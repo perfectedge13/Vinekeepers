@@ -1,0 +1,144 @@
+# Nova-code workflow — spec-driven implementation
+# Single source of truth for the flow. Orchestrator runs phases in order;
+# gates STOP on failure (output Spec Drift Issue). Branch removal_rename when plan_change.removal_or_rename.
+# Shared steps (discovery, schema_gate, drift_gate, run_tests, static_analysis, reconcile, update_readme) use @.cursor/skills/common/
+
+name: nova-code
+description: Spec-driven implementation workflow. Discovery → gates → execution loop (or removal/rename protocol).
+
+# Execute these step IDs in this order (look up each in phases or steps).
+run_order:
+  - discovery
+  - guardrails
+  - schema_gate
+  - drift_gate
+  - plan_change
+  - branch_removal_rename
+  - pre_change_lock
+  - implement
+  - update_specs
+  - update_readme
+  - post_schema
+  - traceability
+  - run_tests
+  - static_analysis
+  - reconcile
+  - wiki
+  - output
+
+phases:
+  - id: discovery
+    type: step
+    skill: nova-spec-discovery
+    location: .cursor/skills/common/discovery.md
+    description: Read index, load relevant registry specs (scope from context), summarize primary_assets and README.
+
+  - id: guardrails
+    type: step
+    location: .cursor/skills/common/guardrails.md
+    description: Apply guardrails — no deleting requirements, no removing required functionality without permission, no schema changes or invented keys; repair spec drift before coding; consider and avoid anti_patterns from impacted specs.
+
+  - id: schema_gate
+    type: gate
+    run: npm run validate-specs
+    on_fail: stop
+    description: All loaded/impacted specs valid against JSON Schema. If fail, output Spec Drift Issue (file paths, schema errors, minimal edits).
+
+  - id: drift_gate
+    type: gate
+    run: npm run validate-drift
+    on_fail: stop
+    skip_when: schema_not_present
+    description: Index and registry integrity (paths exist, refs valid, accepted→test when strict). If fail, output Spec Drift Issue.
+
+  - id: execution_loop
+    type: sequence
+    description: Plan → pre-change lock → implement → update specs/README → post schema → traceability → tests → static analysis → reconcile → output.
+    steps:
+      - plan_change
+      - branch_removal_rename
+      - pre_change_lock
+      - implement
+      - update_specs
+      - update_readme
+      - post_schema
+      - traceability
+      - run_tests
+      - static_analysis
+      - reconcile
+      - wiki
+      - output
+
+# When plan_change sets removal_or_rename, run this sequence then rejoin at pre_change_lock.
+removal_rename_sequence:
+  - id: reference_map
+    type: step
+    skill: nova-removal-rename
+    location: .cursor/skills/nova-code/implementation/removal-rename.md
+    description: Build reference map across index, registries, README.
+  - id: apply_removal
+    type: step
+    description: Apply removal/rename in repo; update all discovered references.
+  - id: gates_again
+    type: gate
+    run: npm run validate-specs && npm run validate-drift
+    on_fail: stop
+  - id: verify
+    type: step
+    description: Verify no dangling refs; update or deprecate validations; update README.
+
+# Step definitions (referenced by execution_loop.steps)
+steps:
+  plan_change:
+    skill: nova-plan-change
+    location: .cursor/skills/nova-code/implementation/plan-change.md
+    description: Identify impacted specs via change_triggers and primary_assets; set removal_or_rename if applicable.
+  branch_removal_rename:
+    when: plan_change.removal_or_rename
+    sequence: removal_rename_sequence
+  pre_change_lock:
+    type: gate
+    run: npm run validate-specs
+    on_fail: stop
+    description: Re-validate impacted specs before implementing.
+  implement:
+    skill: nova-implement
+    location: .cursor/skills/nova-code/implementation/implement.md
+    description: Implement the requested code change; keep scope to impacted specs unless shared interfaces affected. Consider and avoid anti_patterns listed on impacted requirements and assets (see guardrails).
+  update_specs:
+    skill: nova-update-specs
+    location: .cursor/skills/nova-code/documentation/update-specs.md
+    description: Update requirements, validation tests, traceability, acceptance, assets, dependencies, interfaces/change_triggers, and anti_patterns (schema-only keys). When something didn't work (rework/changes from chat), add to anti_patterns.
+  update_readme:
+    skill: nova-update-readme
+    location: .cursor/skills/common/update-readme.md
+    description: Review 12 artifact categories; update impacted (incl. README/docs). See common/update-readme.md.
+  post_schema:
+    type: gate
+    run: npm run validate-specs
+    on_fail: stop
+    description: Post-change schema validation; fix specs before tests if fail.
+  traceability:
+    skill: nova-post-validate
+    location: .cursor/skills/nova-code/documentation/post-validate.md
+    description: Identify impacted requirements; ensure traceability complete; repair if not.
+  run_tests:
+    skill: nova-run-tests
+    location: .cursor/skills/common/run-tests.md
+    description: Run validation tests per project adapter; Pass/Fail/Blocked; full output and counts. See common/run-tests.md.
+  static_analysis:
+    skill: nova-static-analysis
+    location: .cursor/skills/common/static-analysis.md
+    description: Run scoped static analysis from adapter. See common/static-analysis.md.
+  reconcile:
+    skill: nova-reconcile
+    location: .cursor/skills/common/reconcile.md
+    description: Reconcile specs and code; no dangling refs; traceability consistent. See common/reconcile.md.
+  wiki:
+    skill: nova-wiki
+    location: .cursor/skills/nova-wiki/SKILL.md
+    description: Run wiki workflow to sync Wiki.js from specs and handoff (new feature, behavior change, schema change, refactor, deprecation).
+  output:
+    skill: nova-output
+    location: .cursor/skills/nova-code/wrap_up/output.md
+    description: Return change summary, files/specs changed, schema/drift results, test results, static analysis, reconcile results, issues raised.

@@ -1,0 +1,63 @@
+---
+description: Core spec-driven workflow — gates, guardrails, removal/rename, output. Project-agnostic; validation commands from specs index when present.
+---
+
+# Core spec-driven workflow
+
+Reference **@specs/specs.yml**. When the index has a **validation** block, use `validation.commands.test` and `validation.commands.static_analysis` for running tests and static analysis; use `validation.shell` for shell-safe commands (e.g. avoid `&&` on PowerShell). When absent, use project defaults (see project-specific rule if any).
+
+## 0) Mandatory preflight (Schema Gate + Spec Drift Gate)
+
+Before implementing any code change, run a drift check across the top-level spec index and each referenced registry spec file that is required/relevant for the change.
+
+### 0a) Schema Gate (Hard Stop)
+
+**When schemas are not yet present**: If `specs/schema/req-registry.schema.json` or `specs/specs.yml` does not exist, do NOT fail. Note: "Specs/schema not yet present; Schema Gate skipped." Proceed with drift check only for existing spec files.
+
+**When schemas are present**:
+- **Index**: `specs/specs.yml` MUST validate against @specs/schema/specs-index.schema.json
+- **Registries**: Registry specs with `schema.id: "req-registry"` MUST validate against @specs/schema/req-registry.schema.json
+- Do not invent new keys in any spec file. Unknown keys are schema drift bugs.
+- Do not modify schema files unless the user explicitly requests a schema change.
+
+**Schema validation (automation)**  
+Run: `npm install` then `npm run validate-specs` (or `node scripts/validate-specs.cjs` from project root). Use this before and after spec/code changes. Requires Node 18+.
+
+If schema validation fails: STOP immediately. Output a **Spec Drift Issue** (file path(s), schema validation error(s), minimal edits to restore compliance). Do not proceed until schema validation passes.
+
+### 0b) Spec Drift Gate (Fail Fast)
+
+Run `npm run validate-drift` when available. Otherwise validate manually (only for spec files that exist):
+- **Index**: every `specs[].file` exists; every `scope.primary_assets[]` exists; every `change_triggers.paths[]` exists; every `interfaces.cli[].command` points to an existing entrypoint or declared alias.
+- **Registries**: every `assets[].path` exists; every `requirements[].traceability.assets[]` points to a declared `assets[].id`; every `assets[].requires[]` and `dependencies.items[].used_by_requirements[]` point to existing requirement ids; every accepted requirement has at least one test in `validation.tests` or is exempt per guidelines below.
+
+**Guidelines for when `validation.tests: []` is acceptable**: Allow empty tests only when adding a unit test is genuinely too complex. Acceptable exemptions: (a) infrastructure requiring live DB or external service with no in-repo test harness, (b) shutdown/lifecycle not practically unit-testable, (c) behavior covered indirectly by another requirement's test. When leaving `tests: []`, keep acceptance.criteria and traceability accurate. Do not use empty tests for routine business logic or API wrappers that can be stubbed.
+
+If drift is detected: STOP immediately. Output a **Spec Drift Issue** (exact missing/mismatched paths, minimal spec or repo fix). Do not proceed until drift is resolved.
+
+## 1) Workflow for ANY coding task
+
+1) Read @specs/specs.yml and load required specs. Open and summarize: index first, then each required registry spec.
+2) Spec edits are bounded: do not remove required functionality without permission; never delete requirements; if something appears no longer met, keep the requirement and raise an issue. Do not invent new keys or modify schema.
+3) Pre-change lock: Re-run Schema Gate for impacted specs before implementing (skip if schemas not present). If schema fails, stop and repair specs first.
+4) Implement the change; keep scope to impacted specs unless shared interfaces are affected.
+5) Update specs only within existing schema keys: requirements, validation tests, traceability, acceptance, assets, dependencies, interfaces/change_triggers. If an update would require a new key, raise an issue. When adding or changing requirements, follow the requirement-tracking rules in **@.cursor/skills/common/requirement-tracking.md** (when to create, update, or split; keep traceability and ids consistent).
+6) Post-change schema validation: Run `npm run validate-specs`. If the index or any modified registry fails: stop and fix specs before running tests. If schemas not present, note and continue.
+7) Run validation tests: Use the command from index `validation.commands.test` if present, else project default. Record Pass / Fail / Blocked. On Fail: return to implementation; on Blocked: raise an issue with the missing prerequisite.
+8) Static analysis: Use `validation.commands.static_analysis` if present, else project default (e.g. compile or verify).
+9) Re-validate spec integrity: no dangling references; traceability consistent; spec matches code; if not, update spec (within schema) or raise an issue.
+
+## 2) Removal/Rename rules
+
+When asked to remove or rename a file:
+1) **Reference map first**: Identify every reference in spec index (primary_assets, change_triggers, interfaces.cli.command), registry specs (assets[].path, validation.tests, traceability), and README/docs.
+2) **Apply removal/rename**: Remove/rename the file; update all discovered references. Do not add new keys. After edits, re-run Schema Gate + Spec Drift Gate when schemas present; stop if either fails.
+3) **Verify**: No validation references to the removed/renamed path; index entrypoints still exist or are updated to a declared alias.
+
+## 3) Shell/command compatibility
+
+Use the shell indicated in index `validation.shell` if present. On Windows PowerShell, do not use `&&` in test commands; use `Set-Location <path>; <command>` or `cmd /c "cd /d <path> && <command>"`. If a step is shell-specific, the spec must state the assumption.
+
+## 4) Final response requirements
+
+Include: summary of change; changed files (add/modify/delete); which specs were updated; schema validation results (Pass/Fail or skipped); TestNG/validation test results (Pass/Fail/Blocked; on Fail include failed class/method; on Blocked state prerequisite); static analysis performed and results; any spec issues raised (drift, blocked tests).

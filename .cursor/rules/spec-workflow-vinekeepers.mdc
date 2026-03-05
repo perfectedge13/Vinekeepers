@@ -1,0 +1,15 @@
+---
+description: Vinekeepers-specific defaults for spec workflow (entrypoint, test/static-analysis commands, shell). Use when working in this repo; validation block in specs.yml overrides where present.
+---
+
+# Vinekeepers project defaults
+
+When working in the Vinekeepers repo and the spec index does not define a **validation** block, use these defaults:
+
+- **Stack**: Java 21, Maven, JUnit 5 unit tests.
+- **Entrypoint**: `com.vinekeepers.VinekeepersApp` → `src/main/java/com/vinekeepers/VinekeepersApp.java`.
+- **Validation tests**: `mvn test` (Maven Surefire runs JUnit 5).
+- **Static analysis**: `mvn compile` (or `mvn verify` if Checkstyle/SpotBugs configured).
+- **Shell**: Windows PowerShell. Do not use `&&` in commands; use `Set-Location <project-root>; mvn test` or `cmd /c "cd /d <path> && mvn test"`.
+
+When **specs/specs.yml** includes a `validation` block, prefer `validation.commands.test`, `validation.commands.static_analysis`, and `validation.shell` from the index for portability.

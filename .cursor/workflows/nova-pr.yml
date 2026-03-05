@@ -1,0 +1,15 @@
+# Nova-pr workflow — create or update PR; body = last nova-code report
+# Use after nova-code and push (e.g. after nova-commit). Requires gh and report file.
+
+name: nova-pr
+description: Create or update a PR for the current branch; PR body = last nova-code report.
+
+run_order:
+  - create_pr
+
+phases:
+  - id: create_pr
+    type: step
+    skill: nova-pr-create
+    location: .cursor/skills/nova-pr/sub-skills/create-pr.md
+    description: Create PR (or update existing) for current branch; body = nova-code report.

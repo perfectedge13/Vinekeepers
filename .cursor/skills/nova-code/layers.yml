@@ -1,0 +1,9 @@
+# Dev Bot layer alignment (nova-code = Dev Bot). For CLI/orchestrator.
+# Step IDs grouped by layer for reporting and future automation.
+layers:
+  design: [discovery]
+  pre_change: [guardrails, schema_gate, drift_gate]
+  implementation: [plan_change, branch_removal_rename, implement]
+  documentation: [update_specs, update_readme, post_schema, traceability]
+  validation: [run_tests, static_analysis]
+  wrap_up: [reconcile, output]

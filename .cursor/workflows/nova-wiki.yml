@@ -1,0 +1,34 @@
+# Nova-wiki workflow — sync Wiki.js from specs and handoff
+# Invoked by nova-code wiki step. Requires WIKIJS_URL, WIKIJS_EMAIL, WIKIJS_PASSWORD (or WIKIJS_API_KEY).
+
+name: nova-wiki
+description: Sync Wiki.js hierarchy and content from specs; apply updates from handoff (new feature, behavior change, bug, schema change, refactor, deprecation).
+
+run_order:
+  - wiki_prepare
+  - wiki_index
+  - wiki_architecture
+  - wiki_runbooks
+  - wiki_feature_dossiers
+
+steps:
+  wiki_prepare:
+    skill: nova-wiki-prepare
+    location: .cursor/skills/nova-wiki/sub-skills/prepare.md
+    description: Read specs (index + registries); compute domains and features; from handoff decide what to update. Output wiki context for later steps.
+  wiki_index:
+    skill: nova-wiki-index
+    location: .cursor/skills/nova-wiki/sub-skills/index.md
+    description: Ensure /vinekeepers, /vinekeepers/features, /vinekeepers/features/domain, and per-domain index pages exist; follow page-formats.md.
+  wiki_architecture:
+    skill: nova-wiki-architecture
+    location: .cursor/skills/nova-wiki/sub-skills/architecture.md
+    description: Create/update /vinekeepers/architecture (Overview, System context, Major subsystems, Runtime flows, Diagram); follow page-formats.md.
+  wiki_runbooks:
+    skill: nova-wiki-runbooks
+    location: .cursor/skills/nova-wiki/sub-skills/runbooks.md
+    description: Create/update /vinekeepers/runbooks and sub-pages (operational, troubleshooting, recovery, maintenance); follow page-formats.md.
+  wiki_feature_dossiers:
+    skill: nova-wiki-feature-dossiers
+    location: .cursor/skills/nova-wiki/sub-skills/feature-dossiers.md
+    description: For each feature ensure summary + 7 sub-pages (how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams); set status; follow page-formats.md.
