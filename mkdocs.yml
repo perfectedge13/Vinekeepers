@@ -1,0 +1,142 @@
+site_name: Vinekeepers
+docs_dir: mkdoc
+plugins:
+  - search
+  - mermaid2
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+extra_css:
+  - stylesheets/extra.css
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+nav:
+  - Home: index.md
+  - Features:
+    - Overview: features/index.md
+    - Domains:
+      - Domains: features/domain.md
+      - Core:
+        - Overview: features/domain/core.md
+        - Env: features/domain/core/env.md
+        - Config: features/domain/core/config.md
+        - Bot: features/domain/core/bot.md
+        - Events: features/domain/core/events.md
+        - State: features/domain/core/state.md
+        - Tools: features/domain/core/tools.md
+        - Audit: features/domain/core/audit.md
+        - Reasoner: features/domain/core/reasoner.md
+        - Workflow: features/domain/core/workflow.md
+        - Core: features/domain/core/core.md
+        - Luna: features/domain/core/luna.md
+      - Connectors:
+        - Overview: features/domain/connectors.md
+        - Discord: features/domain/connectors/discord.md
+        - GitHub: features/domain/connectors/github.md
+  - Architecture: architecture.md
+  - Runbooks:
+    - Index: runbooks/index.md
+    - Operational: runbooks/operational.md
+    - Troubleshooting: runbooks/troubleshooting.md
+    - Recovery: runbooks/recovery.md
+    - Maintenance: runbooks/maintenance.md
+  - Cursor:
+    - Overview: cursor/index.md
+    - Rules:
+      - Overview: cursor/rules/index.md
+      - vinekeepers-standards: cursor/rules/vinekeepers-standards.md
+      - spec-workflow: cursor/rules/spec-workflow.md
+      - spec-workflow-core: cursor/rules/spec-workflow-core.md
+      - guardrails: cursor/rules/guardrails.md
+      - spec-workflow-vinekeepers: cursor/rules/spec-workflow-vinekeepers.md
+    - Skills:
+      - Overview: cursor/skills/index.md
+      - Nova-code:
+        - Overview: cursor/skills/nova-code.md
+        - implementation:
+          - plan-change: cursor/skills/nova-code/implementation/plan-change.md
+          - implement: cursor/skills/nova-code/implementation/implement.md
+          - update-tests: cursor/skills/nova-code/implementation/update-tests.md
+          - removal-rename: cursor/skills/nova-code/implementation/removal-rename.md
+        - documentation:
+          - update-specs: cursor/skills/nova-code/documentation/update-specs.md
+          - post-validate: cursor/skills/nova-code/documentation/post-validate.md
+        - wrap_up:
+          - output: cursor/skills/nova-code/wrap_up/output.md
+        - Mk:
+          - Overview: cursor/skills/nova-code/mk.md
+          - sub-skills:
+            - prepare: cursor/skills/nova-code/mk/sub-skills/prepare.md
+            - gather-spec-mkdoc-context: cursor/skills/nova-code/mk/sub-skills/gather-spec-mkdoc-context.md
+            - index: cursor/skills/nova-code/mk/sub-skills/index.md
+            - architecture: cursor/skills/nova-code/mk/sub-skills/architecture.md
+            - runbooks: cursor/skills/nova-code/mk/sub-skills/runbooks.md
+            - feature-dossiers: cursor/skills/nova-code/mk/sub-skills/feature-dossiers.md
+            - cursor-docs: cursor/skills/nova-code/mk/sub-skills/cursor-docs.md
+      - Nova-commit:
+        - Overview: cursor/skills/nova-commit.md
+        - sub-skills:
+          - plausibility-review: cursor/skills/nova-commit/sub-skills/plausibility-review.md
+          - commit-message: cursor/skills/nova-commit/sub-skills/commit-message.md
+          - commit-push: cursor/skills/nova-commit/sub-skills/commit-push.md
+          - output: cursor/skills/nova-commit/sub-skills/output.md
+      - Nova-pr:
+        - Overview: cursor/skills/nova-pr.md
+        - sub-skills:
+          - create-pr: cursor/skills/nova-pr/sub-skills/create-pr.md
+      - Nova-spec:
+        - Overview: cursor/skills/nova-spec.md
+        - scan-and-update: cursor/skills/nova-spec/scan-and-update.md
+        - output-format: cursor/skills/nova-spec/output-format.md
+        - sub-skills:
+          - scan: cursor/skills/nova-spec/sub-skills/scan.md
+          - infer-domains: cursor/skills/nova-spec/sub-skills/infer-domains.md
+          - categorize-features-to-domains: cursor/skills/nova-spec/sub-skills/categorize-features-to-domains.md
+          - update-specs-index: cursor/skills/nova-spec/sub-skills/update-specs-index.md
+          - update-registry: cursor/skills/nova-spec/sub-skills/update-registry.md
+          - sync-mkdoc: cursor/skills/nova-spec/sub-skills/sync-mkdoc.md
+      - Nova-wiki:
+        - Overview: cursor/skills/nova-wiki.md
+        - auth: cursor/skills/nova-wiki/auth.md
+        - sub-skills:
+          - prepare: cursor/skills/nova-wiki/sub-skills/prepare.md
+          - index: cursor/skills/nova-wiki/sub-skills/index.md
+          - architecture: cursor/skills/nova-wiki/sub-skills/architecture.md
+          - runbooks: cursor/skills/nova-wiki/sub-skills/runbooks.md
+          - feature-dossiers: cursor/skills/nova-wiki/sub-skills/feature-dossiers.md
+      - Common:
+        - Overview: cursor/skills/common/index.md
+        - discovery: cursor/skills/common/discovery.md
+        - drift-gate: cursor/skills/common/drift-gate.md
+        - project-config: cursor/skills/common/project-config.md
+        - reconcile: cursor/skills/common/reconcile.md
+        - requirement-tracking: cursor/skills/common/requirement-tracking.md
+        - run-tests: cursor/skills/common/run-tests.md
+        - schema-gate: cursor/skills/common/schema-gate.md
+        - static-analysis: cursor/skills/common/static-analysis.md
+        - sync-cursor-docs: cursor/skills/common/sync-cursor-docs.md
+        - update-readme: cursor/skills/common/update-readme.md
+    - Workflows:
+      - Overview: cursor/workflows/index.md
+      - nova-code: cursor/workflows/nova-code.md
+      - nova-commit: cursor/workflows/nova-commit.md
+      - nova-mk: cursor/workflows/nova-mk.md
+      - nova-pr: cursor/workflows/nova-pr.md
+      - nova-spec: cursor/workflows/nova-spec.md
+      - nova-wiki: cursor/workflows/nova-wiki.md

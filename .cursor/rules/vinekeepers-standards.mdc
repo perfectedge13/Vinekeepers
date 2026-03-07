@@ -1,0 +1,52 @@
+---
+description: Vinekeepers coding standards, app flow, and config-based bots
+alwaysApply: true
+---
+
+# Vinekeepers project standards
+
+## Coding standards
+
+- **Java 21**; package layout per README: `core`, `config`, `bot`, `events`, `workflow`, `connectors`, `state`, `env`, `audit`, `tools`, `reasoner`.
+- Prefer **final** classes and clear constructors; avoid mutable shared state.
+- For any spec or code change, follow **@.cursor/rules/spec-workflow.mdc** and **@.cursor/rules/guardrails.mdc** (Schema Gate, Spec Drift Gate, no new spec keys, repair drift first).
+- Validation: run `mvn test` and `mvn compile`; use **PowerShell** for multi-step commands (e.g. `Set-Location path; mvn test` — do not use `&&`).
+
+## General flow
+
+1. **Entrypoint**: VinekeepersApp loads `.env` via EnvLoader and creates Bootstrap.
+2. **Bootstrap**: Builds EventBus, StateStore, Router, Engine; subscribes engine to bus.
+3. **Config**: `loadConfig(path)` loads YAML → ConfigLoader.buildBots / addRoutings → for each bot: engine.registerBot, registerWorkflow, registerReasoner.
+4. **Connectors**: withDiscord() / withGitHub() start event sources; they publish Event to EventBus.
+5. **Engine**: onEvent → Router.route(event) → for each botId, handleEventForBot (workflow, then reasoner, state in StateStore, audit, reply to Discord when source is Discord).
+
+```mermaid
+flowchart LR
+  App[VinekeepersApp] --> Bootstrap[Bootstrap]
+  Bootstrap --> LoadConfig[loadConfig]
+  LoadConfig --> Engine[VinekeepersEngine]
+  EventBus[EventBus] --> Engine
+  Discord[DiscordSource] --> EventBus
+  GitHub[GitHubSource] --> EventBus
+  Engine --> Router[Router]
+  Engine --> HandleBot["handleEventForBot: workflow, reasoner, audit, reply"]
+```
+
+## Bots are config-based
+
+Bot roster and routing come from **YAML** (default `config/bots.yaml`). No hardcoded bot list in code.
+
+- **Bots**: `id` (required), `persona` (name, systemPrompt), optional `model`, `toolPolicy`, `memory`. ConfigLoader produces BotDefinition; Bootstrap registers each bot and wires workflow/reasoner by id (e.g. `luna` → LunaGatheringWorkflow; others → StubWorkflow / StubReasoner).
+- **Routing**: `routing[].botId` + `filter` (e.g. discordTrigger, discordChannels, repos, prLabels, prAuthors). Router matches events to bot ids.
+- **Adding a bot**: Add entry in YAML; optionally register a custom Workflow or Reasoner in Bootstrap for that id.
+
+### Bot config YAML structure
+
+Preserve the structure expected by ConfigLoader: `bots[].id`, `bots[].persona` (name, systemPrompt), optional model/toolPolicy/memory; `routing[].botId`, `routing[].filter` (discordTrigger, discordChannels, etc.). See **config/bots.yaml** and **specs/core-registry.yml** (REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-003).
+
+## References
+
+- **Spec workflow**: @.cursor/rules/spec-workflow.mdc (and spec-workflow-core.mdc)
+- **Guardrails**: @.cursor/rules/guardrails.mdc
+- **Spec index**: specs/specs.yml
+- **Project layout**: README project layout table

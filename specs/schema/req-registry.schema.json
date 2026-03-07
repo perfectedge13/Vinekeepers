@@ -1,0 +1,496 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.example/schemas/req-registry.schema.json",
+  "title": "Requirements Registry (req-registry)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "project", "enums", "dependencies", "assets", "requirements"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "updated_utc"],
+      "properties": {
+        "id": { "const": "req-registry" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "updated_utc": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        }
+      }
+    },
+
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "stack"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "stack": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["language", "runtime"],
+          "properties": {
+            "language": { "type": "string", "minLength": 1 },
+            "runtime": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+
+    "enums": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "priority",
+        "type",
+        "handling_strategy",
+        "asset_kind",
+        "dependency_kind",
+        "dependency_scope",
+        "dependency_criticality"
+      ],
+      "properties": {
+        "status": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "priority": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "type": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "handling_strategy": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "asset_kind": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "dependency_kind": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "dependency_scope": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "dependency_criticality": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/dependencyItem" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/asset" },
+      "minItems": 0
+    },
+
+    "requirements": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/requirement" },
+      "minItems": 0
+    },
+
+    "features": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/feature" },
+      "minItems": 0,
+      "description": "Optional. Explicit features for mkdoc and traceability; each feature groups requirement_ids and optionally asset_ids. Domain for mkdoc = registry file stem (e.g. core)."
+    },
+
+    "agent": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+
+  "definitions": {
+    "idToken": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9\\-_.]*$"
+    },
+
+    "feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "title", "requirement_ids", "status"],
+      "properties": {
+        "id": { "$ref": "#/definitions/idToken" },
+        "slug": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "requirement_ids": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0
+        },
+        "asset_ids": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0,
+          "description": "Optional; if omitted, all assets that reference the feature's requirements are implied."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "active", "deprecated"]
+        },
+        "doc_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path from docs_dir to feature summary page (e.g. features/domain/core/env.md)."
+        },
+        "domain_slug": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Domain owning this feature; used in doc_path and mkdoc nav."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short prose summary for search and tooling."
+        }
+      }
+    },
+
+    "dependencyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "scope",
+        "criticality",
+        "spec",
+        "install_hint",
+        "used_by_requirements"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/idToken" },
+        "kind": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "criticality": { "type": "string", "minLength": 1 },
+        "spec": { "type": "string", "minLength": 1 },
+        "install_hint": { "type": "string", "minLength": 1 },
+        "used_by_requirements": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0
+        },
+        "verification": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/commandExpectation" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "commandExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "expect"],
+      "properties": {
+        "run": { "type": "string", "minLength": 1 },
+        "expect": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "assetSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "requires"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "requires": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "path", "role", "requires"],
+      "properties": {
+        "id": { "$ref": "#/definitions/idToken" },
+        "kind": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "requires": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0
+        },
+        "symbols": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/assetSymbol" },
+          "minItems": 0
+        },
+        "anti_patterns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 0,
+          "description": "Common mistakes or anti-patterns to avoid for this asset"
+        },
+        "feature_ids": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0,
+          "description": "Feature IDs that reference this asset; derived for path-to-feature lookup."
+        }
+      }
+    },
+
+    "reqIO": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+
+    "handling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "message_contains", "retries", "backoff_seconds"],
+      "properties": {
+        "strategy": { "type": "string", "minLength": 1 },
+        "message_contains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 0
+        },
+        "retries": { "type": "integer", "minimum": 0 },
+        "backoff_seconds": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "behaviorError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition", "handling"],
+      "properties": {
+        "condition": { "type": "string", "minLength": 1 },
+        "handling": { "$ref": "#/definitions/handling" }
+      }
+    },
+
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "outputs", "rules", "defaults", "errors"],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/reqIO" },
+          "minItems": 0
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/reqIO" },
+          "minItems": 0
+        },
+        "rules": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 0
+        },
+        "defaults": {
+          "type": "array",
+          "items": { "type": "object" },
+          "minItems": 0
+        },
+        "errors": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/behaviorError" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "acceptanceExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "given", "when", "then"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "given": { "type": "string", "minLength": 1 },
+        "when": { "type": "string", "minLength": 1 },
+        "then": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criteria", "examples"],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 0
+        },
+        "examples": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/acceptanceExample" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "traceSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset", "name"],
+      "properties": {
+        "asset": { "$ref": "#/definitions/idToken" },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "traceability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assets", "symbols"],
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/idToken" },
+          "minItems": 0
+        },
+        "symbols": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/traceSymbol" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "testStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "expect"],
+      "properties": {
+        "run": { "type": "string", "minLength": 1 },
+        "expect": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "manualTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "intent", "preconditions", "steps"],
+      "properties": {
+        "id": { "$ref": "#/definitions/idToken" },
+        "title": { "type": "string", "minLength": 1 },
+        "intent": { "type": "string", "minLength": 1 },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 0
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/testStep" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "unitTestRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "intent", "testClass"],
+      "properties": {
+        "id": { "$ref": "#/definitions/idToken" },
+        "title": { "type": "string", "minLength": 1 },
+        "intent": { "type": "string", "minLength": 1 },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 0
+        },
+        "testClass": { "type": "string", "minLength": 1 },
+        "testMethod": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "test": {
+      "oneOf": [
+        { "$ref": "#/definitions/manualTest" },
+        { "$ref": "#/definitions/unitTestRef" }
+      ]
+    },
+
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tests"],
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/test" },
+          "minItems": 0
+        }
+      }
+    },
+
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "statement",
+        "status",
+        "priority",
+        "type",
+        "behavior",
+        "acceptance",
+        "traceability",
+        "validation"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/idToken" },
+        "title": { "type": "string", "minLength": 1 },
+        "statement": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "priority": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 0
+        },
+        "behavior": { "$ref": "#/definitions/behavior" },
+        "acceptance": { "$ref": "#/definitions/acceptance" },
+        "traceability": { "$ref": "#/definitions/traceability" },
+        "validation": { "$ref": "#/definitions/validation" },
+        "anti_patterns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 0,
+          "description": "Common mistakes or anti-patterns to avoid for this requirement"
+        }
+      }
+    }
+  }
+}

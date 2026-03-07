@@ -12,7 +12,7 @@ This skill runs the **wiki sync** workflow. You are the **orchestrator**: you **
 
 **How to run:**
 
-1. **Preflight (optional):** If `WIKIJS_URL` (and `WIKIJS_EMAIL` / `WIKIJS_PASSWORD` or `WIKIJS_API_KEY`) are not set, return **Skip** with message "Wiki step skipped: WIKIJS_* not set." Do not launch sub-agents.
+1. **Preflight (optional):** If `WIKIJS_*` are not set in process env, first try loading from project root **.env** (read file, parse `KEY=value` lines; skip `#` and blank lines). If still unset, return **Skip** with message "Wiki step skipped: WIKIJS_* not set." Do not launch sub-agents.
 2. **Read** the workflow and get **run_order**: wiki_prepare, wiki_index, wiki_architecture, wiki_runbooks, wiki_feature_dossiers.
 3. **For each step ID in run_order**, in order: **call the mcp_task tool** to run the sub-skill at that step's **location**. Pass handoff (user request; for steps after wiki_prepare, pass the prepare output: domains, features, updates list).
 4. **Handoff:** Pass the **user request** and any **previous step result** (e.g. plan_change summary, implement summary from nova-code; after wiki_prepare, pass the wiki context so index/architecture/runbooks/feature_dossiers know what to create or update). **When the wiki step is invoked by nova-code**, the orchestrator (nova-code) must supply a **structured handoff** so wiki_prepare can compute **affected_features** (0..n) for selective updates: include **plan_change** (impacted registry spec file paths, impacted asset paths/ids) and **implement** (list of changed file paths). Without this, prepare defaults to affected_features = all features (full sync).

@@ -5,7 +5,7 @@
 
 ## Instructions
 
-1. Read **@specs/specs.yml** for `validation.commands.test`. If present, use that command; otherwise use project default (e.g. Vinekeepers: `mvn test`).
+1. Read **@specs/specs.yml** for `validation.commands.test`. If present, use that command; else **@.cursor/project.yml** `validation_defaults.test`; else report "validation not configured" and do not assume a test command.
 2. Use **shell-safe** invocation: on Windows PowerShell do not use `&&`. Use `Set-Location <project-root>; <test-command>` or `cmd /c "cd /d <path> && <test-command>"`.
 3. Run the test command **without** `-q` or quiet flags so the runner prints a full summary (e.g. Maven Surefire prints "Tests run: X, Failures: Y, Errors: Z, Skipped: W").
 4. After the run, **show the full test output** in the agent console (stdout/stderr), including the summary line(s) at the end.

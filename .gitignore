@@ -1,3 +1,6 @@
+# Node (spec validation scripts)
+node_modules/
+
 # Maven
 target/
 pom.xml.tag
@@ -26,6 +29,11 @@ bin/
 *.ear
 *.log
 hs_err_pid*
+
+# Secrets / env (wiki creds, API keys, etc.)
+.env
+.env.local
+.env.*.local
 
 # OS
 .DS_Store

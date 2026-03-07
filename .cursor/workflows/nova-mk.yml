@@ -1,0 +1,44 @@
+# Nova-mk workflow — sync mkdoc/ from specs and handoff
+# Invoked by nova-code mk step. Writes local markdown under mkdoc/; bootstraps mkdoc/ when missing.
+
+name: nova-mk
+description: Sync mkdoc/ hierarchy and content from specs; apply updates from handoff (new feature, behavior change, bug, schema change, refactor, deprecation).
+
+run_order:
+  - mk_prepare
+  - mk_gather_context
+  - mk_index
+  - mk_architecture
+  - mk_runbooks
+  - mk_feature_dossiers
+  - mk_cursor
+
+steps:
+  mk_prepare:
+    skill: nova-mk-prepare
+    location: .cursor/skills/nova-code/mk/sub-skills/prepare.md
+    description: Read specs (index + registries); compute domains and features; from handoff decide what to update; bootstrap mkdoc/ if missing. Output mk context for later steps.
+  mk_gather_context:
+    skill: nova-mk-gather-spec-mkdoc-context
+    location: .cursor/skills/nova-code/mk/sub-skills/gather-spec-mkdoc-context.md
+    description: Scan specs and mkdoc for scoped features; compress into one handoff bundle (requirements, assets, validation, doc excerpts) for later steps.
+  mk_index:
+    skill: nova-mk-index
+    location: .cursor/skills/nova-code/mk/sub-skills/index.md
+    description: Ensure mkdoc/index.md, mkdoc/features/index.md, mkdoc/features/domain.md, and per-domain files exist; follow page-formats.md.
+  mk_architecture:
+    skill: nova-mk-architecture
+    location: .cursor/skills/nova-code/mk/sub-skills/architecture.md
+    description: Create/update mkdoc/architecture.md (Overview, System context, Major subsystems, Runtime flows, Diagram); follow page-formats.md.
+  mk_runbooks:
+    skill: nova-mk-runbooks
+    location: .cursor/skills/nova-code/mk/sub-skills/runbooks.md
+    description: Create/update mkdoc/runbooks/ (index, operational, troubleshooting, recovery, maintenance); follow page-formats.md.
+  mk_feature_dossiers:
+    skill: nova-mk-feature-dossiers
+    location: .cursor/skills/nova-code/mk/sub-skills/feature-dossiers.md
+    description: For each feature ensure summary + 7 sub-files (how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams); set status; follow page-formats.md.
+  mk_cursor:
+    skill: nova-mk-cursor-docs
+    location: .cursor/skills/nova-code/mk/sub-skills/cursor-docs.md
+    description: Sync cursor/ from .cursor (rules, skills, workflows); ensure mkdocs nav includes Cursor.

@@ -1,0 +1,31 @@
+# Project config for Cursor Nova skills (portability).
+# Copy .cursor/ to another repo and edit this file: project_name, paths, docs, wiki, validation_defaults.
+
+project_name: Vinekeepers
+
+paths:
+  specs_index: specs/specs.yml
+  docs_dir: mkdoc
+  mkdocs_file: mkdocs.yml
+
+docs:
+  site_name: Vinekeepers
+
+wiki:
+  path_prefix: /vinekeepers
+
+# Used when specs/specs.yml has no "validation" block
+validation_defaults:
+  test: mvn test
+  static_analysis: mvn compile
+  shell: powershell
+  entrypoint: src/main/java/com/vinekeepers/VinekeepersApp.java
+
+# Optional: for scan and gate commands
+scan:
+  root_config_files: [pom.xml, README.md, .env.example]
+  source_dirs: [src/main/java, src/test/java]
+
+validation:
+  gate_validate_specs: npm run validate-specs
+  gate_validate_drift: npm run validate-drift

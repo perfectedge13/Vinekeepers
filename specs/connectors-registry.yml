@@ -1,0 +1,123 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-06T23:45:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, accepted, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items: []
+
+assets:
+  - id: ASSET-DISCORD-SOURCE
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/DiscordEventSource.java
+    role: Discord event source and reply sender
+    requires: [REQ-CONNECTORS-DISCORD-001]
+  - id: ASSET-DISCORD-REPLY
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/DiscordReplySender.java
+    role: Interface for sending replies back to Discord (channelId, messageId, content)
+    requires: [REQ-CONNECTORS-DISCORD-001]
+  - id: ASSET-GITHUB-SOURCE
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/GitHubEventSource.java
+    role: GitHub event source
+    requires: [REQ-CONNECTORS-GITHUB-001]
+
+requirements:
+  - id: REQ-CONNECTORS-DISCORD-001
+    title: Discord event source and reply
+    statement: DiscordEventSource implements EventSource and translates Discord payloads into internal events; DiscordReplySender provides the interface for sending replies back to Discord (channelId, messageId, content). Engine delivers workflow replies to Discord when the event source is Discord.
+    status: accepted
+    priority: medium
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - DiscordEventSource exists and implements EventSource and emits events onto the event bus
+        - DiscordReplySender interface supports sending replies (channelId, messageId, content) to Discord
+        - Replies from the engine are delivered to Discord via the reply path when source is Discord
+      examples: []
+    traceability:
+      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-DISCORD-EVENT-SOURCE
+          title: DiscordEventSourceTest
+          intent: Verify Discord event source and reply sender behavior
+          testClass: com.vinekeepers.connectors.DiscordEventSourceTest
+          preconditions: []
+        - id: MANUAL-CONNECTORS-DISCORD
+          title: Discord connector compiles and implements interface
+          intent: Verify DiscordEventSource and DiscordReplySender exist and compile
+          preconditions: []
+          steps:
+            - run: "mvn compile -q"
+              expect: ["BUILD SUCCESS"]
+
+  - id: REQ-CONNECTORS-GITHUB-001
+    title: GitHub event source
+    statement: GitHubEventSource implements EventSource and translates GitHub payloads into internal events on the event bus.
+    status: accepted
+    priority: medium
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - GitHubEventSource exists and implements EventSource
+        - Connector emits events onto the event bus when started
+      examples: []
+    traceability:
+      assets: [ASSET-GITHUB-SOURCE]
+      symbols: []
+    validation:
+      tests:
+        - id: MANUAL-CONNECTORS-GITHUB
+          title: GitHub connector compiles and implements interface
+          intent: Verify GitHubEventSource exists and implements EventSource
+          preconditions: []
+          steps:
+            - run: "mvn compile -q"
+              expect: ["BUILD SUCCESS"]
+
+features:
+  - id: FEAT-CONNECTORS-DISCORD
+    slug: discord
+    title: Discord event source and reply
+    requirement_ids: [REQ-CONNECTORS-DISCORD-001]
+    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY]
+    status: active
+  - id: FEAT-CONNECTORS-GITHUB
+    slug: github
+    title: GitHub event source
+    requirement_ids: [REQ-CONNECTORS-GITHUB-001]
+    asset_ids: [ASSET-GITHUB-SOURCE]
+    status: active

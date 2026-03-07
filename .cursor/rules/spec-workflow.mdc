@@ -6,10 +6,7 @@ alwaysApply: true
 Reference these first:
 - @specs/specs.yml
 - @.cursor/rules/spec-workflow-core.mdc
-- @.cursor/rules/spec-workflow-vinekeepers.mdc
 
 # Spec-driven workflow
 
-You MUST follow the **core** spec workflow for all coding tasks: Schema Gate, Spec Drift Gate, workflow steps 1–9, removal/rename protocol, and final output format. See **spec-workflow-core.mdc** for the full rules.
-
-When working in this repository (Vinekeepers), also apply **spec-workflow-vinekeepers.mdc** for project-specific defaults (Java 21, Maven, JUnit 5, PowerShell). When the spec index defines a **validation** block, use those commands and shell for tests and static analysis.
+You MUST follow the **core** spec workflow for all coding tasks: Schema Gate, Spec Drift Gate, workflow steps 1–9, removal/rename protocol, and final output format. See **spec-workflow-core.mdc** for the full rules. Validation and project defaults are defined in **spec-workflow-core.mdc**.

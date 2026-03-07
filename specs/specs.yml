@@ -1,0 +1,32 @@
+scope:
+  primary_assets:
+    - src/main/java/com/vinekeepers/VinekeepersApp.java
+    - src/main/java/com/vinekeepers/core/VinekeepersEngine.java
+    - src/main/java/com/vinekeepers/core/Bootstrap.java
+    - src/main/java/com/vinekeepers/env/EnvLoader.java
+    - src/main/java/com/vinekeepers/config/ConfigLoader.java
+
+change_triggers:
+  paths:
+    - src
+    - specs
+    - .cursor/rules
+    - .cursor/workflows
+
+specs:
+  - file: core-registry.yml
+  - file: connectors-registry.yml
+
+interfaces:
+  cli:
+    - command: mvn test
+      description: Run unit tests
+    - command: mvn compile
+      description: Compile
+
+validation:
+  commands:
+    test: mvn test
+    static_analysis: mvn compile
+  shell: powershell
+  entrypoint: src/main/java/com/vinekeepers/VinekeepersApp.java

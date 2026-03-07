@@ -23,7 +23,7 @@ List **every** step from the workflow's **run_order** (or phases then execution_
   guardrails → Pass  
   schema_gate → Pass  
   drift_gate → Pass  
-  execution_loop: plan_change → Pass, branch_removal_rename → Skip, pre_change_lock → Pass, implement → Pass, update_specs → Pass, update_readme → Pass, post_schema → Pass, traceability → Pass, run_tests → Pass, static_analysis → Pass, reconcile → Pass, wiki → Pass (or Skip if WIKIJS_* not set), output → Pass  
+  execution_loop: plan_change → Pass, branch_removal_rename → Skip, pre_change_lock → Pass, implement → Pass, update_specs → Pass, update_readme → Pass, post_schema → Pass, traceability → Pass, run_tests → Pass, static_analysis → Pass, reconcile → Pass, mk → Pass, output → Pass  
 - If the run stopped early (e.g. gate failure): list steps up to and including the failed step with Fail; subsequent steps as **Not run**.
 
 ### 2. Per-step outcome
@@ -43,7 +43,7 @@ A short checklist the reader can use to confirm the run is successful and comple
 - Tests: Pass / Fail / Blocked (with counts: run, passed, failed)  
 - Static analysis: Pass / Fail  
 - Reconcile: OK / Issues  
-- Wiki: Pass / Fail / Skip (Skip when WIKIJS_* not set)  
+- Mk: Pass / Fail (mkdoc/ sync from specs and handoff)  
 - No unresolved spec drift or blocked tests  
 
 ### 4. Detail sections
@@ -58,6 +58,6 @@ Then include the following sections in this order, populated from step results:
 9. **Test results** — Pass/Fail/Blocked; include **counts** (tests run, passed, failed, skipped); if Fail include failed test class/method; if Blocked state missing prerequisite.  
 10. **Static analysis** — What was run and result.  
 11. **Reconcile results** — Any mismatches found and fixes applied or issues raised.  
-12. **Wiki results** — If wiki step ran: Pass / Fail / Skip; if Pass, one-line summary (e.g. "Updated index, architecture, runbooks, N feature dossiers"). If Skip: "WIKIJS_* not set."  
+12. **Mk results** — If mk step ran: Pass / Fail; if Pass, one-line summary (e.g. "Updated index, architecture, runbooks, N feature dossiers").  
 13. **README changes** — Summary of README updates.  
 14. **Issues raised** — Any spec drift issues, blocked tests, or unmet requirements (do not delete requirements).

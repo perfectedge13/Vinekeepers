@@ -1,8 +1,8 @@
 # Nova-wiki-feature-dossiers
 
-**Inputs:** Wiki context from wiki_prepare (domains, features, updates, **affected_features**), handoff (user request, implement summary). Credentials from env (WIKIJS_*).
+**Inputs:** Wiki context from wiki_prepare (domains, features, updates, **affected_features**), handoff (user request, implement summary). Credentials from env (WIKIJS_*). If not in process env, load from project root .env per **@.cursor/skills/nova-wiki/auth.md**.
 
-**Outputs:** For each feature in scope: page `/vinekeepers/features/domain/<domain>/<feature-name>` and seven sub-pages (how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams). Pass/Fail and count of dossiers updated.
+**Outputs:** For each feature in scope: page &lt;path_prefix&gt;/features/domain/&lt;domain&gt;/&lt;feature-name&gt; and seven sub-pages (how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams). Pass/Fail and count of dossiers updated. **Wiki path prefix** from **@.cursor/project.yml** `wiki.path_prefix`; see **@.cursor/skills/common/project-config.md**.
 
 ## Instructions
 
@@ -10,7 +10,7 @@
 2. **Authenticate** per **@.cursor/skills/nova-wiki/auth.md**: use WIKIJS_API_KEY as Bearer token, or login with `authentication { login(strategy: "local", username: $username, password: $password) { jwt } }` and use the returned **jwt** as `Authorization: Bearer <jwt>`. If credentials unset, return Fail.
 3. **Scope:** When wiki context includes **affected_features** (a list of domain/feature pairs), iterate over **affected_features** only. When **affected_features** is absent or denotes "all," iterate over the full features list from prepare (backward compatible).
 4. For **each feature** in scope (see step 3):
-   - **Feature summary** — Path: `/vinekeepers/features/domain/<domain-slug>/<feature-slug>`. Title: feature display name. Body: # Status (draft/active/deprecated; if deprecated link successor), # Summary, # Key assets (from spec assets), # Sub-pages (bulleted links to the seven sub-pages). Create if new feature; update if behavior change, refactor, or deprecation.
+   - **Feature summary** — Path: &lt;path_prefix&gt;/features/domain/&lt;domain-slug&gt;/&lt;feature-slug&gt; (path_prefix from project config). Title: feature display name. Body: # Status (draft/active/deprecated; if deprecated link successor), # Summary, # Key assets (from spec assets), # Sub-pages (bulleted links to the seven sub-pages). Create if new feature; update if behavior change, refactor, or deprecation.
    - **how-it-works** — Path: .../how-it-works. Create/update with # Overview, # Flow, # Inputs and outputs. **Must** be filled from the current registry spec (behavior/requirements); do not invent content that is not in the spec.
    - **change-log** — Path: .../change-log. Create/update with # Entries (## YYYY-MM-DD). If handoff says "behavior change" or "any change," append a new entry with today's date and short description.
    - **known-issues** — Path: .../known-issues. Create/update with # Active, # Resolved. If handoff says "bug/root cause," add or update an entry.

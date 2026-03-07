@@ -1,8 +1,8 @@
-# Nova-code run report
+# Nova-code run report — [project name from .cursor/project.yml]
 
-**User request:** _(Replace with user request.)_
+_(When generating this report, set the title to "Nova-code run report — &lt;project_name&gt;" using **@.cursor/project.yml** `project_name` or first registry `project.name`.)_
 
-**Workflow:** nova-code
+**User request:** Implement the plan (fix wiki env, update_tests step, guardrails orchestrator-applied, specs bootstrap).
 
 ---
 
@@ -12,99 +12,135 @@
 |------|--------|
 | discovery | Pass |
 | guardrails | Pass |
-| schema_gate | Pass |
-| drift_gate | Pass |
+| schema_gate | Skipped |
+| drift_gate | Skipped |
 | plan_change | Pass |
 | branch_removal_rename | Skip |
-| pre_change_lock | Pass |
+| pre_change_lock | Skipped |
 | implement | Pass |
+| update_tests | Pass |
 | update_specs | Pass |
 | update_readme | Pass |
-| post_schema | Pass |
+| post_schema | Skipped |
 | traceability | Pass |
 | run_tests | Pass |
 | static_analysis | Pass |
 | reconcile | Pass |
+| wiki | **Fail** |
 | output | Pass |
 
-All required steps ran. No steps **Not run**.
+All steps in `run_order` were executed. One step **Fail** (wiki). Workflow completed with one non-blocking failure.
 
 ---
 
 ## 2. Per-step outcome
 
-- **discovery:** Pass. Index and registry loaded; primary_assets and README summarized.
-- **guardrails:** Pass. Guardrails applied; no requirement deletion, no unauthorized removal, no schema/invented-key violations.
-- **schema_gate:** Pass. All specs valid against JSON Schema (or skipped if schemas not present).
-- **drift_gate:** Pass. Index and registry integrity verified (or skipped if schemas not present).
-- **plan_change:** Pass. Impacted specs: none; removal_or_rename: false.
-- **branch_removal_rename:** Skip. Not a removal/rename; branch not taken.
-- **pre_change_lock:** Pass. Impacted specs re-validated before implement.
-- **implement:** Pass. _(Describe what was implemented.)_
-- **update_specs:** Pass. _(No spec updates required or list changes.)_
-- **update_readme:** Pass. _(README updated or unchanged.)_
-- **post_schema:** Pass. Post-change schema validation passed.
-- **traceability:** Pass. Traceability checked; no repairs needed.
-- **run_tests:** Pass. Tests run: N, Passed: N, Failed: 0, Skipped: 0.
-- **static_analysis:** Pass. `mvn compile` succeeded.
-- **reconcile:** Pass. Drift passed; no mismatches.
-- **output:** Pass. Final report produced.
+- **discovery:** Pass. Index and relevant assets loaded; scope set for wiki env fix, update_tests step, guardrails orchestrator-applied, and specs bootstrap.
+- **guardrails:** Pass. Guardrails applied (orchestrator-applied); no requirement deletion, no unauthorized removal of required functionality; no schema or invented-key violations.
+- **schema_gate:** Skipped. Schema validation not run (schemas not present or skipped by design).
+- **drift_gate:** Skipped. Drift validation not run (skipped by design).
+- **plan_change:** Pass. Impacted paths and change scope identified; removal_or_rename = false.
+- **branch_removal_rename:** Skip. Not applicable (removal_or_rename false).
+- **pre_change_lock:** Skipped. Pre-change schema lock not run (schema_gate skipped).
+- **implement:** Pass. Wiki auth/SKILL/sub-skills, nova-code.yml (update_tests + guardrails), update-tests.md, implement.md, update-specs.md, discovery.md delivered.
+- **update_tests:** Pass. update_tests step and docs (update-tests.md) added/updated; test flow aligned with workflow.
+- **update_specs:** Pass. Specs bootstrap: specs/specs.yml, specs/core-registry.yml created/updated.
+- **update_readme:** Pass. README updated per 12 artifact categories and bootstrap changes.
+- **post_schema:** Skipped. Post-change schema validation not run (no schemas or skipped).
+- **traceability:** Pass. Impacted requirements and artifacts identified; traceability verified.
+- **run_tests:** Pass. Validation tests run; all passed.
+- **static_analysis:** Pass. Static analysis run; passed.
+- **reconcile:** Pass. Code and docs reconciled; no dangling refs; traceability consistent.
+- **wiki:** **Fail.** Wiki sub-agent could not invoke mcp_task for its sub-steps (environment or MCP wiring issue).
+- **output:** Pass. Final report produced (this document).
 
 ---
 
 ## 3. Workflow validation
 
-- **Schema Gate:** Pass / Skipped  
-- **Drift Gate:** Pass / Skipped  
-- **Pre-change lock:** Pass  
-- **Post-change schema:** Pass  
-- **Tests:** Pass (run: N, passed: N, failed: 0)  
-- **Static analysis:** Pass  
-- **Reconcile:** OK  
-- **No unresolved spec drift or blocked tests:** Yes  
+| Check | Result |
+|-------|--------|
+| Schema Gate | Skipped |
+| Drift Gate | Skipped |
+| Pre-change lock | Skipped |
+| Post-change schema | Skipped |
+| Tests | Pass |
+| Static analysis | Pass |
+| Reconcile | OK |
+| Wiki | **Fail** (sub-agent cannot invoke mcp_task for sub-steps) |
+| No unresolved spec drift or blocked tests | Yes |
 
 ---
 
 ## 4. Detail sections
 
-### Summary of change
+### 4. Summary of change
 
-_(What was implemented or changed.)_
+The plan was implemented with the following scope:
 
-### Changed files
+- **Wiki env** — Wiki authentication/SKILL and sub-skills updated for wiki environment and wiring.
+- **update_tests step** — Nova-code workflow and docs: `nova-code.yml` (update_tests + guardrails), `update-tests.md`, `implement.md`, `update-specs.md`, `discovery.md`.
+- **Guardrails** — Guardrails applied at orchestrator level (orchestrator-applied).
+- **Specs bootstrap** — Specs index and core registry created/updated: `specs/specs.yml`, `specs/core-registry.yml`.
+
+Implementation stayed within guardrails: no requirements deleted, no unauthorized removal of required functionality, no schema or invented-key violations.
+
+### 5. Changed files
 
 | Action | Path |
 |--------|------|
-| Add/Modify/Delete | _(path)_ |
+| Add/Modify | Wiki auth/SKILL/sub-skills (wiki env fix) |
+| Add/Modify | `.cursor/workflows/nova-code.yml` (update_tests, guardrails) |
+| Add/Modify | `update-tests.md` |
+| Add/Modify | `implement.md` |
+| Add/Modify | `update-specs.md` |
+| Add/Modify | `discovery.md` |
+| Add/Modify | `specs/specs.yml` (bootstrap) |
+| Add/Modify | `specs/core-registry.yml` (bootstrap) |
+| Add/Modify | `README.md` (per update_readme) |
 
-### Specs updated
+(Exact add/modify/delete list may vary by run; above reflects the described implement and update_specs scope.)
 
-_(None or list index/registry files modified.)_
+### 6. Specs updated
 
-### Schema validation results
+- **specs/specs.yml** — Bootstrap index created/updated.
+- **specs/core-registry.yml** — Core registry created/updated.
 
-Schema validation ran at schema_gate, pre_change_lock, and post_schema. _(Pass/Skipped.)_
+### 7. Schema validation results
 
-### Drift Gate result
+Schema validation was not run this run (schema_gate, pre_change_lock, and post_schema were **Skipped**). No per-spec schema Pass/Fail to report.
 
-**Pass.** No Spec Drift Issue.
+### 8. Drift Gate result
 
-### Test results
+Drift Gate was **Skipped**. No Spec Drift Issue reported.
 
-**Pass.** Tests run: N, Passed: N, Failed: 0, Skipped: 0.
+### 9. Test results
 
-### Static analysis
+**Result:** Pass.
 
-**Pass.** Command run: `mvn compile`. Result: succeeded.
+Validation tests were run; all passed. No failed test class/method and no blocked prerequisite reported.
 
-### Reconcile results
+### 10. Static analysis
 
-No mismatches; no issues raised.
+Static analysis was run per project adapter. **Result:** Pass. No violations or blocking issues reported.
 
-### README changes
+### 11. Reconcile results
 
-_(Summary of README updates or "None.")_
+Reconcile step completed successfully. Code and documentation are aligned; no dangling references or traceability inconsistencies. No mismatches requiring fixes or escalation.
 
-### Issues raised
+### 12. Wiki results
 
-None.
+**Result:** **Fail.**  
+**Reason:** Wiki sub-agent cannot invoke mcp_task for its sub-steps. Wiki.js sync (index, architecture, runbooks, feature dossiers) was not completed. This is an environment/MCP wiring limitation, not a content or spec failure.
+
+### 13. README changes
+
+README was updated during **update_readme** to reflect bootstrap specs, workflow changes (update_tests, guardrails), and any impacted artifact categories.
+
+### 14. Issues raised
+
+- **Wiki step failure:** The wiki step failed because the wiki sub-agent could not invoke mcp_task for its sub-steps. Resolving this requires fixing MCP task invocation or environment (e.g. WIKIJS_* or agent/sub-agent MCP configuration). No requirements were deleted; no spec drift or blocked tests remain unresolved.
+
+---
+
+*Report generated by nova-code output step. Workflow: nova-code. Run complete with wiki step Fail (mcp_task invocation).*

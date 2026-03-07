@@ -1,0 +1,15 @@
+# Nova-spec workflow — full-repo scan and complete spec update
+# Single step: scan the repo and update specs (requirements, assets, traceability, validation).
+
+name: nova-spec
+description: Full-repo scan and complete spec update. Adds missing requirements, assets, traceability, and validation to specs/specs.yml and registry files.
+
+run_order:
+  - scan_and_update
+
+phases:
+  - id: scan_and_update
+    type: step
+    skill: nova-spec-scan-update
+    location: .cursor/skills/nova-spec/scan-and-update.md
+    description: Scan entire repo; read current specs; update specs/specs.yml and all registry files with missing requirements, assets, traceability, validation; ensure consistency. Return Pass/Fail, summary, and list of changed spec file paths.

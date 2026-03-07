@@ -8,6 +8,8 @@ Use this to obtain a Bearer token for Wiki.js GraphQL requests. All sub-skills t
 - **WIKIJS_API_KEY** — If set, use it directly as the Bearer token; skip login.
 - **WIKIJS_EMAIL** and **WIKIJS_PASSWORD** — For local strategy login when API key is not set.
 
+If **WIKIJS_*** are not set in process env, load from project root **.env** if it exists: read the file, parse `KEY=value` lines (skip `#` and blank lines), and use **WIKIJS_URL**, **WIKIJS_EMAIL**, **WIKIJS_PASSWORD**, **WIKIJS_API_KEY** from the file.
+
 ## Login (when not using API key)
 
 1. POST to `WIKIJS_URL/graphql` with `Content-Type: application/json`.
@@ -29,7 +31,7 @@ Use this to obtain a Bearer token for Wiki.js GraphQL requests. All sub-skills t
 
 ## Path format
 
-Wiki.js may use paths with or without a leading slash (e.g. `Vinekeepers` or `Vinekeepers/Features`). If existing pages in the wiki use no leading slash, use the same format when creating or updating so paths match.
+**Path prefix** is from **@.cursor/project.yml** `wiki.path_prefix` (e.g. `/vinekeepers` or `Vinekeepers`). Wiki.js may use paths with or without a leading slash. If existing pages in the wiki use no leading slash, use the same format when creating or updating so paths match. When using path_prefix, apply it consistently (with or without leading slash) per auth.md and existing wiki pages.
 
 ## Create/update
 

@@ -1,12 +1,12 @@
 # Nova-wiki-prepare
 
-**Inputs:** User request, handoff from nova-code. Handoff should include **plan_change** (impacted registry spec file paths, impacted asset paths/ids) and **implement** (list of changed file paths) when provided by the orchestrator. Spec index path (default `specs/specs.yml`).
+**Inputs:** User request, handoff from nova-code. Handoff should include **plan_change** (impacted registry spec file paths, impacted asset paths/ids) and **implement** (list of changed file paths) when provided by the orchestrator. Spec index path from **@.cursor/project.yml** `paths.specs_index` if present, else `specs/specs.yml`.
 
 **Outputs:** Wiki context object: `{ domains, features, updates, affected_features }`. No Wiki.js API calls.
 
 ## Instructions
 
-1. Read the project spec index (**@specs/specs.yml**) and load every registry listed in `specs[].file`. **Wiki–spec alignment:** The feature list and domain list must match the current spec index and registries; if a registry was removed from specs, do not include it (do not create new wiki pages for removed registries).
+1. Read the project spec index (path from **@.cursor/project.yml** `paths.specs_index` or `specs/specs.yml`) and load every registry listed in `specs[].file`. **Wiki–spec alignment:** The feature list and domain list must match the current spec index and registries; if a registry was removed from specs, do not include it (do not create new wiki pages for removed registries).
 
 2. **Domains:** Derive from registry ids (e.g. `vinekeepers.core` → slug `core`, `vinekeepers.bots.xyz` → `bots-xyz`). List: domain slug, display name, description (from `project.name` / `project.description`).
 

@@ -17,7 +17,7 @@
 
 - **Index:** specs/specs.yml — _(N registries or "not present.")_
 - **Primary assets:** _(paths or "N/A.")_
-- **Validation:** test `mvn test`, static_analysis `mvn compile`, shell powershell.
+- **Validation:** _(From **specs/specs.yml** `validation` or **@.cursor/project.yml** `validation_defaults`:_ test command, static_analysis command, shell.)
 
 ---
 
@@ -25,7 +25,7 @@
 
 | Result | Details |
 |--------|--------|
-| **Pass** | `mvn test` completed with exit code 0. |
+| **Pass** | _(test command from config)_ completed with exit code 0. |
 
 ---
 
@@ -47,7 +47,7 @@ No dangling refs. Traceability consistent. README matches. _(Or list changes.)_
 
 | Result | Details |
 |--------|--------|
-| **Pass** | `mvn compile` completed with exit code 0. |
+| **Pass** | _(static_analysis command from config)_ completed with exit code 0. |
 
 ---
 

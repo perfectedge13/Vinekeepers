@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.example/schemas/specs-index.schema.json",
+  "title": "Spec index (specs.yml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "change_triggers", "specs", "interfaces"],
+  "properties": {
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional project adapter: commands and shell for portability",
+      "properties": {
+        "commands": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "test": { "type": "string", "minLength": 1 },
+            "static_analysis": { "type": "string", "minLength": 1 }
+          }
+        },
+        "shell": { "type": "string", "minLength": 1 },
+        "entrypoint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_assets"],
+      "properties": {
+        "primary_assets": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 0
+        }
+      }
+    },
+    "change_triggers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths"],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 0
+        }
+      }
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string", "minLength": 1 }
+        }
+      },
+      "minItems": 0
+    },
+    "interfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cli"],
+      "properties": {
+        "cli": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command"],
+            "properties": {
+              "command": { "type": "string", "minLength": 1 },
+              "description": { "type": "string" }
+            }
+          },
+          "minItems": 0
+        }
+      }
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slug", "spec_file"],
+        "properties": {
+          "slug": { "type": "string", "minLength": 1 },
+          "spec_file": { "type": "string", "minLength": 1 }
+        }
+      },
+      "minItems": 0,
+      "description": "Optional. Domain to registry file mapping; can be derived from specs[].file (stem = slug)."
+    }
+  }
+}

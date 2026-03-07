@@ -23,9 +23,10 @@ Sub-skills that run commands (e.g. run-tests, static-analysis) use the project a
 
 ## Sub-skills in this folder
 
+Guardrails are now a selectively applied rule: **@.cursor/rules/guardrails.mdc** (referenced from spec-workflow-core).
+
 | File | Purpose |
 |------|---------|
-| **guardrails.md** | Apply guardrails before coding: no deleting requirements, no new keys, repair drift first. |
 | **requirement-tracking.md** | When to create, update, or split requirements; id and traceability rules. |
 | **discovery.md** | Read spec index, load registry specs (scope from context or "all"), summarize index, registries, README. |
 | **schema-gate.md** | Run validate-specs; Pass/Fail + Spec Drift Issue. |
@@ -37,6 +38,6 @@ Sub-skills that run commands (e.g. run-tests, static-analysis) use the project a
 
 Workflows set `location: .cursor/skills/common/<file>.md` for these steps.
 
-**Nova-code layer alignment:** Nova-code uses common for the **design** layer (discovery), **pre_change** (guardrails), **validation** (run-tests, static-analysis), **wrap_up** (reconcile), and **documentation** (update-readme). The **implementation** and **documentation** layers also use nova-code–specific sub-skills under `.cursor/skills/nova-code/implementation/` and `.cursor/skills/nova-code/documentation/`. See [nova-code/layers.yml](.cursor/skills/nova-code/layers.yml) for the full step-to-layer map.
+**Nova-code layer alignment:** Nova-code uses common for the **design** layer (discovery), **pre_change** (schema_gate, drift_gate), **validation** (run-tests, static-analysis), **wrap_up** (reconcile), and **documentation** (update-readme). The **implementation** and **documentation** layers also use nova-code–specific sub-skills under `.cursor/skills/nova-code/implementation/` and `.cursor/skills/nova-code/documentation/`. See [nova-code/layers.yml](.cursor/skills/nova-code/layers.yml) for the full step-to-layer map.
 
 **Nova-wiki:** The nova-code workflow includes a **wiki** step that invokes the **nova-wiki** skill (`.cursor/skills/nova-wiki/`). Nova-wiki syncs a Wiki.js instance from specs and handoff. It requires `WIKIJS_URL` and either `WIKIJS_EMAIL`/`WIKIJS_PASSWORD` or `WIKIJS_API_KEY` in the environment (see `.env.example`). If these are not set, the wiki step reports **Skip** and does not block the run.

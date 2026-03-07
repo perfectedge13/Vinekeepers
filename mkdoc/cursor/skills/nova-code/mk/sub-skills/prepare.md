@@ -1,0 +1,42 @@
+# Prepare (mk)
+
+## Summary
+
+Reads specs (index + registries); computes domains and features; from handoff decides what to update; bootstraps mkdoc/ if missing. Outputs mk context for later steps.
+
+## Key points
+
+- See **.cursor/skills/nova-code/mk/sub-skills/prepare.md** for full instructions.
+
+## Source (markdown)
+
+<details class="skill-source-wrap">
+<summary>Click to expand</summary>
+
+```markdown
+# Nova-mk-prepare
+
+**Inputs:** User request, handoff from nova-code. Handoff should include **plan_change** (impacted registry spec file paths, impacted asset paths/ids) and **implement** (list of changed file paths) when provided by the orchestrator. Spec index path from **@.cursor/project.yml** `paths.specs_index` if present, else `specs/specs.yml`.
+
+**Outputs:** Mk context object: `{ domains, features, updates, affected_features }`. No API calls. Optionally bootstrap docs dir if missing.
+
+**References:** **@.cursor/skills/common/project-config.md**. **Docs dir:** `paths.docs_dir` (default mkdoc). **Project name:** `project_name` or first registry `project.name`. **Site name:** `docs.site_name` or project name.
+
+## Instructions
+
+1. **Bootstrap:** If the **docs dir** (from project config, default mkdoc) does not exist, create it. If its **index.md** does not exist, create it with minimal content: H1 &lt;project name from config or registry&gt;, then `# Overview` (one sentence project summary from README or specs), then `# Quick links` with bulleted links to [Features](features/index.md), [Architecture](architecture.md), [Runbooks](runbooks/index.md), [Cursor](cursor/index.md). If the **mkdocs config** (paths.mkdocs_file at project root, default mkdocs.yml) does not exist, create it so that `mkdocs serve` works when run from the project root: `site_name:` &lt;docs.site_name or project name&gt;, `docs_dir:` &lt;paths.docs_dir&gt;, and a default `nav` (Home, Features, Architecture, Runbooks as in nova-spec bootstrap). This ensures later steps can write into the docs dir and MkDocs can serve the site. If you ever generate a full Features nav (listing domains/features), use the domain-nested structure per **@.cursor/skills/nova-spec/sub-skills/sync-mkdoc.md** (Overview, Domains, then one subsection per domain with domain index + features).
+
+2. Read the project spec index (path from project config) and load every registry listed in `specs[].file`. **Spec alignment:** The feature list and domain list must match the current spec index and registries; if a registry was removed from specs, do not include it.
+
+3. **Domains:** Derive from registry file stem (e.g. `core-registry.yml` → slug `core`). List: domain slug, display name, description (from `project.name` / `project.description`).
+
+4. **Features:** If the registry has a **features** array (per req-registry schema): use it. Each feature has `id`, `slug`, `title`, `requirement_ids`, optional `asset_ids`, `status` (draft | active | deprecated). Map each feature to its domain (domain = registry file stem). Output: feature slug, domain slug, display name (feature.title), status (feature.status). If the registry has **no** features array: fall back to one feature per domain — feature slug = domain slug, display name = project.name or "Domain &lt;domain&gt;", status derived from requirements (any deprecated → deprecated; any draft → draft; else active).
+
+5. **Affected_features (0..n):** If handoff includes impacted registry paths and/or impacted asset paths (or changed file paths from implement): for each such path, determine which registry owns it (each registry's `assets[].path`; match by path or by which registry file lists that asset). Collect the set of registries that own at least one impacted path; map each registry to its domain/feature. Output **affected_features** = list of (domain_slug, feature_slug) for those registries. If handoff has no impact data, set **affected_features** = all features (full sync).
+
+6. **Updates:** From the user request and handoff (implement summary, change_triggers), classify what to update: New feature → create dossier; Behavior change → update feature summary + add decision note; Bug/root cause → update known-issues or runbook; Schema/interface change → update contracts; Major refactor → update architecture + affected feature pages; Deprecation → mark status and link successor.
+
+7. Output the mk context `{ domains, features, updates, affected_features }` so the next steps (mk_index, mk_architecture, mk_runbooks, mk_feature_dossiers) can use it. Return: Pass, and a short summary of domains count, features count, update types, and affected_features count (or "all"). If you bootstrapped the docs dir or mkdocs config at project root, say so in the summary.
+```
+
+</details>

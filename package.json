@@ -1,0 +1,17 @@
+{
+  "name": "vinekeepers-specs",
+  "version": "1.0.0",
+  "description": "Spec validation and drift checks for Vinekeepers (npm scripts for nova-code gates)",
+  "private": true,
+  "scripts": {
+    "validate-specs": "node scripts/validate-specs.cjs",
+    "validate-drift": "node scripts/validate-drift.cjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.12.0",
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

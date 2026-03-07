@@ -6,6 +6,8 @@
 
 ## Process (ordered steps)
 
+**Bootstrap when specs missing:** If **specs/specs.yml** does not exist, create it per **@specs/schema/specs-index.schema.json**: include `scope.primary_assets`, `change_triggers.paths`, `specs` (e.g. core-registry.yml), `interfaces.cli`. If a registry file referenced in the index does not exist, create it per **@specs/schema/req-registry.schema.json** (schema, project, enums, dependencies, assets, requirements). In **Scope** below: if plan_change had no impacted registry (no index), treat the bootstrap-created registry as impacted.
+
 1. **Scope** — From plan_change output, list impacted registry files and impacted assets/requirements.
 
 2. **Requirement decisions** — For each impacted registry, decide whether to **create new**, **update existing**, or **split** requirements using the rules in **@.cursor/skills/common/requirement-tracking.md**. For splits, follow the "Procedure for splitting a requirement" in that doc.

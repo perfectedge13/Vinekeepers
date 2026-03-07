@@ -9,13 +9,13 @@ description: Spec-driven implementation workflow. Discovery → gates → execut
 # Execute these step IDs in this order (look up each in phases or steps).
 run_order:
   - discovery
-  - guardrails
   - schema_gate
   - drift_gate
   - plan_change
   - branch_removal_rename
   - pre_change_lock
   - implement
+  - update_tests
   - update_specs
   - update_readme
   - post_schema
@@ -23,7 +23,7 @@ run_order:
   - run_tests
   - static_analysis
   - reconcile
-  - wiki
+  - mk
   - output
 
 phases:
@@ -32,11 +32,6 @@ phases:
     skill: nova-spec-discovery
     location: .cursor/skills/common/discovery.md
     description: Read index, load relevant registry specs (scope from context), summarize primary_assets and README.
-
-  - id: guardrails
-    type: step
-    location: .cursor/skills/common/guardrails.md
-    description: Apply guardrails — no deleting requirements, no removing required functionality without permission, no schema changes or invented keys; repair spec drift before coding; consider and avoid anti_patterns from impacted specs.
 
   - id: schema_gate
     type: gate
@@ -59,6 +54,7 @@ phases:
       - branch_removal_rename
       - pre_change_lock
       - implement
+      - update_tests
       - update_specs
       - update_readme
       - post_schema
@@ -66,7 +62,7 @@ phases:
       - run_tests
       - static_analysis
       - reconcile
-      - wiki
+      - mk
       - output
 
 # When plan_change sets removal_or_rename, run this sequence then rejoin at pre_change_lock.
@@ -105,6 +101,10 @@ steps:
     skill: nova-implement
     location: .cursor/skills/nova-code/implementation/implement.md
     description: Implement the requested code change; keep scope to impacted specs unless shared interfaces affected. Consider and avoid anti_patterns listed on impacted requirements and assets (see guardrails).
+  update_tests:
+    skill: nova-update-tests
+    location: .cursor/skills/nova-code/implementation/update-tests.md
+    description: Add or update unit tests for new/changed behavior from implement; run mvn test; return Pass/Fail and list of test file paths.
   update_specs:
     skill: nova-update-specs
     location: .cursor/skills/nova-code/documentation/update-specs.md
@@ -134,10 +134,10 @@ steps:
     skill: nova-reconcile
     location: .cursor/skills/common/reconcile.md
     description: Reconcile specs and code; no dangling refs; traceability consistent. See common/reconcile.md.
-  wiki:
-    skill: nova-wiki
-    location: .cursor/skills/nova-wiki/SKILL.md
-    description: Run wiki workflow to sync Wiki.js from specs and handoff (new feature, behavior change, schema change, refactor, deprecation).
+  mk:
+    skill: nova-mk
+    location: .cursor/skills/nova-code/mk/SKILL.md
+    description: Run mk workflow to sync mkdoc/ from specs and handoff (new feature, behavior change, schema change, refactor, deprecation).
   output:
     skill: nova-output
     location: .cursor/skills/nova-code/wrap_up/output.md
