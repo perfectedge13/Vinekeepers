@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-06T23:45:00Z"
+  updated_utc: "2026-03-07T20:45:10Z"
 
 project:
   id: vinekeepers
@@ -12,7 +12,7 @@ project:
     runtime: "21"
 
 enums:
-  status: [draft, accepted, deprecated]
+  status: [draft, active, deprecated]
   priority: [low, medium, high]
   type: [functional, non-functional, constraint]
   handling_strategy: [fail, retry, skip]
@@ -22,30 +22,53 @@ enums:
   dependency_criticality: [optional, required]
 
 dependencies:
-  items: []
+  items:
+    - id: DEP-JDA
+      kind: library
+      name: JDA
+      scope: runtime
+      criticality: required
+      spec: net.dv8tion:JDA
+      install_hint: Maven dependency
+      used_by_requirements: [REQ-CONNECTORS-DISCORD-001]
 
 assets:
   - id: ASSET-DISCORD-SOURCE
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordEventSource.java
-    role: Discord event source and reply sender
+    role: Discord event source and reply sender that delegates runtime receive/send work to the Discord gateway
     requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-DISCORD-REPLY
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordReplySender.java
     role: Interface for sending replies back to Discord (channelId, messageId, content)
     requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-DISCORD-GATEWAY
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/JdaDiscordGateway.java
+    role: JDA-backed Discord gateway for receiving live messages and sending replies
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-DISCORD-GATEWAY-CONTRACT
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/DiscordGateway.java
+    role: Gateway contract for Discord receive/send operations used by the event source
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-GITHUB-SOURCE
     kind: source
     path: src/main/java/com/vinekeepers/connectors/GitHubEventSource.java
     role: GitHub event source
     requires: [REQ-CONNECTORS-GITHUB-001]
+    feature_ids: [FEAT-CONNECTORS-GITHUB]
 
 requirements:
   - id: REQ-CONNECTORS-DISCORD-001
     title: Discord event source and reply
-    statement: DiscordEventSource implements EventSource and translates Discord payloads into internal events; DiscordReplySender provides the interface for sending replies back to Discord (channelId, messageId, content). Engine delivers workflow replies to Discord when the event source is Discord.
-    status: accepted
+    statement: DiscordEventSource implements EventSource and translates Discord payloads, including mention metadata when available, into internal events; the JDA-backed Discord gateway receives live Discord messages and sends replies; DiscordReplySender provides the interface for sending replies back to Discord (channelId, messageId, content). Engine delivers workflow replies to Discord when the event source is Discord.
+    status: active
     priority: medium
     type: functional
     behavior:
@@ -57,18 +80,32 @@ requirements:
     acceptance:
       criteria:
         - DiscordEventSource exists and implements EventSource and emits events onto the event bus
+        - DiscordEventSource can pass Discord mention metadata through the internal event payload for routing
+        - Discord connector can send replies back to the originating channel or message through the Discord API
         - DiscordReplySender interface supports sending replies (channelId, messageId, content) to Discord
         - Replies from the engine are delivered to Discord via the reply path when source is Discord
       examples: []
     traceability:
-      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY]
+      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT]
       symbols: []
     validation:
       tests:
+        - id: UNIT-ENGINE-DISCORD-REPLY
+          title: VinekeepersEngineTest
+          intent: Verify engine-delivered workflow replies are sent back through the Discord reply path
+          testClass: com.vinekeepers.core.VinekeepersEngineTest
+          testMethod: lunaWorkflowWithReplySenderSendsReplyToDiscord
+          preconditions: []
         - id: UNIT-DISCORD-EVENT-SOURCE
           title: DiscordEventSourceTest
           intent: Verify Discord event source and reply sender behavior
           testClass: com.vinekeepers.connectors.DiscordEventSourceTest
+          preconditions: []
+        - id: UNIT-DISCORD-EVENT-SOURCE-MENTIONS
+          title: DiscordEventSourceTest
+          intent: Verify DiscordEventSource publishes mention metadata for downstream routing
+          testClass: com.vinekeepers.connectors.DiscordEventSourceTest
+          testMethod: startPublishesStubMessageWithMentionsMetadata
           preconditions: []
         - id: MANUAL-CONNECTORS-DISCORD
           title: Discord connector compiles and implements interface
@@ -81,7 +118,7 @@ requirements:
   - id: REQ-CONNECTORS-GITHUB-001
     title: GitHub event source
     statement: GitHubEventSource implements EventSource and translates GitHub payloads into internal events on the event bus.
-    status: accepted
+    status: active
     priority: medium
     type: functional
     behavior:
@@ -113,11 +150,19 @@ features:
     slug: discord
     title: Discord event source and reply
     requirement_ids: [REQ-CONNECTORS-DISCORD-001]
-    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY]
+    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT]
     status: active
+    domain_slug: connectors
+    doc_path: features/domain/connectors/discord.md
+    summary: Discord event source and reply; a JDA-backed gateway receives live messages, preserves mention metadata for routing, and delivers workflow replies back to Discord.
   - id: FEAT-CONNECTORS-GITHUB
     slug: github
     title: GitHub event source
     requirement_ids: [REQ-CONNECTORS-GITHUB-001]
     asset_ids: [ASSET-GITHUB-SOURCE]
     status: active
+    domain_slug: connectors
+    doc_path: features/domain/connectors/github.md
+    summary: GitHubEventSource implements EventSource and translates GitHub payloads into internal events on the event bus.
+
+

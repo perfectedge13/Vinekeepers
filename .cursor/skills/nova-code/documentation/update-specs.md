@@ -20,7 +20,7 @@
    - Update validation.tests (unitTestRef/manualTest) and link tests to the correct requirement(s).
    - Update dependencies.items[].used_by_requirements.
    - **Update anti_patterns** — Consider recent exchanges in the agent chat (rework, change requests, corrections). If something **did not work** (e.g. failed approach, rework requested, user correction), add a short, factual entry to the **anti_patterns** array of the relevant requirement or asset. Record only what didn't work; do not record preferences or style choices. Keep each entry one clear sentence (e.g. "Do not use X because Y failed"). If nothing in the chat qualifies, leave anti_patterns unchanged.
-   - When editing a registry, consider updating **schema.updated_utc** (and optionally bumping version) so changes are auditable.
+   - When editing a registry, update **schema.updated_utc** only if the normalized registry content changed semantically (and optionally bump version when appropriate). Do not churn the timestamp on a no-op rewrite.
    - If index scope/entrypoints or touched files changed: update index (interfaces, change_triggers, primary_assets as per schema).
 
 4. **Consistency check** — After applying updates, ensure: every requirement id in assets[].requires and assets[].symbols[].requires exists in requirements[].id; every requirement's traceability.assets lists exactly the assets that implement it (i.e. that list this requirement in their requires or symbols[].requires). Fix any mismatch before proceeding.

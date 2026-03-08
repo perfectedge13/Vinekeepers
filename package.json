@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "validate-specs": "node scripts/validate-specs.cjs",
-    "validate-drift": "node scripts/validate-drift.cjs"
+    "validate-drift": "node scripts/validate-drift.cjs",
+    "validate-docs": "node scripts/validate-docs.cjs",
+    "test:spec-tools": "node --test scripts/tests/*.test.cjs"
   },
   "devDependencies": {
     "ajv": "^8.12.0",

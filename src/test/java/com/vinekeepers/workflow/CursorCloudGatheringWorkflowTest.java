@@ -1,9 +1,16 @@
 package com.vinekeepers.workflow;
 
+import com.vinekeepers.core.cursor.CursorAgentConversation;
+import com.vinekeepers.core.cursor.CursorAgentDetails;
+import com.vinekeepers.core.cursor.CursorAgentLaunchRequest;
+import com.vinekeepers.core.cursor.CursorAgentLaunchResult;
+import com.vinekeepers.core.cursor.CursorAgentMessage;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.events.Event;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,10 +20,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CursorCloudGatheringWorkflowTest {
 
     private static final CursorCloudAdapter NO_OP_ADAPTER = new CursorCloudAdapter() {
-        @Override public String createBranch(String p, String b) { return ""; }
-        @Override public String runNovaCommit(String p, String c) { return ""; }
-        @Override public String push(String p) { return ""; }
-        @Override public String createPr(String p, String t) { return ""; }
+        @Override
+        public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+            return new CursorAgentLaunchResult("bc_1", "Luna", "CREATING",
+                    request.repositoryUrl(), request.baseRef(), request.branchName(),
+                    "https://cursor.com/agents?id=bc_1", null, true, Instant.now());
+        }
+
+        @Override
+        public CursorAgentDetails getAgent(String agentId) {
+            return new CursorAgentDetails(agentId, "Luna", "RUNNING", null, null, null, null, null, null, Instant.now());
+        }
+
+        @Override
+        public CursorAgentConversation getConversation(String agentId) {
+            return new CursorAgentConversation(agentId, List.of(new CursorAgentMessage("m1", "assistant_message", "Working")));
+        }
+
+        @Override
+        public void addFollowup(String agentId, String promptText) {
+        }
     };
 
     private static Event eventWithContent(String content) {
@@ -60,30 +83,40 @@ class CursorCloudGatheringWorkflowTest {
     void awaitingChangeWithInputRunsAdapterAndCompletes() {
         CursorCloudAdapter stub = new CursorCloudAdapter() {
             @Override
-            public String createBranch(String projectPathOrId, String branchName) {
-                return "Branch:" + branchName;
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                return new CursorAgentLaunchResult(
+                        "bc_42",
+                        "Luna feature",
+                        "CREATING",
+                        request.repositoryUrl(),
+                        request.baseRef(),
+                        request.branchName(),
+                        "https://cursor.com/agents?id=bc_42",
+                        null,
+                        true,
+                        Instant.now()
+                );
             }
+
             @Override
-            public String runNovaCommit(String projectPathOrId, String changeDescription) {
-                return "Commit done";
+            public CursorAgentDetails getAgent(String agentId) {
+                return new CursorAgentDetails(agentId, "Luna", "RUNNING", null, null, null, null, null, null, Instant.now());
             }
+
             @Override
-            public String push(String projectPathOrId) {
-                return "Pushed";
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
             }
+
             @Override
-            public String createPr(String projectPathOrId, String title) {
-                return "PR:" + title;
+            public void addFollowup(String agentId, String promptText) {
             }
         };
         GatheringState state = GatheringState.initial().withProject("proj").withCodeChange("add tests");
         CursorCloudGatheringWorkflow workflow = new CursorCloudGatheringWorkflow(stub);
         WorkflowResult<GatheringState> result = workflow.process(eventWithContent("add tests"), state);
         assertTrue(result.isDone());
-        assertTrue(result.getMessage().contains("Branch:"));
-        assertTrue(result.getMessage().contains("Commit done"));
-        assertTrue(result.getMessage().contains("Pushed"));
-        assertTrue(result.getMessage().contains("PR:"));
+        assertTrue(result.getMessage().contains("bc_42"));
         assertEquals(GatheringState.Step.DONE, result.getState().getStep());
     }
 

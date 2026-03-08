@@ -7,3 +7,4 @@ Discord connector implements EventSource; Bootstrap wires it to the EventBus. Se
 # Feature flow
 
 External Discord → DiscordEventSource → Event → EventBus.publish.
+

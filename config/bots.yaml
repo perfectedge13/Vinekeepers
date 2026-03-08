@@ -1,5 +1,6 @@
 # Bot definitions and routing for Vinekeepers
-# Luna: listens for /Luna on Discord, uses configured workflow luna_cursor (gather project + code change, cursor.fullRun)
+# Luna: listens for @Luna mentions on Discord, gathers repository + feature request,
+# then launches a Cursor Cloud agent run and reports progress back to chat.
 
 bots:
   - id: luna
@@ -14,7 +15,7 @@ bots:
 routing:
   - botId: luna
     filter:
-      discordTrigger: "/Luna"
+      discordMention: "luna"
 
 # Workflows DSL: id -> steps (ask_input, call_action, branch, done)
 workflows:
@@ -27,14 +28,19 @@ workflows:
         message: "Echo: {{userMessage}}"
   luna_cursor:
     steps:
-      - type: ask_input
-        prompt: "Which project do you want to update?"
+      - type: prompt_for_field
+        prompt: "Which GitHub repository should I update? Reply with a full URL or owner/repo."
         storeIn: project
-      - type: ask_input
-        prompt: "What code change should I make?"
+      - type: capture_field
+        storeIn: project
+      - type: prompt_for_field
+        prompt: "What feature or spec-driven code change should I implement?"
+        storeIn: codeChange
+      - type: capture_field
         storeIn: codeChange
       - type: call_action
         action: cursor.fullRun
         bind: {}
+        storeIn: launchMessage
       - type: done
-        message: "Session complete. Use /Luna again to start."
+        message: "{{launchMessage}}"

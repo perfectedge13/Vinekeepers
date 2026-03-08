@@ -1,7 +1,7 @@
 # Nova-code workflow — spec-driven implementation
 # Single source of truth for the flow. Orchestrator runs phases in order;
 # gates STOP on failure (output Spec Drift Issue). Branch removal_rename when plan_change.removal_or_rename.
-# Shared steps (discovery, schema_gate, drift_gate, run_tests, static_analysis, reconcile, update_readme) use @.cursor/skills/common/
+# Shared steps (discovery, schema_gate, drift_gate, run_tests, build_check, reconcile, update_readme) use @.cursor/skills/common/
 
 name: nova-code
 description: Spec-driven implementation workflow. Discovery → gates → execution loop (or removal/rename protocol).
@@ -21,9 +21,10 @@ run_order:
   - post_schema
   - traceability
   - run_tests
-  - static_analysis
+  - build_check
   - reconcile
   - mk
+  - docs_gate
   - output
 
 phases:
@@ -44,11 +45,11 @@ phases:
     run: npm run validate-drift
     on_fail: stop
     skip_when: schema_not_present
-    description: Index and registry integrity (paths exist, refs valid, accepted→test when strict). If fail, output Spec Drift Issue.
+    description: Index and registry integrity (paths exist, refs valid, domains map to the correct registry, active requirements have tests when strict; legacy accepted is migration-only). If fail, output Spec Drift Issue.
 
   - id: execution_loop
     type: sequence
-    description: Plan → pre-change lock → implement → update specs/README → post schema → traceability → tests → static analysis → reconcile → output.
+    description: Plan → pre-change lock → implement → update specs/README → post schema → traceability → tests → build check → reconcile → output.
     steps:
       - plan_change
       - branch_removal_rename
@@ -60,9 +61,10 @@ phases:
       - post_schema
       - traceability
       - run_tests
-      - static_analysis
+      - build_check
       - reconcile
       - mk
+      - docs_gate
       - output
 
 # When plan_change sets removal_or_rename, run this sequence then rejoin at pre_change_lock.
@@ -126,10 +128,10 @@ steps:
     skill: nova-run-tests
     location: .cursor/skills/common/run-tests.md
     description: Run validation tests per project adapter; Pass/Fail/Blocked; full output and counts. See common/run-tests.md.
-  static_analysis:
+  build_check:
     skill: nova-static-analysis
     location: .cursor/skills/common/static-analysis.md
-    description: Run scoped static analysis from adapter. See common/static-analysis.md.
+    description: Run scoped build or compile verification from adapter. Canonical config key: build_check; accept legacy static_analysis during migration. See common/static-analysis.md.
   reconcile:
     skill: nova-reconcile
     location: .cursor/skills/common/reconcile.md
@@ -137,8 +139,13 @@ steps:
   mk:
     skill: nova-mk
     location: .cursor/skills/nova-code/mk/SKILL.md
-    description: Run mk workflow to sync mkdoc/ from specs and handoff (new feature, behavior change, schema change, refactor, deprecation).
+    description: Run mk workflow to sync the configured docs dir from specs and handoff (new feature, behavior change, schema change, refactor, deprecation).
+  docs_gate:
+    type: gate
+    run: npm run validate-docs
+    on_fail: stop
+    description: Verify the configured docs dir feature dossiers and mkdocs navigation match the current inferred domain and feature taxonomy.
   output:
     skill: nova-output
     location: .cursor/skills/nova-code/wrap_up/output.md
-    description: Return change summary, files/specs changed, schema/drift results, test results, static analysis, reconcile results, issues raised.
+    description: Return change summary, files/specs changed, schema/drift results, test results, build-check results, reconcile results, issues raised.

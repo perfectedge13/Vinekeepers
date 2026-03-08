@@ -10,11 +10,8 @@ const path = require('path');
 const yaml = require('js-yaml');
 const Ajv = require('ajv');
 
-const ROOT = path.resolve(__dirname, '..');
-const SPECS_DIR = path.join(ROOT, 'specs');
-const INDEX_PATH = path.join(SPECS_DIR, 'specs.yml');
-const INDEX_SCHEMA_PATH = path.join(SPECS_DIR, 'schema', 'specs-index.schema.json');
-const REGISTRY_SCHEMA_PATH = path.join(SPECS_DIR, 'schema', 'req-registry.schema.json');
+const ROOT = path.resolve(process.env.VINEKEEPERS_ROOT || path.join(__dirname, '..'));
+const PROJECT_CONFIG_PATH = path.join(ROOT, '.cursor', 'project.yml');
 
 function loadYaml(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
@@ -22,6 +19,13 @@ function loadYaml(filePath) {
 }
 
 function main() {
+  const projectConfig = fs.existsSync(PROJECT_CONFIG_PATH) ? loadYaml(PROJECT_CONFIG_PATH) : {};
+  const specsIndexRelPath = projectConfig.paths?.specs_index || 'specs/specs.yml';
+  const INDEX_PATH = path.join(ROOT, specsIndexRelPath);
+  const SPECS_DIR = path.dirname(INDEX_PATH);
+  const INDEX_SCHEMA_PATH = path.join(SPECS_DIR, 'schema', 'specs-index.schema.json');
+  const REGISTRY_SCHEMA_PATH = path.join(SPECS_DIR, 'schema', 'req-registry.schema.json');
+
   if (!fs.existsSync(INDEX_SCHEMA_PATH) || !fs.existsSync(REGISTRY_SCHEMA_PATH)) {
     console.error('Schema Gate skipped: specs/schema/*.schema.json not present.');
     process.exit(0);

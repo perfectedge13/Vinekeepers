@@ -24,7 +24,7 @@ Scan specs (index + registries) and mkdoc (feature dossiers) for information rel
 ## 2. Load specs
 
 - Read the spec index (path from project config) and load every registry listed in `specs[].file`.
-- For each scoped feature, locate its registry (by domain_slug = registry file stem) and the feature entry (by slug or id).
+- For each scoped feature, locate its feature entry by slug or id across all loaded registries. Match on the feature's effective `domain_slug` when present; do not assume `domain_slug` must equal the registry file stem.
 
 ---
 

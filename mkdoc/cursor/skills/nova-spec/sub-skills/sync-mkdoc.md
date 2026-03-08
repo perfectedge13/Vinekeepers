@@ -6,6 +6,8 @@ Syncs the docs dir from updated specs: bootstrap, derive domains/features, write
 
 ## Key points
 
+- Syncs project docs from the registry-derived domain and feature list, including per-feature dossiers and regenerated Features nav.
+- Performs a comprehensive gap-fill pass over home, features, architecture, runbooks, and Cursor docs.
 - See **.cursor/skills/nova-spec/sub-skills/sync-mkdoc.md** for full instructions.
 
 ## Source (markdown)
@@ -36,7 +38,7 @@ After writing spec files, sync the **docs dir** (from **@.cursor/project.yml** `
 For each registry file in the spec index (path from project config) → `specs[].file`:
 
 - Load the registry. **Domain** = registry file stem (e.g. `core-registry.yml` → domain slug `core`).
-- If the registry has a **features** array: use it. Each feature gives (id, slug, title, requirement_ids, asset_ids optional, status). Domain slug = registry stem. So we get a list of (domain_slug, feature_slug, feature_title, requirement_ids, asset_ids, status).
+- If the registry has a **features** array: use it. Each feature gives (id, slug, title, requirement_ids, asset_ids optional, status, and optionally doc_path, domain_slug, summary). Domain slug = registry stem (or use feature.domain_slug when present). **Feature summary doc path:** When a feature has **doc_path**, use it as the path to the feature summary page (relative to docs_dir). When doc_path is absent, derive as `features/domain/<domain_slug>/<feature.slug>.md` (domain_slug from registry stem or feature.domain_slug if present). So we get a list of (domain_slug, feature_slug, feature_title, requirement_ids, asset_ids, status, summary_path, summary optional).
 - If the registry has no features array: derive one feature per domain: slug = domain, title = project.name or "Domain &lt;domain&gt;", requirement_ids = all requirement ids in that registry, asset_ids = omit (implied), status = active/draft/deprecated from requirements.
 
 ## 3. Write docs structure
@@ -82,6 +84,37 @@ When syncing, **update all documents comprehensively**. You may **skip** files t
 
 - Regenerate or patch nav so it is complete and consistent: Home, Features (nested by domain, each domain with its features), Architecture, Runbooks (all five), **Cursor** (Overview, Rules with index + each rule, Skills with index + each skill and nested sub-skill pages, Workflows with index + each workflow). Remove or update stale entries (e.g. features or skills no longer in .cursor or specs).
 
+## 3c. Comprehensive update (gap-fill)
+
+When syncing, **update all documents comprehensively**. You may **skip** files that already satisfy every requirement below; **create** missing files; **update** existing files that lack required sections, markup, or links. Do not only create missing docs—also fix gaps in existing docs.
+
+**Index and home**
+
+- `index.md`: H1 = project name (from config/registry); `# Overview`; `# Quick links` includes [Features](features/index.md), [Architecture](architecture.md), [Runbooks](runbooks/index.md), **[Cursor](cursor/index.md)**. Fix if Quick links omit Cursor or any standard link.
+
+**Features**
+
+- `features/index.md`: Title Features; `# Definition of a feature`; `# Domains` table with every domain and link to `features/domain/<domain-slug>.md`.
+- `features/domain.md`: Title Domain index; list of domains with links to `features/domain/<domain-slug>.md`.
+- Each `features/domain/<domain-slug>.md`: Title = domain name; `# Features` table listing **every** feature in that domain (Feature, Status, link to feature summary). Add any missing features; remove stale entries.
+- For **each** feature in the registry: feature summary page `features/domain/<domain-slug>/<feature-slug>.md` and **all seven sub-pages** (how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams). Each must have the required sections per **page-formats.md**. In **diagrams.md**, ensure link to main architecture uses `../../../../architecture.md`. Add any missing sub-page or section; refresh content from registry where needed.
+
+**Architecture**
+
+- `architecture.md`: `# Overview`, `# System context`, `# Major subsystems`, `# Runtime flows`, `# Diagram`. If a Mermaid diagram is present, use **vertical** flow (`flowchart TB`). Add or fix any missing section.
+
+**Runbooks**
+
+- `runbooks/index.md`, `runbooks/operational.md`, `runbooks/troubleshooting.md`, `runbooks/recovery.md`, `runbooks/maintenance.md`: all exist with required headings per page-formats. Create any missing file; add missing headings to existing files.
+
+**Cursor docs**
+
+- Apply the **Cursor comprehensive checklist** in **@.cursor/skills/common/sync-cursor-docs.md** (section "Comprehensive update (gap-fill)"): every rule, skill, and workflow page exists; every skill/sub-skill page has TOC heading + expandable source with `skill-source-wrap`; all Mermaid diagrams use `flowchart TB`; nav includes every current rule, skill (with nested sub-skills), and workflow. Create missing cursor pages; **update** existing cursor pages that lack any of these.
+
+**Navigation (mkdocs.yml)**
+
+- Regenerate or patch nav so it is complete and consistent: Home, Features (nested by domain, each domain with its features), Architecture, Runbooks (all five), **Cursor** (Overview, Rules with index + each rule, Skills with index + each skill and nested sub-skill pages, Workflows with index + each workflow). Remove or update stale entries (e.g. features or skills no longer in .cursor or specs).
+
 ## 4. Links and paths
 
 Use relative links between markdown files as in page-formats. Create parent directories as needed.
@@ -92,3 +125,5 @@ Record the list of created or updated docs file paths (include the mkdocs config
 ```
 
 </details>
+
+

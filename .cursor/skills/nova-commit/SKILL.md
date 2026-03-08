@@ -12,6 +12,6 @@ This skill runs the full **verification and commit** workflow for the project.
 
 **How to run** — Read the workflow file. Then follow **@.cursor/skills/common/README.md** ("How to execute a workflow"). Execute phases in order; use each phase's **location** for steps. Do not run commit/push until all prior phases have passed — if any gate or step fails or is blocked, stop and report; do not commit.
 
-**Mandatory:** Run every phase in order. Do not skip any phase. The workflow has 9 phases: discovery, schema_gate, drift_gate, run_tests, plausibility_review, docs_reconcile, static_analysis, commit_push, output. Run each one before proceeding to the next (stop on gate/step failure; do not commit if any prior phase failed).
+**Mandatory:** Run every phase in order. Do not skip any phase. The workflow has 9 phases: discovery, schema_gate, drift_gate, run_tests, plausibility_review, docs_reconcile, build_check, commit_push, output. Run each one before proceeding to the next (stop on gate/step failure; do not commit if any prior phase failed).
 
 Do not duplicate the step list here; the workflow and the files at each `location` contain the full instructions.

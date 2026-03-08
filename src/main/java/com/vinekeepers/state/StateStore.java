@@ -1,6 +1,7 @@
 package com.vinekeepers.state;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -28,5 +29,9 @@ public final class StateStore {
 
     public boolean contains(String key) {
         return store.containsKey(key);
+    }
+
+    public Set<String> keys() {
+        return Set.copyOf(store.keySet());
     }
 }

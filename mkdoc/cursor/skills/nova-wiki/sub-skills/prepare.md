@@ -16,3 +16,5 @@ Reads specs (index + registries); computes domains and features; from handoff de
 See **.cursor/skills/nova-wiki/sub-skills/prepare.md** for the full source. Summary: reads specs; computes domains/features; outputs wiki context.
 
 </details>
+
+

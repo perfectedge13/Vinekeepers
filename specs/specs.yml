@@ -9,24 +9,59 @@ scope:
 change_triggers:
   paths:
     - src
+    - config
     - specs
+    - pom.xml
+    - README.md
+    - mkdoc
+    - mkdocs.yml
+    - AGENTS.md
+    - .cursor/project.yml
     - .cursor/rules
+    - .cursor/skills
     - .cursor/workflows
 
 specs:
   - file: core-registry.yml
   - file: connectors-registry.yml
 
+domains:
+  - slug: core
+    spec_file: core-registry.yml
+  - slug: env
+    spec_file: core-registry.yml
+  - slug: config
+    spec_file: core-registry.yml
+  - slug: bot
+    spec_file: core-registry.yml
+  - slug: events
+    spec_file: core-registry.yml
+  - slug: state
+    spec_file: core-registry.yml
+  - slug: tools
+    spec_file: core-registry.yml
+  - slug: audit
+    spec_file: core-registry.yml
+  - slug: reasoner
+    spec_file: core-registry.yml
+  - slug: workflow
+    spec_file: core-registry.yml
+  - slug: connectors
+    spec_file: connectors-registry.yml
+
 interfaces:
   cli:
     - command: mvn test
       description: Run unit tests
     - command: mvn compile
-      description: Compile
+      description: Build verification
+    - command: npm run validate-docs
+      description: Validate generated mkdocs content
 
 validation:
   commands:
     test: mvn test
+    build_check: mvn compile
     static_analysis: mvn compile
   shell: powershell
   entrypoint: src/main/java/com/vinekeepers/VinekeepersApp.java

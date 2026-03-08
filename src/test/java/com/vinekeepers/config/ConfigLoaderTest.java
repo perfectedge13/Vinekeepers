@@ -144,4 +144,22 @@ class ConfigLoaderTest {
         assertEquals("configured", bots.get(0).getWorkflowType());
         assertEquals(Map.of("workflowRef", "my_flow"), bots.get(0).getWorkflowParams());
     }
+
+    @Test
+    void buildRouterParsesDiscordMentionRouting(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            routing:
+              - botId: luna
+                filter:
+                  discordMention: luna
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        Router router = loader.buildRouter(config);
+
+        assertEquals(List.of("luna"), router.route(new com.vinekeepers.events.Event(
+                "discord:g:ch",
+                "message",
+                Map.of("content", "ping @Luna"))));
+    }
 }

@@ -4,5 +4,6 @@
 
 | Feature | Status | Link |
 |---------|--------|------|
-| Discord event source | active | [discord](connectors/discord.md) |
-| GitHub event source | active | [github](connectors/github.md) |
+| Discord event source and reply | active | [Discord event source and reply](connectors/discord.md) |
+| GitHub event source | active | [GitHub event source](connectors/github.md) |
+

@@ -1,13 +1,14 @@
 package com.vinekeepers.workflow;
 
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
+import com.vinekeepers.core.cursor.CursorAgentLaunchRequest;
+import com.vinekeepers.core.cursor.CursorAgentLaunchResult;
 import com.vinekeepers.events.Event;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Multi-turn workflow for Luna: gather project, then code change, then invoke Cursor Cloud API
- * (create feature branch, nova-code/nova-commit, push to GitHub, optional nova-pr).
+ * Legacy multi-turn workflow for Luna retained for tests and backwards compatibility.
  */
 public final class CursorCloudGatheringWorkflow implements Workflow<GatheringState> {
 
@@ -59,22 +60,22 @@ public final class CursorCloudGatheringWorkflow implements Workflow<GatheringSta
         if (change == null || change.isBlank()) {
             return WorkflowResult.continueWith(state.withStep(GatheringState.Step.AWAITING_CHANGE), "Describe the code change you want.");
         }
-        StringBuilder result = new StringBuilder();
         try {
-            String branchResult = cursorAdapter.createBranch(project, "luna-feature");
-            result.append(branchResult).append("\n");
-            String commitResult = cursorAdapter.runNovaCommit(project, change);
-            result.append(commitResult).append("\n");
-            String pushResult = cursorAdapter.push(project);
-            result.append(pushResult).append("\n");
-            String prResult = cursorAdapter.createPr(project, "Luna: " + change.substring(0, Math.min(50, change.length())));
-            result.append(prResult);
+            CursorAgentLaunchResult launch = cursorAdapter.launchAgent(new CursorAgentLaunchRequest(
+                    change,
+                    project,
+                    "main",
+                    "luna/legacy",
+                    true,
+                    ""
+            ));
+            GatheringState done = state.withStep(GatheringState.Step.DONE);
+            return WorkflowResult.done(done, "Launched Cursor agent " + launch.id());
         } catch (Exception e) {
             log.warn("Cursor adapter error", e);
-            result.append("Error: ").append(e.getMessage());
+            GatheringState done = state.withStep(GatheringState.Step.DONE);
+            return WorkflowResult.done(done, "Error: " + e.getMessage());
         }
-        GatheringState done = state.withStep(GatheringState.Step.DONE);
-        return WorkflowResult.done(done, result.toString());
     }
 
     private static String getUserMessage(Event event) {

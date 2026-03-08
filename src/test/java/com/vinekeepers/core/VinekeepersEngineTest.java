@@ -16,8 +16,15 @@ import com.vinekeepers.state.StateStore;
 import com.vinekeepers.connectors.DiscordReplySender;
 import com.vinekeepers.workflow.StubWorkflowRunner;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
+import com.vinekeepers.workflow.WorkflowRunResult;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.WorkflowRunnerFactory;
+import com.vinekeepers.workflow.ConfigurableWorkflowState;
+import com.vinekeepers.tools.Tool;
+import com.vinekeepers.tools.ToolRegistry;
+import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.reasoner.ProposedToolCall;
+import com.vinekeepers.reasoner.ReasonerOutput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -150,5 +157,55 @@ class VinekeepersEngineTest {
         engine.onEvent(second);
 
         assertTrue(auditLogs.size() >= 2);
+    }
+
+    @Test
+    void reasonerAppliesStatePatchRunsToolAndRepliesWhenWorkflowIsSilent() {
+        ToolRegistry registry = new ToolRegistry();
+        AtomicReference<Map<String, Object>> capturedToolArgs = new AtomicReference<>();
+        registry.register(new Tool() {
+            @Override
+            public String getId() {
+                return "echo";
+            }
+
+            @Override
+            public Object run(Map<String, Object> args) {
+                capturedToolArgs.set(args);
+                return "tool:" + args.get("message");
+            }
+        });
+        engine = new VinekeepersEngine(router, stateStore, auditLogs::add, new ToolRunner(registry));
+
+        BotDefinition bot = new BotDefinition(
+                "reasoner-bot",
+                new Persona("Reasoner", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("reasoner-bot", (event, store, botId) -> WorkflowRunResult.continueWithoutReply());
+        engine.registerReasoner("reasoner-bot", input -> new ReasonerOutput(
+                "reasoner reply",
+                true,
+                Map.of("status", "patched"),
+                List.of(new ProposedToolCall("echo", Map.of("message", input.getLastUserMessage())))));
+        AtomicReference<String> capturedReply = new AtomicReference<>();
+        engine.setReplySender((channelId, messageId, content) -> capturedReply.set(content));
+        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "reasoner-bot"));
+
+        Event event = new Event("discord:default", "message",
+                Map.of("channelId", "chan-9", "authorId", "user-1", "content", "ship it"));
+        engine.onEvent(event);
+
+        ConfigurableWorkflowState state = stateStore.get("bot:reasoner-bot:conv:chan-9:user-1",
+                ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals("patched", state.get("status"));
+        assertEquals("ship it", capturedToolArgs.get().get("message"));
+        assertEquals("reasoner reply", capturedReply.get());
+        assertTrue(auditLogs.stream().anyMatch(log ->
+                log.getAction().equals("reasoner_tool") && log.getDetail().equals("tool:ship it")));
+        assertTrue(auditLogs.stream().anyMatch(log ->
+                log.getAction().equals("reasoner") && log.getDetail().equals("reasoner reply")));
     }
 }

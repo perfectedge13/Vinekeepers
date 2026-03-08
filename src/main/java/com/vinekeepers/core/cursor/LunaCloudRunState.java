@@ -1,0 +1,163 @@
+package com.vinekeepers.core.cursor;
+
+import java.time.Instant;
+
+/**
+ * In-memory state for a Luna-triggered Cursor cloud agent run.
+ */
+public final class LunaCloudRunState {
+
+    private final String agentId;
+    private final String sessionKey;
+    private final String projectInput;
+    private final String repositoryUrl;
+    private final String baseRef;
+    private final String branchName;
+    private final String agentUrl;
+    private final String changeRequest;
+    private final String channelId;
+    private final String replyToMessageId;
+    private final Instant launchedAt;
+
+    private String status;
+    private String prUrl;
+    private String summary;
+    private String lastAssistantMessageId;
+    private String lastAssistantMessage;
+    private Instant lastPolledAt;
+    private Instant completedAt;
+    private boolean terminalNotificationSent;
+
+    public LunaCloudRunState(String agentId, String sessionKey, String projectInput,
+                             String repositoryUrl, String baseRef, String branchName,
+                             String agentUrl, String changeRequest, String channelId,
+                             String replyToMessageId, Instant launchedAt, String status) {
+        this.agentId = agentId;
+        this.sessionKey = sessionKey;
+        this.projectInput = projectInput;
+        this.repositoryUrl = repositoryUrl;
+        this.baseRef = baseRef;
+        this.branchName = branchName;
+        this.agentUrl = agentUrl;
+        this.changeRequest = changeRequest;
+        this.channelId = channelId;
+        this.replyToMessageId = replyToMessageId;
+        this.launchedAt = launchedAt;
+        this.status = status;
+    }
+
+    public synchronized String getAgentId() {
+        return agentId;
+    }
+
+    public synchronized String getSessionKey() {
+        return sessionKey;
+    }
+
+    public synchronized String getProjectInput() {
+        return projectInput;
+    }
+
+    public synchronized String getRepositoryUrl() {
+        return repositoryUrl;
+    }
+
+    public synchronized String getBaseRef() {
+        return baseRef;
+    }
+
+    public synchronized String getBranchName() {
+        return branchName;
+    }
+
+    public synchronized String getAgentUrl() {
+        return agentUrl;
+    }
+
+    public synchronized String getChangeRequest() {
+        return changeRequest;
+    }
+
+    public synchronized String getChannelId() {
+        return channelId;
+    }
+
+    public synchronized String getReplyToMessageId() {
+        return replyToMessageId;
+    }
+
+    public synchronized Instant getLaunchedAt() {
+        return launchedAt;
+    }
+
+    public synchronized String getStatus() {
+        return status;
+    }
+
+    public synchronized String getPrUrl() {
+        return prUrl;
+    }
+
+    public synchronized String getSummary() {
+        return summary;
+    }
+
+    public synchronized String getLastAssistantMessageId() {
+        return lastAssistantMessageId;
+    }
+
+    public synchronized String getLastAssistantMessage() {
+        return lastAssistantMessage;
+    }
+
+    public synchronized Instant getLastPolledAt() {
+        return lastPolledAt;
+    }
+
+    public synchronized Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public synchronized boolean isTerminalNotificationSent() {
+        return terminalNotificationSent;
+    }
+
+    public synchronized void applyAgentDetails(CursorAgentDetails details) {
+        if (details == null) {
+            return;
+        }
+        this.status = details.status();
+        this.prUrl = details.prUrl();
+        this.summary = details.summary();
+        this.lastPolledAt = Instant.now();
+        if (isTerminalStatus(details.status()) && this.completedAt == null) {
+            this.completedAt = Instant.now();
+        }
+    }
+
+    public synchronized void recordAssistantMessage(CursorAgentMessage message) {
+        if (message == null) {
+            return;
+        }
+        this.lastAssistantMessageId = message.id();
+        this.lastAssistantMessage = message.text();
+        this.lastPolledAt = Instant.now();
+    }
+
+    public synchronized void markTerminalNotificationSent() {
+        this.terminalNotificationSent = true;
+    }
+
+    public synchronized boolean isTerminal() {
+        return isTerminalStatus(status);
+    }
+
+    public static boolean isTerminalStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        return "FINISHED".equalsIgnoreCase(status)
+                || "ERROR".equalsIgnoreCase(status)
+                || "EXPIRED".equalsIgnoreCase(status);
+    }
+}

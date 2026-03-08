@@ -16,6 +16,7 @@
           "additionalProperties": false,
           "properties": {
             "test": { "type": "string", "minLength": 1 },
+            "build_check": { "type": "string", "minLength": 1 },
             "static_analysis": { "type": "string", "minLength": 1 }
           }
         },
@@ -91,7 +92,7 @@
         }
       },
       "minItems": 0,
-      "description": "Optional. Domain to registry file mapping; can be derived from specs[].file (stem = slug)."
+      "description": "Optional but authoritative when present. Maps first-class domain slugs to the registry file that stores their feature metadata. Registry files may contain features from multiple domains."
     }
   }
 }

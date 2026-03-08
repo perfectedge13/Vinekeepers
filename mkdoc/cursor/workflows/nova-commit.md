@@ -12,6 +12,8 @@ Full-suite verification and commit. Discovery (all registries) → gates → tes
 4. run_tests  
 5. plausibility_review  
 6. docs_reconcile  
-7. static_analysis  
+7. build_check  
 8. commit_push  
 9. output  
+
+

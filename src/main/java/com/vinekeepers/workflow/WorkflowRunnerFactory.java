@@ -1,5 +1,10 @@
 package com.vinekeepers.workflow;
 
+import com.vinekeepers.bot.BotDefinition;
+import com.vinekeepers.bot.ConversationMode;
+import com.vinekeepers.bot.ToolPolicy;
+import com.vinekeepers.tools.ToolRunner;
+
 import java.util.List;
 import java.util.Map;
 
@@ -12,7 +17,8 @@ public final class WorkflowRunnerFactory {
      * Create a runner for the given workflow type and params (no workflows section or action registry).
      */
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams) {
-        return create(workflowType, workflowParams, null, null);
+        return create(workflowType, workflowParams, null, null, null, ToolPolicy.allowAll(),
+                ConversationMode.SINGLE_EVENT, null);
     }
 
     /**
@@ -26,11 +32,32 @@ public final class WorkflowRunnerFactory {
      */
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry) {
+        return create(workflowType, workflowParams, workflows, actionRegistry, null, ToolPolicy.allowAll(),
+                ConversationMode.SINGLE_EVENT, null);
+    }
+
+    public static WorkflowRunner create(BotDefinition bot, Map<String, Object> workflows,
+                                        WorkflowActionRegistry actionRegistry, ToolRunner toolRunner) {
+        BotDefinition resolvedBot = bot;
+        if (resolvedBot == null) {
+            return create("stub", null, workflows, actionRegistry, toolRunner, ToolPolicy.allowAll(),
+                    ConversationMode.SINGLE_EVENT, null);
+        }
+        return create(resolvedBot.getWorkflowType(), resolvedBot.getWorkflowParams(), workflows, actionRegistry,
+                toolRunner, resolvedBot.getToolPolicy(), resolvedBot.getConversationMode(),
+                resolvedBot.getSessionKeyStrategy());
+    }
+
+    public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
+                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry,
+                                        ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                        ConversationMode conversationMode, String sessionKeyStrategy) {
         String type = workflowType != null && !workflowType.isBlank() ? workflowType : "stub";
         return switch (type) {
             case "configured" -> {
                 WorkflowDefinition def = resolveWorkflowDefinition(workflowParams, workflows);
-                yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry());
+                yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry(),
+                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy);
             }
             default -> new StubWorkflowRunner();
         };

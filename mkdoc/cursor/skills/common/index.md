@@ -18,3 +18,5 @@ Shared sub-skills used by nova-code, nova-commit, and other workflows. All conte
 | Static analysis | Run project static-analysis command; Pass/Fail. | [static-analysis](static-analysis.md) |
 | Sync Cursor docs | Enumerate rules, skills, workflows; write cursor/ pages and update mkdocs nav. | [sync-cursor-docs](sync-cursor-docs.md) |
 | Update readme | Review 12 artifact categories; update only impacted (incl. README/docs). | [update-readme](update-readme.md) |
+
+

@@ -19,7 +19,7 @@ Orchestrators (nova-code, nova-commit) run a workflow by doing the following. Do
 5. **Do not skip gates** unless the workflow explicitly allows it (e.g. `skip_when`).
 6. **Before finishing**, verify you ran every phase and every step in the workflow (use the workflow YAML or run_order as the checklist).
 
-Sub-skills that run commands (e.g. run-tests, static-analysis) use the project adapter: read `specs/specs.yml` for `validation.commands.test`, `validation.commands.static_analysis`, `validation.shell` when present.
+Sub-skills that run commands (e.g. run-tests, build-check) use the project adapter: read `specs/specs.yml` for `validation.commands.test`, canonical `validation.commands.build_check`, legacy `validation.commands.static_analysis`, and `validation.shell` when present.
 
 ## Sub-skills in this folder
 
@@ -32,12 +32,12 @@ Guardrails are now a selectively applied rule: **@.cursor/rules/guardrails.mdc**
 | **schema-gate.md** | Run validate-specs; Pass/Fail + Spec Drift Issue. |
 | **drift-gate.md** | Run validate-drift or manual drift checks; Pass/Fail + Spec Drift Issue. |
 | **run-tests.md** | Run project test command; full output and counts; Pass/Fail/Blocked. |
-| **static-analysis.md** | Run project static-analysis command; Pass/Fail. |
+| **static-analysis.md** | Run project build-check command (compile/build verification; legacy static_analysis alias supported); Pass/Fail. |
 | **reconcile.md** | Reconcile specs, code, and README; no dangling refs; fix or raise issues. |
 | **update-readme.md** | Review all 12 impacted artifact categories; update only impacted (incl. README/docs). Do not assume only code changes. |
 
 Workflows set `location: .cursor/skills/common/<file>.md` for these steps.
 
-**Nova-code layer alignment:** Nova-code uses common for the **design** layer (discovery), **pre_change** (schema_gate, drift_gate), **validation** (run-tests, static-analysis), **wrap_up** (reconcile), and **documentation** (update-readme). The **implementation** and **documentation** layers also use nova-code–specific sub-skills under `.cursor/skills/nova-code/implementation/` and `.cursor/skills/nova-code/documentation/`. See [nova-code/layers.yml](.cursor/skills/nova-code/layers.yml) for the full step-to-layer map.
+**Nova-code layer alignment:** Nova-code uses common for the **design** layer (discovery), **pre_change** (schema_gate, drift_gate), **validation** (run-tests, build-check), **wrap_up** (reconcile), and **documentation** (update-readme). The **implementation** and **documentation** layers also use nova-code–specific sub-skills under `.cursor/skills/nova-code/implementation/` and `.cursor/skills/nova-code/documentation/`. See [nova-code/layers.yml](.cursor/skills/nova-code/layers.yml) for the full step-to-layer map.
 
 **Nova-wiki:** The nova-code workflow includes a **wiki** step that invokes the **nova-wiki** skill (`.cursor/skills/nova-wiki/`). Nova-wiki syncs a Wiki.js instance from specs and handoff. It requires `WIKIJS_URL` and either `WIKIJS_EMAIL`/`WIKIJS_PASSWORD` or `WIKIJS_API_KEY` in the environment (see `.env.example`). If these are not set, the wiki step reports **Skip** and does not block the run.

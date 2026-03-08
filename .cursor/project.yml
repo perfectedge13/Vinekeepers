@@ -17,6 +17,7 @@ wiki:
 # Used when specs/specs.yml has no "validation" block
 validation_defaults:
   test: mvn test
+  build_check: mvn compile
   static_analysis: mvn compile
   shell: powershell
   entrypoint: src/main/java/com/vinekeepers/VinekeepersApp.java
@@ -25,7 +26,9 @@ validation_defaults:
 scan:
   root_config_files: [pom.xml, README.md, .env.example]
   source_dirs: [src/main/java, src/test/java]
+  bots_config: config/bots.yaml
 
 validation:
   gate_validate_specs: npm run validate-specs
   gate_validate_drift: npm run validate-drift
+  gate_validate_docs: npm run validate-docs

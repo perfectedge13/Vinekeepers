@@ -12,3 +12,5 @@ Vinekeepers coding standards, app flow, and config-based bots. Always-applied ru
 - Validation: run `mvn test` and `mvn compile`; use **PowerShell** for multi-step commands.
 - **Flow:** VinekeepersApp → Bootstrap → loadConfig → Engine; EventBus → Engine; Connectors publish to bus; Engine routes to bots, runs workflow then reasoner, persists state, audit, reply to Discord when source is Discord.
 - Bots and routing from YAML (config/bots.yaml); no hardcoded bot list. Adding a bot: add entry in YAML; optionally register custom Workflow or Reasoner in Bootstrap.
+
+

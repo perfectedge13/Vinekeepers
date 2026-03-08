@@ -16,3 +16,5 @@ For each feature ensures summary + 7 sub-pages (how-it-works, change-log, known-
 See **.cursor/skills/nova-wiki/sub-skills/feature-dossiers.md** for the full source. Summary: per feature ensures summary + 7 sub-pages on Wiki.js per page-formats.
 
 </details>
+
+

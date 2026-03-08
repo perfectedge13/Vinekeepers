@@ -1,0 +1,2461 @@
+
+<!DOCTYPE html>
+
+<html class="no-js" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<link href="../" rel="prev"/>
+<link href="implementation/plan-change/" rel="next"/>
+<link href="../../../assets/images/favicon.png" rel="icon"/>
+<meta content="mkdocs-1.6.1, mkdocs-material-9.7.4" name="generator"/>
+<title>Overview - Vinekeepers</title>
+<link href="../../../assets/stylesheets/main.484c7ddc.min.css" rel="stylesheet"/>
+<link href="../../../assets/stylesheets/palette.ab4e12ef.min.css" rel="stylesheet"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback" rel="stylesheet"/>
+<style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+<link href="../../../stylesheets/extra.css" rel="stylesheet"/>
+<script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+</head>
+<body data-md-color-accent="custom" data-md-color-primary="custom" data-md-color-scheme="slate" dir="ltr">
+<input autocomplete="off" class="md-toggle" data-md-toggle="drawer" id="__drawer" type="checkbox"/>
+<input autocomplete="off" class="md-toggle" data-md-toggle="search" id="__search" type="checkbox"/>
+<label class="md-overlay" for="__drawer"></label>
+<div data-md-component="skip">
+<a class="md-skip" href="#nova-code">
+          Skip to content
+        </a>
+</div>
+<div data-md-component="announce">
+</div>
+<header class="md-header md-header--shadow" data-md-component="header">
+<nav aria-label="Header" class="md-header__inner md-grid">
+<a aria-label="Vinekeepers" class="md-header__button md-logo" data-md-component="logo" href="../../.." title="Vinekeepers">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+</a>
+<label class="md-header__button md-icon" for="__drawer">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+</label>
+<div class="md-header__title" data-md-component="header-title">
+<div class="md-header__ellipsis">
+<div class="md-header__topic">
+<span class="md-ellipsis">
+            Vinekeepers
+          </span>
+</div>
+<div class="md-header__topic" data-md-component="header-topic">
+<span class="md-ellipsis">
+            
+              Overview
+            
+          </span>
+</div>
+</div>
+</div>
+<form class="md-header__option" data-md-component="palette">
+<input aria-label="Switch to light mode" class="md-option" data-md-color-accent="custom" data-md-color-media="" data-md-color-primary="custom" data-md-color-scheme="slate" id="__palette_0" name="__palette" type="radio"/>
+<label class="md-header__button md-icon" for="__palette_1" hidden="" title="Switch to light mode">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+</label>
+<input aria-label="Switch to dark mode" class="md-option" data-md-color-accent="custom" data-md-color-media="" data-md-color-primary="custom" data-md-color-scheme="default" id="__palette_1" name="__palette" type="radio"/>
+<label class="md-header__button md-icon" for="__palette_0" hidden="" title="Switch to dark mode">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+</label>
+</form>
+<script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+<label class="md-header__button md-icon" for="__search">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+</label>
+<div class="md-search" data-md-component="search" role="dialog">
+<label class="md-search__overlay" for="__search"></label>
+<div class="md-search__inner" role="search">
+<form class="md-search__form" name="search">
+<input aria-label="Search" autocapitalize="off" autocomplete="off" autocorrect="off" class="md-search__input" data-md-component="search-query" name="query" placeholder="Search" required="" spellcheck="false" type="text"/>
+<label class="md-search__icon md-icon" for="__search">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+</label>
+<nav aria-label="Search" class="md-search__options">
+<button aria-label="Clear" class="md-search__icon md-icon" tabindex="-1" title="Clear" type="reset">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+</button>
+</nav>
+</form>
+<div class="md-search__output">
+<div class="md-search__scrollwrap" data-md-scrollfix="" tabindex="0">
+<div class="md-search-result" data-md-component="search-result">
+<div class="md-search-result__meta">
+            Initializing search
+          </div>
+<ol class="md-search-result__list" role="presentation"></ol>
+</div>
+</div>
+</div>
+</div>
+</div>
+</nav>
+</header>
+<div class="md-container" data-md-component="container">
+<main class="md-main" data-md-component="main">
+<div class="md-main__inner md-grid">
+<div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+<div class="md-sidebar__scrollwrap">
+<div class="md-sidebar__inner">
+<nav aria-label="Navigation" class="md-nav md-nav--primary" data-md-level="0">
+<label class="md-nav__title" for="__drawer">
+<a aria-label="Vinekeepers" class="md-nav__button md-logo" data-md-component="logo" href="../../.." title="Vinekeepers">
+<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+</a>
+    Vinekeepers
+  </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../..">
+<span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_label" class="md-nav" data-md-level="1">
+<label class="md-nav__title" for="__nav_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Domains
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_label" class="md-nav" data-md-level="2">
+<label class="md-nav__title" for="__nav_2_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Domains
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/">
+<span class="md-ellipsis">
+    
+  
+    Domain index
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_2" id="__nav_2_2_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_2_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Core
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/core/">
+<span class="md-ellipsis">
+    
+  
+    Specs governance and bootstrap
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/engine/">
+<span class="md-ellipsis">
+    
+  
+    Event-driven engine orchestration
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_3" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_3" id="__nav_2_2_3_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Env
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_3_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_3">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Env
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/env/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/env/">
+<span class="md-ellipsis">
+    
+  
+    Environment and .env loading
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_4" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_4" id="__nav_2_2_4_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_4_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_4">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Config
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/config/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/config/">
+<span class="md-ellipsis">
+    
+  
+    Bot config from YAML
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_5" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_5" id="__nav_2_2_5_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Bot
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_5_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_5">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Bot
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/bot/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/routing/">
+<span class="md-ellipsis">
+    
+  
+    Event routing and normalized context
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/bot/">
+<span class="md-ellipsis">
+    
+  
+    Bot runtime definition and tool policy
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_6" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_6" id="__nav_2_2_6_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Events
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_6_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_6">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Events
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/events/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/events/">
+<span class="md-ellipsis">
+    
+  
+    Event bus and publish/subscribe
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_7" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_7" id="__nav_2_2_7_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    State
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_7_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_7">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    State
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/state/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/state/">
+<span class="md-ellipsis">
+    
+  
+    State store for workflow state
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_8" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_8" id="__nav_2_2_8_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Tools
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_8_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_8">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Tools
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/tools/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/tools/">
+<span class="md-ellipsis">
+    
+  
+    Tool registry and execution
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_9" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_9" id="__nav_2_2_9_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Audit
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_9_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_9">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Audit
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/audit/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/audit/">
+<span class="md-ellipsis">
+    
+  
+    Audit log for tool calls and outcomes
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_10" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_10" id="__nav_2_2_10_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Reasoner
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_10_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_10">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Reasoner
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/reasoner/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/reasoner/">
+<span class="md-ellipsis">
+    
+  
+    Reasoner interface for bot decisions
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_11" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_11" id="__nav_2_2_11_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Workflow
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_11_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_11">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Workflow
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/workflow/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/workflow/">
+<span class="md-ellipsis">
+    
+  
+    Workflow runners and session lifecycle
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/workflow-steps/">
+<span class="md-ellipsis">
+    
+  
+    Workflow step DSL and branching actions
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/core/cursor-gathering/">
+<span class="md-ellipsis">
+    
+  
+    Cursor-backed gathering workflow
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_2_2_12" type="checkbox"/>
+<label class="md-nav__link" for="__nav_2_2_12" id="__nav_2_2_12_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Connectors
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_2_2_12_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_2_2_12">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Connectors
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/connectors/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/connectors/discord/">
+<span class="md-ellipsis">
+    
+  
+    Discord
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../features/domain/connectors/github/">
+<span class="md-ellipsis">
+    
+  
+    GitHub
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../architecture/">
+<span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_4" type="checkbox"/>
+<label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Runbooks
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_4_label" class="md-nav" data-md-level="1">
+<label class="md-nav__title" for="__nav_4">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Runbooks
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../runbooks/">
+<span class="md-ellipsis">
+    
+  
+    Index
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../runbooks/operational/">
+<span class="md-ellipsis">
+    
+  
+    Operational
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../runbooks/troubleshooting/">
+<span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../runbooks/recovery/">
+<span class="md-ellipsis">
+    
+  
+    Recovery
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../../runbooks/maintenance/">
+<span class="md-ellipsis">
+    
+  
+    Maintenance
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--active md-nav__item--nested">
+<input checked="" class="md-nav__toggle md-toggle" id="__nav_5" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Cursor
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="true" aria-labelledby="__nav_5_label" class="md-nav" data-md-level="1">
+<label class="md-nav__title" for="__nav_5">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Cursor
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Rules
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_2_label" class="md-nav" data-md-level="2">
+<label class="md-nav__title" for="__nav_5_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Rules
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../rules/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../rules/vinekeepers-standards/">
+<span class="md-ellipsis">
+    
+  
+    vinekeepers-standards
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../rules/spec-workflow/">
+<span class="md-ellipsis">
+    
+  
+    spec-workflow
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../rules/spec-workflow-core/">
+<span class="md-ellipsis">
+    
+  
+    spec-workflow-core
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../rules/guardrails/">
+<span class="md-ellipsis">
+    
+  
+    guardrails
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../rules/spec-workflow-vinekeepers/">
+<span class="md-ellipsis">
+    
+  
+    spec-workflow-vinekeepers
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--active md-nav__item--nested">
+<input checked="" class="md-nav__toggle md-toggle" id="__nav_5_3" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Skills
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="true" aria-labelledby="__nav_5_3_label" class="md-nav" data-md-level="2">
+<label class="md-nav__title" for="__nav_5_3">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Skills
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--active md-nav__item--nested">
+<input checked="" class="md-nav__toggle md-toggle" id="__nav_5_3_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_2" id="__nav_5_3_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Nova-code
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="true" aria-labelledby="__nav_5_3_2_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_5_3_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Nova-code
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item md-nav__item--active">
+<input class="md-nav__toggle md-toggle" id="__toc" type="checkbox"/>
+<label class="md-nav__link md-nav__link--active" for="__toc">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<a class="md-nav__link md-nav__link--active" href="./">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+<nav aria-label="Table of contents" class="md-nav md-nav--secondary">
+<label class="md-nav__title" for="__toc">
+<span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+<ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#summary">
+<span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#key-points">
+<span class="md-ellipsis">
+      
+        Key points
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#diagram">
+<span class="md-ellipsis">
+      
+        Diagram
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#sub-skills">
+<span class="md-ellipsis">
+      
+        Sub-skills
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#skill-source-markdown">
+<span class="md-ellipsis">
+      
+        Skill source (markdown)
+      
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_2_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_2_2" id="__nav_5_3_2_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    implementation
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_2_2_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_2_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    implementation
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="implementation/plan-change/">
+<span class="md-ellipsis">
+    
+  
+    plan-change
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="implementation/plan-change-output/">
+<span class="md-ellipsis">
+    
+  
+    plan-change-output
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="implementation/implement/">
+<span class="md-ellipsis">
+    
+  
+    implement
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="implementation/update-tests/">
+<span class="md-ellipsis">
+    
+  
+    update-tests
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="implementation/removal-rename/">
+<span class="md-ellipsis">
+    
+  
+    removal-rename
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_2_3" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_2_3" id="__nav_5_3_2_3_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    documentation
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_2_3_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_2_3">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    documentation
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="documentation/output-format/">
+<span class="md-ellipsis">
+    
+  
+    output-format
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="documentation/update-specs/">
+<span class="md-ellipsis">
+    
+  
+    update-specs
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="documentation/post-validate/">
+<span class="md-ellipsis">
+    
+  
+    post-validate
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_2_4" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_2_4" id="__nav_5_3_2_4_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    wrap_up
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_2_4_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_2_4">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    wrap_up
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="wrap_up/output/">
+<span class="md-ellipsis">
+    
+  
+    output
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_2_5" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_2_5" id="__nav_5_3_2_5_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Mk
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_2_5_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_2_5">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Mk
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_2_5_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_2_5_2" id="__nav_5_3_2_5_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    sub-skills
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_2_5_2_label" class="md-nav" data-md-level="5">
+<label class="md-nav__title" for="__nav_5_3_2_5_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    sub-skills
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/prepare/">
+<span class="md-ellipsis">
+    
+  
+    prepare
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/gather-spec-mkdoc-context/">
+<span class="md-ellipsis">
+    
+  
+    gather-spec-mkdoc-context
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/">
+<span class="md-ellipsis">
+    
+  
+    index
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/architecture/">
+<span class="md-ellipsis">
+    
+  
+    architecture
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/runbooks/">
+<span class="md-ellipsis">
+    
+  
+    runbooks
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/feature-dossiers/">
+<span class="md-ellipsis">
+    
+  
+    feature-dossiers
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="mk/sub-skills/cursor-docs/">
+<span class="md-ellipsis">
+    
+  
+    cursor-docs
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_3" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_3" id="__nav_5_3_3_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Nova-commit
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_3_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_5_3_3">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Nova-commit
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-commit/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_3_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_3_2" id="__nav_5_3_3_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    sub-skills
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_3_2_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_3_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    sub-skills
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-commit/sub-skills/plausibility-review/">
+<span class="md-ellipsis">
+    
+  
+    plausibility-review
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-commit/sub-skills/commit-message/">
+<span class="md-ellipsis">
+    
+  
+    commit-message
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-commit/sub-skills/commit-push/">
+<span class="md-ellipsis">
+    
+  
+    commit-push
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-commit/sub-skills/output/">
+<span class="md-ellipsis">
+    
+  
+    output
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_4" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_4" id="__nav_5_3_4_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Nova-pr
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_4_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_5_3_4">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Nova-pr
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-pr/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_4_2" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_4_2" id="__nav_5_3_4_2_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    sub-skills
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_4_2_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_4_2">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    sub-skills
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-pr/sub-skills/create-pr/">
+<span class="md-ellipsis">
+    
+  
+    create-pr
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_5" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_5" id="__nav_5_3_5_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Nova-spec
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_5_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_5_3_5">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Nova-spec
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/scan-and-update/">
+<span class="md-ellipsis">
+    
+  
+    scan-and-update
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/output-format/">
+<span class="md-ellipsis">
+    
+  
+    output-format
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_5_4" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_5_4" id="__nav_5_3_5_4_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    sub-skills
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_5_4_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_5_4">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    sub-skills
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/scan/">
+<span class="md-ellipsis">
+    
+  
+    scan
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/infer-domains/">
+<span class="md-ellipsis">
+    
+  
+    infer-domains
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/categorize-features-to-domains/">
+<span class="md-ellipsis">
+    
+  
+    categorize-features-to-domains
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/categorize-features-to-domains-output/">
+<span class="md-ellipsis">
+    
+  
+    categorize-features-to-domains-output
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/update-specs-index/">
+<span class="md-ellipsis">
+    
+  
+    update-specs-index
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/update-registry/">
+<span class="md-ellipsis">
+    
+  
+    update-registry
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-spec/sub-skills/sync-mkdoc/">
+<span class="md-ellipsis">
+    
+  
+    sync-mkdoc
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_6" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_6" id="__nav_5_3_6_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Nova-wiki
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_6_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_5_3_6">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Nova-wiki
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/auth/">
+<span class="md-ellipsis">
+    
+  
+    auth
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_6_3" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_6_3" id="__nav_5_3_6_3_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    sub-skills
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_6_3_label" class="md-nav" data-md-level="4">
+<label class="md-nav__title" for="__nav_5_3_6_3">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    sub-skills
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/sub-skills/prepare/">
+<span class="md-ellipsis">
+    
+  
+    prepare
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/sub-skills/">
+<span class="md-ellipsis">
+    
+  
+    index
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/sub-skills/architecture/">
+<span class="md-ellipsis">
+    
+  
+    architecture
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/sub-skills/runbooks/">
+<span class="md-ellipsis">
+    
+  
+    runbooks
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../nova-wiki/sub-skills/feature-dossiers/">
+<span class="md-ellipsis">
+    
+  
+    feature-dossiers
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_3_7" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_3_7" id="__nav_5_3_7_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Common
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_3_7_label" class="md-nav" data-md-level="3">
+<label class="md-nav__title" for="__nav_5_3_7">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Common
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/discovery/">
+<span class="md-ellipsis">
+    
+  
+    discovery
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/drift-gate/">
+<span class="md-ellipsis">
+    
+  
+    drift-gate
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/project-config/">
+<span class="md-ellipsis">
+    
+  
+    project-config
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/reconcile/">
+<span class="md-ellipsis">
+    
+  
+    reconcile
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/requirement-tracking/">
+<span class="md-ellipsis">
+    
+  
+    requirement-tracking
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/run-tests/">
+<span class="md-ellipsis">
+    
+  
+    run-tests
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/schema-gate/">
+<span class="md-ellipsis">
+    
+  
+    schema-gate
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/static-analysis/">
+<span class="md-ellipsis">
+    
+  
+    static-analysis
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/sync-cursor-docs/">
+<span class="md-ellipsis">
+    
+  
+    sync-cursor-docs
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../common/update-readme/">
+<span class="md-ellipsis">
+    
+  
+    update-readme
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item md-nav__item--nested">
+<input class="md-nav__toggle md-toggle" id="__nav_5_4" type="checkbox"/>
+<label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+<span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+<span class="md-nav__icon md-icon"></span>
+</label>
+<nav aria-expanded="false" aria-labelledby="__nav_5_4_label" class="md-nav" data-md-level="2">
+<label class="md-nav__title" for="__nav_5_4">
+<span class="md-nav__icon md-icon"></span>
+            
+  
+    Workflows
+  
+
+          </label>
+<ul class="md-nav__list" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/">
+<span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/nova-code/">
+<span class="md-ellipsis">
+    
+  
+    nova-code
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/nova-commit/">
+<span class="md-ellipsis">
+    
+  
+    nova-commit
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/nova-mk/">
+<span class="md-ellipsis">
+    
+  
+    nova-mk
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/nova-pr/">
+<span class="md-ellipsis">
+    
+  
+    nova-pr
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/nova-spec/">
+<span class="md-ellipsis">
+    
+  
+    nova-spec
+  
+
+    
+  </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="../../workflows/nova-wiki/">
+<span class="md-ellipsis">
+    
+  
+    nova-wiki
+  
+
+    
+  </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+</div>
+<div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+<div class="md-sidebar__scrollwrap">
+<div class="md-sidebar__inner">
+<nav aria-label="Table of contents" class="md-nav md-nav--secondary">
+<label class="md-nav__title" for="__toc">
+<span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+<ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#summary">
+<span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#key-points">
+<span class="md-ellipsis">
+      
+        Key points
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#diagram">
+<span class="md-ellipsis">
+      
+        Diagram
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#sub-skills">
+<span class="md-ellipsis">
+      
+        Sub-skills
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#skill-source-markdown">
+<span class="md-ellipsis">
+      
+        Skill source (markdown)
+      
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+</div>
+<div class="md-content" data-md-component="content">
+<article class="md-content__inner md-typeset">
+<h1 id="nova-code">Nova Code</h1>
+<h2 id="summary">Summary</h2>
+<p>Runs the spec-driven <strong>implementation</strong> workflow. The orchestrator enforces the workflow: runs gate commands and launches one sub-agent per step (discovery, plan_change, implement, update_tests, update_specs, mk, output, etc.).</p>
+<h2 id="key-points">Key points</h2>
+<ul>
+<li>Read <strong>nova-code.yml</strong> for run_order; do not skip steps (except branch_removal_rename when no removal/rename).</li>
+<li>Run <strong>gates</strong> (schema_gate, drift_gate, pre_change_lock, post_schema) yourself; for steps with a <code>location</code>, call <strong>mcp_task</strong>.</li>
+<li>Pass <strong>user request</strong> and <strong>handoff</strong> (e.g. plan_change output, implement changed files) into each sub-agent. For <strong>mk</strong>, handoff must include plan_change and implement.</li>
+<li><strong>Output</strong> step produces the final report.</li>
+</ul>
+<h2 id="diagram">Diagram</h2>
+<pre class="mermaid"><code>flowchart TB
+  A[discovery] --&gt; C[schema_gate]
+  C --&gt; D[drift_gate]
+  D --&gt; E[plan_change]
+  E --&gt; F[branch_removal_rename]
+  F --&gt; G[pre_change_lock]
+  G --&gt; H[implement]
+  H --&gt; I[update_tests]
+  I --&gt; J[update_specs]
+  J --&gt; K[post_schema]
+  K --&gt; L[traceability]
+  L --&gt; M[run_tests]
+  M --&gt; N[static_analysis]
+  N --&gt; O[reconcile]
+  O --&gt; P[mk]
+  P --&gt; Q[output]
+</code></pre>
+<h2 id="sub-skills">Sub-skills</h2>
+<ul>
+<li><a href="implementation/plan-change/">implementation/plan-change</a></li>
+<li><a href="implementation/plan-change-output/">implementation/plan-change-output</a></li>
+<li><a href="implementation/implement/">implementation/implement</a></li>
+<li><a href="implementation/update-tests/">implementation/update-tests</a></li>
+<li><a href="implementation/removal-rename/">implementation/removal-rename</a></li>
+<li><a href="documentation/update-specs/">documentation/update-specs</a></li>
+<li><a href="documentation/output-format/">documentation/output-format</a></li>
+<li><a href="documentation/post-validate/">documentation/post-validate</a></li>
+<li><a href="wrap_up/output/">wrap_up/output</a></li>
+<li><a href="mk.md">mk</a> (mkdoc sync: prepare, index, architecture, runbooks, feature dossiers, cursor docs)</li>
+</ul>
+<h2 id="skill-source-markdown">Skill source (markdown)</h2>
+<details class="skill-source-wrap">
+<summary>Click to expand</summary>
+<div class="highlight"><pre><span></span><code>---
+name: nova-code
+description: Orchestrator for spec-driven implementation. Reads workflow; runs gates; launches one sub-agent per step. Use when the user requests nova-code, spec-driven implementation, or when working against specs.yml and registry specs.
+<span class="gu">disable-model-invocation: true</span>
+<span class="gu">---</span>
+
+<span class="gh"># Nova Code (Orchestrator)</span>
+
+This skill runs the spec-driven <span class="gs">**implementation**</span> workflow. You are the <span class="gs">**orchestrator**</span>: you <span class="gs">**enforce**</span> the workflow. You do <span class="gs">**not**</span> run sub-skills yourself; you run gate commands and <span class="gs">**launch a sub-agent**</span> for each step that has a sub-skill.
+
+<span class="gs">**Workflow**</span> — Read <span class="gs">**@.cursor/workflows/nova-code.yml**</span>. The project rule <span class="gs">**@.cursor/rules/spec-workflow.mdc**</span> is the source of truth for gate semantics.
+
+<span class="gs">**How to run:**</span>
+
+<span class="k">1.</span> <span class="gs">**Read**</span> the workflow and get <span class="gs">**run_order**</span> (the ordered list of step IDs).
+<span class="k">2.</span> <span class="gs">**For each step ID in run_order**</span>, in order:
+<span class="w">   </span><span class="k">-</span><span class="w"> </span><span class="gs">**If the step is a gate**</span> (schema_gate, drift_gate, pre_change_lock, post_schema, or gates inside removal_rename_sequence): <span class="gs">**you**</span> run the gate command from the workflow (e.g. <span class="sb">`npm run validate-specs`</span>, <span class="sb">`npm run validate-drift`</span>). On failure: <span class="gs">**STOP**</span>, output a <span class="gs">**Spec Drift Issue**</span>, do not launch further sub-agents.
+<span class="w">   </span><span class="k">-</span><span class="w"> </span><span class="gs">**If the step is a step**</span> (has a <span class="sb">`location`</span> in the workflow): <span class="gs">**call the mcp_task tool**</span> (see "Using Cursor sub-agents" below) to run that step. Do not run the sub-skill yourself.
+<span class="k">3.</span> <span class="gs">**Handoff:**</span> Pass the <span class="gs">**user request**</span> into each sub-agent task. Optionally pass a short summary from the previous sub-agent (e.g. plan_change output) so the next has context. Sub-agents can read the repo as needed. <span class="gs">**For the mk step:**</span> you <span class="gs">**must**</span> pass a <span class="gs">**structured cumulative handoff**</span> so the mk workflow can map coding changes to 0..n feature updates: include <span class="gs">**plan_change**</span> (impacted registry spec file paths, impacted asset paths/ids) and <span class="gs">**implement**</span> (list of changed file paths). Collect these from the plan_change and implement sub-agents' results before launching the mk step.
+<span class="k">4.</span> <span class="gs">**Branch (removal/rename):**</span> When the step is <span class="sb">`branch_removal_rename`</span> and plan_change set removal_or_rename, run the <span class="gs">**removal_rename_sequence**</span> from the workflow: for each step in that sequence, either run the gate yourself or launch a sub-agent for the step's location (one sub-agent per step of the sequence). Then rejoin run_order at the next step.
+<span class="k">5.</span> <span class="gs">**Output:**</span> The last step is <span class="gs">**output**</span>. Its sub-agent produces the final report (per output-format). Return that report to the user.
+
+<span class="gs">**Using Cursor sub-agents:**</span> For every step that has a <span class="sb">`location`</span> in the workflow, you <span class="gs">**MUST**</span> call the <span class="gs">**mcp_task**</span> tool (Cursor's sub-agent launcher). Do not run that step yourself. Use:
+<span class="k">-</span><span class="w"> </span><span class="gs">**subagent_type:**</span> <span class="sb">`generalPurpose`</span> (or the type that runs arbitrary instructions and returns a result).
+<span class="k">-</span><span class="w"> </span><span class="gs">**prompt:**</span> A single task description that includes:
+<span class="w">  </span><span class="k">1.</span> Step id and instruction: "Run the nova-code step <span class="gs">**&amp;lt;step_id&amp;gt;**</span>. Open and follow the sub-skill at <span class="gs">**&amp;lt;location&amp;gt;**</span> (from the workflow)."
+<span class="w">  </span><span class="k">2.</span> Context: "User request: &amp;lt;exact user request&amp;gt;."
+<span class="w">  </span><span class="k">3.</span> Handoff (for steps after plan_change): "Previous step result: &amp;lt;short summary&amp;gt;" (e.g. plan_change: impacted registries, removal_or_rename; implement: list of changed files). For the <span class="gs">**mk**</span> step, handoff is <span class="gs">**required**</span> and must include plan_change (impacted registry paths, impacted asset paths/ids) and implement (list of changed file paths).
+<span class="w">  </span><span class="k">4.</span> Required output: "Return: Pass or Fail, and one short line describing what you did or what changed."
+<span class="k">-</span><span class="w"> </span><span class="gs">**description:**</span> Short label for the task, e.g. "nova-code step: &amp;lt;step_id&amp;gt;".
+
+Collect each sub-agent's result before launching the next. If a sub-agent returns Fail, you may stop and report, or continue according to the workflow (e.g. output step still runs to report the failure). For steps inside <span class="gs">**removal_rename_sequence**</span>, use mcp_task for each step that has a <span class="sb">`location`</span> (reference_map, apply_removal, verify); run any gate in that sequence yourself (e.g. gates_again).
+
+<span class="gs">**Gate commands**</span> are in the workflow (e.g. <span class="sb">`run: npm run validate-specs`</span> under schema_gate, drift_gate, pre_change_lock, post_schema). Look up each step in <span class="sb">`phases`</span> or <span class="sb">`steps`</span> to see if it has <span class="sb">`type: gate`</span> and a <span class="sb">`run`</span> field.
+
+Do not skip any step (except branch_removal_rename when plan_change did not set removal_or_rename). The workflow YAML and run_order are the checklist.
+</code></pre></div>
+</details>
+</article>
+</div>
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+</div>
+</main>
+<footer class="md-footer">
+<div class="md-footer-meta md-typeset">
+<div class="md-footer-meta__inner md-grid">
+<div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" rel="noopener" target="_blank">
+      Material for MkDocs
+    </a>
+</div>
+</div>
+</div>
+</footer>
+</div>
+<div class="md-dialog" data-md-component="dialog">
+<div class="md-dialog__inner md-typeset"></div>
+</div>
+<script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+<script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+<script type="module">import mermaid from "https://unpkg.com/mermaid@10.4.0/dist/mermaid.esm.min.mjs";
+window.mermaidConfig = {default: {
+    startOnLoad: false
+}};</script></body>
+</html>

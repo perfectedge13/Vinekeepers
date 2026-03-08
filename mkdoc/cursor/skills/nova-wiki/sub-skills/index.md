@@ -16,3 +16,5 @@ Ensures Wiki.js index and feature/domain pages exist under path prefix; follows 
 See **.cursor/skills/nova-wiki/sub-skills/index.md** for the full source. Summary: ensures Wiki.js index and feature/domain pages under path prefix.
 
 </details>
+
+

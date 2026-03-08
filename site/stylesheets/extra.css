@@ -1,0 +1,285 @@
+/*
+ * Vinekeepers theme: forest / gardening + cyberpunk
+ * All colors and typography defined here; primary and accent are "custom" in mkdocs.yml.
+ */
+
+/* === Fonts (forest + tech) === */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --md-text-font-family: "DM Sans", system-ui, sans-serif;
+  --md-code-font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+h1, h2, h3, h4, h5, h6,
+.md-nav__title,
+.md-header__topic {
+  font-family: "Space Grotesk", var(--md-text-font-family);
+}
+
+/* === Light mode (default) — forest / garden base === */
+[data-md-color-scheme="default"] {
+  /* Primary: header, sidebar, primary buttons — forest green */
+  --md-primary-fg-color: #f5f7f0;
+  --md-primary-bg-color: #1a472a;
+  --md-primary-bg-color--light: #2e7d32;
+  --md-primary-bg-color--dark: #0d3318;
+  /* Accent: hover, buttons, focus — cyberpunk lime */
+  --md-accent-fg-color: #0d3318;
+  --md-accent-bg-color: #76ff03;
+  /* Page background and text */
+  --md-default-bg-color: #f5f7f0;
+  --md-default-fg-color: #1a2f1a;
+  --md-default-fg-color--light: #2d4a2d;
+  --md-default-fg-color--lighter: #4a6b4a;
+  --md-default-fg-color--lightest: #6b8f6b;
+  --md-default-bg-color--light: #e8ebe3;
+  --md-default-bg-color--lighter: #dce0d6;
+  --md-default-bg-color--lightest: #c8d0c0;
+  /* Code */
+  --md-code-bg-color: #e0e8dc;
+  --md-code-fg-color: #1a2f1a;
+  /* Typeset (content) */
+  --md-typeset-color: #1a2f1a;
+  --md-typeset-a-color: #2e7d32;
+}
+
+/* === Dark mode (slate) — night forest + cyberpunk === */
+[data-md-color-scheme="slate"] {
+  /* Primary — forest green, slightly brighter on dark */
+  --md-primary-fg-color: #e0ebe0;
+  --md-primary-bg-color: #1a472a;
+  --md-primary-bg-color--light: #2e7d32;
+  --md-primary-bg-color--dark: #0d3318;
+  /* Accent — neon lime */
+  --md-accent-fg-color: #0d1f0d;
+  --md-accent-bg-color: #76ff03;
+  /* Page background and text */
+  --md-default-bg-color: #0d1f0d;
+  --md-default-fg-color: #c8e6c9;
+  --md-default-fg-color--light: #a5d6a7;
+  --md-default-fg-color--lighter: #81c784;
+  --md-default-fg-color--lightest: #66bb6a;
+  --md-default-bg-color--light: #121a12;
+  --md-default-bg-color--lighter: #1a2f1a;
+  --md-default-bg-color--lightest: #243d24;
+  /* Code */
+  --md-code-bg-color: #0d1f0d;
+  --md-code-fg-color: #a5d6a7;
+  /* Typeset */
+  --md-typeset-color: #c8e6c9;
+  --md-typeset-a-color: #76ff03;
+}
+
+/* === Header / sidebar === */
+.md-header,
+.md-tabs {
+  box-shadow: 0 1px 0 rgba(118, 255, 3, 0.12);
+}
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-tabs {
+  box-shadow: 0 1px 0 rgba(118, 255, 3, 0.2);
+}
+.md-nav--primary .md-nav__title {
+  box-shadow: 0 1px 0 rgba(118, 255, 3, 0.08);
+}
+
+/* === Links === */
+.md-typeset a {
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.md-typeset a:hover {
+  color: var(--md-accent-bg-color);
+}
+[data-md-color-scheme="slate"] .md-typeset .md-content a:hover,
+[data-md-color-scheme="slate"] .md-typeset a:hover {
+  color: #e0ffc0 !important;
+}
+
+/* === Code blocks === */
+.md-typeset pre > code {
+  border-radius: 6px;
+  border-left: 3px solid var(--md-accent-bg-color);
+  box-shadow: 0 2px 8px rgba(26, 71, 42, 0.08);
+}
+[data-md-color-scheme="slate"] .md-typeset pre > code {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(118, 255, 3, 0.06);
+}
+
+/* Inline code */
+.md-typeset code {
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+}
+
+/* === Blockquotes === */
+.md-typeset blockquote {
+  border-left: 4px solid var(--md-primary-bg-color);
+  background-color: rgba(26, 71, 42, 0.06);
+  border-radius: 0 6px 6px 0;
+  padding: 0.6rem 1rem;
+}
+[data-md-color-scheme="slate"] .md-typeset blockquote {
+  background-color: rgba(46, 125, 50, 0.12);
+}
+
+/* === Tables === */
+.md-typeset table:not([class]) {
+  border-radius: 6px;
+  border: 1px solid rgba(26, 71, 42, 0.25);
+  box-shadow: 0 2px 6px rgba(26, 71, 42, 0.06);
+}
+.md-typeset table:not([class]) th {
+  background-color: rgba(26, 71, 42, 0.12);
+  color: var(--md-default-fg-color);
+  border-bottom: 2px solid var(--md-primary-bg-color);
+}
+.md-typeset table:not([class]) td {
+  border-top: 1px solid rgba(26, 71, 42, 0.15);
+}
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background-color: rgba(46, 125, 50, 0.2);
+}
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) {
+  border-color: rgba(118, 255, 3, 0.2);
+}
+
+/* === Horizontal rules === */
+.md-typeset hr {
+  border-bottom: 2px solid transparent;
+  background: linear-gradient(90deg, var(--md-primary-bg-color), var(--md-accent-bg-color));
+  border-radius: 1px;
+  opacity: 0.8;
+}
+
+/* === Admonitions === */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-left-color: var(--md-primary-bg-color);
+  background-color: rgba(26, 71, 42, 0.06);
+  border-radius: 0 6px 6px 0;
+}
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-left-color: var(--md-accent-bg-color);
+  background-color: rgba(118, 255, 3, 0.06);
+  border-radius: 0 6px 6px 0;
+}
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-left-color: #c0a020;
+  background-color: rgba(192, 160, 32, 0.08);
+  border-radius: 0 6px 6px 0;
+}
+.md-typeset .admonition.danger,
+.md-typeset details.danger {
+  border-left-color: #c62828;
+  background-color: rgba(198, 40, 40, 0.06);
+  border-radius: 0 6px 6px 0;
+}
+[data-md-color-scheme="slate"] .md-typeset .admonition.note,
+[data-md-color-scheme="slate"] details.note {
+  background-color: rgba(46, 125, 50, 0.15);
+}
+[data-md-color-scheme="slate"] .md-typeset .admonition.tip,
+[data-md-color-scheme="slate"] details.tip {
+  background-color: rgba(118, 255, 3, 0.1);
+}
+
+/* === Buttons / interactive === */
+.md-typeset .md-button--primary {
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.md-typeset .md-button:focus,
+.md-typeset .md-button:hover {
+  box-shadow: 0 0 12px rgba(118, 255, 3, 0.35);
+}
+[data-md-color-scheme="slate"] .md-typeset .md-button:focus,
+[data-md-color-scheme="slate"] .md-typeset .md-button:hover {
+  box-shadow: 0 0 16px rgba(118, 255, 3, 0.4);
+}
+
+/* === Focus ring (a11y + cyberpunk glow) === */
+:focus-visible {
+  outline: 2px solid var(--md-accent-bg-color);
+  outline-offset: 2px;
+}
+[data-md-color-scheme="slate"] :focus-visible {
+  box-shadow: 0 0 0 2px var(--md-default-bg-color), 0 0 0 4px var(--md-accent-bg-color);
+}
+
+/* === Selection === */
+[data-md-color-scheme="default"] ::selection {
+  background-color: rgba(118, 255, 3, 0.35);
+  color: #0d3318;
+}
+[data-md-color-scheme="slate"] ::selection {
+  background-color: rgba(118, 255, 3, 0.4);
+  color: #0d1f0d;
+}
+
+/* === Scrollbar (webkit) === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--md-default-bg-color--light);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--md-primary-bg-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--md-accent-bg-color);
+}
+[data-md-color-scheme="slate"] ::-webkit-scrollbar-track {
+  background: var(--md-default-bg-color--lighter);
+}
+
+/* === Transitions on nav items === */
+.md-nav__link {
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+[data-md-color-scheme="slate"] .md-nav__link:hover,
+[data-md-color-scheme="slate"] .md-nav--primary .md-nav__link:hover,
+[data-md-color-scheme="slate"] .md-nav__item > .md-nav__link:hover,
+[data-md-color-scheme="slate"] .md-nav__item:hover > .md-nav__link {
+  color: #e0ffc0 !important;
+}
+.md-nav__link--active {
+  color: var(--md-accent-bg-color);
+}
+[data-md-color-scheme="default"] .md-nav__link--active {
+  color: var(--md-primary-bg-color);
+}
+
+/* === Optional: subtle background texture (very light) === */
+[data-md-color-scheme="default"] .md-main {
+  background-image: linear-gradient(180deg, transparent 0%, rgba(26, 71, 42, 0.02) 100%);
+}
+[data-md-color-scheme="slate"] .md-main {
+  background-image: linear-gradient(180deg, transparent 0%, rgba(118, 255, 3, 0.02) 100%);
+}
+
+/* === Mermaid diagram container (fit theme) === */
+.md-typeset .highlight pre code.language-mermaid {
+  background: transparent;
+}
+[data-md-color-scheme="default"] .md-typeset pre > code.language-mermaid {
+  background-color: var(--md-code-bg-color);
+}
+[data-md-color-scheme="slate"] .md-typeset pre > code.language-mermaid {
+  background-color: var(--md-code-bg-color);
+}
+
+/* === Cursor skill source: horizontal wrap (expandable markdown) === */
+.md-typeset details.skill-source-wrap pre,
+.md-typeset details.skill-source-wrap .highlight pre {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.md-typeset details.skill-source-wrap .highlight {
+  overflow: visible;
+}

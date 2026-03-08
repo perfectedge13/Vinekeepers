@@ -2,7 +2,7 @@
 
 ## Summary
 
-Spec-driven implementation workflow. Discovery → gates → execution loop (plan_change, implement, update_tests, update_specs, post_schema, traceability, run_tests, static_analysis, reconcile, mk, output). Branch removal_rename when plan_change sets removal_or_rename.
+Spec-driven implementation workflow. Discovery → gates → execution loop (plan_change, implement, update_tests, update_specs, post_schema, traceability, run_tests, build_check, reconcile, mk, output). Branch removal_rename when plan_change sets removal_or_rename.
 
 ## Sequence
 
@@ -19,7 +19,7 @@ Spec-driven implementation workflow. Discovery → gates → execution loop (pla
 11. post_schema  
 12. traceability  
 13. run_tests  
-14. static_analysis  
+14. build_check  
 15. reconcile  
 16. mk  
 17. output  
@@ -36,3 +36,5 @@ flowchart TB
   G --> H[mk]
   H --> I[output]
 ```
+
+

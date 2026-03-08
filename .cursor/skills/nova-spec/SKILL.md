@@ -1,6 +1,6 @@
 ---
 name: nova-spec
-description: Full-repo scan and complete spec + mkdoc update. Use when the user invokes /nova-spec.
+description: Full-repo scan and complete spec + docs-dir update. Use when the user invokes /nova-spec.
 ---
 
 # Nova-spec
@@ -11,7 +11,7 @@ This skill runs the **scan-and-update** workflow. You are the **orchestrator**: 
 
 **How to run:**
 
-1. Run the **scan-and-update** step: follow its phases (scan, update, write, mkdoc, return).
+1. Run the **scan-and-update** step: follow its phases (scan, update, write, docs sync, return).
 2. For **update phase** steps 2.1–2.4 in that document, you may run each sub-skill **inline** or **launch a sub-agent** (mcp_task) with the sub-skill path and handoff. Prefer sub-agent for **categorize-features-to-domains** and **update-registry** when the workload is large (many domains/features).
 3. **Return** Produce the final report using the structure in **@.cursor/skills/nova-spec/output-format.md** (Outcome, Summary, Phases executed, Specs updated, Mkdoc updated, Domains, Issues/notes). All output must conform to specs schema (no new keys).
 

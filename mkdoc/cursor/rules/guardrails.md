@@ -11,3 +11,5 @@ Pre-implementation checklist for spec-driven changes. Applied selectively via sp
 - **Do not change schema files** or invent new keys in spec files; stay within existing schema.
 - **Repair spec drift before coding** — If specs and code are out of sync, fix specs or restore assets first; prefer truth over consistency.
 - **Consider and avoid anti-patterns** — Before and during implementation, read **anti_patterns** on impacted requirements and assets in the registry specs; avoid those approaches when coding.
+
+

@@ -4,6 +4,7 @@ import com.vinekeepers.events.Event;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -36,43 +37,41 @@ public final class Router {
     }
 
     private boolean matches(RoutingFilter f, Event event) {
-        String sourceId = event.getSourceId();
-        String kind = event.getKind();
-        var payload = event.getPayload();
+        NormalizedEventContext context = NormalizedEventContext.from(event);
+        String sourceType = context.getSourceType();
+        String kind = context.getEventType();
 
-        if (sourceId.startsWith("discord:")) {
+        if ("discord".equals(sourceType)) {
             if (!f.getDiscordAuthors().isEmpty()) {
-                String author = event.getPayload("authorId", String.class);
-                if (author == null) author = (String) payload.get("author");
+                String author = context.getActorId();
                 if (author == null || !f.getDiscordAuthors().contains(author)) return false;
             }
             if (!f.getDiscordChannels().isEmpty()) {
-                String channel = event.getPayload("channelId", String.class);
-                if (channel == null) channel = (String) payload.get("channel");
+                String channel = context.getChannelId();
                 if (channel == null || !f.getDiscordChannels().contains(channel)) return false;
             }
             if (f.getDiscordTrigger() != null && !f.getDiscordTrigger().isEmpty()) {
-                String text = event.getPayload("text", String.class);
-                if (text == null) text = (String) payload.get("content");
+                String text = context.getText();
                 if (text == null || !text.contains(f.getDiscordTrigger())) return false;
+            }
+            if (f.getDiscordMention() != null && !f.getDiscordMention().isBlank()) {
+                String mention = f.getDiscordMention().trim().toLowerCase(Locale.ROOT);
+                if (!context.getMentions().contains(mention)) return false;
             }
             return true;
         }
 
-        if (sourceId.startsWith("github:") || kind != null && kind.toLowerCase().contains("pr")) {
+        if ("github".equals(sourceType) || kind != null && kind.toLowerCase().contains("pr")) {
             if (!f.getRepos().isEmpty()) {
-                String repo = event.getPayload("repo", String.class);
-                if (repo == null) repo = (String) payload.get("repository");
+                String repo = context.getRepo();
                 if (repo == null || !f.getRepos().contains(repo)) return false;
             }
             if (!f.getPrLabels().isEmpty()) {
-                @SuppressWarnings("unchecked")
-                List<String> labels = event.getPayload("labels", List.class);
+                List<String> labels = context.getLabels();
                 if (labels == null || labels.stream().noneMatch(f.getPrLabels()::contains)) return false;
             }
             if (!f.getPrAuthors().isEmpty()) {
-                String author = event.getPayload("author", String.class);
-                if (author == null) author = event.getPayload("user", String.class);
+                String author = context.getActorId();
                 if (author == null || !f.getPrAuthors().contains(author)) return false;
             }
             return true;

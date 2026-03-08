@@ -9,3 +9,5 @@ This section documents the project's **Cursor** configuration: **rules**, **skil
 - [Rules](rules/index.md) — Project rules (spec workflow, gates, project defaults).
 - [Skills](skills/index.md) — Top-level skills and sub-skill hierarchy.
 - [Workflows](workflows/index.md) — Workflow definitions and run order.
+
+

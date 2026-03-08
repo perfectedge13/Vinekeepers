@@ -1,33 +1,27 @@
 package com.vinekeepers.core.cursor;
 
 /**
- * Adapter for Cursor Cloud API: create feature branch, run nova-code/nova-commit,
- * push to GitHub, optionally create PR.
- * Configuration (e.g. API key, base URL) is read from environment/config.
+ * Adapter for the official Cursor Cloud Agent API.
  */
 public interface CursorCloudAdapter {
 
     /**
-     * Create a feature branch for the given project.
-     * @return branch name or error message
+     * Launch a new cloud agent run for the supplied repository and prompt.
      */
-    String createBranch(String projectPathOrId, String branchName);
+    CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request);
 
     /**
-     * Run nova-commit (or nova-code) for the given project with the given change description.
-     * @return success message or error
+     * Fetch the latest agent state, summary, branch, and PR details.
      */
-    String runNovaCommit(String projectPathOrId, String changeDescription);
+    CursorAgentDetails getAgent(String agentId);
 
     /**
-     * Push the current branch to GitHub.
-     * @return success message or error
+     * Fetch the conversation transcript for the given agent.
      */
-    String push(String projectPathOrId);
+    CursorAgentConversation getConversation(String agentId);
 
     /**
-     * Create a pull request (optional).
-     * @return PR URL or message, or error
+     * Send a follow-up prompt to an already running cloud agent.
      */
-    String createPr(String projectPathOrId, String title);
+    void addFollowup(String agentId, String promptText);
 }

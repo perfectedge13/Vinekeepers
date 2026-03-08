@@ -71,4 +71,31 @@ class RouterTest {
         Event event = new Event("github:repo", "pull_request", Map.of("repo", "owner/repo"));
         assertEquals(List.of("gh-bot"), router.route(event));
     }
+
+    @Test
+    void routeMatchesDiscordMentionFromTextCaseInsensitively() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message", Map.of("content", "Hello @LuNa, can you help?"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeMatchesDiscordMentionFromMetadataListCaseInsensitively() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message", Map.of("mentions", List.of("LUNA")));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchWhenDiscordMentionIsMissing() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message", Map.of("content", "Hello there"));
+        assertTrue(router.route(event).isEmpty());
+    }
 }

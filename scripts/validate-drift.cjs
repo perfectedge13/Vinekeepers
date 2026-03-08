@@ -11,9 +11,8 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 
-const ROOT = path.resolve(__dirname, '..');
-const SPECS_DIR = path.join(ROOT, 'specs');
-const INDEX_PATH = path.join(SPECS_DIR, 'specs.yml');
+const ROOT = path.resolve(process.env.VINEKEEPERS_ROOT || path.join(__dirname, '..'));
+const PROJECT_CONFIG_PATH = path.join(ROOT, '.cursor', 'project.yml');
 
 function loadYaml(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
@@ -26,13 +25,29 @@ function fileExists(filePath) {
 }
 
 function main() {
+  const projectConfig = fs.existsSync(PROJECT_CONFIG_PATH) ? loadYaml(PROJECT_CONFIG_PATH) : {};
+  const specsIndexRelPath = projectConfig.paths?.specs_index || 'specs/specs.yml';
+  const INDEX_PATH = path.join(ROOT, specsIndexRelPath);
+  const SPECS_DIR = path.dirname(INDEX_PATH);
+
   if (!fs.existsSync(INDEX_PATH)) {
     console.error('Drift: index not found:', INDEX_PATH);
     process.exit(1);
   }
 
   const index = loadYaml(INDEX_PATH);
+  const declaredRegistryFiles = new Set((index.specs || []).map((entry) => entry.file));
+  const domainRegistryMap = new Map();
   let failed = false;
+
+  for (const domain of index.domains || []) {
+    if (!declaredRegistryFiles.has(domain.spec_file)) {
+      console.error('Drift: domain spec_file is not declared in specs[]:', domain.slug, '->', domain.spec_file);
+      failed = true;
+      continue;
+    }
+    domainRegistryMap.set(domain.slug, domain.spec_file);
+  }
 
   // --- Index checks ---
   for (const entry of index.specs || []) {
@@ -131,6 +146,26 @@ function main() {
 
     // features[].requirement_ids and asset_ids
     for (const f of reg.features || []) {
+      if (f.domain_slug) {
+        const mappedRegistryFile = domainRegistryMap.get(f.domain_slug);
+        if (!mappedRegistryFile) {
+          console.error('Drift:', entry.file, 'feature', f.id, 'uses undeclared domain_slug:', f.domain_slug);
+          failed = true;
+        } else if (mappedRegistryFile !== entry.file) {
+          console.error(
+            'Drift:',
+            entry.file,
+            'feature',
+            f.id,
+            'domain_slug',
+            f.domain_slug,
+            'is mapped to',
+            mappedRegistryFile,
+            'in specs.yml domains[]'
+          );
+          failed = true;
+        }
+      }
       for (const rid of f.requirement_ids || []) {
         if (!reqIds.has(rid)) {
           console.error('Drift:', entry.file, 'feature', f.id, 'requirement_ids unknown:', rid);
@@ -145,11 +180,12 @@ function main() {
       }
     }
 
-    // Accepted requirements: at least one test (guideline; we don't fail on empty tests here to allow exemptions)
+    // Active requirements: at least one test (guideline; we don't fail on empty tests here to allow exemptions)
+    // Legacy status alias: accepted == active during migration.
     // Optional: uncomment to enforce
     // for (const r of reg.requirements || []) {
-    //   if (r.status === 'accepted' && (!r.validation?.tests || r.validation.tests.length === 0)) {
-    //     console.error('Drift:', entry.file, 'accepted requirement', r.id, 'has no validation.tests');
+    //   if ((r.status === 'active' || r.status === 'accepted') && (!r.validation?.tests || r.validation.tests.length === 0)) {
+    //     console.error('Drift:', entry.file, 'live requirement', r.id, 'has no validation.tests');
     //     failed = true;
     //   }
     // }

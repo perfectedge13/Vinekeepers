@@ -1,6 +1,7 @@
 package com.vinekeepers.config;
 
 import com.vinekeepers.bot.BotDefinition;
+import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.MemoryPolicy;
 import com.vinekeepers.bot.ModelProfile;
 import com.vinekeepers.bot.Persona;
@@ -17,7 +18,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -66,7 +66,7 @@ public final class ConfigLoader {
             RoutingFilter filter = parseRoutingFilter(r.get("filter") != null ? (Map<String, Object>) r.get("filter") : null);
             String botId = (String) r.get("botId");
             if (botId != null) {
-                router.addRouting(new Routing(filter != null ? filter : new RoutingFilter(null, null, null, null, null, null), botId));
+                router.addRouting(new Routing(filter != null ? filter : new RoutingFilter(null, null, null, null, null, null, null), botId));
             }
         }
     }
@@ -90,11 +90,12 @@ public final class ConfigLoader {
 
     @SuppressWarnings("unchecked")
     private RoutingFilter parseRoutingFilter(Map<String, Object> f) {
-        if (f == null) return new RoutingFilter(null, null, null, null, null, null);
+        if (f == null) return new RoutingFilter(null, null, null, null, null, null, null);
         return new RoutingFilter(
                 toSet((List<String>) f.get("discordAuthors")),
                 toSet((List<String>) f.get("discordChannels")),
                 (String) f.get("discordTrigger"),
+                (String) f.get("discordMention"),
                 toSet((List<String>) f.get("repos")),
                 toSet((List<String>) f.get("prLabels")),
                 toSet((List<String>) f.get("prAuthors")));
@@ -133,8 +134,11 @@ public final class ConfigLoader {
             if (w.get("type") instanceof String t) workflowType = t;
             if (w.get("params") instanceof Map<?, ?> p) workflowParams = (Map<String, Object>) p;
         }
+        ConversationMode conversationMode = ConversationMode.fromValue((String) b.get("conversationMode"));
+        String sessionKeyStrategy = (String) b.get("sessionKeyStrategy");
 
-        return new BotDefinition(id, persona, modelProfile, toolPolicy, memoryPolicy, workflowType, workflowParams);
+        return new BotDefinition(id, persona, modelProfile, toolPolicy, memoryPolicy,
+                workflowType, workflowParams, conversationMode, sessionKeyStrategy);
     }
 
     @SuppressWarnings("unchecked")

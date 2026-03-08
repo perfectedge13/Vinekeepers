@@ -2,18 +2,21 @@
 
 # Overview
 
-DiscordEventSource implements EventSource. On start(EventBus), it connects to the Discord API and translates incoming payloads into internal Events, then publishes to the bus. The connector emits events when started and when Discord events occur.
+`DiscordEventSource` implements `EventSource` and delegates runtime receive/send work to `JdaDiscordGateway`. The gateway connects to Discord with `DISCORD_BOT_TOKEN`, converts live Discord messages into internal `Event` objects, and preserves mention metadata so routing can match bot mentions without relying only on raw text parsing.
 
 # Flow
 
-1. Bootstrap starts DiscordEventSource with EventBus.
-2. Connector registers with Discord (or equivalent).
-3. Incoming Discord events → translated to Event → EventBus.publish.
+1. `Bootstrap` starts `DiscordEventSource` with `EventBus`.
+2. `DiscordEventSource` connects the gateway and subscribes live Discord message events.
+3. The gateway converts Discord messages into internal `Event` payloads with `channelId`, `authorId`, `messageId`, `content`, and normalized `mentions`.
+4. Downstream routing reads both message text and the `mentions` payload field to resolve mention-based bot activation.
 
 # Reply path
 
-The engine can set a DiscordReplySender (DiscordEventSource implements it). When a workflow produces a reply (e.g. Luna multi-turn messages), the engine sends that reply back to Discord via `sendReply(channelId, messageId, content)`. Stub implementation logs replies until a real Discord API integration is added.
+The engine can set a `DiscordReplySender` (`DiscordEventSource` implements it). When a workflow or the Cursor run monitor produces a reply, the engine or monitor sends that reply back to Discord via `send(channelId, messageId, content)`. The gateway replies to the original message when a `messageId` is present and falls back to a plain channel message when needed.
 
 # Inputs and outputs
 
-- **Inputs:** Discord API payloads (messages, etc.). **Outputs:** Internal Events on EventBus; workflow replies sent back to Discord via DiscordReplySender when configured.
+- **Inputs:** Live Discord messages with content, channel, author, and mention metadata; `DISCORD_BOT_TOKEN` for connector startup.
+- **Outputs:** Internal `Event` objects on `EventBus` with mention metadata available for routing, plus workflow and Cursor status replies sent back through `DiscordReplySender`.
+

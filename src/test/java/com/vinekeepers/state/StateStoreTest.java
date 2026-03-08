@@ -49,4 +49,12 @@ class StateStoreTest {
         assertTrue(store.contains("k1"));
         assertFalse(store.contains("k2"));
     }
+
+    @Test
+    void keysReturnsStoredKeys() {
+        store.put("k1", "v1");
+        store.put("k2", 2);
+
+        assertEquals(java.util.Set.of("k1", "k2"), store.keys());
+    }
 }

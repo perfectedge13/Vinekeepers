@@ -4,31 +4,36 @@ Sub-skills MUST follow these formats when creating or updating markdown files un
 
 | File path | Required format (sections in order) |
 |-----------|-------------------------------------|
-| &lt;docs_dir&gt;/index.md | **Title (H1):** &lt;project name from config or registry&gt;. `# Overview` (1–2 sentence project summary). `# Quick links` (bulleted links to Features, Architecture, Runbooks — use relative links e.g. [Features](features/index.md)). |
-| `mkdoc/features/index.md` | **Title:** Features. `# Definition of a feature` (paragraph: feature = cohesive capability backed by spec requirements/assets; status draft / active / deprecated). `# Domains` (table or list: Domain, Description, Link to domain index). |
-| `mkdoc/features/domain.md` | **Title:** Domain index. `# Domains` (short intro). List of domains with links to `mkdoc/features/domain/<domain-slug>.md`. |
-| `mkdoc/features/domain/<domain-slug>.md` | **Title:** \<Domain name\>. `# Features` (table or list: Feature, Status, Link to feature summary page). |
-| `mkdoc/features/domain/<domain>/<feature-name>.md` | **Title:** \<Feature name\>. `# Status` (single line: draft / active / deprecated; if deprecated, link to successor). `# Summary` (short description). `# Key assets` (class/method summaries or table: Asset, Role, Path). `# Sub-pages` (bulleted links to how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams). |
-| `mkdoc/features/domain/<domain>/<feature-name>/how-it-works.md` | **Title:** How it works. `# Overview` (behavior in prose). `# Flow` (numbered or bullet steps; optional Mermaid). `# Inputs and outputs` (if applicable). |
-| `mkdoc/features/domain/<domain>/<feature-name>/change-log.md` | **Title:** Change log. `# Entries` (chronological list; each entry: `## YYYY-MM-DD` then paragraph or bullets). Newest first or oldest first (pick one and stick to it). |
-| `mkdoc/features/domain/<domain>/<feature-name>/known-issues.md` | **Title:** Known issues. `# Active` (list of current issues: short title, description, workaround if any). `# Resolved` (optional; moved from Active when fixed). |
-| `mkdoc/features/domain/<domain>/<feature-name>/decisions.md` | **Title:** Decisions. `# Entries` (each: `## YYYY-MM-DD — <short title>` then context, decision, consequence). |
-| `mkdoc/features/domain/<domain>/<feature-name>/contracts.md` | **Title:** Contracts. `# APIs` (endpoints, request/response shape). `# Schemas` (data models, field list). `# Interfaces` (Java/other interfaces; method signatures or link to code). |
-| `mkdoc/features/domain/<domain>/<feature-name>/tests.md` | **Title:** Tests. `# Coverage` (summary). `# Test list` (table: Test ID, Title, Class, Method, Intent). |
-| `mkdoc/features/domain/<domain>/<feature-name>/diagrams.md` | **Title:** Diagrams. `# Architecture` (link to main architecture or inline Mermaid). When linking to the main architecture page from this file, use `../../../../architecture.md` — four levels up to mkdoc root. `# Feature flow` (optional Mermaid for this feature). |
-| `mkdoc/architecture.md` | **Title:** Architecture. `# Overview` (2–3 sentences). `# System context` (external systems, boundaries). `# Major subsystems` (domains with short description). `# Runtime flows` (how components interact). `# Diagram` (Mermaid block or link). |
-| `mkdoc/runbooks/index.md` | **Title:** Runbooks. `# Index` (links to operational, troubleshooting, recovery, maintenance). Short intro. |
-| `mkdoc/runbooks/operational.md` | **Title:** Operational. `# Procedures` (heading per procedure; steps underneath). |
-| `mkdoc/runbooks/troubleshooting.md` | **Title:** Troubleshooting. `# Entries` (each: `## <symptom or issue>` then cause, steps, resolution). |
-| `mkdoc/runbooks/recovery.md` | **Title:** Recovery. `# Procedures` (recovery scenarios and steps). |
-| `mkdoc/runbooks/maintenance.md` | **Title:** Maintenance. `# Procedures` (maintenance tasks, schedule, steps). |
+| &lt;docs_dir&gt;/index.md | **Title (H1):** &lt;project name from config or registry&gt;. Preserve any existing project logo image block directly below the H1 (for Vinekeepers, `<img src="img/Vinekeepers.png" alt="Vinekeepers logo" width="400" />`). `# Overview` (1–2 sentence project summary). `# Quick links` (bulleted links to Features, Architecture, Runbooks, and Cursor — use relative links e.g. [Features](features/index.md)). |
+| `&lt;docs_dir&gt;/features/index.md` | **Title:** Features. `# Definition of a feature` (paragraph: feature = cohesive capability backed by spec requirements/assets; status draft / active / deprecated). `# Domains` (table or list: Domain, Description, Link to domain index). |
+| `&lt;docs_dir&gt;/features/domain.md` | **Title:** Domain index. `# Domains` (short intro). List of domains with links to `features/domain/<domain-slug>.md`. |
+| `&lt;docs_dir&gt;/features/domain/<domain-slug>.md` | **Title:** \<Domain name\>. `# Features` (table or list: Feature, Status, Link to feature summary page). |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>.md` | **Title:** \<Feature name\>. `# Status` (single line: draft / active / deprecated; if deprecated, link to successor). `# Summary` (short description). `# Key assets` (class/method summaries or table: Asset, Role, Path). `# Sub-pages` (bulleted links to how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams). |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/how-it-works.md` | **Title:** How it works. `# Overview` (behavior in prose). `# Flow` (numbered or bullet steps; optional Mermaid). `# Inputs and outputs` (if applicable). |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/change-log.md` | **Title:** Change log. `# Entries` (chronological list; each entry: `## YYYY-MM-DD` then paragraph or bullets). New entries append or merge by stable identity; preserve prior history by default. |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/known-issues.md` | **Title:** Known issues. `# Active` (list of current issues: short title, description, workaround if any). `# Resolved` (optional; moved from Active when fixed). Update by issue identity; preserve prior entries by default. |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/decisions.md` | **Title:** Decisions. `# Entries` (each: `## YYYY-MM-DD — <short title>` then context, decision, consequence). Update by `date + title`; preserve prior entries by default. |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/contracts.md` | **Title:** Contracts. `# APIs` (endpoints, request/response shape). `# Schemas` (data models, field list). `# Interfaces` (Java/other interfaces; method signatures or link to code). |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/tests.md` | **Title:** Tests. `# Coverage` (summary). `# Test list` (table: Test ID, Title, Class, Method, Intent). |
+| `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/diagrams.md` | **Title:** Diagrams. `# Architecture` (link to main architecture or inline Mermaid). When linking to the main architecture page from this file, use `../../../../architecture.md` — four levels up to the docs root. `# Feature flow` (optional Mermaid for this feature). |
+| `&lt;docs_dir&gt;/architecture.md` | **Title:** Architecture. `# Overview` (2–3 sentences). `# System context` (external systems, boundaries). `# Major subsystems` (domains with short description). `# Runtime flows` (how components interact). `# Diagram` (Mermaid block or link). |
+| `&lt;docs_dir&gt;/runbooks/index.md` | **Title:** Runbooks. `# Index` (links to operational, troubleshooting, recovery, maintenance). Short intro. |
+| `&lt;docs_dir&gt;/runbooks/operational.md` | **Title:** Operational. `# Procedures` (heading per procedure; steps underneath). |
+| `&lt;docs_dir&gt;/runbooks/troubleshooting.md` | **Title:** Troubleshooting. `# Entries` (each: `## <symptom or issue>` then cause, steps, resolution). |
+| `&lt;docs_dir&gt;/runbooks/recovery.md` | **Title:** Recovery. `# Procedures` (recovery scenarios and steps). |
+| `&lt;docs_dir&gt;/runbooks/maintenance.md` | **Title:** Maintenance. `# Procedures` (maintenance tasks, schedule, steps). |
 
 ## When to update (by owning step)
 
-- **mk_index** owns: `mkdoc/index.md`, `mkdoc/features/index.md`, `mkdoc/features/domain.md`, `mkdoc/features/domain/<domain-slug>.md`.
-- **mk_architecture** owns: `mkdoc/architecture.md`.
-- **mk_runbooks** owns: `mkdoc/runbooks/index.md`, `mkdoc/runbooks/operational.md`, `mkdoc/runbooks/troubleshooting.md`, `mkdoc/runbooks/recovery.md`, `mkdoc/runbooks/maintenance.md`.
-- **mk_feature_dossiers** owns: `mkdoc/features/domain/<domain>/<feature-name>.md` and its seven sub-pages (how-it-works.md, change-log.md, known-issues.md, decisions.md, contracts.md, tests.md, diagrams.md).
+- **mk_index** owns: `&lt;docs_dir&gt;/index.md`, `&lt;docs_dir&gt;/features/index.md`, `&lt;docs_dir&gt;/features/domain.md`, `&lt;docs_dir&gt;/features/domain/<domain-slug>.md`.
+- **mk_architecture** owns: `&lt;docs_dir&gt;/architecture.md`.
+- **mk_runbooks** owns: `&lt;docs_dir&gt;/runbooks/index.md`, `&lt;docs_dir&gt;/runbooks/operational.md`, `&lt;docs_dir&gt;/runbooks/troubleshooting.md`, `&lt;docs_dir&gt;/runbooks/recovery.md`, `&lt;docs_dir&gt;/runbooks/maintenance.md`.
+- **mk_feature_dossiers** owns: the resolved feature summary path plus its seven sub-pages (how-it-works.md, change-log.md, known-issues.md, decisions.md, contracts.md, tests.md, diagrams.md).
+
+## Update semantics
+
+- **Generated-and-overwritable:** home/index pages, domain index pages, feature summary pages, how-it-works, contracts, tests, diagrams, architecture, runbooks, Cursor docs, and mkdocs nav may be fully regenerated.
+- **Generated-with-history-preserving semantics:** `change-log.md`, `known-issues.md`, and `decisions.md` preserve prior entries by default. Append or merge entries by stable identity instead of replacing the whole file.
 
 Use relative links between markdown files (e.g. `[Architecture](../architecture.md)` from runbooks, `[Features](features/index.md)` from index).
 

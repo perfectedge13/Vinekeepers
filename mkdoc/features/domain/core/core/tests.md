@@ -23,3 +23,4 @@ Unit tests cover EnvLoader, VinekeepersApp, VinekeepersEngine, ConfigLoader, Rou
 | MANUAL-REASONER | Reasoner interface | — | — | Verify reasoner used in core loop |
 | MANUAL-WORKFLOW | Workflow interface | — | — | Verify workflow part of bot definition |
 | MANUAL-CONNECTORS | Connectors compile and implement interface | — | — | Verify connector sources exist |
+

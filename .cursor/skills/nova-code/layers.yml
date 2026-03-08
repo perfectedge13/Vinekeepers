@@ -5,5 +5,5 @@ layers:
   pre_change: [schema_gate, drift_gate]
   implementation: [plan_change, branch_removal_rename, implement]
   documentation: [update_specs, update_readme, post_schema, traceability]
-  validation: [run_tests, static_analysis]
+  validation: [run_tests, build_check]
   wrap_up: [reconcile, output]

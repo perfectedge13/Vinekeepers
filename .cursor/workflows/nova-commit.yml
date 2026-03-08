@@ -1,9 +1,9 @@
 # Nova-commit workflow — full verification then commit/push
-# Shared steps use @.cursor/skills/common/ (discovery, run_tests, reconcile, static_analysis). Commit-only steps in nova-commit/sub-skills/.
+# Shared steps use @.cursor/skills/common/ (discovery, run_tests, reconcile, build_check). Commit-only steps in nova-commit/sub-skills/.
 # Commit and push only if all phases pass.
 
 name: nova-commit
-description: Full-suite verification and commit. Discovery (all registries) → gates → tests → plausibility → docs → static analysis → commit/push → output.
+description: Full-suite verification and commit. Discovery (all registries) → gates → tests → plausibility → docs → build check → commit/push → output.
 
 # Execute these phase IDs in this order.
 run_order:
@@ -13,7 +13,7 @@ run_order:
   - run_tests
   - plausibility_review
   - docs_reconcile
-  - static_analysis
+  - build_check
   - commit_push
   - output
 
@@ -48,7 +48,7 @@ phases:
     type: step
     skill: nova-plausibility-review
     location: .cursor/skills/nova-commit/sub-skills/plausibility-review.md
-    description: For every requirement, report Implemented? true/false with justification. If any accepted requirement is false, treat as failure; do not commit.
+    description: For every requirement, report Implemented? true/false with justification. If any active requirement is false, treat as failure; accept legacy accepted only as a migration alias.
 
   - id: docs_reconcile
     type: step
@@ -56,11 +56,11 @@ phases:
     location: .cursor/skills/common/reconcile.md
     description: Reconcile README and docs. See common/reconcile.md.
 
-  - id: static_analysis
+  - id: build_check
     type: step
     skill: nova-static-analysis
     location: .cursor/skills/common/static-analysis.md
-    description: Run static analysis (project adapter). If build fails, stop.
+    description: Run build or compile verification (project adapter). Canonical config key: build_check; accept legacy static_analysis during migration. If build fails, stop.
 
   - id: commit_push
     type: step

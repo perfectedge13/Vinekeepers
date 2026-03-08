@@ -11,3 +11,4 @@ Event: sourceId, kind, payload.
 # Interfaces
 
 EventSource (from events package): start(EventBus).
+

@@ -23,7 +23,7 @@ List **every** step from the workflow's **run_order** (or phases then execution_
   guardrails → Pass  
   schema_gate → Pass  
   drift_gate → Pass  
-  execution_loop: plan_change → Pass, branch_removal_rename → Skip, pre_change_lock → Pass, implement → Pass, update_specs → Pass, update_readme → Pass, post_schema → Pass, traceability → Pass, run_tests → Pass, static_analysis → Pass, reconcile → Pass, mk → Pass, output → Pass  
+  execution_loop: plan_change → Pass, branch_removal_rename → Skip, pre_change_lock → Pass, implement → Pass, update_specs → Pass, update_readme → Pass, post_schema → Pass, traceability → Pass, run_tests → Pass, build_check → Pass, reconcile → Pass, mk → Pass, output → Pass  
 - If the run stopped early (e.g. gate failure): list steps up to and including the failed step with Fail; subsequent steps as **Not run**.
 
 ### 2. Per-step outcome
@@ -43,7 +43,7 @@ A short checklist the reader can use to confirm the run is successful and comple
 - Tests: Pass / Fail / Blocked (with counts: run, passed, failed)  
 - Static analysis: Pass / Fail  
 - Reconcile: OK / Issues  
-- Mk: Pass / Fail (mkdoc/ sync from specs and handoff)  
+- Mk: Pass / Fail (docs-dir sync from specs and handoff)
 - No unresolved spec drift or blocked tests  
 
 ### 4. Detail sections

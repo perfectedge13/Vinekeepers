@@ -26,7 +26,7 @@ flowchart TB
   J --> K[post_schema]
   K --> L[traceability]
   L --> M[run_tests]
-  M --> N[static_analysis]
+  M --> N[build_check]
   N --> O[reconcile]
   O --> P[mk]
   P --> Q[output]
@@ -35,10 +35,12 @@ flowchart TB
 ## Sub-skills
 
 - [implementation/plan-change](nova-code/implementation/plan-change.md)
+- [implementation/plan-change-output](nova-code/implementation/plan-change-output.md)
 - [implementation/implement](nova-code/implementation/implement.md)
 - [implementation/update-tests](nova-code/implementation/update-tests.md)
 - [implementation/removal-rename](nova-code/implementation/removal-rename.md)
 - [documentation/update-specs](nova-code/documentation/update-specs.md)
+- [documentation/output-format](nova-code/documentation/output-format.md)
 - [documentation/post-validate](nova-code/documentation/post-validate.md)
 - [wrap_up/output](nova-code/wrap_up/output.md)
 - [mk](mk.md) (mkdoc sync: prepare, index, architecture, runbooks, feature dossiers, cursor docs)
@@ -88,3 +90,5 @@ Do not skip any step (except branch_removal_rename when plan_change did not set 
 ```
 
 </details>
+
+

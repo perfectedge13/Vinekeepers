@@ -16,3 +16,5 @@ Creates/updates Wiki.js runbooks and sub-pages (operational, troubleshooting, re
 See **.cursor/skills/nova-wiki/sub-skills/runbooks.md** for the full source. Summary: creates/updates Wiki.js runbooks (operational, troubleshooting, recovery, maintenance).
 
 </details>
+
+

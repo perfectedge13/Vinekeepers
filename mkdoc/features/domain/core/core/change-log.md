@@ -4,7 +4,7 @@
 
 ## 2026-03-07
 
-Bootstrap creates WorkflowRunner per bot via WorkflowRunnerFactory (from bot's workflow.type/params) and registerRunner(botId, runner). Engine uses registered runners; runner.run(event, stateStore, botId) for workflow execution.
+Bootstrap now creates per-bot workflow runners with runtime conversation settings, shared tool registration, and configurable workflow support. The engine runs workflow first, then builds reasoner context from workflow output and current state, applies reasoner state patches, executes proposed tools, and delivers Discord replies through the configured reply sender.
 
 ## 2026-03-06
 
@@ -17,3 +17,4 @@ Nova-spec run: per-area features added to registry (env, config, bot, events, st
 ## 2025-03-05
 
 Initial mkdoc sync from nova-spec: bootstrapped mkdoc and feature dossier for Core (Vinekeepers core engine and bot framework).
+

@@ -1,20 +1,20 @@
 # Update registry (sub-skill)
 
-**Inputs (handoff):** domain_slug; for this domain: requirement_ids[], asset_ids[], features[] (each feature: id, slug, title, requirement_ids, asset_ids, status). Full project/schema/enums and full assets/requirements/dependencies from the **canonical registry** (e.g. core-registry) or from the scan so you can filter to only those in requirement_ids/asset_ids for this domain.
+**Inputs (handoff):** `registry_file`; one or more domain groups assigned to that registry, where each domain group has requirement_ids[], asset_ids[], and features[] (each feature: id, slug, title, requirement_ids, asset_ids, status, domain_slug). Full project/schema/enums and full assets/requirements/dependencies from existing registries or from the scan so you can filter to only the ids that belong in this registry file.
 
-**Outputs:** Path to the registry file written (same directory as spec index, file &lt;domain_slug&gt;-registry.yml); list of requirement/asset/feature ids in this registry.
+**Outputs:** Path to the registry file written (same directory as spec index, file = `registry_file`); list of requirement/asset/feature ids in this registry.
 
 **Spec index path:** From **@.cursor/project.yml** `paths.specs_index` if present, else `specs/specs.yml`. Registry files live in the same directory as the spec index.
 
 ## Logic
 
-1. **Target file:** &lt;directory of spec index&gt;/&lt;domain_slug&gt;-registry.yml. Create or overwrite.
-2. **Schema block:** schema.id = req-registry, version, updated_utc = current UTC.
+1. **Target file:** &lt;directory of spec index&gt;/&lt;registry_file&gt;. Create or update.
+2. **Schema block:** schema.id = req-registry, version, updated_utc = current UTC **only when the normalized registry content changed semantically**.
 3. **Project, enums:** Copy from canonical registry (e.g. core-registry.yml) so all required enums and project are present.
-4. **Dependencies:** Include only dependency items whose used_by_requirements intersect this domain's requirement_ids. If no registry exists yet, copy minimal enums and project from core or from schema defaults.
-5. **Assets:** Include only assets whose id is in this domain's asset_ids. Each asset: id, kind, path, role, requires (only requirement ids that are in this domain's requirement_ids). After features are fixed, derive and set optional `feature_ids` on each asset (feature IDs that list this asset in asset_ids or whose requirement_ids intersect this asset's requires). Preserve traceability.
-6. **Requirements:** Include only requirements whose id is in this domain's requirement_ids. Full shape: id, title, statement, status, priority, type, behavior, acceptance, traceability (assets only in this domain), validation. Preserve bidirectional consistency with assets in this registry.
-7. **Features:** Include the features[] for this domain. Each feature's requirement_ids and asset_ids must be subsets of this domain's requirement_ids and asset_ids. For each feature, set optional **domain_slug** from the registry file stem (e.g. core-registry.yml → core), **doc_path** as `features/domain/<domain_slug>/<feature.slug>.md` (relative to docs_dir), and **summary** when missing from the first requirement's title or first sentence of statement for that feature. Preserve existing domain_slug, doc_path, summary if already present and valid.
+4. **Dependencies:** Include only dependency items whose used_by_requirements intersect the requirement ids stored in this registry. If no registry exists yet, copy minimal enums and project from a compatible registry or from schema defaults.
+5. **Assets:** Include only assets whose id is assigned to one of the domain groups stored in this registry. Each asset: id, kind, path, role, requires (only requirement ids that are stored in this registry). After features are fixed, derive and set optional `feature_ids` on each asset (feature IDs that list this asset in asset_ids or whose requirement_ids intersect this asset's requires). Preserve traceability.
+6. **Requirements:** Include only requirements whose id is assigned to one of the domain groups stored in this registry. Full shape: id, title, statement, status, priority, type, behavior, acceptance, traceability (assets only in this registry), validation. Preserve bidirectional consistency with assets in this registry.
+7. **Features:** Include the features[] for every domain group assigned to this registry. Each feature's requirement_ids and asset_ids must be subsets of the ids stored in this registry. Preserve the feature's explicit **domain_slug**; only fall back to the registry file stem when the feature has no domain slug yet. Derive **doc_path** from the feature's effective domain slug as `features/domain/<domain_slug>/<feature.slug>.md` (relative to docs_dir) unless an existing path remains valid and intentionally differs. Set **summary** when missing from the first requirement's title or first sentence of statement for that feature.
 8. **Gap-fill:** Within this registry, every requirement has at least one asset; every asset has at least one requirement; every requirement has validation.tests. Add or fix as needed.
 9. Conform to **@specs/schema/req-registry.schema.json**.
 
@@ -36,7 +36,7 @@ When writing each registry file, follow these rules. Conform to **@specs/schema/
 **Requirements:**
 
 - For each capability inferred from the repo (see candidate requirements), ensure a requirement exists: `id`, `title`, `statement`, `status`, `priority`, `type`, `behavior`, `acceptance`, `traceability`, `validation`.
-- Use the registry's `enums` for status, priority, type (e.g. status: draft | accepted | deprecated; type: functional | non-functional | constraint).
+- Use the registry's `enums` for status, priority, type. Canonical lifecycle vocabulary is `draft | active | deprecated`. During migration, treat legacy `accepted` as a readable alias for `active`, but do not write new `accepted` values.
 - Add missing requirements; do not delete existing ones (mark deprecated if no longer relevant). Follow **@.cursor/skills/common/requirement-tracking.md** for when to create vs update vs split.
 
 **Traceability:**
@@ -56,9 +56,9 @@ When writing each registry file, follow these rules. Conform to **@specs/schema/
 
 **Infer features from scan:**
 
-- Use the **candidate features** from the scan. For each candidate feature (slug, title, requirement_ids, asset_ids), ensure a feature exists in the registry: `id` FEAT-&lt;UPPERCASE-SLUG&gt;, `slug`, `title`, `requirement_ids`, `asset_ids` (or omit for implied), `status` (draft | active | deprecated from requirements in that group). Add any missing feature; do not remove existing features that still have valid refs.
+- Use the **candidate features** from the scan. For each candidate feature (slug, title, requirement_ids, asset_ids, optional domain_slug), ensure a feature exists in the registry: `id` FEAT-&lt;UPPERCASE-SLUG&gt;, `slug`, `title`, `requirement_ids`, `asset_ids` (or omit for implied), `status` (draft | active | deprecated from requirements in that group), and explicit `domain_slug`. Add any missing feature; do not remove existing features that still have valid refs.
 - **Coverage:** Every requirement must appear in at least one feature's `requirement_ids`; every asset should appear in at least one feature's `asset_ids` (or in a feature that omits asset_ids for "all implied"). If the registry currently has only one umbrella feature, add the per-area features and optionally keep the umbrella or split its requirement_ids/asset_ids across the new features.
-- Conform to schema: feature id, slug, title, requirement_ids, optional asset_ids, status. **Optional feature fields for doc search:** Include **domain_slug** (from registry file stem), **doc_path** (`features/domain/<domain_slug>/<slug>.md` relative to docs_dir), and **summary** (from first requirement title or first sentence of statement when missing). Preserve existing values if present and valid.
+- Conform to schema: feature id, slug, title, requirement_ids, optional asset_ids, status. **Optional feature fields for doc search:** Include **domain_slug** (the inferred owning domain, not necessarily the registry stem), **doc_path** (`features/domain/<domain_slug>/<slug>.md` relative to docs_dir unless an intentional override already exists), and **summary** (from first requirement title or first sentence of statement when missing). Preserve existing values if present and valid.
 
 **Gap-fill:**
 
@@ -66,10 +66,10 @@ When writing each registry file, follow these rules. Conform to **@specs/schema/
 - **Requirements:** Every capability theme from the scan has a requirement; add any missing.
 - **Traceability:** Every asset has `requires` and appears in the traceability of those requirements; every requirement has traceability.assets and symbols.
 - **Validation:** Every requirement has at least one validation test (unitTestRef or manualTest).
-- **Features:** Every requirement and every asset is in at least one feature (see features inference above). When features exist, ensure every feature has **domain_slug** and **doc_path**; set **summary** when missing from requirement data.
+- **Features:** Every requirement and every asset is in at least one feature (see features inference above). When features exist, ensure every feature has **domain_slug** and a docs-dir-relative **doc_path** derived from the effective domain and feature slug unless an intentional override is already valid; set **summary** when missing from requirement data.
 
-**schema.updated_utc:** Set to current UTC when writing the registry (format: `YYYY-MM-DDTHH:MM:SSZ`).
+**schema.updated_utc:** Set to current UTC only when the normalized registry content changed semantically (format: `YYYY-MM-DDTHH:MM:SSZ`).
 
 ## Return
 
-Pass; path specs/&lt;domain_slug&gt;-registry.yml; list of requirement_ids, asset_ids, feature ids written.
+Pass; path specs/&lt;registry_file&gt;; list of requirement_ids, asset_ids, feature ids written.

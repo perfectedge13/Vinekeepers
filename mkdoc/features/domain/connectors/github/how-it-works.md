@@ -13,3 +13,4 @@ GitHubEventSource implements EventSource. On start(EventBus), it connects to the
 # Inputs and outputs
 
 - **Inputs:** GitHub API payloads (webhooks, etc.). **Outputs:** Internal Events on EventBus.
+

@@ -16,3 +16,5 @@ Wiki.js authentication: WIKIJS_URL, WIKIJS_EMAIL, WIKIJS_PASSWORD or WIKIJS_API_
 See **.cursor/skills/nova-wiki/auth.md** for the full source. Summary: Wiki.js auth (WIKIJS_* env), JWT/Bearer, path prefix from project config.
 
 </details>
+
+

@@ -1,4 +1,4 @@
-# Core engine, bootstrap, and specs
+# Specs governance and bootstrap
 
 # Status
 
@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Specs bootstrap and traceability (REQ-CORE-001), application bootstrap and entrypoint (REQ-CORE-002), and event-driven engine (REQ-CORE-003). Assets: spec index, registry, VinekeepersApp, Bootstrap, VinekeepersEngine, PackageMarker.
+Specs bootstrap and traceability (REQ-CORE-001) and application bootstrap and entrypoint (REQ-CORE-002). `specs/specs.yml` and `specs/core-registry.yml` anchor traceability, while `VinekeepersApp` loads `.env` and hands startup to `Bootstrap`, which wires the event bus, router, state store, tool execution, connectors, and configured bot runners.
 
 # Key assets
 
@@ -14,10 +14,8 @@ Specs bootstrap and traceability (REQ-CORE-001), application bootstrap and entry
 |-------|------|------|
 | ASSET-SPEC-INDEX | Spec index and validation entrypoint | specs/specs.yml |
 | ASSET-REGISTRY | Core requirements registry | specs/core-registry.yml |
-| ASSET-APP | Application entrypoint; loads .env and bootstraps engine | src/main/java/com/vinekeepers/VinekeepersApp.java |
-| ASSET-BOOTSTRAP | Wire engine, config, connectors; create WorkflowRunner per bot via WorkflowRunnerFactory, registerRunner(botId, runner) | src/main/java/com/vinekeepers/core/Bootstrap.java |
-| ASSET-ENGINE | Route events to bots; run core loop using registered WorkflowRunners (runner.run loads state, runs workflow, persists, responds) | src/main/java/com/vinekeepers/core/VinekeepersEngine.java |
-| ASSET-WORKFLOW-RUNNER-FACTORY | Create WorkflowRunner from workflow.type and params from config | src/main/java/com/vinekeepers/workflow/WorkflowRunnerFactory.java |
+| ASSET-APP | Application entrypoint; loads `.env` and bootstraps runtime wiring | src/main/java/com/vinekeepers/VinekeepersApp.java |
+| ASSET-BOOTSTRAP | Wire engine, config loader, connectors, shared tools, and configured workflow runners | src/main/java/com/vinekeepers/core/Bootstrap.java |
 | ASSET-PACKAGE-MARKER | Package marker utility | src/main/java/com/vinekeepers/util/PackageMarker.java |
 
 # Sub-pages
@@ -29,3 +27,4 @@ Specs bootstrap and traceability (REQ-CORE-001), application bootstrap and entry
 - [Contracts](core/contracts.md)
 - [Tests](core/tests.md)
 - [Diagrams](core/diagrams.md)
+

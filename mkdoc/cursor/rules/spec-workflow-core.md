@@ -12,3 +12,5 @@ Core spec-driven workflow: gates, removal/rename protocol, and final output. Gua
 - **Removal/rename (2):** Reference map first; apply removal/rename; update all references; re-run gates; verify.
 - **Shell:** Use index or project.yml shell; Windows PowerShell: avoid `&&`, use `Set-Location` or `cmd /c`.
 - **Final response:** Summary, changed files, schema result, test results, static analysis, any spec issues.
+
+

@@ -16,3 +16,5 @@ Creates/updates Wiki.js architecture page (Overview, System context, Major subsy
 See **.cursor/skills/nova-wiki/sub-skills/architecture.md** for the full source. Summary: creates/updates Wiki.js architecture page per page-formats.
 
 </details>
+
+

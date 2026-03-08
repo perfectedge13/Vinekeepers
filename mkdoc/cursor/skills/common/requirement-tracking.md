@@ -35,7 +35,7 @@ When to create, update, or split requirements; how to keep ids and traceability 
 
 - The requirement has become **too broad**: it describes multiple independently testable behaviors or multiple distinct outcomes; splitting allows separate status, tests, and traceability per part.
 - **Different assets** implement different parts of the same high-level feature; each part that is independently verifiable should be a separate requirement, with assets/symbols pointing to the right requirement.
-- **Status or priority** would differ by sub-behavior (e.g. one part accepted, another draft); split so each requirement has a single status.
+- **Status or priority** would differ by sub-behavior (e.g. one part active, another draft); split so each requirement has a single status.
 - Give each new requirement its own **validation.tests** (partition or copy from the old requirement); ensure each test verifies exactly one of the new requirements (or attach the same test to each requirement it verifies — see Ids and traceability). If a single test verifies more than one new requirement, attach that test to each requirement it verifies (duplicate ref) or to the primary one and document in acceptance/intent; ensure every new requirement has at least one test where possible.
 
 ## When not to split
@@ -58,3 +58,5 @@ When to create, update, or split requirements; how to keep ids and traceability 
 ```
 
 </details>
+
+

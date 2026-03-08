@@ -14,7 +14,14 @@ public interface WorkflowRunner {
      * @param event      the incoming event
      * @param stateStore store for workflow state
      * @param botId      bot id (for state keying)
-     * @return reply message to send (e.g. to Discord), or null/empty if none
+     * @return structured workflow run result
      */
-    String run(Event event, StateStore stateStore, String botId);
+    WorkflowRunResult runResult(Event event, StateStore stateStore, String botId);
+
+    /**
+     * Legacy adapter for older callers that still expect a reply string.
+     */
+    default String run(Event event, StateStore stateStore, String botId) {
+        return runResult(event, stateStore, botId).getReplyMessage();
+    }
 }

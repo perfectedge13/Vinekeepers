@@ -2,18 +2,20 @@
 
 ## Summary
 
-Orchestrator for local mkdoc/ sync. Invoked by the nova-code **mk** step. Reads the nova-mk workflow; launches one sub-agent per step; passes handoff (user request, plan_change/implement summary, mk context from prepare). Writes markdown under mkdoc/; no auth. Bootstraps mkdoc/ when missing.
+Orchestrator for local `mkdoc/` sync. Invoked by the `nova-code` `mk` step. It reads the `nova-mk` workflow, passes structured handoff from `plan_change` and `implement`, runs prepare and gather-context before the page-writing steps, and syncs feature docs, runbooks, architecture, and Cursor docs under the configured docs directory.
 
 ## Key points
 
 - **Workflow:** Read **@.cursor/workflows/nova-mk.yml**. Page formats in **@.cursor/skills/nova-code/mk/page-formats.md**.
-- **Run order:** mk_prepare, mk_index, mk_architecture, mk_runbooks, mk_feature_dossiers, mk_cursor.
-- For every step with a `location`, call **mcp_task**; do not run sub-skills yourself.
-- When invoked by nova-code, handoff must include plan_change (impacted registries/assets) and implement (changed file paths).
+- **Run order:** `mk_prepare`, `mk_gather_context`, `mk_index`, `mk_architecture`, `mk_runbooks`, `mk_feature_dossiers`, `mk_cursor`.
+- **Handoff:** `mk_prepare` receives cumulative `plan_change` and `implement` data so it can compute affected features. `mk_gather_context` compresses spec and existing mkdoc context for downstream steps.
+- **Execution model:** The orchestrator uses one sub-agent per workflow step when the agent runtime supports that tool.
+- **Output:** Returns a short summary of the updated mkdoc pages after the final step.
 
 ## Sub-skills
 
 - [prepare](mk/sub-skills/prepare.md)
+- [gather-spec-mkdoc-context](mk/sub-skills/gather-spec-mkdoc-context.md)
 - [index](mk/sub-skills/index.md)
 - [architecture](mk/sub-skills/architecture.md)
 - [runbooks](mk/sub-skills/runbooks.md)
@@ -54,3 +56,5 @@ Do not skip any step. The workflow YAML and run_order are the checklist.
 ```
 
 </details>
+
+

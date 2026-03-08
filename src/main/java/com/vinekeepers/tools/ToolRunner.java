@@ -16,6 +16,10 @@ public final class ToolRunner {
         this.registry = Objects.requireNonNull(registry, "registry");
     }
 
+    public boolean hasTool(String toolId) {
+        return registry.get(toolId) != null;
+    }
+
     /**
      * Run the tool by id with args, if allowed by policy. Returns result or throws.
      */

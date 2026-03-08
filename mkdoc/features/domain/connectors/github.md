@@ -23,3 +23,4 @@ GitHub event source (REQ-CONNECTORS-GITHUB-001). GitHubEventSource implements Ev
 - [Contracts](github/contracts.md)
 - [Tests](github/tests.md)
 - [Diagrams](github/diagrams.md)
+

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-06T23:59:00Z"
+  updated_utc: "2026-03-07T20:45:10Z"
 
 project:
   id: vinekeepers
@@ -12,7 +12,7 @@ project:
     runtime: "21"
 
 enums:
-  status: [draft, accepted, deprecated]
+  status: [draft, active, deprecated]
   priority: [low, medium, high]
   type: [functional, non-functional, constraint]
   handling_strategy: [fail, retry, skip]
@@ -47,6 +47,14 @@ dependencies:
       spec: org.yaml:snakeyaml
       install_hint: Maven dependency
       used_by_requirements: [REQ-CONFIG-001]
+    - id: DEP-JACKSON-DATABIND
+      kind: library
+      name: jackson-databind
+      scope: runtime
+      criticality: required
+      spec: com.fasterxml.jackson.core:jackson-databind
+      install_hint: Maven dependency
+      used_by_requirements: [REQ-LUNA-001]
     - id: DEP-JUNIT
       kind: library
       name: junit-jupiter
@@ -54,7 +62,7 @@ dependencies:
       criticality: required
       spec: org.junit.jupiter:junit-jupiter
       install_hint: Maven test dependency
-      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
 
 assets:
   - id: ASSET-SPEC-INDEX
@@ -62,292 +70,475 @@ assets:
     path: specs/specs.yml
     role: Spec index and validation entrypoint
     requires: [REQ-CORE-001]
+    feature_ids: [FEAT-CORE]
   - id: ASSET-REGISTRY
     kind: spec
     path: specs/core-registry.yml
     role: Core requirements registry
     requires: [REQ-CORE-001]
+    feature_ids: [FEAT-CORE]
   - id: ASSET-APP
     kind: source
     path: src/main/java/com/vinekeepers/VinekeepersApp.java
     role: Application entrypoint; loads .env and bootstraps engine
     requires: [REQ-CORE-002, REQ-ENV-001]
+    feature_ids: [FEAT-CORE, FEAT-ENV]
   - id: ASSET-BOOTSTRAP
     kind: source
     path: src/main/java/com/vinekeepers/core/Bootstrap.java
-    role: Wire engine, config, connectors (including Luna and Discord)
-    requires: [REQ-CORE-002, REQ-LUNA-001]
+    role: Wire engine, config, connectors, shared tools, and configured workflow runners
+    requires: [REQ-CORE-002, REQ-TOOLS-001, REQ-LUNA-001]
+    feature_ids: [FEAT-CORE, FEAT-TOOLS, FEAT-CURSOR-GATHERING]
   - id: ASSET-ENV-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/env/EnvLoader.java
     role: Load .env file into system properties
     requires: [REQ-ENV-001]
+    feature_ids: [FEAT-ENV]
   - id: ASSET-ENV
     kind: source
     path: src/main/java/com/vinekeepers/env/Env.java
     role: Read config from system properties
     requires: [REQ-ENV-001]
+    feature_ids: [FEAT-ENV]
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots; run core loop; deliver workflow replies to Discord when source is Discord
-    requires: [REQ-CORE-003, REQ-LUNA-001]
+    role: Route events to bots; run workflow and reasoner; apply tool/state side effects; deliver replies to Discord
+    requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
+    feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
   - id: ASSET-CONFIG-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/config/ConfigLoader.java
-    role: Load bot definitions from YAML
+    role: Load bot definitions, routing, workflows, bot runtime options, and Discord mention filters from YAML
     requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
-    role: Bot definitions YAML (including Luna routing and trigger)
+    role: Bot definitions YAML (including Luna routing and Discord mention activation)
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
+    feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
     kind: source
     path: src/main/java/com/vinekeepers/config/BotConfig.java
     role: Bot configuration model
     requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
   - id: ASSET-ROUTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/Router.java
-    role: Match events to bots by routing rules
+    role: Match events to bots by routing rules, including Discord mention filters
     requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
     kind: source
     path: src/main/java/com/vinekeepers/bot/Routing.java
     role: Routing and filter configuration
     requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
   - id: ASSET-EVENT-FILTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/EventFilter.java
     role: Filter events by criteria
     requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING-FILTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/RoutingFilter.java
-    role: Apply routing filters to events
+    role: Apply routing filters to events, including discordTrigger and discordMention matching
     requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
+  - id: ASSET-NORMALIZED-EVENT-CONTEXT
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/NormalizedEventContext.java
+    role: Normalize event payloads for routing and session decisions, including mention extraction from payload and text
+    requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
   - id: ASSET-TOOL-POLICY
     kind: source
     path: src/main/java/com/vinekeepers/bot/ToolPolicy.java
-    role: Allow/deny and approval for tools
+    role: Allow/deny policy for bot tools
     requires: [REQ-BOT-002]
+    feature_ids: [FEAT-BOT]
   - id: ASSET-BOT-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/bot/BotDefinition.java
-    role: Bot composition (persona, model, workflow, tools)
+    role: Bot composition (persona, model, workflow, tools, and runtime conversation settings)
     requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+  - id: ASSET-CONVERSATION-MODE
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/ConversationMode.java
+    role: Runtime mode enum for single-event versus conversational bots
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
   - id: ASSET-PERSONA
     kind: source
     path: src/main/java/com/vinekeepers/bot/Persona.java
     role: Bot persona and tone
     requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
   - id: ASSET-MODEL-PROFILE
     kind: source
     path: src/main/java/com/vinekeepers/bot/ModelProfile.java
     role: LLM/model settings per bot
     requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
   - id: ASSET-MEMORY-POLICY
     kind: source
     path: src/main/java/com/vinekeepers/bot/MemoryPolicy.java
     role: Session and memory policy per bot
     requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
   - id: ASSET-EVENT-BUS
     kind: source
     path: src/main/java/com/vinekeepers/events/EventBus.java
     role: Publish and subscribe to events
     requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
   - id: ASSET-EVENT
     kind: source
     path: src/main/java/com/vinekeepers/events/Event.java
     role: Event payload and metadata
     requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
   - id: ASSET-EVENT-SOURCE
     kind: source
     path: src/main/java/com/vinekeepers/events/EventSource.java
     role: Event source interface
     requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
   - id: ASSET-EVENT-SUBSCRIBER
     kind: source
     path: src/main/java/com/vinekeepers/events/EventSubscriber.java
     role: Event subscriber interface
     requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
   - id: ASSET-STATE-STORE
     kind: source
     path: src/main/java/com/vinekeepers/state/StateStore.java
     role: Persist and load bot workflow state
     requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
   - id: ASSET-TOOL
     kind: source
     path: src/main/java/com/vinekeepers/tools/Tool.java
     role: Tool interface
     requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
   - id: ASSET-TOOL-REGISTRY
     kind: source
     path: src/main/java/com/vinekeepers/tools/ToolRegistry.java
     role: Register and resolve tools
     requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
   - id: ASSET-TOOL-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/tools/ToolRunner.java
-    role: Execute approved tool calls
+    role: Execute approved tool calls for workflows and reasoners under ToolPolicy
     requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
+  - id: ASSET-CURSOR-FULL-RUN-TOOL
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/CursorFullRunTool.java
+    role: Tool wrapper that launches a Cursor cloud run from gathered workflow state and stores launch metadata
+    requires: [REQ-TOOLS-001, REQ-LUNA-001]
+    feature_ids: [FEAT-TOOLS, FEAT-CURSOR-GATHERING]
+  - id: ASSET-ECHO-TOOL
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/EchoTool.java
+    role: Simple echo tool used by configured workflow and tool runner tests
+    requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
   - id: ASSET-STUB-TOOL
     kind: source
     path: src/main/java/com/vinekeepers/tools/StubTool.java
     role: Stub tool implementation
     requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
   - id: ASSET-AUDIT-LOG
     kind: source
     path: src/main/java/com/vinekeepers/audit/AuditLog.java
     role: Audit log interface
     requires: [REQ-AUDIT-001]
+    feature_ids: [FEAT-AUDIT]
   - id: ASSET-AUDIT-RECORDER
     kind: source
     path: src/main/java/com/vinekeepers/audit/AuditRecorder.java
     role: Record tool calls and outcomes
     requires: [REQ-AUDIT-001]
+    feature_ids: [FEAT-AUDIT]
   - id: ASSET-REASONER
     kind: source
     path: src/main/java/com/vinekeepers/reasoner/Reasoner.java
     role: Reasoner interface for bot decisions
     requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
   - id: ASSET-REASONER-INPUT
     kind: source
     path: src/main/java/com/vinekeepers/reasoner/ReasonerInput.java
-    role: Reasoner input model
+    role: Reasoner input model including workflow context, current state, and last user message
     requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
   - id: ASSET-REASONER-OUTPUT
     kind: source
     path: src/main/java/com/vinekeepers/reasoner/ReasonerOutput.java
-    role: Reasoner output model
+    role: Reasoner output model including reply text, state patch, and proposed tool calls
     requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
+  - id: ASSET-PROPOSED-TOOL-CALL
+    kind: source
+    path: src/main/java/com/vinekeepers/reasoner/ProposedToolCall.java
+    role: Proposed tool call emitted by a reasoner for engine-side execution
+    requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
   - id: ASSET-STUB-REASONER
     kind: source
     path: src/main/java/com/vinekeepers/reasoner/StubReasoner.java
-    role: Stub reasoner implementation
+    role: Stub reasoner implementation that returns an empty output
     requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
   - id: ASSET-WORKFLOW
     kind: source
     path: src/main/java/com/vinekeepers/workflow/Workflow.java
     role: Workflow state machine interface
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-WORKFLOW-RESULT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowResult.java
     role: Workflow result model
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-STUB-WORKFLOW
     kind: source
     path: src/main/java/com/vinekeepers/workflow/StubWorkflow.java
     role: Stub workflow implementation
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-STUB-STATE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/StubState.java
     role: Stub workflow state
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-PACKAGE-MARKER
     kind: source
     path: src/main/java/com/vinekeepers/util/PackageMarker.java
     role: Package marker utility
     requires: [REQ-CORE-002]
+    feature_ids: [FEAT-CORE]
   - id: ASSET-LUNA-STATE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/GatheringState.java
     role: Luna per-conversation state (project, code change, step)
     requires: [REQ-STATE-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+    feature_ids: [FEAT-STATE, FEAT-CURSOR-GATHERING]
   - id: ASSET-LUNA-WORKFLOW
     kind: source
     path: src/main/java/com/vinekeepers/workflow/CursorCloudGatheringWorkflow.java
     role: Luna workflow class (legacy); Luna uses configured workflow luna_cursor in config; this class used by tests
     requires: [REQ-WORKFLOW-001, REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-WORKFLOW-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowRunner.java
-    role: Interface to run workflow for an event (load state, run, persist, return reply)
+    role: Interface to run workflow for an event and return a structured workflow result
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW, FEAT-ENGINE]
+  - id: ASSET-WORKFLOW-RUN-RESULT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/WorkflowRunResult.java
+    role: Structured workflow result with reply, waiting/completed flags, and error details
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-STUB-WORKFLOW-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/StubWorkflowRunner.java
     role: Stub workflow runner implementation
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-WORKFLOW-RUNNER-FACTORY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowRunnerFactory.java
-    role: Create WorkflowRunner from workflow type and params from config (stub, configured)
+    role: Create WorkflowRunner from workflow type, params, and bot runtime options from config
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
+  - id: ASSET-SESSION-KEY-STRATEGY
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/SessionKeyStrategy.java
+    role: Contract for resolving per-bot workflow session keys from events
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
+  - id: ASSET-SESSION-KEY-STRATEGIES
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/SessionKeyStrategies.java
+    role: Built-in session key strategies for channel, channel_user, and thread conversations
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-STEP-RESULT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/StepResult.java
-    role: Result of a single workflow step execution
+    role: Result of a single workflow step execution with next-step, storage, and outcome metadata
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
+  - id: ASSET-STEP-OUTCOME
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/StepOutcome.java
+    role: Outcome enum for continue, waiting, complete, and error workflow step states
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-WORKFLOW-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowStep.java
     role: Single step in a configurable workflow
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-WORKFLOW-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowAction.java
     role: Action interface invokable from workflow steps
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-WORKFLOW-ACTION-REGISTRY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowActionRegistry.java
     role: Register and resolve workflow actions by name
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CONFIGURABLE-WORKFLOW-STATE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowState.java
-    role: Mutable state for configurable workflow (step index, key-value store)
+    role: Mutable state for configurable workflow including waiting, completed, and error lifecycle data
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-WORKFLOW-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java
     role: Workflow definition from config (id and list of step configs)
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CONFIGURABLE-WORKFLOW-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
-    role: "Run workflow from WorkflowDefinition (steps: ask_input, call_action, branch, done)"
+    role: "Run workflow from WorkflowDefinition with conversational pause/resume, session keys, and tool-backed actions"
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-ASK-FOR-INPUT-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/AskForInputStep.java
     role: Step that asks for user input and stores in state
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
+  - id: ASSET-PROMPT-FOR-FIELD-STEP
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/steps/PromptForFieldStep.java
+    role: Step that prompts once for a field and pauses the workflow until a later event arrives
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
+  - id: ASSET-CAPTURE-FIELD-STEP
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/steps/CaptureFieldFromEventStep.java
+    role: Step that captures a field from the current event after a conversational prompt
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CALL-ACTION-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/CallActionStep.java
-    role: Step that invokes a registered WorkflowAction
+    role: Step that invokes a registered WorkflowAction or ToolRunner-backed tool with bound arguments
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-BRANCH-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/BranchStep.java
     role: Step that branches by condition
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-DONE-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/DoneStep.java
     role: Step that completes workflow with optional message
     requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CURSOR-ADAPTER
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudAdapter.java
-    role: Cursor Cloud API adapter interface
+    role: Cursor Cloud Agents API adapter interface for launch, status, conversation, and follow-up operations
     requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-CURSOR-ADAPTER-IMPL
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudAdapterImpl.java
-    role: Cursor Cloud API adapter implementation (env-based config)
+    role: Cursor Cloud Agents API HTTP client implementation (env-based config)
     requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-LUNA-RUN-STATE
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/LunaCloudRunState.java
+    role: In-memory state for a launched Cursor cloud run, including Discord reply target and remote status
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-RUN-MONITOR
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorCloudRunMonitor.java
+    role: Poll Cursor cloud runs and relay status, feedback, and PR updates back to Discord
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-AGENT-LAUNCH-REQUEST
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorAgentLaunchRequest.java
+    role: Request payload model for launching a Cursor Cloud agent run
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-AGENT-CONVERSATION
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorAgentConversation.java
+    role: Conversation response model for Cursor Cloud agent feedback
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-AGENT-DETAILS
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorAgentDetails.java
+    role: Details model for Cursor Cloud agent status lookups
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-AGENT-LAUNCH-RESULT
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorAgentLaunchResult.java
+    role: Launch result model returned after starting a Cursor Cloud agent run
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-AGENT-MESSAGE
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorAgentMessage.java
+    role: Message model representing Cursor Cloud agent conversation entries
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-CLOUD-TRANSPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorCloudTransport.java
+    role: HTTP transport abstraction for Cursor Cloud adapter calls
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorCloudTransportResponse.java
+    role: Transport response model used by Cursor Cloud adapter calls
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-CLOUD-EXCEPTION
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorCloudException.java
+    role: Exception type for Cursor Cloud transport and adapter failures
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
 
 requirements:
   - id: REQ-CORE-001
     title: Specs bootstrap and traceability
     statement: The project maintains a spec index (specs.yml) and at least one requirements registry for traceability; schema and drift checks apply when schemas are present.
-    status: accepted
+    status: active
     priority: medium
     type: non-functional
     behavior:
@@ -379,7 +570,7 @@ requirements:
   - id: REQ-ENV-001
     title: Load .env at startup
     statement: The application loads a .env file from the project root into system properties at startup and provides Env.get(key, default) for configuration access.
-    status: accepted
+    status: active
     priority: medium
     type: functional
     behavior:
@@ -406,8 +597,8 @@ requirements:
 
   - id: REQ-CORE-002
     title: Application bootstrap and entrypoint
-    statement: VinekeepersApp is the entrypoint; it loads .env and bootstraps the engine, config, and connectors.
-    status: accepted
+    statement: VinekeepersApp is the entrypoint; it loads .env and bootstraps the engine, config, connectors, and shared tool execution components.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -421,6 +612,7 @@ requirements:
         - Main class runs Bootstrap and starts engine
         - Bootstrap wires engine, config loader, and event sources
         - Bootstrap creates WorkflowRunner per bot via WorkflowRunnerFactory and registerRunner(botId, runner)
+        - Bootstrap registers shared tools and passes ToolRunner into configured workflows
       examples: []
     traceability:
       assets: [ASSET-APP, ASSET-BOOTSTRAP, ASSET-PACKAGE-MARKER]
@@ -435,8 +627,8 @@ requirements:
 
   - id: REQ-CORE-003
     title: Event-driven engine routes events to bots
-    statement: VinekeepersEngine receives events, routes them to matching bots, and runs the core loop using registered WorkflowRunners (runner.run loads state, runs workflow, persists, responds).
-    status: accepted
+    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -448,11 +640,13 @@ requirements:
     acceptance:
       criteria:
         - Engine subscribes to event bus and dispatches to bots by routing rules
-        - Engine uses registered runners and runner.run(event, stateStore, botId) for workflow execution
+        - Engine uses registered runners and runner.runResult(event, stateStore, botId) for workflow execution
+        - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message
+        - Engine applies reasoner state patches and executes proposed tool calls through ToolRunner
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:
-      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER]
+      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT]
       symbols: []
     validation:
       tests:
@@ -464,8 +658,8 @@ requirements:
 
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions from YAML configuration; BotConfig models the structure. Workflow block (type, params) is parsed into BotDefinition.
-    status: accepted
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, and routing filter keys including optional discordTrigger and discordMention are parsed from YAML into runtime configuration.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -479,6 +673,8 @@ requirements:
         - ConfigLoader loads YAML and returns bot configs
         - BotConfig maps to BotDefinition structure
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
+        - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
+        - ConfigLoader parses routing filters including optional discordTrigger and discordMention keys from YAML
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML]
@@ -490,11 +686,17 @@ requirements:
           intent: Verify YAML config loading
           testClass: com.vinekeepers.config.ConfigLoaderTest
           preconditions: []
+        - id: UNIT-CONFIG-LOADER-DISCORD-MENTION
+          title: ConfigLoaderTest
+          intent: Verify discordMention routing filters are parsed from YAML and produce a matching router
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordMentionRouting
+          preconditions: []
 
   - id: REQ-BOT-001
     title: Route events to bots by routing rules
-    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter; events are dispatched only to bots whose filters accept the event.
-    status: accepted
+    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view; events are dispatched only to bots whose filters accept the event, including Discord mention-based routing from either payload metadata or @mention text when configured.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -507,9 +709,11 @@ requirements:
       criteria:
         - Router.match(event) returns list of matching BotDefinitions
         - Filters apply Discord/GitHub and other criteria from routing config
+        - Event routing can normalize actor, channel, text, mentions, repo, and label fields from incoming payloads
+        - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text
       examples: []
     traceability:
-      assets: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER]
+      assets: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT]
       symbols: []
     validation:
       tests:
@@ -518,11 +722,29 @@ requirements:
           intent: Verify event routing and filter matching
           testClass: com.vinekeepers.bot.RouterTest
           preconditions: []
+        - id: UNIT-ROUTER-DISCORD-MENTION-TEXT
+          title: RouterTest
+          intent: Verify discordMention routing matches @mentions in message text case-insensitively
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeMatchesDiscordMentionFromTextCaseInsensitively
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-MENTION-METADATA
+          title: RouterTest
+          intent: Verify discordMention routing matches mention metadata case-insensitively
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeMatchesDiscordMentionFromMetadataListCaseInsensitively
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-MENTION-MISSING
+          title: RouterTest
+          intent: Verify discordMention routing does not match when the configured mention is absent
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeDoesNotMatchWhenDiscordMentionIsMissing
+          preconditions: []
 
   - id: REQ-BOT-002
-    title: Tool policy allow/deny and approval
-    statement: ToolPolicy defines which tools a bot may use (allow/deny), approval requirements, and scopes.
-    status: accepted
+    title: Tool policy allow/deny lists
+    statement: ToolPolicy defines which tools a bot may use with allow and deny sets. Empty allow and deny sets permit any tool, denied tools always win, and a non-empty allow set restricts execution to the listed tool ids.
+    status: active
     priority: medium
     type: functional
     behavior:
@@ -533,8 +755,8 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - ToolPolicy enforces allowlist/denylist and approval-required tools
-        - Policy can be defined per bot in config
+        - ToolPolicy.allowAll() and null allow/deny inputs permit any tool
+        - Denied tool ids override allowed tool ids, and a non-empty allow set acts as an allowlist
       examples: []
     traceability:
       assets: [ASSET-TOOL-POLICY]
@@ -543,14 +765,14 @@ requirements:
       tests:
         - id: UNIT-TOOL-POLICY
           title: ToolPolicyTest
-          intent: Verify tool policy enforcement
+          intent: Verify allow-all, allowlist, and deny-precedence behavior
           testClass: com.vinekeepers.bot.ToolPolicyTest
           preconditions: []
 
   - id: REQ-BOT-003
     title: Bot definition and persona/model
-    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, Routing, and MemoryPolicy; bots are configured via YAML.
-    status: accepted
+    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, Routing, MemoryPolicy, and bot runtime conversation settings; bots are configured via YAML.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -561,11 +783,11 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - BotDefinition record holds persona, model, workflowType, workflowParams, tool policy, routing, memory policy
-        - Config loader produces BotDefinition from YAML (including workflow block)
+        - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, routing, memory policy, conversation mode, and optional session key strategy
+        - Config loader produces BotDefinition from YAML (including workflow block and runtime options)
       examples: []
     traceability:
-      assets: [ASSET-BOT-DEFINITION, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
+      assets: [ASSET-BOT-DEFINITION, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
       symbols: []
     validation:
       tests:
@@ -580,7 +802,7 @@ requirements:
   - id: REQ-EVENTS-001
     title: Event bus publish and subscribe
     statement: EventBus allows event sources to publish events and subscribers to receive them; Event carries sourceId, kind, payload; EventSource and EventSubscriber are the interfaces.
-    status: accepted
+    status: active
     priority: high
     type: functional
     behavior:
@@ -608,7 +830,7 @@ requirements:
   - id: REQ-STATE-001
     title: State store for bot workflow state
     statement: StateStore persists and loads per-bot, per-conversation workflow state (structured state objects).
-    status: accepted
+    status: active
     priority: high
     type: functional
     behavior:
@@ -635,8 +857,8 @@ requirements:
 
   - id: REQ-TOOLS-001
     title: Tool registry and execution
-    statement: Tools are registered by name; ToolRunner executes approved tool calls; Tool interface defines name, argsSchema, execute.
-    status: accepted
+    statement: Tools are registered by name; ToolRunner enforces ToolPolicy and executes approved tool calls for workflows and reasoners; Tool interface defines the tool contract.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -649,12 +871,19 @@ requirements:
       criteria:
         - ToolRegistry resolves tools by name
         - ToolRunner runs approved actions and returns results
+        - ToolRunner rejects denied or unknown tools before execution
+        - Configured workflows can resolve registered tools such as cursor.fullRun and echo through ToolRunner
       examples: []
     traceability:
-      assets: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-STUB-TOOL]
+      assets: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ECHO-TOOL, ASSET-STUB-TOOL, ASSET-BOOTSTRAP]
       symbols: []
     validation:
       tests:
+        - id: UNIT-TOOL-RUNNER
+          title: ToolRunnerTest
+          intent: Verify ToolRunner executes allowed tools and rejects denied or unknown ones
+          testClass: com.vinekeepers.tools.ToolRunnerTest
+          preconditions: []
         - id: MANUAL-TOOLS
           title: Tool registry and runner
           intent: Verify tools are used by engine and policy
@@ -666,7 +895,7 @@ requirements:
   - id: REQ-AUDIT-001
     title: Audit log for tool calls and outcomes
     statement: AuditLog records who triggered what, what tools were called, and results/errors for human-facing audit.
-    status: accepted
+    status: active
     priority: medium
     type: functional
     behavior:
@@ -695,8 +924,8 @@ requirements:
 
   - id: REQ-REASONER-001
     title: Reasoner interface for bot decisions
-    statement: Reasoner.think(ReasonerInput) returns ReasonerOutput (statePatch, proposedActions, nextState); can be LLM-backed or rules-based.
-    status: accepted
+    statement: Reasoner.reason(ReasonerInput) returns ReasonerOutput with reply text, state patch, and proposed tool calls; the engine can persist patched state and execute approved proposed tools.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -708,13 +937,21 @@ requirements:
     acceptance:
       criteria:
         - Reasoner interface and ReasonerInput/ReasonerOutput models exist
+        - ReasonerInput includes workflow context, current state, and last normalized user message
+        - ReasonerOutput can return reply text, state patches, and proposed tool calls
         - StubReasoner or real implementation used by engine
       examples: []
     traceability:
-      assets: [ASSET-REASONER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-STUB-REASONER]
+      assets: [ASSET-REASONER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-PROPOSED-TOOL-CALL, ASSET-STUB-REASONER, ASSET-ENGINE]
       symbols: []
     validation:
       tests:
+        - id: UNIT-ENGINE-REASONER-INTEGRATION
+          title: VinekeepersEngineTest
+          intent: Verify reasoner state patches, tool proposals, and reply selection are applied by the engine
+          testClass: com.vinekeepers.core.VinekeepersEngineTest
+          testMethod: reasonerAppliesStatePatchRunsToolAndRepliesWhenWorkflowIsSilent
+          preconditions: []
         - id: MANUAL-REASONER
           title: Reasoner interface
           intent: Verify reasoner is used in core loop
@@ -725,8 +962,8 @@ requirements:
 
   - id: REQ-WORKFLOW-001
     title: Workflow state machine and config-driven runners
-    statement: Workflow<S> handle(event, context, state) returns WorkflowResult<S>; WorkflowRunner runs workflow for an event (load state, run, persist, return reply). WorkflowRunnerFactory creates runners from config workflow type and params (stub, configured). Luna uses configured workflow with workflowRef luna_cursor.
-    status: accepted
+    statement: Workflow<S> handle(event, context, state) returns WorkflowResult<S>; WorkflowRunner runs a workflow for an event and returns WorkflowRunResult with reply, waiting, completion, and error state. WorkflowRunnerFactory creates runners from config workflow type and params (stub, configured), and configurable workflows can pause for later events using session key strategies.
+    status: active
     priority: high
     type: functional
     behavior:
@@ -738,15 +975,31 @@ requirements:
     acceptance:
       criteria:
         - Workflow interface and WorkflowResult model exist
-        - WorkflowRunner interface and runner.run(event, stateStore, botId) used by engine
+        - WorkflowRunner interface and runner.runResult(event, stateStore, botId) used by engine
         - WorkflowRunnerFactory creates runner by type (stub, configured)
         - StubWorkflow/StubState and StubWorkflowRunner used when no custom workflow
+        - Configurable workflows support prompt_for_field and capture_field steps for conversational pause/resume
+        - Configurable workflow state records waiting field, pending prompt, completion, and error status
+        - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
+        - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
       examples: []
     traceability:
-      assets: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE, ASSET-WORKFLOW-RUNNER, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-STEP-RESULT, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-WORKFLOW-DEFINITION, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-ASK-FOR-INPUT-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
+      assets: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-WORKFLOW-DEFINITION, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
       symbols: []
     validation:
       tests:
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-CONVERSATION
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify configurable workflows pause, resume, and complete across conversational events
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runPromptAndCapturePausesThenResumesAtCaptureStep
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-SESSION-ISOLATION
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify conversational workflow state is isolated per channel/user session key
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runPromptFlowKeepsSameChannelUsersIsolated
+          preconditions: []
         - id: UNIT-WORKFLOW-RUNNER-FACTORY
           title: WorkflowRunnerFactoryTest
           intent: Verify factory creates runners by type (stub, configured)
@@ -761,6 +1014,16 @@ requirements:
           title: ConfigurableWorkflowStateTest
           intent: Verify ConfigurableWorkflowState step index and key-value store
           testClass: com.vinekeepers.workflow.ConfigurableWorkflowStateTest
+          preconditions: []
+        - id: UNIT-STEP-RESULT
+          title: StepResultTest
+          intent: Verify StepResult factory methods and null-message normalization for step continuation, jumps, and completion
+          testClass: com.vinekeepers.workflow.StepResultTest
+          preconditions: []
+        - id: UNIT-WORKFLOW-ACTION-REGISTRY
+          title: WorkflowActionRegistryTest
+          intent: Verify WorkflowActionRegistry registers, resolves, runs, and safely ignores missing or failing actions
+          testClass: com.vinekeepers.workflow.WorkflowActionRegistryTest
           preconditions: []
         - id: UNIT-ASK-FOR-INPUT-STEP
           title: AskForInputStepTest
@@ -786,9 +1049,9 @@ requirements:
               expect: ["BUILD SUCCESS"]
 
   - id: REQ-LUNA-001
-    title: Luna bot — Discord /Luna, multi-turn gather, Cursor Cloud API
-    statement: "Luna bot is registered with id luna; trigger /Luna on Discord; workflow type configured with workflowRef luna_cursor in bots.yaml; configured workflow luna_cursor gathers project and code change then invokes cursor.fullRun action (Cursor Cloud API adapter: create branch, nova-commit, push, optional PR); engine delivers Luna replies to Discord via reply path; config and routing for bot luna and trigger /Luna."
-    status: accepted
+    title: Luna bot — Discord mention trigger, multi-turn gather, Cursor Cloud API
+    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule that matches @Luna-style mentions from normalized message text or mention metadata; workflow type configured with workflowRef luna_cursor in bots.yaml; configured workflow luna_cursor prompts for a repository and feature request across multiple Discord turns, then invokes cursor.fullRun to launch an official Cursor Cloud Agent run on a feature branch with auto PR enabled; Vinekeepers stores in-memory run state, polls Cursor for status and conversation feedback, and reports launch/progress/completion updates back to Discord; config and routing for bot luna and Discord mention activation stay in YAML."
+    status: active
     priority: high
     type: functional
     behavior:
@@ -799,14 +1062,16 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - Bot id luna and routing filter discordTrigger /Luna
+        - Bot id luna and routing filter discordMention luna
+        - Luna routing activates when Discord messages reference @Luna in text or mention metadata
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
-        - Workflow luna_cursor (ask_input project, ask_input codeChange, call_action cursor.fullRun, done)
-        - cursor.fullRun action reads project and codeChange from state; Cursor Cloud API adapter createBranch, runNovaCommit, push, createPr
+        - Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before launching cursor.fullRun
+        - cursor.fullRun action resolves repository input, launches the official Cursor Cloud Agent API, stores LunaCloudRunState, and immediately acknowledges launch to Discord
+        - CursorCloudRunMonitor polls agent status and conversation feedback and relays updates such as running state, PR URL, and final summary to Discord
         - Engine sends workflow reply to Discord when source is Discord
       examples: []
     traceability:
-      assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML]
+      assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML]
       symbols: []
     validation:
       tests:
@@ -814,6 +1079,12 @@ requirements:
           title: GatheringStateTest
           intent: Verify Luna conversation state (project, code change, step)
           testClass: com.vinekeepers.workflow.GatheringStateTest
+          preconditions: []
+        - id: UNIT-LUNA-MENTION-ROUTING
+          title: ConfigLoaderTest
+          intent: Verify Luna config uses discordMention routing that activates on @Luna-style messages
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordMentionRouting
           preconditions: []
         - id: UNIT-LUNA-WORKFLOW
           title: CursorCloudGatheringWorkflowTest
@@ -825,74 +1096,147 @@ requirements:
           intent: Verify Cursor Cloud API adapter implementation
           testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
           preconditions: []
+        - id: UNIT-CURSOR-FULL-RUN-TOOL
+          title: CursorFullRunToolTest
+          intent: Verify cursor.fullRun launches a Cursor cloud run and stores run state
+          testClass: com.vinekeepers.tools.CursorFullRunToolTest
+          preconditions: []
+        - id: UNIT-CURSOR-RUN-MONITOR
+          title: CursorCloudRunMonitorTest
+          intent: Verify CursorCloudRunMonitor reports Cursor status and feedback back to Discord
+          testClass: com.vinekeepers.core.cursor.CursorCloudRunMonitorTest
+          preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
       - Storing secrets in state
+      - Do not rely on discordTrigger alone for Luna activation because @mentions in Discord channels would be missed.
 
 features:
   - id: FEAT-ENV
     slug: env
     title: Environment and .env loading
+    domain_slug: env
+    doc_path: features/domain/env/env.md
+    summary: Load .env at startup and provide Env.get(key, default) for configuration access.
     requirement_ids: [REQ-ENV-001]
     asset_ids: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]
     status: active
   - id: FEAT-CONFIG
     slug: config
     title: Bot config from YAML
+    domain_slug: config
+    doc_path: features/domain/config/config.md
+    summary: ConfigLoader loads bot definitions from YAML; BotConfig models the structure.
     requirement_ids: [REQ-CONFIG-001]
     asset_ids: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML]
     status: active
+  - id: FEAT-ROUTING
+    slug: routing
+    title: Event routing and normalized context
+    domain_slug: bot
+    doc_path: features/domain/bot/routing.md
+    summary: Router matches events to bots through routing filters over a normalized event view.
+    requirement_ids: [REQ-BOT-001]
+    asset_ids: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT]
+    status: active
   - id: FEAT-BOT
     slug: bot
-    title: Bot definition, routing, and tool policy
-    requirement_ids: [REQ-BOT-001, REQ-BOT-002, REQ-BOT-003]
-    asset_ids: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-TOOL-POLICY, ASSET-BOT-DEFINITION, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
+    title: Bot runtime definition and tool policy
+    domain_slug: bot
+    doc_path: features/domain/bot/bot.md
+    summary: BotDefinition composes persona, model, workflow settings, memory settings, and ToolPolicy for runtime execution.
+    requirement_ids: [REQ-BOT-002, REQ-BOT-003]
+    asset_ids: [ASSET-TOOL-POLICY, ASSET-BOT-DEFINITION, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
     status: active
   - id: FEAT-EVENTS
     slug: events
     title: Event bus and publish/subscribe
+    domain_slug: events
+    doc_path: features/domain/events/events.md
+    summary: EventBus allows publish and subscribe; Event carries sourceId, kind, payload.
     requirement_ids: [REQ-EVENTS-001]
     asset_ids: [ASSET-EVENT-BUS, ASSET-EVENT, ASSET-EVENT-SOURCE, ASSET-EVENT-SUBSCRIBER]
     status: active
   - id: FEAT-STATE
     slug: state
     title: State store for workflow state
+    domain_slug: state
+    doc_path: features/domain/state/state.md
+    summary: StateStore persists and loads per-bot, per-conversation workflow state.
     requirement_ids: [REQ-STATE-001]
     asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE]
     status: active
   - id: FEAT-TOOLS
     slug: tools
     title: Tool registry and execution
+    domain_slug: tools
+    doc_path: features/domain/tools/tools.md
+    summary: Tools registered by name; ToolRunner executes approved tool calls.
     requirement_ids: [REQ-TOOLS-001]
-    asset_ids: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-STUB-TOOL]
+    asset_ids: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ECHO-TOOL, ASSET-STUB-TOOL, ASSET-BOOTSTRAP]
     status: active
   - id: FEAT-AUDIT
     slug: audit
     title: Audit log for tool calls and outcomes
+    domain_slug: audit
+    doc_path: features/domain/audit/audit.md
+    summary: AuditLog records who triggered what, tools called, and results for human-facing audit.
     requirement_ids: [REQ-AUDIT-001]
     asset_ids: [ASSET-AUDIT-LOG, ASSET-AUDIT-RECORDER]
     status: active
   - id: FEAT-REASONER
     slug: reasoner
     title: Reasoner interface for bot decisions
+    domain_slug: reasoner
+    doc_path: features/domain/reasoner/reasoner.md
+    summary: Reasoner.reason(ReasonerInput) returns ReasonerOutput with reply text, state patch, and proposed tool calls.
     requirement_ids: [REQ-REASONER-001]
-    asset_ids: [ASSET-REASONER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-STUB-REASONER]
+    asset_ids: [ASSET-REASONER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-PROPOSED-TOOL-CALL, ASSET-STUB-REASONER, ASSET-ENGINE]
     status: active
   - id: FEAT-WORKFLOW
     slug: workflow
-    title: Workflow state machine and config-driven runners
+    title: Workflow runners and session lifecycle
+    domain_slug: workflow
+    doc_path: features/domain/workflow/workflow.md
+    summary: WorkflowRunner and ConfigurableWorkflowRunner execute configured or stub workflows with persisted conversational state.
     requirement_ids: [REQ-WORKFLOW-001]
-    asset_ids: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE, ASSET-WORKFLOW-RUNNER, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-STEP-RESULT, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-WORKFLOW-DEFINITION, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-ASK-FOR-INPUT-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
+    asset_ids: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-CONFIGURABLE-WORKFLOW-RUNNER]
+    status: active
+  - id: FEAT-WORKFLOW-STEPS
+    slug: workflow-steps
+    title: Workflow step DSL and branching actions
+    domain_slug: workflow
+    doc_path: features/domain/workflow/workflow-steps.md
+    summary: WorkflowDefinition and step/action primitives define the configurable workflow DSL and branch execution rules.
+    requirement_ids: [REQ-WORKFLOW-001]
+    asset_ids: [ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-WORKFLOW-DEFINITION, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
+    status: active
+  - id: FEAT-CURSOR-GATHERING
+    slug: cursor-gathering
+    title: Cursor-backed gathering workflow
+    domain_slug: workflow
+    doc_path: features/domain/workflow/cursor-gathering.md
+    summary: Luna gathers repository and feature input over Discord, launches an official Cursor cloud agent run, and reports progress and PR results back to chat.
+    requirement_ids: [REQ-LUNA-001]
+    asset_ids: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-BOTS-YAML, ASSET-BOOTSTRAP, ASSET-ENGINE]
     status: active
   - id: FEAT-CORE
     slug: core
-    title: Core engine, bootstrap, and specs
-    requirement_ids: [REQ-CORE-001, REQ-CORE-002, REQ-CORE-003]
-    asset_ids: [ASSET-SPEC-INDEX, ASSET-REGISTRY, ASSET-APP, ASSET-BOOTSTRAP, ASSET-ENGINE, ASSET-PACKAGE-MARKER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-WORKFLOW-RUNNER]
+    title: Specs governance and bootstrap
+    domain_slug: core
+    doc_path: features/domain/core/core.md
+    summary: Spec metadata anchors traceability, and VinekeepersApp plus Bootstrap wire the runtime before events begin flowing.
+    requirement_ids: [REQ-CORE-001, REQ-CORE-002]
+    asset_ids: [ASSET-SPEC-INDEX, ASSET-REGISTRY, ASSET-APP, ASSET-BOOTSTRAP, ASSET-PACKAGE-MARKER]
     status: active
-  - id: FEAT-LUNA
-    slug: luna
-    title: Luna bot — Discord /Luna, multi-turn gather, Cursor Cloud API
-    requirement_ids: [REQ-LUNA-001]
-    asset_ids: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML]
+  - id: FEAT-ENGINE
+    slug: engine
+    title: Event-driven engine orchestration
+    domain_slug: core
+    doc_path: features/domain/core/engine.md
+    summary: VinekeepersEngine routes events to matched bots, executes workflow runners, applies reasoner output, and emits replies.
+    requirement_ids: [REQ-CORE-003]
+    asset_ids: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT]
     status: active
+
+

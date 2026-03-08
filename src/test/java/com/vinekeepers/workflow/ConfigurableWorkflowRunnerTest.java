@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConfigurableWorkflowRunnerTest {
@@ -80,5 +81,107 @@ class ConfigurableWorkflowRunnerTest {
         StateStore store = new StateStore();
         String out = runner.run(event, store, "b");
         assertEquals("Result: echoed", out);
+    }
+
+    @Test
+    void runPromptAndCapturePausesThenResumesAtCaptureStep() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "prompt_for_field", "prompt", "Which project?", "storeIn", "project"),
+                Map.of("type", "capture_field", "storeIn", "project"),
+                Map.of("type", "done", "message", "Project: {{project}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("conversation", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry());
+        StateStore store = new StateStore();
+
+        Event firstEvent = new Event("discord:test", "message",
+                Map.of("channelId", "chan-1", "authorId", "user-1", "content", "/Luna"));
+        WorkflowRunResult firstResult = runner.runResult(firstEvent, store, "luna");
+
+        assertTrue(firstResult.isWaiting());
+        assertEquals("Which project?", firstResult.getReplyMessage());
+        assertEquals("project", firstResult.getWaitingForField());
+
+        String stateKey = "bot:luna:conv:chan-1:user-1";
+        ConfigurableWorkflowState waitingState = store.get(stateKey, ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals(ConfigurableWorkflowState.Status.WAITING_INPUT, waitingState.getStatus());
+        assertEquals(1, waitingState.getStepIndex());
+        assertEquals("project", waitingState.getWaitingForField());
+        assertEquals("Which project?", waitingState.getPendingPrompt());
+
+        Event resumeEvent = new Event("discord:test", "message",
+                Map.of("channelId", "chan-1", "authorId", "user-1", "content", "vinekeepers"));
+        WorkflowRunResult resumed = runner.runResult(resumeEvent, store, "luna");
+
+        assertFalse(resumed.isWaiting());
+        assertTrue(resumed.isCompleted());
+        assertEquals("Project: vinekeepers", resumed.getReplyMessage());
+
+        ConfigurableWorkflowState completedState = store.get(stateKey, ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals(ConfigurableWorkflowState.Status.COMPLETED, completedState.getStatus());
+        assertEquals(3, completedState.getStepIndex());
+        assertEquals("vinekeepers", completedState.get("project"));
+    }
+
+    @Test
+    void runPromptFlowKeepsSameChannelUsersIsolated() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "prompt_for_field", "prompt", "Which project?", "storeIn", "project"),
+                Map.of("type", "capture_field", "storeIn", "project"),
+                Map.of("type", "done", "message", "Project: {{project}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("conversation", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry());
+        StateStore store = new StateStore();
+
+        WorkflowRunResult userOnePrompt = runner.runResult(
+                new Event("discord:test", "message",
+                        Map.of("channelId", "chan-1", "authorId", "user-1", "content", "/Luna")),
+                store,
+                "luna");
+        WorkflowRunResult userTwoPrompt = runner.runResult(
+                new Event("discord:test", "message",
+                        Map.of("channelId", "chan-1", "authorId", "user-2", "content", "different project")),
+                store,
+                "luna");
+
+        assertTrue(userOnePrompt.isWaiting());
+        assertTrue(userTwoPrompt.isWaiting());
+        assertTrue(store.contains("bot:luna:conv:chan-1:user-1"));
+        assertTrue(store.contains("bot:luna:conv:chan-1:user-2"));
+
+        WorkflowRunResult userOneResume = runner.runResult(
+                new Event("discord:test", "message",
+                        Map.of("channelId", "chan-1", "authorId", "user-1", "content", "vinekeepers")),
+                store,
+                "luna");
+
+        assertTrue(userOneResume.isCompleted());
+        assertEquals("Project: vinekeepers", userOneResume.getReplyMessage());
+        ConfigurableWorkflowState userTwoState = store.get("bot:luna:conv:chan-1:user-2", ConfigurableWorkflowState.class)
+                .orElseThrow();
+        assertEquals(ConfigurableWorkflowState.Status.WAITING_INPUT, userTwoState.getStatus());
+        assertEquals(1, userTwoState.getStepIndex());
+        assertEquals(null, userTwoState.get("project"));
+    }
+
+    @Test
+    void runResultKeepsSingleEventAskInputBehavior() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "ask_input", "prompt", "Say something", "storeIn", "input"),
+                Map.of("type", "done", "message", "You said: {{input}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("single-event", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry());
+        StateStore store = new StateStore();
+
+        WorkflowRunResult result = runner.runResult(
+                new Event("test", "message", Map.of("content", "hello")),
+                store,
+                "bot1");
+
+        assertFalse(result.isWaiting());
+        assertTrue(result.isCompleted());
+        assertEquals("You said: hello", result.getReplyMessage());
     }
 }

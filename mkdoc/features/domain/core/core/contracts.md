@@ -2,21 +2,22 @@
 
 # APIs
 
-No external REST APIs. Tool invocations (e.g. discord.reply, github.comment) are defined per tool and executed by ToolRunner with BotContext.
+No external REST APIs. Tool invocations are defined per tool and executed by `ToolRunner`.
 
 # Schemas
 
-- **BotConfig (YAML):** botId, persona, model, workflow, stateSchema, tools (allow/deny, approval-required), routing (discord, git/github filters), memory. See ConfigLoader and BotConfig.
+- **BotConfig (YAML):** bot definitions, routing rules, workflow config, and runtime options such as `conversationMode` and `sessionKeyStrategy`. See `ConfigLoader` and `BotConfig`.
 - **Event:** sourceId, kind, payload (opaque).
-- **ReasonerInput / ReasonerOutput:** event, context, state in; statePatch, proposedActions, nextState out.
-- **WorkflowResult&lt;S&gt;:** nextState, actions, done flag.
+- **ReasonerInput / ReasonerOutput:** event, workflow context, current state, last user message in; reply text, state patch, and proposed tool calls out.
+- **WorkflowResult&lt;S&gt; / WorkflowRunResult:** legacy workflow state transitions plus engine-facing workflow outcome metadata.
 
 # Interfaces
 
 - **EventSource:** void start(EventBus bus); connectors implement this.
 - **EventSubscriber:** void onEvent(Event e); engine implements this.
-- **Tool:** String name(); JsonSchema argsSchema(); ToolResult execute(JsonObject args, BotContext ctx).
-- **Reasoner:** ReasonerOutput think(ReasonerInput input).
+- **Tool:** named tool contract executed through `ToolRunner`.
+- **Reasoner:** `ReasonerOutput reason(ReasonerInput input)`.
 - **Workflow&lt;S&gt;:** WorkflowResult&lt;S&gt; handle(Event event, BotContext ctx, S state).
-- **StateStore:** load(botId, conversationKey), save(botId, conversationKey, state).
+- **StateStore:** session-scoped get/put for persisted workflow state.
 - **AuditLog:** record(event, bot, actions, results).
+

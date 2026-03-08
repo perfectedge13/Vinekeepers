@@ -21,7 +21,7 @@ One line: **Pass** or **Fail**. If Fail, include a one-line reason (e.g. "Fail. 
 Short prose summary of what was done. Examples:
 
 - "Updated specs and mkdoc: added N requirements, M assets; synced mkdoc from features."
-- "No changes; registries and mkdoc already in sync. Refreshed schema.updated_utc in registries."
+- "No semantic changes; registries and docs were already in sync, so schema.updated_utc was left unchanged."
 - "Updated specs: added domain X; wrote X-registry.yml. Mkdoc synced; N feature dossiers updated."
 
 ### 3. Phases executed
@@ -43,7 +43,7 @@ Bulleted list or table of changed **spec** file paths (e.g. `specs/specs.yml`, `
 
 ### 5. Mkdoc updated
 
-Bulleted list or table of changed **mkdoc** paths (e.g. `mkdoc/index.md`, `mkdoc/features/domain/core.md`, `mkdocs.yml`). If none: "None."
+Bulleted list or table of changed **docs-dir** paths (e.g. `mkdoc/index.md`, `mkdoc/features/domain/core.md`, `mkdocs.yml`). Use the configured docs root from project config. If none: "None."
 
 ### 6. Domains
 

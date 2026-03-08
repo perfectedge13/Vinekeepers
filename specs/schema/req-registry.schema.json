@@ -94,7 +94,7 @@
       "type": "array",
       "items": { "$ref": "#/definitions/feature" },
       "minItems": 0,
-      "description": "Optional. Explicit features for mkdoc and traceability; each feature groups requirement_ids and optionally asset_ids. Domain for mkdoc = registry file stem (e.g. core)."
+      "description": "Optional. Explicit features for mkdoc and traceability; each feature groups requirement_ids and optionally asset_ids. Feature ownership comes from feature.domain_slug. Registry files may store features from multiple domains."
     },
 
     "agent": {
@@ -135,12 +135,12 @@
         "doc_path": {
           "type": "string",
           "minLength": 1,
-          "description": "Relative path from docs_dir to feature summary page (e.g. features/domain/core/env.md)."
+          "description": "Relative path from docs_dir to the feature summary page. Default shape is features/domain/<domain_slug>/<feature.slug>.md unless an intentional override is preserved."
         },
         "domain_slug": {
           "type": "string",
           "minLength": 1,
-          "description": "Domain owning this feature; used in doc_path and mkdoc nav."
+          "description": "First-class domain slug that owns this feature. This is distinct from the registry file that stores the feature."
         },
         "summary": {
           "type": "string",
@@ -472,7 +472,11 @@
         "id": { "$ref": "#/definitions/idToken" },
         "title": { "type": "string", "minLength": 1 },
         "statement": { "type": "string", "minLength": 1 },
-        "status": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Requirement lifecycle value from the registry enums. Canonical authored values are draft, active, and deprecated; validators may temporarily accept accepted as a legacy alias during migration."
+        },
         "priority": { "type": "string", "minLength": 1 },
         "type": { "type": "string", "minLength": 1 },
         "tags": {

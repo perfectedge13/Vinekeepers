@@ -12,3 +12,5 @@ Workflows are YAML definitions under `.cursor/workflows/` that define `run_order
 | nova-pr | Create or update PR with nova-code report as body. | [nova-pr](nova-pr.md) |
 | nova-spec | Full-repo scan and complete spec update. Single step: scan_and_update. | [nova-spec](nova-spec.md) |
 | nova-wiki | Wiki.js sync. prepare, index, architecture, runbooks, feature dossiers. | [nova-wiki](nova-wiki.md) |
+
+

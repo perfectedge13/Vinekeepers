@@ -28,7 +28,7 @@ When a skill needs **project name**, **paths**, **validation commands**, or **wi
 4. **MkDocs file:** `paths.mkdocs_file` from project.yml → `mkdocs.yml` (at project root).
 5. **Docs site name:** `docs.site_name` from project.yml → project name (from above).
 6. **Wiki path prefix:** `wiki.path_prefix` from project.yml → slug of project name (e.g. lowercase, single segment like `vinekeepers`).
-7. **Validation (test, static_analysis, shell, entrypoint):** Prefer **specs/specs.yml** `validation` block. If absent, use project.yml `validation_defaults.test`, `validation_defaults.static_analysis`, `validation_defaults.shell`, `validation_defaults.entrypoint`. If still absent, report "validation not configured" and do not assume Maven or any stack.
+7. **Validation (test, build_check, shell, entrypoint):** Prefer **specs/specs.yml** `validation` block. If absent, use project.yml `validation_defaults.test`, `validation_defaults.build_check`, `validation_defaults.shell`, `validation_defaults.entrypoint`. If still absent, report "validation not configured" and do not assume Maven or any stack.
 8. **Scan roots:** `scan.root_config_files` and `scan.source_dirs` from project.yml → if absent, default to `[pom.xml, README.md, .env.example]` and `[src/main/java, src/test/java]`.
 9. **Gate commands:** `validation.gate_validate_specs` and `validation.gate_validate_drift` from project.yml → if absent, workflow uses its default (e.g. `npm run validate-specs`).
 
@@ -43,3 +43,5 @@ Reference this doc from skills that need any of these values.
 ```
 
 </details>
+
+

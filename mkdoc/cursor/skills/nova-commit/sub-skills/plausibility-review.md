@@ -17,7 +17,7 @@ Reviews changes for plausibility before commit (e.g. no unintended deletions, sc
 # Nova-plausibility-review
 
 **Inputs**: All loaded registry specs (every requirement across all registries).
-**Outputs**: Plausibility table — for each requirement: Implemented? (true/false), brief justification. If any accepted requirement is false, treat as failure.
+**Outputs**: Plausibility table — for each requirement: Implemented? (true/false), brief justification. If any active requirement is false, treat as failure.
 
 ## Instructions
 
@@ -28,3 +28,5 @@ Reviews changes for plausibility before commit (e.g. no unintended deletions, sc
 ```
 
 </details>
+
+
