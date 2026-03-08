@@ -65,6 +65,13 @@ public final class JdaDiscordGateway implements DiscordGateway {
             throw new IllegalStateException("Discord gateway startup interrupted.", e);
         } catch (RuntimeException e) {
             connected = false;
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            Throwable cause = e.getCause();
+            String causeMsg = cause != null && cause.getMessage() != null ? cause.getMessage() : "";
+            if (msg.contains("4014") || msg.contains("Disallowed intents") || causeMsg.contains("4014") || causeMsg.contains("Disallowed intents")) {
+                log.warn("Discord connection failed: enable Message Content Intent in Discord Developer Portal → Your App → Bot → Privileged Gateway Intents. See https://discord.com/developers/applications. Continuing without Discord.");
+                return;
+            }
             throw e;
         }
     }

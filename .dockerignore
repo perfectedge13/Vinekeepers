@@ -1,0 +1,35 @@
+# Git and IDE
+.git
+.gitignore
+.cursor
+.idea
+*.iml
+.vscode
+
+# Build output (rebuilt in container)
+target
+
+# Docs and tooling (not needed at runtime)
+mkdoc
+*.md
+!README.md
+requirements-docs.txt
+package.json
+package-lock.json
+node_modules
+npm-debug.log
+
+# Specs and validation (not needed at runtime)
+specs
+.cursorrules
+
+# Env: do not bake into image; mount at run
+.env
+.env.*
+
+# Tests (run in CI; not needed in image)
+src/test
+
+# Misc
+*.log
+.DS_Store

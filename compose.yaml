@@ -1,0 +1,12 @@
+# Vinekeepers — run with: docker compose up -d
+# Build first: docker build -t vinekeepers .   (or use: docker compose build)
+# Env: put DISCORD_BOT_TOKEN, CURSOR_API_KEY, etc. in .env (loaded into container).
+
+services:
+  vinekeepers:
+    image: vinekeepers
+    build: .
+    env_file: .env
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped

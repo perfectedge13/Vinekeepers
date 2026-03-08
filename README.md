@@ -12,6 +12,29 @@ Vinekeepers is an AI-based bots collection. The bot core provides bootstrap, con
 
 Requirements: Java 21, Maven, Node 18+ for the spec gates.
 
+### Docker
+
+Build and run in a container (Java 21 runtime, Alpine-based):
+
+```bash
+docker build -t vinekeepers .
+docker run --rm -e DISCORD_BOT_TOKEN=your_token vinekeepers
+```
+
+Or use Compose (optionally add a `.env` file with `DISCORD_BOT_TOKEN=...` and uncomment `env_file: .env` in `compose.yaml`):
+
+```bash
+docker compose up -d
+```
+
+To override config or env from the host when using `docker run`, mount volumes:
+
+```bash
+docker run --rm -v "$(pwd)/config:/app/config" -v "$(pwd)/.env:/app/.env" -e DISCORD_BOT_TOKEN=... vinekeepers
+```
+
+Optional: set `JAVA_OPTS` (e.g. `-Xmx512m`) via `-e JAVA_OPTS=...`.
+
 Bot definitions and routing are in `config/bots.yaml`. Each bot can set `workflow.type` (for example `stub` or `configured`) plus runtime options such as `conversationMode` and `sessionKeyStrategy`; Bootstrap creates a `WorkflowRunner` per bot via `WorkflowRunnerFactory`, and the engine uses `runResult(event, stateStore, botId)` to execute it. Routing filters support keys such as `discordTrigger` and `discordMention`; `discordMention` matches case-insensitively against normalized Discord `@mentions` from message text or connector-provided mention metadata. For `configured`, use `workflow.params.workflowRef` to reference a workflow id from the YAML `workflows:` section, which defines a step DSL with `ask_input`, `prompt_for_field`, `capture_field`, `call_action`, `branch`, and `done`.
 
 Configured workflows persist per-session `ConfigurableWorkflowState`. `CallActionStep` prefers `ToolRunner` when a tool is registered and falls back to `WorkflowActionRegistry` for legacy actions; for tool-backed steps it also forwards event metadata and the session key so tools can launch external work and correlate replies. After the workflow runs, the engine can invoke a bot reasoner with the workflow reply context, current session state, and the last normalized user message; any proposed tool calls are executed through `ToolRunner` under the bot's `ToolPolicy`.
@@ -56,7 +79,7 @@ The app loads a `.env` file (if present) into system properties at startup. A sa
 
 Required for Luna on Discord:
 
-- `DISCORD_BOT_TOKEN`: Discord bot token used by the JDA connector.
+- `DISCORD_BOT_TOKEN`: Discord bot token used by the JDA connector. In the [Discord Developer Portal](https://discord.com/developers/applications), open your app → Bot → **Privileged Gateway Intents** and enable **Message Content Intent** (required for reading message text and mentions).
 - `CURSOR_API_KEY`: Cursor API key used for Cloud Agent launches and status polling.
 
 Optional Cursor settings:
