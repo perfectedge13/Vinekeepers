@@ -43,8 +43,13 @@ public final class Router {
 
         if ("discord".equals(sourceType)) {
             if (!f.getDiscordAuthors().isEmpty()) {
-                String author = context.getActorId();
-                if (author == null || !f.getDiscordAuthors().contains(author)) return false;
+                String actorId = context.getActorId();
+                String actorUsername = context.getActorUsername();
+                String usernameNorm = actorUsername != null ? actorUsername.trim().toLowerCase(Locale.ROOT) : null;
+                boolean authorMatch = (actorId != null && f.getDiscordAuthors().contains(actorId))
+                        || (usernameNorm != null && !usernameNorm.isEmpty() && f.getDiscordAuthors().stream()
+                                .anyMatch(a -> a != null && a.trim().toLowerCase(Locale.ROOT).equals(usernameNorm)));
+                if (!authorMatch) return false;
             }
             if (!f.getDiscordChannels().isEmpty()) {
                 String channel = context.getChannelId();

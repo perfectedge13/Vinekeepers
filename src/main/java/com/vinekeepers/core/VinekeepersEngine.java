@@ -8,6 +8,9 @@ import com.vinekeepers.bot.Router;
 import com.vinekeepers.connectors.DiscordReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.events.EventSubscriber;
+import com.vinekeepers.interactions.AppReplySink;
+import com.vinekeepers.interactions.OutboundResponse;
+import com.vinekeepers.interactions.ReplyTarget;
 import com.vinekeepers.reasoner.ProposedToolCall;
 import com.vinekeepers.reasoner.Reasoner;
 import com.vinekeepers.reasoner.ReasonerInput;
@@ -41,6 +44,8 @@ public final class VinekeepersEngine implements EventSubscriber {
     private final StateStore stateStore;
     private final AuditRecorder auditRecorder;
     private final ToolRunner toolRunner;
+    /** Transitional: sink per sourceId prefix (e.g. "discord"). */
+    private final Map<String, AppReplySink> sinks = new ConcurrentHashMap<>();
     private volatile DiscordReplySender replySender;
 
     public VinekeepersEngine(Router router, StateStore stateStore, AuditRecorder auditRecorder) {
@@ -67,7 +72,17 @@ public final class VinekeepersEngine implements EventSubscriber {
     }
 
     /**
-     * Set the Discord reply sender so workflow replies can be sent back to Discord.
+     * Register a reply sink for the given sourceId prefix (e.g. "discord").
+     * Transitional; longer-term may use explicit connector/surface reference.
+     */
+    public void registerSink(String sourceIdPrefix, AppReplySink sink) {
+        if (sourceIdPrefix != null && !sourceIdPrefix.isBlank() && sink != null) {
+            sinks.put(sourceIdPrefix, sink);
+        }
+    }
+
+    /**
+     * Set the Discord reply sender for legacy text-only delivery when no sink is registered.
      */
     public void setReplySender(DiscordReplySender replySender) {
         this.replySender = replySender;
@@ -103,8 +118,9 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
 
         ReasonerOutput reasonerOutput = runReasoner(bot, event, workflowResult);
-        String reply = selectReply(workflowResult, reasonerOutput);
-        sendReplyIfDiscord(event, reply);
+        OutboundResponse outbound = buildOutboundResponse(workflowResult, reasonerOutput);
+        ReplyTarget target = resolveReplyTarget(event);
+        deliverReply(event, outbound, target);
     }
 
     private ReasonerOutput runReasoner(BotDefinition bot, Event event, WorkflowRunResult workflowResult) {
@@ -150,7 +166,7 @@ public final class VinekeepersEngine implements EventSubscriber {
         return output;
     }
 
-    private static String selectReply(WorkflowRunResult workflowResult, ReasonerOutput reasonerOutput) {
+    private static String selectReplyText(WorkflowRunResult workflowResult, ReasonerOutput reasonerOutput) {
         if (workflowResult != null) {
             if (workflowResult.getReplyMessage() != null && !workflowResult.getReplyMessage().isBlank()) {
                 return workflowResult.getReplyMessage();
@@ -165,29 +181,79 @@ public final class VinekeepersEngine implements EventSubscriber {
         return "";
     }
 
-    private static String lastUserMessage(Event event) {
-        NormalizedEventContext context = NormalizedEventContext.from(event);
-        return context.getText() != null ? context.getText() : "";
+    private static OutboundResponse buildOutboundResponse(WorkflowRunResult workflowResult, ReasonerOutput reasonerOutput) {
+        if (workflowResult != null && workflowResult.getRichReply().isPresent()) {
+            return workflowResult.getRichReply().get();
+        }
+        if (reasonerOutput != null && reasonerOutput.getRichReply().isPresent()) {
+            return reasonerOutput.getRichReply().get();
+        }
+        String text = selectReplyText(workflowResult, reasonerOutput);
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        return OutboundResponse.ofText(text);
     }
 
-    private void sendReplyIfDiscord(Event event, String message) {
-        if (message == null || message.isEmpty() || replySender == null) {
-            return;
-        }
-        if (!event.getSourceId().startsWith("discord:")) {
-            return;
-        }
+    private static ReplyTarget resolveReplyTarget(Event event) {
+        String sourceId = event.getSourceId();
         String channelId = event.getPayload("channelId", String.class);
         if (channelId == null) {
             channelId = event.getPayload("channel", String.class);
         }
         if (channelId == null) {
-            return;
+            channelId = "";
         }
         String messageId = event.getPayload("messageId", String.class);
         if (messageId == null) {
             messageId = event.getPayload("message_id", String.class);
         }
-        replySender.send(channelId, messageId, message);
+        if (messageId == null) {
+            messageId = "";
+        }
+        Boolean deferred = event.getPayload("deferred", Boolean.class);
+        String interactionId = event.getPayload("interactionId", String.class);
+        String token = event.getPayload("token", String.class);
+        if ("interaction".equals(event.getKind()) && interactionId != null && token != null) {
+            return new com.vinekeepers.interactions.InteractionTarget(
+                    sourceId, channelId, messageId, interactionId, token, Boolean.TRUE.equals(deferred));
+        }
+        return new com.vinekeepers.interactions.ChannelTarget(sourceId, channelId, messageId);
     }
+
+    private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target) {
+        if (outbound == null) {
+            return;
+        }
+        String sourcePrefix = event.getSourceId().contains(":") ? event.getSourceId().substring(0, event.getSourceId().indexOf(':')) : event.getSourceId();
+        AppReplySink sink = sinks.get(sourcePrefix);
+        if (sink != null) {
+            if (target instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
+                sink.sendFollowUp(outbound, target);
+            } else if (target instanceof com.vinekeepers.interactions.InteractionTarget) {
+                sink.respondImmediately(outbound, target);
+            } else {
+                sink.respondImmediately(outbound, target);
+            }
+            return;
+        }
+        if (replySender != null && event.getSourceId().startsWith("discord:")) {
+            String text = outbound.getText().orElse("");
+            if (!text.isEmpty()) {
+                String channelId = event.getPayload("channelId", String.class);
+                if (channelId == null) channelId = event.getPayload("channel", String.class);
+                String messageId = event.getPayload("messageId", String.class);
+                if (messageId == null) messageId = event.getPayload("message_id", String.class);
+                if (channelId != null) {
+                    replySender.send(channelId, messageId, text);
+                }
+            }
+        }
+    }
+
+    private static String lastUserMessage(Event event) {
+        NormalizedEventContext context = NormalizedEventContext.from(event);
+        return context.getText() != null ? context.getText() : "";
+    }
+
 }

@@ -2,6 +2,14 @@
 
 # Entries
 
+## 2026-03-09
+
+- **Author in payload for routing:** JdaDiscordGateway supplies author (authorId, author) in the internal event payload so routing can apply `discordAuthors` filter and NormalizedEventContext can expose actorId/actorUsername for matching.
+
+## 2026-03-08
+
+- **AppReplySink and rich intents:** Discord connector implements `AppReplySink` with lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal); adapter acks or defers interactions within the platform window and may auto-defer when sync reply is not safely possible. Intents (PresentChoices, ConfirmAction, etc.) render to Discord with fallback to text. Engine delivers replies via sink registry by sourceId prefix.
+
 ## 2026-03-07
 
 - The Discord reply path is now documented as part of the engine workflow and reasoner loop, including replies that originate from configured conversational workflows and are delivered back through `DiscordReplySender`.

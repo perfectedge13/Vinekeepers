@@ -52,4 +52,21 @@ class StepResultTest {
         StepResult r = new StepResult(null, null, null, false, null);
         assertEquals("", r.getMessage());
     }
+
+    @Test
+    void waitingWithRichReplyStoresRichReply() {
+        com.vinekeepers.interactions.OutboundResponse rich =
+                com.vinekeepers.interactions.OutboundResponse.ofText("Pick one");
+        StepResult r = StepResult.waiting("Prompt", "field", rich);
+        assertTrue(r.getRichReply().isPresent());
+        assertEquals(rich, r.getRichReply().get());
+        assertEquals("field", r.getWaitingForField());
+        assertEquals(StepOutcome.WAITING, r.getOutcome());
+    }
+
+    @Test
+    void waitingWithoutRichReplyHasEmptyRichReply() {
+        StepResult r = StepResult.waiting("Prompt", "field");
+        assertTrue(r.getRichReply().isEmpty());
+    }
 }

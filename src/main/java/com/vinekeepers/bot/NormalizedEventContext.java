@@ -21,6 +21,7 @@ public final class NormalizedEventContext {
     private final String sourceType;
     private final String eventType;
     private final String actorId;
+    private final String actorUsername;
     private final String channelId;
     private final String threadId;
     private final String conversationId;
@@ -29,13 +30,19 @@ public final class NormalizedEventContext {
     private final String repo;
     private final List<String> labels;
     private final Map<String, Object> metadata;
+    private final String interactionId;
+    private final String token;
+    private final String customId;
+    private final List<String> interactionValues;
 
-    private NormalizedEventContext(String sourceType, String eventType, String actorId, String channelId,
+    private NormalizedEventContext(String sourceType, String eventType, String actorId, String actorUsername, String channelId,
                                    String threadId, String conversationId, String text, List<String> mentions,
-                                   String repo, List<String> labels, Map<String, Object> metadata) {
+                                   String repo, List<String> labels, Map<String, Object> metadata,
+                                   String interactionId, String token, String customId, List<String> interactionValues) {
         this.sourceType = sourceType != null ? sourceType : "";
         this.eventType = eventType != null ? eventType : "";
         this.actorId = actorId;
+        this.actorUsername = actorUsername;
         this.channelId = channelId;
         this.threadId = threadId;
         this.conversationId = conversationId;
@@ -44,18 +51,23 @@ public final class NormalizedEventContext {
         this.repo = repo;
         this.labels = labels != null ? List.copyOf(labels) : List.of();
         this.metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+        this.interactionId = interactionId;
+        this.token = token;
+        this.customId = customId;
+        this.interactionValues = interactionValues != null ? List.copyOf(interactionValues) : List.of();
     }
 
     public static NormalizedEventContext from(Event event) {
         if (event == null) {
-            return new NormalizedEventContext("", "", null, null, null, null, null, List.of(), null, List.of(), Map.of());
+            return new NormalizedEventContext("", "", null, null, null, null, null, null, List.of(), null, List.of(), Map.of(), null, null, null, List.of());
         }
         Map<String, Object> payload = event.getPayload();
         String sourceId = event.getSourceId();
         String sourceType = sourceId != null && sourceId.contains(":")
                 ? sourceId.substring(0, sourceId.indexOf(':'))
                 : sourceId;
-        String actorId = firstString(payload, "authorId", "author", "user");
+        String actorId = firstString(payload, "authorId", "user");
+        String actorUsername = firstString(payload, "author");
         String channelId = firstString(payload, "channelId", "channel");
         String threadId = firstString(payload, "threadId", "thread");
         String conversationId = threadId != null ? threadId : channelId;
@@ -63,8 +75,22 @@ public final class NormalizedEventContext {
         List<String> mentions = mentionsFrom(payload, text);
         String repo = firstString(payload, "repo", "repository");
         List<String> labels = listOfStrings(payload.get("labels"));
-        return new NormalizedEventContext(sourceType, event.getKind(), actorId, channelId, threadId,
-                conversationId, text, mentions, repo, labels, payload);
+        String interactionId = firstString(payload, "interactionId");
+        String token = firstString(payload, "token");
+        String customId = firstString(payload, "customId");
+        List<String> interactionValues = "interaction".equals(event.getKind())
+                ? listOfStrings(payload.get("values") != null ? extractValuesList(payload.get("values")) : null)
+                : List.of();
+        return new NormalizedEventContext(sourceType, event.getKind(), actorId, actorUsername, channelId, threadId,
+                conversationId, text, mentions, repo, labels, payload,
+                interactionId, token, customId, interactionValues);
+    }
+
+    private static Object extractValuesList(Object values) {
+        if (values instanceof Map<?, ?> m && m.containsKey("values")) {
+            return m.get("values");
+        }
+        return values;
     }
 
     public String getSourceType() {
@@ -77,6 +103,10 @@ public final class NormalizedEventContext {
 
     public String getActorId() {
         return actorId;
+    }
+
+    public String getActorUsername() {
+        return actorUsername;
     }
 
     public String getChannelId() {
@@ -109,6 +139,22 @@ public final class NormalizedEventContext {
 
     public Map<String, Object> getMetadata() {
         return metadata;
+    }
+
+    public String getInteractionId() {
+        return interactionId;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public String getCustomId() {
+        return customId;
+    }
+
+    public List<String> getInteractionValues() {
+        return interactionValues;
     }
 
     private static String firstString(Map<String, Object> payload, String... keys) {

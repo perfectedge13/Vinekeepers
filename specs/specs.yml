@@ -55,6 +55,10 @@ interfaces:
       description: Run unit tests
     - command: mvn compile
       description: Build verification
+    - command: npm run validate-specs
+      description: Validate spec index and registries against schema
+    - command: npm run validate-drift
+      description: Validate index and registry paths, refs, and traceability
     - command: npm run validate-docs
       description: Validate generated mkdocs content
 

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-07T20:45:10Z"
+  updated_utc: "2026-03-09T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -104,9 +104,39 @@ assets:
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots; run workflow and reasoner; apply tool/state side effects; deliver replies to Discord
+    role: Route events to bots; run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
     requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
     feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
+  - id: ASSET-OUTBOUND-RESPONSE
+    kind: source
+    path: src/main/java/com/vinekeepers/interactions/OutboundResponse.java
+    role: Platform-neutral outbound reply (optional text, optional single ResponseIntent); at least one present
+    requires: [REQ-CORE-003]
+    feature_ids: [FEAT-ENGINE]
+  - id: ASSET-APP-REPLY-SINK
+    kind: source
+    path: src/main/java/com/vinekeepers/interactions/AppReplySink.java
+    role: Connector contract with lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); defer is adapter-internal only
+    requires: [REQ-CORE-003]
+    feature_ids: [FEAT-ENGINE]
+  - id: ASSET-REPLY-TARGET
+    kind: source
+    path: src/main/java/com/vinekeepers/interactions/ReplyTarget.java
+    role: Sealed ReplyTarget (ChannelTarget, InteractionTarget) for where to send replies
+    requires: [REQ-CORE-003]
+    feature_ids: [FEAT-ENGINE]
+  - id: ASSET-CAPABILITIES
+    kind: source
+    path: src/main/java/com/vinekeepers/interactions/Capabilities.java
+    role: Typed connector capabilities (supportedIntents, supportsInteractions, deferRequiredWithinMs, etc.)
+    requires: [REQ-CORE-003]
+    feature_ids: [FEAT-ENGINE]
+  - id: ASSET-RESPONSE-INTENT
+    kind: source
+    path: src/main/java/com/vinekeepers/interactions/ResponseIntent.java
+    role: Platform-neutral response intents (PresentChoices, ConfirmAction, CollectText, CollectForm, ShowActions, ShowStatus)
+    requires: [REQ-CORE-003]
+    feature_ids: [FEAT-ENGINE]
   - id: ASSET-CONFIG-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/config/ConfigLoader.java
@@ -116,7 +146,7 @@ assets:
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
-    role: Bot definitions YAML (including Luna routing and Discord mention activation)
+    role: Bot definitions YAML (including Luna routing, Discord mention activation, and optional discordAuthors filter)
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -128,7 +158,7 @@ assets:
   - id: ASSET-ROUTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/Router.java
-    role: Match events to bots by routing rules, including Discord mention filters
+    role: Match events to bots by routing rules, including Discord mention and discordAuthors filters
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
@@ -146,13 +176,13 @@ assets:
   - id: ASSET-ROUTING-FILTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/RoutingFilter.java
-    role: Apply routing filters to events, including discordTrigger and discordMention matching
+    role: Apply routing filters to events, including discordTrigger, discordMention, and discordAuthors matching
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-NORMALIZED-EVENT-CONTEXT
     kind: source
     path: src/main/java/com/vinekeepers/bot/NormalizedEventContext.java
-    role: Normalize event payloads for routing and session decisions, including mention extraction from payload and text
+    role: Normalize event payloads for routing and session decisions, including actorId and actorUsername (from payload author/authorId), mention extraction, and optional interaction payload (interactionId, token, customId, values)
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-TOOL-POLICY
@@ -284,7 +314,7 @@ assets:
   - id: ASSET-REASONER-OUTPUT
     kind: source
     path: src/main/java/com/vinekeepers/reasoner/ReasonerOutput.java
-    role: Reasoner output model including reply text, state patch, and proposed tool calls
+    role: Reasoner output model including reply text, optional OutboundResponse richReply, state patch, and proposed tool calls
     requires: [REQ-REASONER-001]
     feature_ids: [FEAT-REASONER]
   - id: ASSET-PROPOSED-TOOL-CALL
@@ -350,7 +380,7 @@ assets:
   - id: ASSET-WORKFLOW-RUN-RESULT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowRunResult.java
-    role: Structured workflow result with reply, waiting/completed flags, and error details
+    role: Structured workflow result with reply, optional OutboundResponse richReply, waiting/completed flags, and error details
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-STUB-WORKFLOW-RUNNER
@@ -380,7 +410,7 @@ assets:
   - id: ASSET-STEP-RESULT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/StepResult.java
-    role: Result of a single workflow step execution with next-step, storage, and outcome metadata
+    role: Result of a single workflow step execution with next-step, storage, outcome metadata, and optional OutboundResponse richReply
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-STEP-OUTCOME
@@ -422,7 +452,7 @@ assets:
   - id: ASSET-CONFIGURABLE-WORKFLOW-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
-    role: "Run workflow from WorkflowDefinition with conversational pause/resume, session keys, and tool-backed actions"
+    role: "Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses intent, choices, confirmLabel, cancelLabel, fields for steps"
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-ASK-FOR-INPUT-STEP
@@ -434,13 +464,13 @@ assets:
   - id: ASSET-PROMPT-FOR-FIELD-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/PromptForFieldStep.java
-    role: Step that prompts once for a field and pauses the workflow until a later event arrives
+    role: Step that prompts once for a field and pauses the workflow until a later event; optional intent/choices/confirmLabel/cancelLabel/fields produce OutboundResponse when present
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CAPTURE-FIELD-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/CaptureFieldFromEventStep.java
-    role: Step that captures a field from the current event after a conversational prompt
+    role: Step that captures a field from the current event after a conversational prompt; for kind interaction reads values/customId from payload
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CALL-ACTION-STEP
@@ -627,7 +657,7 @@ requirements:
 
   - id: REQ-CORE-003
     title: Event-driven engine routes events to bots
-    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events.
+    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. Reply delivery uses the connector contract (AppReplySink) with distinct lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); engine builds OutboundResponse from workflow or reasoner (rich or text-only), resolves ReplyTarget from event, and calls the sink registered for the event source (transitional source-prefix routing). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
     status: active
     priority: high
     type: functional
@@ -643,10 +673,11 @@ requirements:
         - Engine uses registered runners and runner.runResult(event, stateStore, botId) for workflow execution
         - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message
         - Engine applies reasoner state patches and executes proposed tool calls through ToolRunner
+        - Engine delivers replies via sink registry (source-prefix) and lifecycle methods (respondImmediately, sendFollowUp, updateMessage, openModal); sink exposes getCapabilities; no defer in engine
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:
-      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT]
+      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT]
       symbols: []
     validation:
       tests:
@@ -658,7 +689,7 @@ requirements:
 
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, and routing filter keys including optional discordTrigger and discordMention are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
     status: active
     priority: high
     type: functional
@@ -674,7 +705,7 @@ requirements:
         - BotConfig maps to BotDefinition structure
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
-        - ConfigLoader parses routing filters including optional discordTrigger and discordMention keys from YAML
+        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors keys from YAML
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML]
@@ -692,10 +723,16 @@ requirements:
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildRouterParsesDiscordMentionRouting
           preconditions: []
+        - id: UNIT-CONFIG-LOADER-DISCORD-AUTHORS
+          title: ConfigLoaderTest
+          intent: Verify discordAuthors routing filter is parsed from YAML and router matches by author/actorUsername
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordAuthorsRouting
+          preconditions: []
 
   - id: REQ-BOT-001
     title: Route events to bots by routing rules
-    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view; events are dispatched only to bots whose filters accept the event, including Discord mention-based routing from either payload metadata or @mention text when configured.
+    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view; events are dispatched only to bots whose filters accept the event, including Discord mention-based routing from either payload metadata or @mention text when configured, and optional Discord author filtering (discordAuthors) by actor id or normalized actor username.
     status: active
     priority: high
     type: functional
@@ -710,7 +747,9 @@ requirements:
         - Router.match(event) returns list of matching BotDefinitions
         - Filters apply Discord/GitHub and other criteria from routing config
         - Event routing can normalize actor, channel, text, mentions, repo, and label fields from incoming payloads
+        - Normalized event context exposes actorId and actorUsername (e.g. from payload author/authorId) for routing
         - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text
+        - discordAuthors filters match when event author (actorId or actorUsername normalized) is in the configured list
       examples: []
     traceability:
       assets: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT]
@@ -739,6 +778,12 @@ requirements:
           intent: Verify discordMention routing does not match when the configured mention is absent
           testClass: com.vinekeepers.bot.RouterTest
           testMethod: routeDoesNotMatchWhenDiscordMentionIsMissing
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-AUTHORS
+          title: ConfigLoaderTest
+          intent: Verify discordAuthors filter matches by actorId/actorUsername and rejects other authors
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordAuthorsRouting
           preconditions: []
 
   - id: REQ-BOT-002
@@ -1050,7 +1095,7 @@ requirements:
 
   - id: REQ-LUNA-001
     title: Luna bot — Discord mention trigger, multi-turn gather, Cursor Cloud API
-    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule that matches @Luna-style mentions from normalized message text or mention metadata; workflow type configured with workflowRef luna_cursor in bots.yaml; configured workflow luna_cursor prompts for a repository and feature request across multiple Discord turns, then invokes cursor.fullRun to launch an official Cursor Cloud Agent run on a feature branch with auto PR enabled; Vinekeepers stores in-memory run state, polls Cursor for status and conversation feedback, and reports launch/progress/completion updates back to Discord; config and routing for bot luna and Discord mention activation stay in YAML."
+    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule that matches @Luna-style mentions from normalized message text or mention metadata; optional discordAuthors filter (e.g. novawilde13_72571) restricts which Discord users can trigger Luna; workflow type configured with workflowRef luna_cursor in bots.yaml; configured workflow luna_cursor prompts for a repository and feature request across multiple Discord turns, then invokes cursor.fullRun to launch an official Cursor Cloud Agent run on a feature branch with auto PR enabled; Vinekeepers stores in-memory run state, polls Cursor for status and conversation feedback, and reports launch/progress/completion updates back to Discord; config and routing for bot luna and Discord mention activation stay in YAML."
     status: active
     priority: high
     type: functional
@@ -1062,8 +1107,8 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - Bot id luna and routing filter discordMention luna
-        - Luna routing activates when Discord messages reference @Luna in text or mention metadata
+        - Bot id luna and routing filter discordMention luna; optional discordAuthors in routing restricts Luna to listed Discord users (e.g. novawilde13_72571)
+        - Luna routing activates when Discord messages reference @Luna in text or mention metadata and satisfy discordAuthors when configured
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
         - Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before launching cursor.fullRun
         - cursor.fullRun action resolves repository input, launches the official Cursor Cloud Agent API, stores LunaCloudRunState, and immediately acknowledges launch to Discord

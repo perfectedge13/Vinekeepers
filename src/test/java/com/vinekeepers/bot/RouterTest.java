@@ -29,7 +29,7 @@ class RouterTest {
     @Test
     void addRoutingAndRouteMatchesDiscordByAuthor() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("u1"), Set.of(), null, Set.of(), Set.of(), Set.of());
+                Set.of("u1"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
         Event event = new Event("discord:g:ch", "message", Map.of("authorId", "u1"));
         assertEquals(List.of("bot-a"), router.route(event));
@@ -38,9 +38,49 @@ class RouterTest {
     @Test
     void routeDoesNotMatchWhenAuthorNotInFilter() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("u1"), Set.of(), null, Set.of(), Set.of(), Set.of());
+                Set.of("u1"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
         Event event = new Event("discord:g:ch", "message", Map.of("authorId", "u2"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsActorId() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("user-snowflake-123"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "user-snowflake-123", "author", "alice", "content", "hi"));
+        assertEquals(List.of("bot-a"), router.route(event));
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsActorUsername() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("novawilde13_72571"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("author", "novawilde13_72571", "content", "ping @Luna"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsActorUsernameCaseInsensitive() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("Novawilde13_72571"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("author", "novawilde13_72571", "content", "hi"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchWhenDiscordAuthorsSetAndActorUsernameNotInFilter() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed_user"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("author", "other_user", "authorId", "x99", "content", "hi"));
         assertTrue(router.route(event).isEmpty());
     }
 

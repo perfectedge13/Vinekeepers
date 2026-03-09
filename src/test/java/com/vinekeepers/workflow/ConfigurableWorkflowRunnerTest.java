@@ -184,4 +184,34 @@ class ConfigurableWorkflowRunnerTest {
         assertTrue(result.isCompleted());
         assertEquals("You said: hello", result.getReplyMessage());
     }
+
+    @Test
+    void runPromptForFieldWithPresentChoicesReturnsRichReply() {
+        List<Map<String, Object>> steps = List.of(
+                Map.<String, Object>of(
+                        "type", "prompt_for_field",
+                        "prompt", "Which repo?",
+                        "storeIn", "repo",
+                        "intent", "present_choices",
+                        "choices", List.of(
+                                Map.of("id", "a", "label", "Repo A", "description", "First"),
+                                Map.of("id", "b", "label", "Repo B"))),
+                Map.of("type", "capture_field", "storeIn", "repo"),
+                Map.of("type", "done", "message", "Selected: {{repo}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("choices", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry());
+        StateStore store = new StateStore();
+
+        WorkflowRunResult result = runner.runResult(
+                new Event("discord:test", "message",
+                        Map.of("channelId", "chan-1", "authorId", "user-1", "content", "/start")),
+                store,
+                "luna");
+
+        assertTrue(result.isWaiting());
+        assertTrue(result.getRichReply().isPresent());
+        assertEquals("Which repo?", result.getReplyMessage());
+        assertEquals("repo", result.getWaitingForField());
+    }
 }

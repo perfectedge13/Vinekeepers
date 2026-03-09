@@ -46,4 +46,12 @@ public class DiscordEventSource implements EventSource, DiscordReplySender {
     public void send(String channelId, String messageId, String content) {
         gateway.send(channelId, messageId, content);
     }
+
+    /**
+     * Reply sink implementing the connector contract (lifecycle operations).
+     * Register with engine via registerSink("discord", getReplySink()).
+     */
+    public DiscordAppReplySink getReplySink() {
+        return new DiscordAppReplySink(gateway);
+    }
 }

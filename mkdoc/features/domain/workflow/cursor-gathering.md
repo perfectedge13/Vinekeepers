@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Luna bot gathering workflow and Cursor Cloud execution (REQ-LUNA-001). The shipped `luna` bot stays config-driven in `config/bots.yaml`, activates from `discordMention: luna`, runs configured workflow `luna_cursor` to gather repository and feature inputs across multiple Discord turns, then delegates execution to `cursor.fullRun` and the official Cursor Cloud Agents API. Vinekeepers stores a `LunaCloudRunState`, polls Cursor for status and conversation feedback, and relays launch/progress/PR updates back to Discord.
+Luna bot gathering workflow and Cursor Cloud execution (REQ-LUNA-001). The shipped `luna` bot stays config-driven in `config/bots.yaml`, activates from `discordMention: luna` (and optional `discordAuthors`, e.g. `novawilde13_72571`, to restrict which Discord users can trigger Luna), runs configured workflow `luna_cursor` to gather repository and feature inputs across multiple Discord turns, then delegates execution to `cursor.fullRun` and the official Cursor Cloud Agents API. Vinekeepers stores a `LunaCloudRunState`, polls Cursor for status and conversation feedback, and relays launch/progress/PR updates back to Discord.
 
 # Key assets
 

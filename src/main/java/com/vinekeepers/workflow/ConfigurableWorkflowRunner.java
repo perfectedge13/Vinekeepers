@@ -85,17 +85,20 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
             if (result.getOutcome() == StepOutcome.WAITING) {
                 state.markWaiting(result.getWaitingForField(), result.getPromptMessage());
-                // Resume must continue at the capture step, not replay the prompt step.
                 state.setStepIndex(nextStepIndex);
                 stateStore.put(stateKey, state);
-                return WorkflowRunResult.waiting(result.getPromptMessage(), result.getWaitingForField());
+                return result.getRichReply().isPresent()
+                        ? WorkflowRunResult.waiting(result.getRichReply().get(), result.getWaitingForField())
+                        : WorkflowRunResult.waiting(result.getPromptMessage(), result.getWaitingForField());
             }
 
             if (result.getOutcome() == StepOutcome.COMPLETE) {
                 state.markCompleted();
                 state.setStepIndex(nextStepIndex);
                 stateStore.put(stateKey, state);
-                return WorkflowRunResult.completed(result.getMessage());
+                return result.getRichReply().isPresent()
+                        ? WorkflowRunResult.completed(result.getRichReply().get())
+                        : WorkflowRunResult.completed(result.getMessage());
             }
 
             if (result.getOutcome() == StepOutcome.ERROR) {
@@ -128,7 +131,12 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         (String) stepMap.get("storeIn")));
                 case "prompt_for_field" -> out.add(new com.vinekeepers.workflow.steps.PromptForFieldStep(
                         (String) stepMap.get("prompt"),
-                        (String) stepMap.get("storeIn")));
+                        (String) stepMap.get("storeIn"),
+                        (String) stepMap.get("intent"),
+                        (List<Map<String, Object>>) stepMap.get("choices"),
+                        (String) stepMap.get("confirmLabel"),
+                        (String) stepMap.get("cancelLabel"),
+                        (List<Map<String, Object>>) stepMap.get("fields")));
                 case "capture_field" -> out.add(new com.vinekeepers.workflow.steps.CaptureFieldFromEventStep(
                         (String) stepMap.get("storeIn"),
                         (String) stepMap.get("contentKey")));

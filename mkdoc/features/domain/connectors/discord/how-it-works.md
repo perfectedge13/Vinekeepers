@@ -8,7 +8,7 @@
 
 1. `Bootstrap` starts `DiscordEventSource` with `EventBus`.
 2. `DiscordEventSource` connects the gateway and subscribes live Discord message events.
-3. The gateway converts Discord messages into internal `Event` payloads with `channelId`, `authorId`, `messageId`, `content`, and normalized `mentions`.
+3. The gateway converts Discord messages into internal `Event` payloads with `channelId`, `authorId`, `author` (username), `messageId`, `content`, and normalized `mentions` so routing can apply `discordAuthors` by id or username.
 4. Downstream routing reads both message text and the `mentions` payload field to resolve mention-based bot activation.
 
 # Reply path

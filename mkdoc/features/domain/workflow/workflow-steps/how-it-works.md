@@ -13,6 +13,6 @@ Configured workflows are defined by `WorkflowDefinition` and executed as ordered
 
 # Inputs and outputs
 
-- **Inputs:** Workflow definition, current configurable workflow state, event payload, and optional registered actions or tools.
-- **Outputs:** Step outcomes, stored state values, next-step selection, and optional reply text.
+- **Inputs:** Workflow definition, current configurable workflow state, event payload (including interaction payload: interactionId, token, customId, values when kind is interaction), and optional registered actions or tools.
+- **Outputs:** Step outcomes, stored state values, next-step selection, optional reply text, and optional `OutboundResponse` (richReply with `ResponseIntent`) for the engine to deliver via the connector sink.
 

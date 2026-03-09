@@ -46,7 +46,7 @@ class DiscordEventSourceTest {
 
         source.start(bus);
         gateway.publish(new Event("discord:default", "message",
-                java.util.Map.of("content", "ping @Luna", "channelId", "stub", "authorId", "user", "mentions", List.of("luna"))));
+                java.util.Map.of("content", "ping @Luna", "channelId", "stub", "authorId", "user", "author", "novawilde13_72571", "mentions", List.of("luna"))));
 
         assertEquals(1, events.size());
         Event event = events.getFirst();
@@ -54,6 +54,17 @@ class DiscordEventSourceTest {
         assertEquals("message", event.getKind());
         assertNotNull(event.getPayload().get("mentions"));
         assertInstanceOf(List.class, event.getPayload().get("mentions"));
+        assertEquals("novawilde13_72571", event.getPayload().get("author"));
+    }
+
+    @Test
+    void getReplySinkReturnsDiscordAppReplySink() {
+        FakeDiscordGateway gateway = new FakeDiscordGateway();
+        DiscordEventSource source = new DiscordEventSource(gateway);
+        DiscordAppReplySink sink = source.getReplySink();
+        assertNotNull(sink);
+        assertInstanceOf(DiscordAppReplySink.class, sink);
+        assertNotNull(sink.getCapabilities());
     }
 
     private static final class FakeDiscordGateway implements DiscordGateway {

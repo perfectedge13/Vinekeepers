@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-07T20:45:10Z"
+  updated_utc: "2026-03-09T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -48,13 +48,19 @@ assets:
   - id: ASSET-DISCORD-GATEWAY
     kind: source
     path: src/main/java/com/vinekeepers/connectors/JdaDiscordGateway.java
-    role: JDA-backed Discord gateway for receiving live messages and sending replies
+    role: JDA-backed Discord gateway for receiving messages and interactions, including author (authorId, author) in payload for routing, deferring interactions within 3s, sending replies and follow-ups
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-DISCORD-GATEWAY-CONTRACT
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordGateway.java
-    role: Gateway contract for Discord receive/send operations used by the event source
+    role: Gateway contract for Discord receive/send and interaction lifecycle (sendFollowUp, updateMessage, openModal)
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-DISCORD-REPLY-SINK
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/DiscordAppReplySink.java
+    role: Implements AppReplySink; lifecycle operations; render intents to Discord; fallback to text; adapter owns timing and may auto-defer on interaction receive
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-GITHUB-SOURCE
@@ -67,7 +73,7 @@ assets:
 requirements:
   - id: REQ-CONNECTORS-DISCORD-001
     title: Discord event source and reply
-    statement: DiscordEventSource implements EventSource and translates Discord payloads, including mention metadata when available, into internal events; the JDA-backed Discord gateway receives live Discord messages and sends replies; DiscordReplySender provides the interface for sending replies back to Discord (channelId, messageId, content). Engine delivers workflow replies to Discord when the event source is Discord.
+    statement: DiscordEventSource implements EventSource and translates Discord payloads, including mention metadata when available, into internal events; the JDA-backed Discord gateway receives live Discord messages and interaction events, acks or defers interactions within the platform window (adapter-owned timing), and sends replies. DiscordReplySender provides legacy text reply (channelId, messageId, content). DiscordAppReplySink implements the connector contract with lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal); adapter is responsible for ack/defer within Discord window and may auto-defer when sync reply is not safely possible; fallback to text when intent is not supported.
     status: active
     priority: medium
     type: functional
@@ -80,13 +86,15 @@ requirements:
     acceptance:
       criteria:
         - DiscordEventSource exists and implements EventSource and emits events onto the event bus
-        - DiscordEventSource can pass Discord mention metadata through the internal event payload for routing
+        - DiscordEventSource can pass Discord mention metadata and author (authorId, author) through the internal event payload for routing
+        - Discord gateway handles Interaction Create; on receive, adapter acks or defers within platform window and publishes Event with kind interaction and token
+        - DiscordAppReplySink implements AppReplySink; all lifecycle operations; render intents; fallback to text
         - Discord connector can send replies back to the originating channel or message through the Discord API
         - DiscordReplySender interface supports sending replies (channelId, messageId, content) to Discord
-        - Replies from the engine are delivered to Discord via the reply path when source is Discord
+        - Replies from the engine are delivered to Discord via sink or legacy reply path when source is Discord
       examples: []
     traceability:
-      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT]
+      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK]
       symbols: []
     validation:
       tests:
@@ -95,6 +103,11 @@ requirements:
           intent: Verify engine-delivered workflow replies are sent back through the Discord reply path
           testClass: com.vinekeepers.core.VinekeepersEngineTest
           testMethod: lunaWorkflowWithReplySenderSendsReplyToDiscord
+          preconditions: []
+        - id: UNIT-DISCORD-APP-REPLY-SINK
+          title: DiscordAppReplySinkTest
+          intent: Verify DiscordAppReplySink implements AppReplySink lifecycle, capabilities, and intent rendering with fallback to text
+          testClass: com.vinekeepers.connectors.DiscordAppReplySinkTest
           preconditions: []
         - id: UNIT-DISCORD-EVENT-SOURCE
           title: DiscordEventSourceTest
@@ -150,7 +163,7 @@ features:
     slug: discord
     title: Discord event source and reply
     requirement_ids: [REQ-CONNECTORS-DISCORD-001]
-    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT]
+    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK]
     status: active
     domain_slug: connectors
     doc_path: features/domain/connectors/discord.md

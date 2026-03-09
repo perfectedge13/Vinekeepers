@@ -14,6 +14,11 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.reasoner.StubReasoner;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.interactions.AppReplySink;
+import com.vinekeepers.interactions.ChannelTarget;
+import com.vinekeepers.interactions.InteractionTarget;
+import com.vinekeepers.interactions.OutboundResponse;
+import com.vinekeepers.interactions.ReplyTarget;
 import com.vinekeepers.workflow.StubWorkflowRunner;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunResult;
@@ -34,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -207,5 +213,136 @@ class VinekeepersEngineTest {
                 log.getAction().equals("reasoner_tool") && log.getDetail().equals("tool:ship it")));
         assertTrue(auditLogs.stream().anyMatch(log ->
                 log.getAction().equals("reasoner") && log.getDetail().equals("reasoner reply")));
+    }
+
+    @Test
+    void registerSinkReceivesDeliveryWhenEventIsChannelTarget() {
+        BotDefinition bot = new BotDefinition(
+                "sink-bot",
+                new Persona("Sink", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        AtomicReference<OutboundResponse> capturedResponse = new AtomicReference<>();
+        AtomicReference<ReplyTarget> capturedTarget = new AtomicReference<>();
+        AppReplySink mockSink = new AppReplySink() {
+            @Override
+            public void respondImmediately(OutboundResponse response, ReplyTarget target) {
+                capturedResponse.set(response);
+                capturedTarget.set(target);
+            }
+            @Override
+            public void sendFollowUp(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public void updateMessage(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public void openModal(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public com.vinekeepers.interactions.Capabilities getCapabilities() {
+                return new com.vinekeepers.interactions.Capabilities(
+                        java.util.Set.of(com.vinekeepers.interactions.ResponseIntentType.PRESENT_CHOICES),
+                        true, true, true, false, 3000, 25, 5, 5);
+            }
+        };
+        engine.registerSink("discord", mockSink);
+        engine.registerRunner("sink-bot", (event, store, botId) ->
+                com.vinekeepers.workflow.WorkflowRunResult.completed(OutboundResponse.ofText("Via sink")));
+        engine.registerReasoner("sink-bot", new StubReasoner());
+        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-99", "content", "hi"));
+        engine.onEvent(event);
+
+        assertNotNull(capturedResponse.get());
+        assertEquals("Via sink", capturedResponse.get().getText().orElse(""));
+        assertInstanceOf(ChannelTarget.class, capturedTarget.get());
+        assertEquals("ch-99", ((ChannelTarget) capturedTarget.get()).channelId());
+    }
+
+    @Test
+    void whenSinkRegisteredDeferredInteractionUsesSendFollowUp() {
+        BotDefinition bot = new BotDefinition(
+                "sink-bot",
+                new Persona("Sink", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        AtomicReference<String> calledMethod = new AtomicReference<>();
+        AppReplySink mockSink = new AppReplySink() {
+            @Override
+            public void respondImmediately(OutboundResponse response, ReplyTarget target) {
+                calledMethod.set("respondImmediately");
+            }
+            @Override
+            public void sendFollowUp(OutboundResponse response, ReplyTarget target) {
+                calledMethod.set("sendFollowUp");
+            }
+            @Override
+            public void updateMessage(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public void openModal(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public com.vinekeepers.interactions.Capabilities getCapabilities() {
+                return new com.vinekeepers.interactions.Capabilities(
+                        java.util.Set.of(), true, true, true, false, 3000, 25, 5, 5);
+            }
+        };
+        engine.registerSink("discord", mockSink);
+        engine.registerRunner("sink-bot", (event, store, botId) ->
+                com.vinekeepers.workflow.WorkflowRunResult.completed(OutboundResponse.ofText("OK")));
+        engine.registerReasoner("sink-bot", new StubReasoner());
+        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+
+        Event event = new Event("discord:g:ch", "interaction",
+                Map.of("channelId", "ch-1", "interactionId", "int-1", "token", "tok-1", "deferred", true));
+        engine.onEvent(event);
+
+        assertEquals("sendFollowUp", calledMethod.get());
+    }
+
+    @Test
+    void whenSinkRegisteredRichReplyFromWorkflowIsDeliveredViaSink() {
+        BotDefinition bot = new BotDefinition(
+                "sink-bot",
+                new Persona("Sink", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        AtomicReference<OutboundResponse> captured = new AtomicReference<>();
+        AppReplySink mockSink = new AppReplySink() {
+            @Override
+            public void respondImmediately(OutboundResponse response, ReplyTarget target) {
+                captured.set(response);
+            }
+            @Override
+            public void sendFollowUp(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public void updateMessage(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public void openModal(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public com.vinekeepers.interactions.Capabilities getCapabilities() {
+                return new com.vinekeepers.interactions.Capabilities(
+                        java.util.Set.of(com.vinekeepers.interactions.ResponseIntentType.PRESENT_CHOICES),
+                        true, true, true, false, 3000, 25, 5, 5);
+            }
+        };
+        engine.registerSink("discord", mockSink);
+        OutboundResponse rich = OutboundResponse.ofIntent(
+                new com.vinekeepers.interactions.PresentChoices("Choose one", java.util.List.of()));
+        engine.registerRunner("sink-bot", (event, store, botId) ->
+                com.vinekeepers.workflow.WorkflowRunResult.completed(rich));
+        engine.registerReasoner("sink-bot", new StubReasoner());
+        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+
+        Event event = new Event("discord:g:ch", "message", Map.of("channelId", "ch-1"));
+        engine.onEvent(event);
+
+        assertNotNull(captured.get());
+        assertTrue(captured.get().getIntent().isPresent());
     }
 }

@@ -1,6 +1,9 @@
 package com.vinekeepers.workflow;
 
+import com.vinekeepers.interactions.OutboundResponse;
+
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Result of executing a single workflow step.
@@ -14,14 +17,20 @@ public final class StepResult {
     private final String message;
     private final String promptMessage;
     private final String waitingForField;
+    private final OutboundResponse richReply;
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, boolean done, String message) {
         this(nextStepIndex, storeIn, storeValue, done ? StepOutcome.COMPLETE : StepOutcome.CONTINUE,
-                message, "", null);
+                message, "", null, null);
     }
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
                       String message, String promptMessage, String waitingForField) {
+        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, null);
+    }
+
+    public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
+                      String message, String promptMessage, String waitingForField, OutboundResponse richReply) {
         this.nextStepIndex = nextStepIndex;
         this.storeIn = storeIn;
         this.storeValue = storeValue;
@@ -29,6 +38,7 @@ public final class StepResult {
         this.message = message != null ? message : "";
         this.promptMessage = promptMessage != null ? promptMessage : "";
         this.waitingForField = waitingForField;
+        this.richReply = richReply;
     }
 
     public Integer getNextStepIndex() {
@@ -63,6 +73,10 @@ public final class StepResult {
         return waitingForField;
     }
 
+    public Optional<OutboundResponse> getRichReply() {
+        return Optional.ofNullable(richReply);
+    }
+
     public static StepResult advance(String storeIn, Object storeValue) {
         return new StepResult(null, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null);
     }
@@ -81,7 +95,12 @@ public final class StepResult {
 
     public static StepResult waiting(String promptMessage, String waitingForField) {
         return new StepResult(null, null, null, StepOutcome.WAITING, "",
-                Objects.requireNonNull(promptMessage), waitingForField);
+                Objects.requireNonNull(promptMessage), waitingForField, null);
+    }
+
+    public static StepResult waiting(String promptMessage, String waitingForField, OutboundResponse richReply) {
+        return new StepResult(null, null, null, StepOutcome.WAITING, "",
+                Objects.requireNonNull(promptMessage), waitingForField, richReply);
     }
 
     public static StepResult error(String message) {

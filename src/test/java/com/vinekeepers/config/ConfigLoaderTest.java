@@ -162,4 +162,28 @@ class ConfigLoaderTest {
                 "message",
                 Map.of("content", "ping @Luna"))));
     }
+
+    @Test
+    void buildRouterParsesDiscordAuthorsRouting(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            routing:
+              - botId: luna
+                filter:
+                  discordMention: luna
+                  discordAuthors: ["novawilde13_72571"]
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        Router router = loader.buildRouter(config);
+
+        com.vinekeepers.events.Event withAuthorUsername = new com.vinekeepers.events.Event(
+                "discord:g:ch", "message",
+                Map.of("content", "ping @Luna", "author", "novawilde13_72571", "authorId", "snowflake-id"));
+        assertEquals(List.of("luna"), router.route(withAuthorUsername));
+
+        com.vinekeepers.events.Event otherAuthor = new com.vinekeepers.events.Event(
+                "discord:g:ch", "message",
+                Map.of("content", "ping @Luna", "author", "other_user", "authorId", "other-id"));
+        assertTrue(router.route(otherAuthor).isEmpty());
+    }
 }

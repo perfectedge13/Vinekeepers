@@ -104,6 +104,7 @@ public final class Bootstrap {
     public Bootstrap withDiscord() {
         this.discordSource = new DiscordEventSource();
         engine.setReplySender(discordSource);
+        engine.registerSink("discord", discordSource.getReplySink());
         discordSource.start(eventBus);
         cursorCloudRunMonitor.setReplySender(discordSource);
         return this;

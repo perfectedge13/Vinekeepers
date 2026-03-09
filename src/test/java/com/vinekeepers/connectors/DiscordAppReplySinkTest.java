@@ -1,0 +1,169 @@
+package com.vinekeepers.connectors;
+
+import com.vinekeepers.interactions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class DiscordAppReplySinkTest {
+
+    private RecordingDiscordGateway gateway;
+    private DiscordAppReplySink sink;
+
+    @BeforeEach
+    void setUp() {
+        gateway = new RecordingDiscordGateway();
+        sink = new DiscordAppReplySink(gateway);
+    }
+
+    @Test
+    void getCapabilitiesReturnsSupportedIntentsAndDeferMs() {
+        Capabilities caps = sink.getCapabilities();
+        assertTrue(caps.supportedIntents().contains(ResponseIntentType.PRESENT_CHOICES));
+        assertTrue(caps.supportedIntents().contains(ResponseIntentType.CONFIRM_ACTION));
+        assertTrue(caps.supportedIntents().contains(ResponseIntentType.COLLECT_TEXT));
+        assertTrue(caps.supportsIntent(new PresentChoices("x", List.of())));
+        assertTrue(caps.deferRequiredWithinMs() > 0);
+    }
+
+    @Test
+    void respondImmediatelyWithChannelTargetCallsSend() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "msg1");
+        sink.respondImmediately(OutboundResponse.ofText("Hi"), target);
+        assertEquals(1, gateway.sendCalls.get());
+        assertEquals("ch1|msg1|Hi", gateway.lastSend);
+    }
+
+    @Test
+    void respondImmediatelyWithInteractionTargetNotDeferredCallsSendFollowUp() {
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "msg1", "int-id", "token-1", false);
+        sink.respondImmediately(OutboundResponse.ofText("Reply"), target);
+        assertEquals(1, gateway.sendFollowUpCalls.get());
+        assertEquals("token-1|Reply", gateway.lastSendFollowUp);
+    }
+
+    @Test
+    void respondImmediatelyWithInteractionTargetDeferredCallsSendFollowUp() {
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "msg1", "int-id", "token-2", true);
+        sink.respondImmediately(OutboundResponse.ofText("Follow-up"), target);
+        assertEquals(1, gateway.sendFollowUpCalls.get());
+        assertEquals("token-2|Follow-up", gateway.lastSendFollowUp);
+    }
+
+    @Test
+    void respondImmediatelyWithIntentRendersIntentAsTextWhenSupported() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "");
+        ResponseIntent intent = new PresentChoices("Choose an option", List.of());
+        sink.respondImmediately(OutboundResponse.ofIntent(intent), target);
+        assertEquals("ch1||Choose an option", gateway.lastSend);
+    }
+
+    @Test
+    void sendFollowUpRequiresInteractionTarget() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "");
+        sink.sendFollowUp(OutboundResponse.ofText("x"), target);
+        assertEquals(0, gateway.sendFollowUpCalls.get());
+    }
+
+    @Test
+    void sendFollowUpWithInteractionTargetCallsGateway() {
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "m1", "i1", "tok", true);
+        sink.sendFollowUp(OutboundResponse.ofText("Later"), target);
+        assertEquals(1, gateway.sendFollowUpCalls.get());
+        assertEquals("tok|Later", gateway.lastSendFollowUp);
+    }
+
+    @Test
+    void updateMessageRequiresInteractionTarget() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "");
+        sink.updateMessage(OutboundResponse.ofText("edit"), target);
+        assertEquals(0, gateway.updateMessageCalls.get());
+    }
+
+    @Test
+    void updateMessageWithInteractionTargetCallsGateway() {
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "m1", "i1", "tok", true);
+        sink.updateMessage(OutboundResponse.ofText("Updated"), target);
+        assertEquals(1, gateway.updateMessageCalls.get());
+        assertEquals("tok|Updated", gateway.lastUpdateMessage);
+    }
+
+    @Test
+    void openModalWithoutModalSupportSendsFollowUpAsFallback() {
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "m1", "i1", "tok", true);
+        OutboundResponse response = OutboundResponse.ofIntent(new PresentChoices("Choose", List.of()));
+        sink.openModal(response, target);
+        assertEquals(1, gateway.sendFollowUpCalls.get());
+        assertTrue(gateway.lastSendFollowUp.contains("Choose") || gateway.lastSendFollowUp.endsWith("Choose an option"));
+    }
+
+    @Test
+    void intentToTextPresentChoicesUsesPromptOrDefault() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "");
+        sink.respondImmediately(OutboundResponse.ofIntent(new PresentChoices("Pick one", List.of())), target);
+        assertTrue(gateway.lastSend.endsWith("Pick one"));
+    }
+
+    @Test
+    void intentToTextConfirmActionUsesPromptOrDefault() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "");
+        sink.respondImmediately(OutboundResponse.ofIntent(new ConfirmAction("Proceed?", "Y", "N")), target);
+        assertTrue(gateway.lastSend.endsWith("Proceed?"));
+    }
+
+    @Test
+    void respondImmediatelyWithEmptyContentDoesNotCallSend() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "");
+        sink.respondImmediately(OutboundResponse.of("", new ShowStatus("", null)), target);
+        assertEquals(0, gateway.sendCalls.get());
+    }
+
+    private static final class RecordingDiscordGateway implements DiscordGateway {
+
+        final AtomicInteger sendCalls = new AtomicInteger(0);
+        final AtomicInteger sendFollowUpCalls = new AtomicInteger(0);
+        final AtomicInteger updateMessageCalls = new AtomicInteger(0);
+        String lastSend;
+        String lastSendFollowUp;
+        String lastUpdateMessage;
+        private boolean connected;
+
+        @Override
+        public void connect(java.util.function.Consumer<com.vinekeepers.events.Event> publisher) {
+            connected = true;
+        }
+
+        @Override
+        public void shutdown() {
+            connected = false;
+        }
+
+        @Override
+        public void send(String channelId, String messageId, String content) {
+            sendCalls.incrementAndGet();
+            lastSend = channelId + "|" + (messageId != null ? messageId : "") + "|" + content;
+        }
+
+        @Override
+        public void sendFollowUp(String token, String content) {
+            sendFollowUpCalls.incrementAndGet();
+            lastSendFollowUp = token + "|" + content;
+        }
+
+        @Override
+        public void updateMessage(String token, String content) {
+            updateMessageCalls.incrementAndGet();
+            lastUpdateMessage = token + "|" + content;
+        }
+
+        @Override
+        public boolean isConnected() {
+            return connected;
+        }
+    }
+}

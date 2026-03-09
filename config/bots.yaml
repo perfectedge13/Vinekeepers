@@ -16,8 +16,10 @@ routing:
   - botId: luna
     filter:
       discordMention: "luna"
+      discordAuthors: ["novawilde13_72571"]
 
-# Workflows DSL: id -> steps (ask_input, call_action, branch, done)
+# Workflows DSL: id -> steps (ask_input, prompt_for_field, capture_field, call_action, branch, done)
+# Optional: intent/choices/confirmLabel/cancelLabel/fields for rich interactions
 workflows:
   simple_echo:
     steps:
@@ -31,6 +33,7 @@ workflows:
       - type: prompt_for_field
         prompt: "Which GitHub repository should I update? Reply with a full URL or owner/repo."
         storeIn: project
+        # optional: intent: present_choices / confirm_action; choices: [{ id, label, description }]
       - type: capture_field
         storeIn: project
       - type: prompt_for_field

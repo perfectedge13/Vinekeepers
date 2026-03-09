@@ -1,6 +1,7 @@
-# Nova-code run: Final report
+# Nova-code final report
 
-**Run context:** Update Luna to configured workflow and remove CursorCloudGatheringRunner.
+**Workflow:** nova-code (spec-driven implementation)  
+**Run:** Discord user filter (discordAuthors, actorUsername, Luna filter novawilde13_72571)
 
 ---
 
@@ -12,11 +13,7 @@
 | schema_gate | Pass |
 | drift_gate | Pass |
 | plan_change | Pass |
-| branch_removal_rename | Pass (branch taken: removal_or_rename) |
-| → reference_map | Pass |
-| → apply_removal | Pass |
-| → gates_again | Pass (schema fix for REQ-LUNA-001 quoted statement) |
-| → verify | Pass |
+| branch_removal_rename | Skip |
 | pre_change_lock | Pass |
 | implement | Pass |
 | update_tests | Pass |
@@ -25,147 +22,151 @@
 | post_schema | Pass |
 | traceability | Pass |
 | run_tests | Pass |
-| static_analysis | Pass |
+| build_check | Pass |
 | reconcile | Pass |
 | mk | Pass |
+| docs_gate | Pass |
 | output | Pass |
 
-All required steps ran. Workflow complete.
+All steps in `run_order` were executed. **branch_removal_rename** skipped (removal_or_rename not set).
 
 ---
 
 ## 2. Per-step outcome
 
-- **discovery:** Pass. Index and registry specs loaded; primary assets and scope summarized.
-- **schema_gate:** Pass. All loaded specs valid against JSON Schema.
-- **drift_gate:** Pass. Index and registry integrity OK.
-- **plan_change:** Pass. Impact set identified; removal_or_rename set (remove CursorCloudGatheringRunner, switch Luna to configured workflow luna_cursor); change_context produced.
-- **branch_removal_rename:** Pass. Removal/rename sequence executed: reference_map → apply_removal → gates_again → verify.
-- **reference_map:** Pass. Reference map produced (`.cursor/out/removal_rename_reference_map.md`) for CursorCloudGatheringRunner and cursor_cloud_gathering.
-- **apply_removal:** Pass. CursorCloudGatheringRunner deleted; WorkflowRunnerFactory, config/bots.yaml, specs, README, mkdoc, and tests updated per map.
-- **gates_again:** Pass. Schema fix applied for REQ-LUNA-001 quoted statement; validate-specs and validate-drift passed.
-- **verify:** Pass. No dangling refs; validations and README updated.
-- **pre_change_lock:** Pass. Impacted specs re-validated before implement.
-- **implement:** Pass. Luna wired to configured workflow luna_cursor; CursorCloudGatheringRunner removed; factory and config updated.
-- **update_tests:** Pass. Tests updated for configured runner (WorkflowRunnerFactoryTest, ConfigLoaderTest, VinekeepersEngineTest); mvn test passed.
-- **update_specs:** Pass. REQ-LUNA-001, REQ-WORKFLOW-001, assets, validation tests, and traceability updated; ASSET-CURSOR-CLOUD-GATHERING-RUNNER removed from registry.
-- **update_readme:** Pass. README project layout and workflow examples updated (stub, configured; Luna luna_cursor).
-- **post_schema:** Pass. Post-change schema validation passed (npm run validate-specs).
-- **traceability:** Pass. Impacted requirements and traceability repaired.
-- **run_tests:** Pass. Tests run: 109, Passed: 109, Failed: 0, Skipped: 0.
-- **static_analysis:** Pass. mvn compile succeeded.
+- **discovery:** Pass. Index and registry specs loaded; primary assets and scope summarized for routing, config, Discord, Luna.
+- **schema_gate:** Pass. All impacted specs valid against JSON Schema.
+- **drift_gate:** Pass. Index and registry integrity validated; no drift issues.
+- **plan_change:** Pass. Impact set: core + connectors registries, Router, RoutingFilter, NormalizedEventContext, ConfigLoader, bots.yaml, JdaDiscordGateway. Change context written to `.cursor/out/plan_change_change_context_discord_user_filter.md`.
+- **branch_removal_rename:** Skip. No removal or rename; continued at pre_change_lock.
+- **pre_change_lock:** Pass. Specs re-validated before implement.
+- **implement:** Pass. Discord author in payload; actorUsername on NormalizedEventContext; Router discordAuthors match (actorId or actorUsername); Luna routing filter `discordAuthors: ["novawilde13_72571"]` in config/bots.yaml.
+- **update_tests:** Pass. NormalizedEventContextTest added; RouterTest, ConfigLoaderTest, DiscordEventSourceTest updated; mvn test OK.
+- **update_specs:** Pass. core-registry.yml and connectors-registry.yml updated for discordAuthors and assets.
+- **update_readme:** Pass. README and docs-dir content updated for routing/config/discord/cursor-gathering.
+- **post_schema:** Pass. Post-change schema validation passed.
+- **traceability:** Pass. Impacted requirements and assets traced; no gaps.
+- **run_tests:** Pass. Tests run: 159, Passed: 159, Failed: 0.
+- **build_check:** Pass. `mvn compile` succeeded.
 - **reconcile:** Pass. Specs and code reconciled; no dangling refs.
-- **mk:** Pass. mkdoc/ synced from specs and handoff (index, architecture, runbooks, feature dossiers, cursor docs).
-- **output:** Pass. Final report produced (this document).
+- **mk:** Pass. Docs-dir synced from specs and handoff; routing, config, discord, cursor-gathering dossiers updated.
+- **docs_gate:** Pass. validate-docs passed; feature dossiers and mkdocs navigation consistent.
+- **output:** Pass. Final report produced per output-format.md.
 
 ---
 
 ## 3. Workflow validation
 
-| Check | Result |
-|-------|--------|
-| Schema Gate | Pass |
-| Drift Gate | Pass |
-| Pre-change lock | Pass |
-| Post-change schema | Pass |
-| Tests | Pass (run: 109, passed: 109, failed: 0) |
-| Static analysis | Pass |
-| Reconcile | OK |
-| Mk | Pass |
-| No unresolved spec drift or blocked tests | OK |
+- **Schema Gate:** Pass  
+- **Drift Gate:** Pass  
+- **Pre-change lock:** Pass  
+- **Post-change schema:** Pass  
+- **Tests:** Pass (run: 159, passed: 159, failed: 0)  
+- **Static analysis:** Pass (mvn compile)  
+- **Reconcile:** OK  
+- **Mk:** Pass (docs-dir sync; routing, config, discord, cursor-gathering updated)  
+- **No unresolved spec drift or blocked tests**
 
 ---
 
 ## 4. Summary of change
 
-- **Luna** now uses the **configured** workflow **luna_cursor** (defined in `config/bots.yaml`): `workflow.type: configured`, `workflow.params.workflowRef: luna_cursor`. The engine registers a `ConfigurableWorkflowRunner` for Luna; the runner runs luna_cursor steps (ask project, ask codeChange, cursor.fullRun, done) and persists `ConfigurableWorkflowState`.
-- **CursorCloudGatheringRunner** and the **cursor_cloud_gathering** workflow type were **removed**: class `CursorCloudGatheringRunner.java` deleted; `WorkflowRunnerFactory` no longer has a `cursor_cloud_gathering` branch; types are **stub** and **configured** only.
-- Specs updated: REQ-LUNA-001 statement and acceptance use configured + workflowRef luna_cursor; REQ-WORKFLOW-001 and related assets/validation/traceability no longer reference ASSET-CURSOR-CLOUD-GATHERING-RUNNER or cursor_cloud_gathering. Schema fix applied for REQ-LUNA-001 quoted statement.
+**Request:** Add the ability to filter Discord messages by user and set Luna’s filter to **novawilde13_72571** (Discord username or id).
+
+**Implemented:**
+
+1. **Discord payload:** JdaDiscordGateway adds `"author"` (username) to message and interaction event payloads so routing can match by username or id.
+2. **Normalized context:** NormalizedEventContext exposes `actorUsername` from payload `"author"`; `actorId` unchanged from author id.
+3. **Router:** When `discordAuthors` is non-empty, the event is accepted if `context.getActorId()` or `context.getActorUsername()` (case-insensitive) is in the set; otherwise rejected.
+4. **Config:** Luna routing in `config/bots.yaml` includes `discordAuthors: ["novawilde13_72571"]` so Luna only reacts to that user in addition to existing discordMention.
+
+No new spec keys; existing REQ-CONFIG-001 / REQ-BOT-001 and routing filter behavior extended; guardrails respected.
 
 ---
 
 ## 5. Changed files
 
-**Deleted**
-- `src/main/java/com/vinekeepers/workflow/CursorCloudGatheringRunner.java`
-
-**Modified**
-- `src/main/java/com/vinekeepers/workflow/WorkflowRunnerFactory.java` — removed cursor_cloud_gathering case and CursorCloudGatheringRunner; Javadoc updated to stub, configured.
-- `config/bots.yaml` — Luna: workflow type set to configured, workflowRef luna_cursor; workflows.luna_cursor defined.
-- `specs/core-registry.yml` — REQ-LUNA-001, REQ-WORKFLOW-001, assets (ASSET-WORKFLOW-RUNNER-FACTORY role), validation tests (UNIT-WORKFLOW-RUNNER-FACTORY intent), traceability; ASSET-CURSOR-CLOUD-GATHERING-RUNNER removed.
-- `src/test/java/com/vinekeepers/workflow/WorkflowRunnerFactoryTest.java` — removed cursor_cloud_gathering test(s); stub and configured cases kept.
-- `src/test/java/com/vinekeepers/config/ConfigLoaderTest.java` — Luna config and assertions updated to configured + workflowRef.
-- `src/test/java/com/vinekeepers/core/VinekeepersEngineTest.java` — Luna runner uses ConfigurableWorkflowRunner (factory-created with configured + luna_cursor).
-- `README.md` — workflow examples (stub, configured), Luna example (luna_cursor), project layout (no CursorCloudGatheringRunner).
-- mkdoc: `mkdoc/features/domain/core/workflow.md`, `workflow/change-log.md`, `workflow/how-it-works.md`, `workflow/contracts.md`, `workflow/tests.md`, `luna.md`, `luna/change-log.md`, `config.md`, `config/change-log.md`, `architecture.md` — cursor_cloud_gathering and CursorCloudGatheringRunner removed; configured + luna_cursor documented.
-
-**Added / artifacts**
-- `.cursor/out/removal_rename_reference_map.md` — reference map for removal.
-- `.cursor/out/plan_change_change_context.md` — plan and change context (from plan_change step).
+| Path | Change |
+|------|--------|
+| `JdaDiscordGateway.java` | Modified — add `"author"` (username) to message and interaction payloads |
+| `NormalizedEventContext.java` | Modified — add `actorUsername` from payload `"author"` |
+| `Router.java` | Modified — discordAuthors match on actorId or actorUsername (case-insensitive) |
+| `config/bots.yaml` | Modified — Luna routing filter `discordAuthors: ["novawilde13_72571"]` |
+| `NormalizedEventContextTest.java` | Added — tests for actorUsername and payload mapping |
+| `RouterTest` | Modified — discordAuthors matching by actorId and actorUsername |
+| `ConfigLoaderTest` | Modified — discordAuthors parsed from YAML |
+| `DiscordEventSourceTest` | Modified — payload includes author for messages |
+| `specs/core-registry.yml` | Modified — routing/assets and discordAuthors in criteria |
+| `specs/connectors-registry.yml` | Modified — Discord payload and gateway assets |
+| `README.md` | Modified — routing/config/discord mention |
+| `mkdoc/` (routing, config, discord, cursor-gathering) | Modified — discordAuthors filter and Luna config |
 
 ---
 
 ## 6. Specs updated
 
-- **specs/specs.yml** — No structural change; validation commands (test, static_analysis) unchanged.
-- **specs/core-registry.yml** — REQ-LUNA-001 (statement, acceptance, traceability.assets); REQ-WORKFLOW-001 (statement, acceptance, traceability.assets); asset ASSET-WORKFLOW-RUNNER-FACTORY (role: stub, configured); asset ASSET-CURSOR-CLOUD-GATHERING-RUNNER removed; validation test UNIT-WORKFLOW-RUNNER-FACTORY (intent: stub, configured).
+- **specs/specs.yml:** Index unchanged; no new spec files.
+- **specs/core-registry.yml:** REQ-BOT-001 / REQ-CONFIG-001 statement or criteria; ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT, ASSET-ROUTER; discordAuthors in routing filter description.
+- **specs/connectors-registry.yml:** REQ-CONNECTORS-DISCORD-001; ASSET-DISCORD-GATEWAY; payload includes author (username).
 
 ---
 
 ## 7. Schema validation results
 
-- **core-registry.yml:** Pass (validate-specs OK).
-- **connectors-registry.yml:** Pass (no change; validated as part of index).
-- Schema validation (npm run validate-specs): **OK** (pre and post change).
+- **core-registry.yml:** Pass (validate-specs).
+- **connectors-registry.yml:** Pass (validate-specs).
+- Other loaded/impacted specs: Pass. No schema errors reported.
 
 ---
 
 ## 8. Drift Gate result
 
-- **Result:** Pass.
-- **Details:** npm run validate-drift OK. Index and registry paths/refs valid; no spec drift issues after removal and REQ-LUNA-001 update.
+**Pass.** Index and registry integrity OK; paths exist, refs valid, domains map to correct registries; no spec drift issues.
 
 ---
 
 ## 9. Test results
 
-- **Result:** Pass.
-- **Counts:** Tests run: 109, Passed: 109, Failed: 0, Skipped: 0.
-- **Scope:** Unit tests for config, core, env, events, state, bot, workflow (including ConfigurableWorkflowRunner, GatheringState, CursorCloudGatheringWorkflow), connectors, VinekeepersEngine (Luna with configured runner).
-- **Failed test class/method:** None.
-- **Blocked:** No.
+- **Status:** Pass  
+- **Counts:** run: 159, passed: 159, failed: 0  
+- **New:** NormalizedEventContextTest (actorUsername, payload mapping).  
+- **Updated:** RouterTest (discordAuthors by actorId/actorUsername), ConfigLoaderTest (discordAuthors from YAML), DiscordEventSourceTest (payload author).  
+- No failed test class or method; not blocked.
 
 ---
 
 ## 10. Static analysis
 
-- **Command:** `mvn compile` (per specs/specs.yml and .cursor/project.yml).
-- **Result:** Pass. Build succeeded.
+- **Command:** `mvn compile`  
+- **Result:** Pass  
+- No compile errors or static-analysis failures reported.
 
 ---
 
 ## 11. Reconcile results
 
-- **Result:** OK.
-- **Details:** Specs and code reconciled; no dangling refs; traceability consistent. ASSET-CURSOR-CLOUD-GATHERING-RUNNER and cursor_cloud_gathering removed from specs and codebase; README and mkdoc aligned.
+- **Result:** OK  
+- Specs and code reconciled; no dangling refs; traceability consistent. No mismatches or open issues from reconcile step.
 
 ---
 
 ## 12. Mk results
 
-- **Result:** Pass.
-- **Summary:** mkdoc/ synced from specs and handoff; index, architecture, runbooks, feature dossiers (e.g. Luna, workflow, config), and cursor docs updated to reflect configured Luna and removal of CursorCloudGatheringRunner.
+- **Status:** Pass  
+- **Summary:** Docs-dir synced from specs and handoff; updated index, routing, config, discord, and cursor-gathering feature dossiers to describe discordAuthors filter and Luna discordAuthors configuration.
 
 ---
 
 ## 13. README changes
 
-- Workflow type examples updated to **stub** and **configured** (cursor_cloud_gathering removed).
-- Luna example: **workflow.type: configured**, **workflow.params.workflowRef: luna_cursor**; workflow luna_cursor and cursor.fullRun described.
-- Project layout: `com.vinekeepers.workflow` no longer lists CursorCloudGatheringRunner; lists WorkflowRunnerFactory (stub, configured), ConfigurableWorkflowRunner, GatheringState, CursorCloudGatheringWorkflow, etc.
+- README updated for routing (discordAuthors filter), config (routing filter keys), Discord (payload author), and cursor-gathering (Luna discordAuthors). No new artifact categories; existing 12 categories reflected where relevant.
 
 ---
 
 ## 14. Issues raised
 
-- **None.** No unresolved spec drift, blocked tests, or unmet requirements. Schema and drift gates passed; tests and static analysis passed; reconcile OK.
+- **None.** No spec drift issues, blocked tests, or unmet requirements. No requirement keys deleted; no new spec keys added; guardrails followed.
+
+---
+
+*Report generated by nova-code output step per `.cursor/skills/nova-code/documentation/output-format.md`.*

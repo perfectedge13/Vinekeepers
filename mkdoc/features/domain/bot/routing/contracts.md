@@ -6,7 +6,7 @@ None. Routing is an internal runtime capability consumed by the engine.
 
 # Schemas
 
-`Routing` holds filter configuration, and `NormalizedEventContext` exposes connector-neutral fields that filters can evaluate.
+`Routing` holds filter configuration (including optional `discordAuthors` list for Discord author filtering). `NormalizedEventContext` exposes connector-neutral fields: `actorId`, `actorUsername` (from payload author/authorId), channel, text, mentions, repo, label, etc.; and for events with `kind: interaction`, optional interaction payload: `interactionId`, `token`, `customId`, `values` for capture steps and intent handling.
 
 # Interfaces
 

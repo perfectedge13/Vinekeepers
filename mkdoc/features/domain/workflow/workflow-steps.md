@@ -6,13 +6,13 @@ active
 
 # Summary
 
-Workflow step DSL and branching actions (REQ-WORKFLOW-001). `WorkflowDefinition` describes configured flows, while `WorkflowStep`, `StepResult`, `StepOutcome`, `WorkflowAction`, and the built-in step types implement prompt, capture, branching, tool-backed action, and completion behavior.
+Workflow step DSL and branching actions (REQ-WORKFLOW-001). `WorkflowDefinition` describes configured flows, while `WorkflowStep`, `StepResult`, `StepOutcome`, `WorkflowAction`, and the built-in step types implement prompt, capture, branching, tool-backed action, and completion behavior. **Intent-based steps:** `prompt_for_field` step config may include optional `intent` (e.g. `present_choices`, `confirm_action`), `choices`, `confirmLabel`, `cancelLabel`, or `fields`; when present, the step produces an `OutboundResponse` (rich reply) that the engine delivers via the connector sink. `capture_field` reads from message content or, for events with `kind: interaction`, from payload `values` or `customId`.
 
 # Key assets
 
 | Asset | Role | Path |
 |-------|------|------|
-| ASSET-STEP-RESULT | Result of a single workflow step execution with next-step, storage, and outcome metadata | src/main/java/com/vinekeepers/workflow/StepResult.java |
+| ASSET-STEP-RESULT | Result of a single workflow step execution with next-step, storage, outcome metadata, and optional OutboundResponse richReply | src/main/java/com/vinekeepers/workflow/StepResult.java |
 | ASSET-STEP-OUTCOME | Outcome enum for continue, waiting, complete, and error workflow step states | src/main/java/com/vinekeepers/workflow/StepOutcome.java |
 | ASSET-WORKFLOW-STEP | Single step in a configurable workflow | src/main/java/com/vinekeepers/workflow/WorkflowStep.java |
 | ASSET-WORKFLOW-ACTION | Action interface invokable from workflow steps | src/main/java/com/vinekeepers/workflow/WorkflowAction.java |
