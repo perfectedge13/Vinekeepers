@@ -18,6 +18,14 @@ public interface DiscordGateway {
 
     void send(String channelId, String messageId, String content);
 
+    /**
+     * Send to channel with optional components (list of action rows; each row is a list of component maps).
+     * Default delegates to send(channelId, messageId, content) when components is null or empty.
+     */
+    default void send(String channelId, String messageId, String content, List<List<Map<String, Object>>> components) {
+        send(channelId, messageId, content);
+    }
+
     boolean isConnected();
 
     /**

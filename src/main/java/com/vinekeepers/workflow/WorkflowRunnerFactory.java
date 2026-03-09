@@ -33,31 +33,46 @@ public final class WorkflowRunnerFactory {
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry) {
         return create(workflowType, workflowParams, workflows, actionRegistry, null, ToolPolicy.allowAll(),
-                ConversationMode.SINGLE_EVENT, null);
+                ConversationMode.SINGLE_EVENT, null, null);
     }
 
     public static WorkflowRunner create(BotDefinition bot, Map<String, Object> workflows,
                                         WorkflowActionRegistry actionRegistry, ToolRunner toolRunner) {
+        return create(bot, workflows, actionRegistry, toolRunner, null);
+    }
+
+    public static WorkflowRunner create(BotDefinition bot, Map<String, Object> workflows,
+                                        WorkflowActionRegistry actionRegistry, ToolRunner toolRunner,
+                                        DynamicChoiceProviderRegistry choiceProviderRegistry) {
         BotDefinition resolvedBot = bot;
         if (resolvedBot == null) {
             return create("stub", null, workflows, actionRegistry, toolRunner, ToolPolicy.allowAll(),
-                    ConversationMode.SINGLE_EVENT, null);
+                    ConversationMode.SINGLE_EVENT, null, null);
         }
         return create(resolvedBot.getWorkflowType(), resolvedBot.getWorkflowParams(), workflows, actionRegistry,
                 toolRunner, resolvedBot.getToolPolicy(), resolvedBot.getConversationMode(),
-                resolvedBot.getSessionKeyStrategy());
+                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry);
     }
 
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
                                         Map<String, Object> workflows, WorkflowActionRegistry actionRegistry,
                                         ToolRunner toolRunner, ToolPolicy toolPolicy,
                                         ConversationMode conversationMode, String sessionKeyStrategy) {
+        return create(workflowType, workflowParams, workflows, actionRegistry, toolRunner, toolPolicy,
+                conversationMode, sessionKeyStrategy, null);
+    }
+
+    public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
+                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry,
+                                        ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                        ConversationMode conversationMode, String sessionKeyStrategy,
+                                        DynamicChoiceProviderRegistry choiceProviderRegistry) {
         String type = workflowType != null && !workflowType.isBlank() ? workflowType : "stub";
         return switch (type) {
             case "configured" -> {
                 WorkflowDefinition def = resolveWorkflowDefinition(workflowParams, workflows);
                 yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry(),
-                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy);
+                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry);
             }
             default -> new StubWorkflowRunner();
         };

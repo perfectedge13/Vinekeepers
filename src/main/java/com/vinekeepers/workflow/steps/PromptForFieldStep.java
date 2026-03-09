@@ -6,10 +6,11 @@ import com.vinekeepers.interactions.OutboundResponse;
 import com.vinekeepers.interactions.PresentChoices;
 import com.vinekeepers.interactions.ResponseIntent;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
+import com.vinekeepers.workflow.DynamicChoiceProvider;
 import com.vinekeepers.workflow.StepResult;
 import com.vinekeepers.workflow.WorkflowStep;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 /**
  * Conversational step that prompts once and pauses the workflow until a later event supplies the field.
  * Optional intent/choices/confirmLabel/cancelLabel/fields produce a rich OutboundResponse when supported.
+ * When choiceProvider is set, dynamic choices are fetched and merged with static choices.
  */
 public final class PromptForFieldStep implements WorkflowStep {
 
@@ -27,14 +29,21 @@ public final class PromptForFieldStep implements WorkflowStep {
     private final String confirmLabel;
     private final String cancelLabel;
     private final List<Map<String, Object>> fields;
+    private final DynamicChoiceProvider choiceProvider;
 
     public PromptForFieldStep(String prompt, String storeIn) {
-        this(prompt, storeIn, null, null, null, null, null);
+        this(prompt, storeIn, null, null, null, null, null, null);
     }
 
     public PromptForFieldStep(String prompt, String storeIn, String intent,
                              List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
                              List<Map<String, Object>> fields) {
+        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, null);
+    }
+
+    public PromptForFieldStep(String prompt, String storeIn, String intent,
+                             List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
+                             List<Map<String, Object>> fields, DynamicChoiceProvider choiceProvider) {
         this.prompt = prompt != null ? prompt : "";
         this.storeIn = storeIn != null ? storeIn : "input";
         this.intent = intent;
@@ -42,25 +51,60 @@ public final class PromptForFieldStep implements WorkflowStep {
         this.confirmLabel = confirmLabel;
         this.cancelLabel = cancelLabel;
         this.fields = fields != null ? List.copyOf(fields) : List.of();
+        this.choiceProvider = choiceProvider;
     }
 
     @Override
     public StepResult execute(Event event, ConfigurableWorkflowState state, int stepIndex) {
         Object existing = state != null ? state.get(storeIn) : null;
-        if (existing instanceof String value && !value.isBlank()) {
+        if (existing instanceof String value && !value.isBlank() && !"__custom__".equals(value)) {
             return StepResult.advance(null, null);
         }
-        if (existing != null) {
+        if (existing != null && !"__custom__".equals(existing.toString())) {
             return StepResult.advance(null, null);
         }
-        OutboundResponse richReply = buildRichReply();
+        String resolvedPrompt = interpolatePrompt(prompt, state);
+        OutboundResponse richReply = buildRichReply(event, state, resolvedPrompt);
         if (richReply != null) {
-            return StepResult.waiting(prompt, storeIn, richReply);
+            return StepResult.waiting(resolvedPrompt, storeIn, richReply);
         }
-        return StepResult.waiting(prompt, storeIn);
+        return StepResult.waiting(resolvedPrompt, storeIn);
     }
 
-    private OutboundResponse buildRichReply() {
+    private static String interpolatePrompt(String template, ConfigurableWorkflowState state) {
+        if (template == null || template.isBlank() || state == null || state.getData() == null) {
+            return template != null ? template : "";
+        }
+        String result = template;
+        for (String key : state.getData().keySet()) {
+            Object v = state.get(key);
+            String placeholder = "{{" + key + "}}";
+            if (result.contains(placeholder)) {
+                result = result.replace(placeholder, v != null ? v.toString() : "");
+            }
+        }
+        return result;
+    }
+
+    private OutboundResponse buildRichReply(Event event, ConfigurableWorkflowState state, String resolvedPrompt) {
+        String text = resolvedPrompt != null ? resolvedPrompt : prompt;
+        if (choiceProvider != null) {
+            try {
+                List<ResponseIntent.Choice> dynamic = choiceProvider.getChoices(event, state);
+                if (dynamic != null && !dynamic.isEmpty()) {
+                    List<ResponseIntent.Choice> merged = new ArrayList<>(dynamic);
+                    for (Map<String, Object> m : choices) {
+                        merged.add(new ResponseIntent.Choice(
+                                stringVal(m, "id"),
+                                stringVal(m, "label"),
+                                stringVal(m, "description")));
+                    }
+                    return OutboundResponse.of(text, new PresentChoices(text, merged));
+                }
+            } catch (Exception ignored) {
+                // Fall back to static choices or text-only
+            }
+        }
         if ("present_choices".equals(intent) && !choices.isEmpty()) {
             List<ResponseIntent.Choice> cs = choices.stream()
                     .map(m -> new ResponseIntent.Choice(
@@ -68,11 +112,11 @@ public final class PromptForFieldStep implements WorkflowStep {
                             stringVal(m, "label"),
                             stringVal(m, "description")))
                     .collect(Collectors.toList());
-            return OutboundResponse.of(prompt, new PresentChoices(prompt, cs));
+            return OutboundResponse.of(text, new PresentChoices(text, cs));
         }
         if ("confirm_action".equals(intent)) {
-            return OutboundResponse.of(prompt, new ConfirmAction(
-                    prompt,
+            return OutboundResponse.of(text, new ConfirmAction(
+                    text,
                     confirmLabel != null ? confirmLabel : "Confirm",
                     cancelLabel != null ? cancelLabel : "Cancel"));
         }

@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.steps;
 
+import com.vinekeepers.bot.NormalizedEventContext;
 import com.vinekeepers.events.Event;
 
 import java.util.List;
@@ -31,9 +32,9 @@ public final class CaptureFieldFromEventStep implements WorkflowStep {
             return "";
         }
         if ("interaction".equals(event.getKind())) {
-            Object values = event.getPayload().get("values");
-            if (values instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof String) {
-                return String.join(", ", list.stream().map(Object::toString).toList());
+            List<String> interactionValues = NormalizedEventContext.getInteractionValuesFromPayload(event.getPayload());
+            if (!interactionValues.isEmpty()) {
+                return String.join(", ", interactionValues);
             }
             String customId = event.getPayload("customId", String.class);
             if (customId != null && !customId.isBlank()) {

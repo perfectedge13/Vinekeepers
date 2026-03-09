@@ -2,6 +2,8 @@ package com.vinekeepers.workflow;
 
 import com.vinekeepers.interactions.OutboundResponse;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -18,19 +20,26 @@ public final class StepResult {
     private final String promptMessage;
     private final String waitingForField;
     private final OutboundResponse richReply;
+    private final List<String> clearKeys;
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, boolean done, String message) {
         this(nextStepIndex, storeIn, storeValue, done ? StepOutcome.COMPLETE : StepOutcome.CONTINUE,
-                message, "", null, null);
+                message, "", null, null, null);
     }
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
                       String message, String promptMessage, String waitingForField) {
-        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, null);
+        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, null, null);
     }
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
                       String message, String promptMessage, String waitingForField, OutboundResponse richReply) {
+        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, richReply, null);
+    }
+
+    public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
+                      String message, String promptMessage, String waitingForField, OutboundResponse richReply,
+                      List<String> clearKeys) {
         this.nextStepIndex = nextStepIndex;
         this.storeIn = storeIn;
         this.storeValue = storeValue;
@@ -39,6 +48,8 @@ public final class StepResult {
         this.promptMessage = promptMessage != null ? promptMessage : "";
         this.waitingForField = waitingForField;
         this.richReply = richReply;
+        this.clearKeys = clearKeys != null && !clearKeys.isEmpty()
+                ? List.copyOf(clearKeys) : null;
     }
 
     public Integer getNextStepIndex() {
@@ -77,16 +88,27 @@ public final class StepResult {
         return Optional.ofNullable(richReply);
     }
 
+    /**
+     * Keys to clear from workflow state before advancing (e.g. for edit-reprompt flows).
+     */
+    public List<String> getClearKeys() {
+        return clearKeys != null ? clearKeys : Collections.emptyList();
+    }
+
     public static StepResult advance(String storeIn, Object storeValue) {
         return new StepResult(null, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null);
     }
 
     public static StepResult goTo(int nextStepIndex) {
-        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null);
+        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null, null, null);
+    }
+
+    public static StepResult goTo(int nextStepIndex, List<String> clearKeys) {
+        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null, null, clearKeys);
     }
 
     public static StepResult goTo(int nextStepIndex, String storeIn, Object storeValue) {
-        return new StepResult(nextStepIndex, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null);
+        return new StepResult(nextStepIndex, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null, null, null);
     }
 
     public static StepResult done(String message) {

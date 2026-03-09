@@ -4,6 +4,7 @@
 
 ## 2026-03-09
 
+- **bots.yaml and configured workflow:** `config/bots.yaml` updated for Luna and configured workflow references; aligns with Discord intake components and edit-reprompt (clearKeys) behavior in workflow runner/state.
 - **discordAuthors in routing:** ConfigLoader parses optional `discordAuthors` from routing filter in YAML; Luna can be restricted to specific Discord users (e.g. `novawilde13_72571`) so only those authors trigger the bot when `discordMention` and `discordAuthors` are both configured.
 
 ## 2026-03-07

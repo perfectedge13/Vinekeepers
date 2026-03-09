@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+
+import static com.vinekeepers.interactions.ResponseIntent.Choice;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -123,6 +125,20 @@ class DiscordAppReplySinkTest {
         assertEquals(0, gateway.sendCalls.get());
     }
 
+    @Test
+    void respondImmediatelyWithChannelTargetAndPresentChoicesIntentCallsSendWithNonNullComponents() {
+        ChannelTarget target = new ChannelTarget("discord:g", "ch-1", "msg-1");
+        PresentChoices intent = new PresentChoices("Choose one", List.of(
+                new Choice("opt1", "Option 1", null),
+                new Choice("opt2", "Option 2", null)
+        ));
+        sink.respondImmediately(OutboundResponse.ofIntent(intent), target);
+        assertEquals(1, gateway.sendCalls.get());
+        assertEquals("ch-1|msg-1|Choose one", gateway.lastSend);
+        assertNotNull(gateway.lastSendComponents);
+        assertFalse(gateway.lastSendComponents.isEmpty());
+    }
+
     private static final class RecordingDiscordGateway implements DiscordGateway {
 
         final AtomicInteger sendCalls = new AtomicInteger(0);
@@ -143,20 +159,38 @@ class DiscordAppReplySinkTest {
             connected = false;
         }
 
+        List<List<Map<String, Object>>> lastSendComponents;
+
         @Override
         public void send(String channelId, String messageId, String content) {
+            send(channelId, messageId, content, null);
+        }
+
+        @Override
+        public void send(String channelId, String messageId, String content, List<List<Map<String, Object>>> components) {
             sendCalls.incrementAndGet();
             lastSend = channelId + "|" + (messageId != null ? messageId : "") + "|" + content;
+            lastSendComponents = components;
         }
 
         @Override
         public void sendFollowUp(String token, String content) {
+            sendFollowUp(token, content, null);
+        }
+
+        @Override
+        public void sendFollowUp(String token, String content, List<List<Map<String, Object>>> components) {
             sendFollowUpCalls.incrementAndGet();
             lastSendFollowUp = token + "|" + content;
         }
 
         @Override
         public void updateMessage(String token, String content) {
+            updateMessage(token, content, null);
+        }
+
+        @Override
+        public void updateMessage(String token, String content, List<List<Map<String, Object>>> components) {
             updateMessageCalls.incrementAndGet();
             lastUpdateMessage = token + "|" + content;
         }

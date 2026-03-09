@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -141,5 +142,19 @@ public final class ConfigurableWorkflowState {
 
     public boolean has(String key) {
         return data.containsKey(key);
+    }
+
+    /**
+     * Remove the given keys from state data (e.g. for edit-reprompt so user re-enters).
+     * Does not remove __sessionKey.
+     */
+    public void clearKeys(Collection<String> keys) {
+        if (keys == null) return;
+        for (String key : keys) {
+            if (key != null && !"__sessionKey".equals(key)) {
+                data.remove(key);
+            }
+        }
+        touch();
     }
 }

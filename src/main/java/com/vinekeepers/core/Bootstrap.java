@@ -19,6 +19,8 @@ import com.vinekeepers.tools.CursorFullRunTool;
 import com.vinekeepers.tools.EchoTool;
 import com.vinekeepers.tools.ToolRegistry;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.providers.GitHubReposChoiceProvider;
+import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.WorkflowRunnerFactory;
@@ -78,10 +80,12 @@ public final class Bootstrap {
             router.clear();
             loader.addRoutings(config, router);
             WorkflowActionRegistry actionRegistry = createActionRegistry();
+            DynamicChoiceProviderRegistry choiceProviderRegistry = new DynamicChoiceProviderRegistry();
+            choiceProviderRegistry.register("githubRepos", new GitHubReposChoiceProvider(stateStore));
             List<BotDefinition> bots = loader.buildBots(config);
             for (BotDefinition bot : bots) {
                 engine.registerBot(bot);
-                WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), actionRegistry, toolRunner);
+                WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), actionRegistry, toolRunner, choiceProviderRegistry);
                 engine.registerRunner(bot.getId(), runner);
                 engine.registerReasoner(bot.getId(), new StubReasoner());
             }

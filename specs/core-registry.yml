@@ -440,7 +440,7 @@ assets:
   - id: ASSET-CONFIGURABLE-WORKFLOW-STATE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowState.java
-    role: Mutable state for configurable workflow including waiting, completed, and error lifecycle data
+    role: Mutable state for configurable workflow including waiting, completed, and error lifecycle data; clearKeys(keys) removes given keys from state (edit-reprompt)
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-WORKFLOW-DEFINITION
@@ -452,7 +452,7 @@ assets:
   - id: ASSET-CONFIGURABLE-WORKFLOW-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
-    role: "Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses intent, choices, confirmLabel, cancelLabel, fields for steps"
+    role: "Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses intent, choices, confirmLabel, cancelLabel, fields for steps; applies StepResult clearKeys to state before setStepIndex"
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW]
   - id: ASSET-ASK-FOR-INPUT-STEP
@@ -464,13 +464,13 @@ assets:
   - id: ASSET-PROMPT-FOR-FIELD-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/PromptForFieldStep.java
-    role: Step that prompts once for a field and pauses the workflow until a later event; optional intent/choices/confirmLabel/cancelLabel/fields produce OutboundResponse when present
+    role: Step that prompts once for a field and pauses until a later event; optional intent/choices/choiceProvider/confirmLabel/cancelLabel/fields; interpolates {{key}} from state
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CAPTURE-FIELD-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/CaptureFieldFromEventStep.java
-    role: Step that captures a field from the current event after a conversational prompt; for kind interaction reads values/customId from payload
+    role: Step that captures a field from the current event; for kind interaction normalizes payload.values (Map or List) and reads selected value or customId
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW-STEPS]
   - id: ASSET-CALL-ACTION-STEP
@@ -482,9 +482,27 @@ assets:
   - id: ASSET-BRANCH-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/BranchStep.java
-    role: Step that branches by condition
+    role: Step that branches by condition (state key truthy, or when key/value map for value-based branch); optional clear config (list of state keys) for edit-reprompt flows
     requires: [REQ-WORKFLOW-001]
     feature_ids: [FEAT-WORKFLOW-STEPS]
+  - id: ASSET-DYNAMIC-CHOICE-PROVIDER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/DynamicChoiceProvider.java
+    role: Interface for dynamic choice providers used by prompt_for_field when choiceProvider is set
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW-STEPS]
+  - id: ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/DynamicChoiceProviderRegistry.java
+    role: Registry of named dynamic choice providers wired from Bootstrap into ConfigurableWorkflowRunner
+    requires: [REQ-WORKFLOW-001]
+    feature_ids: [FEAT-WORKFLOW]
+  - id: ASSET-GITHUB-REPOS-CHOICE-PROVIDER
+    kind: source
+    path: src/main/java/com/vinekeepers/providers/GitHubReposChoiceProvider.java
+    role: Fetches user repos from GitHub API (sort=updated), prepends last repo, appends Custom repo; uses GITHUB_TOKEN
+    requires: [REQ-WORKFLOW-001, REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-DONE-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/DoneStep.java
@@ -1027,6 +1045,8 @@ requirements:
         - Configurable workflow state records waiting field, pending prompt, completion, and error status
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
         - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
+        - StepResult may carry clearKeys; runner applies clearKeys to state before setStepIndex (edit-reprompt)
+        - BranchStep branch config may include clear (list of state keys); returned StepResult carries clearKeys for runner to apply
       examples: []
     traceability:
       assets: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-WORKFLOW-DEFINITION, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
@@ -1062,8 +1082,13 @@ requirements:
           preconditions: []
         - id: UNIT-STEP-RESULT
           title: StepResultTest
-          intent: Verify StepResult factory methods and null-message normalization for step continuation, jumps, and completion
+          intent: Verify StepResult factory methods, clearKeys (goTo with clearKeys), and null-message normalization for step continuation, jumps, and completion
           testClass: com.vinekeepers.workflow.StepResultTest
+          preconditions: []
+        - id: UNIT-BRANCH-STEP
+          title: BranchStepTest
+          intent: Verify BranchStep with clear config returns StepResult with clearKeys; branch without clear returns empty clearKeys
+          testClass: com.vinekeepers.workflow.steps.BranchStepTest
           preconditions: []
         - id: UNIT-WORKFLOW-ACTION-REGISTRY
           title: WorkflowActionRegistryTest
@@ -1085,6 +1110,11 @@ requirements:
           intent: Verify DoneStep completes with message and template
           testClass: com.vinekeepers.workflow.steps.DoneStepTest
           preconditions: []
+        - id: UNIT-CAPTURE-FIELD-STEP
+          title: CaptureFieldFromEventStepTest
+          intent: Verify CaptureFieldFromEventStep reads interaction values (nested or direct list) and customId fallback
+          testClass: com.vinekeepers.workflow.steps.CaptureFieldFromEventStepTest
+          preconditions: []
         - id: MANUAL-WORKFLOW
           title: Workflow interface
           intent: Verify workflow is part of bot definition
@@ -1095,7 +1125,7 @@ requirements:
 
   - id: REQ-LUNA-001
     title: Luna bot — Discord mention trigger, multi-turn gather, Cursor Cloud API
-    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule that matches @Luna-style mentions from normalized message text or mention metadata; optional discordAuthors filter (e.g. novawilde13_72571) restricts which Discord users can trigger Luna; workflow type configured with workflowRef luna_cursor in bots.yaml; configured workflow luna_cursor prompts for a repository and feature request across multiple Discord turns, then invokes cursor.fullRun to launch an official Cursor Cloud Agent run on a feature branch with auto PR enabled; Vinekeepers stores in-memory run state, polls Cursor for status and conversation feedback, and reports launch/progress/completion updates back to Discord; config and routing for bot luna and Discord mention activation stay in YAML."
+    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule and optional discordAuthors filter; workflowRef luna_cursor in bots.yaml; luna_cursor uses guided repo selection (choiceProvider githubRepos, GitHub API + last-repo memory), optional custom repo entry, codeChange prompt/capture, confirmation step (Launch/Edit repo/Edit request/Cancel), then cursor.fullRun; Vinekeepers stores in-memory run state and luna:lastRepo per author, polls Cursor, reports launch/progress/completion to Discord; config and routing stay in YAML."
     status: active
     priority: high
     type: functional
@@ -1114,9 +1144,10 @@ requirements:
         - cursor.fullRun action resolves repository input, launches the official Cursor Cloud Agent API, stores LunaCloudRunState, and immediately acknowledges launch to Discord
         - CursorCloudRunMonitor polls agent status and conversation feedback and relays updates such as running state, PR URL, and final summary to Discord
         - Engine sends workflow reply to Discord when source is Discord
+        - "Confirmation branch clear: luna_cursor edit_request branch clears codeChange and confirmAction from state before reprompting; edit_repo branch clears project, codeChange, and confirmAction before reprompting (branch clear config in bots.yaml)"
       examples: []
     traceability:
-      assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML]
+      assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-STEP-RESULT, ASSET-BRANCH-STEP]
       symbols: []
     validation:
       tests:
@@ -1245,7 +1276,7 @@ features:
     doc_path: features/domain/workflow/workflow.md
     summary: WorkflowRunner and ConfigurableWorkflowRunner execute configured or stub workflows with persisted conversational state.
     requirement_ids: [REQ-WORKFLOW-001]
-    asset_ids: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-CONFIGURABLE-WORKFLOW-RUNNER]
+    asset_ids: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY]
     status: active
   - id: FEAT-WORKFLOW-STEPS
     slug: workflow-steps
@@ -1254,7 +1285,7 @@ features:
     doc_path: features/domain/workflow/workflow-steps.md
     summary: WorkflowDefinition and step/action primitives define the configurable workflow DSL and branch execution rules.
     requirement_ids: [REQ-WORKFLOW-001]
-    asset_ids: [ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-WORKFLOW-DEFINITION, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
+    asset_ids: [ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-WORKFLOW-DEFINITION, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DYNAMIC-CHOICE-PROVIDER, ASSET-DONE-STEP]
     status: active
   - id: FEAT-CURSOR-GATHERING
     slug: cursor-gathering
@@ -1263,7 +1294,7 @@ features:
     doc_path: features/domain/workflow/cursor-gathering.md
     summary: Luna gathers repository and feature input over Discord, launches an official Cursor cloud agent run, and reports progress and PR results back to chat.
     requirement_ids: [REQ-LUNA-001]
-    asset_ids: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-BOTS-YAML, ASSET-BOOTSTRAP, ASSET-ENGINE]
+    asset_ids: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-GITHUB-REPOS-CHOICE-PROVIDER, ASSET-BOTS-YAML, ASSET-BOOTSTRAP, ASSET-ENGINE]
     status: active
   - id: FEAT-CORE
     slug: core

@@ -2,6 +2,8 @@ package com.vinekeepers.workflow;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -68,5 +70,18 @@ class StepResultTest {
     void waitingWithoutRichReplyHasEmptyRichReply() {
         StepResult r = StepResult.waiting("Prompt", "field");
         assertTrue(r.getRichReply().isEmpty());
+    }
+
+    @Test
+    void goToWithClearKeysReturnsClearKeys() {
+        StepResult r = StepResult.goTo(2, List.of("project", "repo"));
+        assertEquals(2, r.getNextStepIndex());
+        assertEquals(List.of("project", "repo"), r.getClearKeys());
+    }
+
+    @Test
+    void goToWithoutClearKeysHasEmptyClearKeys() {
+        StepResult r = StepResult.goTo(1);
+        assertTrue(r.getClearKeys().isEmpty());
     }
 }

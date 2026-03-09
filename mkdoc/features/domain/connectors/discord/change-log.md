@@ -4,6 +4,7 @@
 
 ## 2026-03-09
 
+- **Discord intake initial components:** Gateway contract (`DiscordGateway`), JDA-backed gateway (`JdaDiscordGateway`), and reply sink (`DiscordAppReplySink`) updates for receive/send and interaction lifecycle; author (authorId, author) in payload for routing; adapter acks or defers within platform window; optional components on channel send and follow-up/update.
 - **Author in payload for routing:** JdaDiscordGateway supplies author (authorId, author) in the internal event payload so routing can apply `discordAuthors` filter and NormalizedEventContext can expose actorId/actorUsername for matching.
 
 ## 2026-03-08

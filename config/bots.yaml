@@ -31,9 +31,20 @@ workflows:
   luna_cursor:
     steps:
       - type: prompt_for_field
-        prompt: "Which GitHub repository should I update? Reply with a full URL or owner/repo."
+        prompt: "Choose a repository"
         storeIn: project
-        # optional: intent: present_choices / confirm_action; choices: [{ id, label, description }]
+        choiceProvider: githubRepos
+      - type: capture_field
+        storeIn: project
+      - type: branch
+        branches:
+          - when: { key: project, value: __custom__ }
+            next: 3
+          - when: else
+            next: 5
+      - type: prompt_for_field
+        prompt: "Enter repo URL or owner/repo"
+        storeIn: project
       - type: capture_field
         storeIn: project
       - type: prompt_for_field
@@ -41,9 +52,34 @@ workflows:
         storeIn: codeChange
       - type: capture_field
         storeIn: codeChange
+      - type: prompt_for_field
+        prompt: "Repo: {{project}}, Branch: main. Change: {{codeChange}}. Confirm?"
+        storeIn: confirmAction
+        intent: present_choices
+        choices:
+          - { id: launch, label: Launch }
+          - { id: edit_repo, label: Edit repo }
+          - { id: edit_request, label: Edit request }
+          - { id: cancel, label: Cancel }
+      - type: capture_field
+        storeIn: confirmAction
+      - type: branch
+        branches:
+          - when: { key: confirmAction, value: launch }
+            next: 10
+          - when: { key: confirmAction, value: edit_repo }
+            next: 0
+            clear: [project, codeChange, confirmAction]
+          - when: { key: confirmAction, value: edit_request }
+            next: 5
+            clear: [codeChange, confirmAction]
+          - when: else
+            next: 12
       - type: call_action
         action: cursor.fullRun
         bind: {}
         storeIn: launchMessage
       - type: done
         message: "{{launchMessage}}"
+      - type: done
+        message: "Cancelled."

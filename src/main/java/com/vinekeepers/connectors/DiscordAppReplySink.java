@@ -17,6 +17,9 @@ import com.vinekeepers.interactions.ShowStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -38,23 +41,22 @@ public final class DiscordAppReplySink implements AppReplySink {
     @Override
     public void respondImmediately(OutboundResponse response, ReplyTarget target) {
         String content = response.getText().orElse("");
+        List<List<Map<String, Object>>> components = null;
         if (response.getIntent().isPresent() && getCapabilities().supportsIntent(response.getIntent().get())) {
-            // Phase 1: render intent as text; components can be added later (Discord V2)
-            content = content.isEmpty() ? intentToText(response.getIntent().get()) : content;
+            components = intentToComponents(response.getIntent().get());
+            if (content.isEmpty()) {
+                content = intentToText(response.getIntent().get());
+            }
         }
         if (content.isEmpty()) {
             return;
         }
         if (target instanceof ChannelTarget ct) {
-            gateway.send(ct.channelId(), ct.messageId(), content);
+            gateway.send(ct.channelId(), ct.messageId(), content, components);
             return;
         }
         if (target instanceof InteractionTarget it) {
-            if (it.alreadyDeferred()) {
-                gateway.sendFollowUp(it.token(), content);
-            } else {
-                gateway.sendFollowUp(it.token(), content);
-            }
+            gateway.sendFollowUp(it.token(), content, components);
         }
     }
 
@@ -65,11 +67,15 @@ public final class DiscordAppReplySink implements AppReplySink {
             return;
         }
         String content = response.getText().orElse("");
+        List<List<Map<String, Object>>> components = null;
         if (response.getIntent().isPresent() && getCapabilities().supportsIntent(response.getIntent().get())) {
-            content = content.isEmpty() ? intentToText(response.getIntent().get()) : content;
+            components = intentToComponents(response.getIntent().get());
+            if (content.isEmpty()) {
+                content = intentToText(response.getIntent().get());
+            }
         }
         if (!content.isEmpty()) {
-            gateway.sendFollowUp(it.token(), content);
+            gateway.sendFollowUp(it.token(), content, components);
         }
     }
 
@@ -80,11 +86,15 @@ public final class DiscordAppReplySink implements AppReplySink {
             return;
         }
         String content = response.getText().orElse("");
+        List<List<Map<String, Object>>> components = null;
         if (response.getIntent().isPresent() && getCapabilities().supportsIntent(response.getIntent().get())) {
-            content = content.isEmpty() ? intentToText(response.getIntent().get()) : content;
+            components = intentToComponents(response.getIntent().get());
+            if (content.isEmpty()) {
+                content = intentToText(response.getIntent().get());
+            }
         }
         if (!content.isEmpty()) {
-            gateway.updateMessage(it.token(), content);
+            gateway.updateMessage(it.token(), content, components);
         }
     }
 
@@ -134,5 +144,46 @@ public final class DiscordAppReplySink implements AppReplySink {
             case ShowActions s -> s.prompt() != null ? s.prompt() : "Actions";
             case ShowStatus s -> s.statusText() != null ? s.statusText() : "";
         };
+    }
+
+    /**
+     * Build Discord component rows from intent. Buttons (max 5 per row) for small choice sets or ConfirmAction;
+     * string select menu (max 25 options) for larger sets.
+     */
+    private static List<List<Map<String, Object>>> intentToComponents(ResponseIntent intent) {
+        List<List<Map<String, Object>>> rows = new ArrayList<>();
+        if (intent instanceof PresentChoices p && p.choices() != null && !p.choices().isEmpty()) {
+            List<ResponseIntent.Choice> choices = p.choices();
+            if (choices.size() <= 5 && choices.stream().allMatch(c -> (c.label() == null ? 0 : c.label().length()) <= 80)) {
+                List<Map<String, Object>> row = new ArrayList<>();
+                for (ResponseIntent.Choice c : choices) {
+                    String id = c.id() != null ? c.id() : "";
+                    String label = c.label() != null && !c.label().isBlank() ? c.label() : id;
+                    if (label.length() > 80) label = label.substring(0, 80);
+                    row.add(Map.of("type", "button", "custom_id", id, "label", label));
+                }
+                rows.add(row);
+            } else {
+                List<Map<String, Object>> options = new ArrayList<>();
+                for (ResponseIntent.Choice c : choices) {
+                    if (options.size() >= 25) break;
+                    String id = c.id() != null ? c.id() : "";
+                    String label = c.label() != null && !c.label().isBlank() ? c.label() : id;
+                    if (label.length() > 100) label = label.substring(0, 100);
+                    options.add(Map.of("value", id, "label", label));
+                }
+                rows.add(List.of(Map.of("type", "select_menu", "custom_id", "choice", "options", options)));
+            }
+        } else if (intent instanceof ConfirmAction c) {
+            String confirmId = "confirm";
+            String cancelId = "cancel";
+            String confirmLabel = c.confirmLabel() != null && !c.confirmLabel().isBlank() ? c.confirmLabel() : "Confirm";
+            String cancelLabel = c.cancelLabel() != null && !c.cancelLabel().isBlank() ? c.cancelLabel() : "Cancel";
+            rows.add(List.of(
+                    Map.of("type", "button", "custom_id", confirmId, "label", confirmLabel.length() > 80 ? confirmLabel.substring(0, 80) : confirmLabel),
+                    Map.of("type", "button", "custom_id", cancelId, "label", cancelLabel.length() > 80 ? cancelLabel.substring(0, 80) : cancelLabel)
+            ));
+        }
+        return rows.isEmpty() ? null : rows;
     }
 }

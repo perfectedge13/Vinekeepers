@@ -93,6 +93,17 @@ public final class NormalizedEventContext {
         return values;
     }
 
+    /**
+     * Returns the list of selected values from an interaction payload (e.g. Discord select menu).
+     * Unwraps payload.values when it is a Map with key "values" so both gateway shapes are supported.
+     */
+    public static List<String> getInteractionValuesFromPayload(Map<String, Object> payload) {
+        if (payload == null) return List.of();
+        Object raw = payload.get("values");
+        Object unwrapped = raw != null ? extractValuesList(raw) : null;
+        return listOfStrings(unwrapped);
+    }
+
     public String getSourceType() {
         return sourceType;
     }

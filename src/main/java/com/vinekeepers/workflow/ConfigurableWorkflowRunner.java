@@ -23,17 +23,24 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     private final List<WorkflowStep> steps;
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry) {
-        this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null);
+        this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null);
     }
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
                                       ToolRunner toolRunner, ToolPolicy toolPolicy,
                                       ConversationMode conversationMode, String sessionKeyStrategyName) {
+        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName, null);
+    }
+
+    public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
+                                      ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                      ConversationMode conversationMode, String sessionKeyStrategyName,
+                                      DynamicChoiceProviderRegistry choiceProviderRegistry) {
         WorkflowDefinition resolvedDefinition = definition != null ? definition : new WorkflowDefinition("", List.of());
         WorkflowActionRegistry resolvedRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.sessionKeyStrategyName = sessionKeyStrategyName;
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
-                toolPolicy != null ? toolPolicy : ToolPolicy.allowAll());
+                toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
     }
 
     @Override
@@ -83,6 +90,10 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                     ? result.getNextStepIndex()
                     : state.getStepIndex() + 1;
 
+            if (!result.getClearKeys().isEmpty()) {
+                state.clearKeys(result.getClearKeys());
+            }
+
             if (result.getOutcome() == StepOutcome.WAITING) {
                 state.markWaiting(result.getWaitingForField(), result.getPromptMessage());
                 state.setStepIndex(nextStepIndex);
@@ -118,7 +129,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
     @SuppressWarnings("unchecked")
     private static List<WorkflowStep> buildSteps(WorkflowDefinition definition, WorkflowActionRegistry registry,
-                                                 ToolRunner toolRunner, ToolPolicy toolPolicy) {
+                                                 ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                                 DynamicChoiceProviderRegistry choiceProviderRegistry) {
         List<WorkflowStep> out = new ArrayList<>();
         for (Map<String, Object> stepMap : definition.getSteps()) {
             String type = (String) stepMap.get("type");
@@ -129,14 +141,20 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 case "ask_input" -> out.add(new com.vinekeepers.workflow.steps.AskForInputStep(
                         (String) stepMap.get("prompt"),
                         (String) stepMap.get("storeIn")));
-                case "prompt_for_field" -> out.add(new com.vinekeepers.workflow.steps.PromptForFieldStep(
-                        (String) stepMap.get("prompt"),
-                        (String) stepMap.get("storeIn"),
-                        (String) stepMap.get("intent"),
-                        (List<Map<String, Object>>) stepMap.get("choices"),
-                        (String) stepMap.get("confirmLabel"),
-                        (String) stepMap.get("cancelLabel"),
-                        (List<Map<String, Object>>) stepMap.get("fields")));
+                case "prompt_for_field" -> {
+                    String choiceProviderId = (String) stepMap.get("choiceProvider");
+                    DynamicChoiceProvider provider = choiceProviderRegistry != null && choiceProviderId != null
+                            ? choiceProviderRegistry.get(choiceProviderId) : null;
+                    out.add(new com.vinekeepers.workflow.steps.PromptForFieldStep(
+                            (String) stepMap.get("prompt"),
+                            (String) stepMap.get("storeIn"),
+                            (String) stepMap.get("intent"),
+                            (List<Map<String, Object>>) stepMap.get("choices"),
+                            (String) stepMap.get("confirmLabel"),
+                            (String) stepMap.get("cancelLabel"),
+                            (List<Map<String, Object>>) stepMap.get("fields"),
+                            provider));
+                }
                 case "capture_field" -> out.add(new com.vinekeepers.workflow.steps.CaptureFieldFromEventStep(
                         (String) stepMap.get("storeIn"),
                         (String) stepMap.get("contentKey")));

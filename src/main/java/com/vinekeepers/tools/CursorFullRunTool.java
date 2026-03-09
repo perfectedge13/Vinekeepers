@@ -93,6 +93,10 @@ public final class CursorFullRunTool implements Tool {
             );
             stateStore.put(runKey(launch.id()), runState);
             stateStore.put(sessionRunKey(sessionKey), launch.id());
+            String authorId = getString(eventMetadata, "authorId");
+            if (authorId != null && !authorId.isBlank()) {
+                stateStore.put("luna:lastRepo:" + authorId, project);
+            }
             return buildLaunchAcknowledgement(runState);
         } catch (CursorCloudException e) {
             return "Cursor launch failed: " + e.getMessage();

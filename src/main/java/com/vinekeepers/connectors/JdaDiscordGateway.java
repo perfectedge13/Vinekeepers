@@ -14,10 +14,16 @@ import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionE
 import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.ItemComponent;
+import net.dv8tion.jda.api.interactions.components.LayoutComponent;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -173,8 +179,14 @@ public final class JdaDiscordGateway implements DiscordGateway {
             log.warn("No deferred hook for token; cannot send follow-up");
             return;
         }
-        if (content != null && !content.isBlank()) {
-            hook.sendMessage(content).queue(
+        String text = (content != null && !content.isBlank()) ? content : "(no content)";
+        List<LayoutComponent> actionRows = toJdaActionRows(components);
+        if (actionRows != null && !actionRows.isEmpty()) {
+            hook.sendMessage(text).addComponents(actionRows).queue(
+                    m -> { },
+                    err -> log.debug("Discord follow-up failed: {}", err.getMessage()));
+        } else {
+            hook.sendMessage(text).queue(
                     m -> { },
                     err -> log.debug("Discord follow-up failed: {}", err.getMessage()));
         }
@@ -196,13 +208,65 @@ public final class JdaDiscordGateway implements DiscordGateway {
             return;
         }
         String text = (content != null && !content.isBlank()) ? content : "(no content)";
-        hook.editOriginal(text).queue(
-                m -> { },
-                err -> log.debug("Discord update message failed: {}", err.getMessage()));
+        List<LayoutComponent> actionRows = toJdaActionRows(components);
+        if (actionRows != null && !actionRows.isEmpty()) {
+            hook.editOriginal(text).setComponents(actionRows).queue(
+                    m -> { },
+                    err -> log.debug("Discord update message failed: {}", err.getMessage()));
+        } else {
+            hook.editOriginal(text).queue(
+                    m -> { },
+                    err -> log.debug("Discord update message failed: {}", err.getMessage()));
+        }
+    }
+
+    private static List<LayoutComponent> toJdaActionRows(List<List<Map<String, Object>>> components) {
+        if (components == null || components.isEmpty()) return null;
+        List<LayoutComponent> rows = new ArrayList<>();
+        for (List<Map<String, Object>> row : components) {
+            if (row == null || row.isEmpty()) continue;
+            List<ItemComponent> comps = new ArrayList<>();
+            for (Map<String, Object> m : row) {
+                String type = m != null ? (String) m.get("type") : null;
+                if ("button".equals(type)) {
+                    String customId = m.get("custom_id") != null ? m.get("custom_id").toString() : "btn";
+                    String label = m.get("label") != null ? m.get("label").toString() : "Button";
+                    if (label.length() > 80) label = label.substring(0, 80);
+                    comps.add(Button.primary(customId, label));
+                } else if ("select_menu".equals(type)) {
+                    String customId = m.get("custom_id") != null ? m.get("custom_id").toString() : "select";
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> options = (List<Map<String, Object>>) m.get("options");
+                    if (options != null && !options.isEmpty()) {
+                        StringSelectMenu.Builder menu = StringSelectMenu.create(customId);
+                        int count = 0;
+                        for (Map<String, Object> opt : options) {
+                            if (count >= 25) break;
+                            String value = opt.get("value") != null ? opt.get("value").toString() : "";
+                            String label = opt.get("label") != null ? opt.get("label").toString() : value;
+                            if (value.length() > 100) value = value.substring(0, 100);
+                            if (label.length() > 100) label = label.substring(0, 100);
+                            menu.addOption(label, value);
+                            count++;
+                        }
+                        comps.add(menu.build());
+                    }
+                }
+            }
+            if (!comps.isEmpty()) {
+                rows.add(ActionRow.of(comps));
+            }
+        }
+        return rows.isEmpty() ? null : rows;
     }
 
     @Override
     public void send(String channelId, String messageId, String content) {
+        send(channelId, messageId, content, null);
+    }
+
+    @Override
+    public void send(String channelId, String messageId, String content, List<List<Map<String, Object>>> components) {
         if (!connected || jda == null || channelId == null || channelId.isBlank() || content == null || content.isBlank()) {
             return;
         }
@@ -211,19 +275,35 @@ public final class JdaDiscordGateway implements DiscordGateway {
             log.warn("Discord channel {} not found for reply", channelId);
             return;
         }
+        List<LayoutComponent> actionRows = toJdaActionRows(components);
+        String text = content;
         if (messageId != null && !messageId.isBlank()) {
             channel.retrieveMessageById(messageId)
-                    .flatMap(message -> message.reply(content))
+                    .flatMap(message -> {
+                        var req = message.reply(text);
+                        if (actionRows != null && !actionRows.isEmpty()) {
+                            req = req.addComponents(actionRows);
+                        }
+                        return req;
+                    })
                     .queue(
                             success -> { },
                             error -> {
                                 log.debug("Discord reply fallback for {}: {}", messageId, error.getMessage());
-                                channel.sendMessage(content).queue();
+                                var req = channel.sendMessage(text);
+                                if (actionRows != null && !actionRows.isEmpty()) {
+                                    req = req.addComponents(actionRows);
+                                }
+                                req.queue();
                             }
                     );
             return;
         }
-        channel.sendMessage(content).queue();
+        if (actionRows != null && !actionRows.isEmpty()) {
+            channel.sendMessage(text).addComponents(actionRows).queue();
+        } else {
+            channel.sendMessage(text).queue();
+        }
     }
 
     @Override
