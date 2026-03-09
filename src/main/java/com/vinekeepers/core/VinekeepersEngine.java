@@ -25,9 +25,12 @@ import com.vinekeepers.workflow.WorkflowRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -92,8 +95,38 @@ public final class VinekeepersEngine implements EventSubscriber {
     public void onEvent(Event event) {
         log.debug("Engine received event: {} {}", event.getSourceId(), event.getKind());
         List<String> botIds = router.route(event);
+        if (isDiscordMessage(event)) {
+            addBotsWithWaitingSessionForDiscordMessage(event, botIds);
+        }
         for (String botId : botIds) {
             handleEventForBot(event, botId);
+        }
+    }
+
+    private static boolean isDiscordMessage(Event event) {
+        return "message".equals(event.getKind()) && event.getSourceId() != null && event.getSourceId().startsWith("discord");
+    }
+
+    /**
+     * For Discord message events, adds to {@code botIds} any registered bot that has a workflow runner
+     * and has state in stateStore under this event's session key with status WAITING_INPUT.
+     */
+    private void addBotsWithWaitingSessionForDiscordMessage(Event event, List<String> botIds) {
+        Set<String> seen = new HashSet<>(botIds);
+        for (BotDefinition bot : bots.values()) {
+            if (seen.contains(bot.getId())) {
+                continue;
+            }
+            if (runners.get(bot.getId()) == null) {
+                continue;
+            }
+            String sessionKey = SessionKeyStrategies.resolve(bot.getSessionKeyStrategy(), event)
+                    .resolveSessionKey(bot.getId(), event);
+            Optional<ConfigurableWorkflowState> stateOpt = stateStore.get(sessionKey, ConfigurableWorkflowState.class);
+            if (stateOpt.isPresent() && stateOpt.get().getStatus() == ConfigurableWorkflowState.Status.WAITING_INPUT) {
+                botIds.add(bot.getId());
+                seen.add(bot.getId());
+            }
         }
     }
 

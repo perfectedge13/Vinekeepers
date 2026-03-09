@@ -6,13 +6,13 @@ active
 
 # Summary
 
-Event-driven engine routes events to bots (REQ-CORE-003). `VinekeepersEngine` receives events, routes them to matching bots, runs the registered `WorkflowRunner`, builds `ReasonerInput` from workflow context and session state, applies `ReasonerOutput` patches and proposed tool calls, records audit activity, builds `OutboundResponse` from workflow or reasoner (rich or text-only), resolves `ReplyTarget` from the event, and delivers replies via the connector **sink registry** (lifecycle: respondImmediately, sendFollowUp, updateMessage); no defer in engine.
+Event-driven engine routes events to bots (REQ-CORE-003). `VinekeepersEngine` receives events, routes them to matching bots; for Discord message events it also adds any registered bot that has a workflow runner and has state with `WAITING_INPUT` for the event's session key (waiting-session routing) so workflows resume on follow-up messages. It runs the registered `WorkflowRunner`, builds `ReasonerInput` from workflow context and session state, applies `ReasonerOutput` patches and proposed tool calls, records audit activity, builds `OutboundResponse` from workflow or reasoner (rich or text-only), resolves `ReplyTarget` from the event, and delivers replies via the connector **sink registry** (lifecycle: respondImmediately, sendFollowUp, updateMessage); no defer in engine.
 
 # Key assets
 
 | Asset | Role | Path |
 |-------|------|------|
-| ASSET-ENGINE | Route events to bots; run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry; build OutboundResponse; resolve ReplyTarget | src/main/java/com/vinekeepers/core/VinekeepersEngine.java |
+| ASSET-ENGINE | Route events to bots (for Discord message events add bots with WAITING_INPUT for event session key—waiting-session routing); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry; build OutboundResponse; resolve ReplyTarget | src/main/java/com/vinekeepers/core/VinekeepersEngine.java |
 | ASSET-WORKFLOW-RUNNER | Interface to run workflow for an event and return a structured workflow result | src/main/java/com/vinekeepers/workflow/WorkflowRunner.java |
 | ASSET-TOOL-RUNNER | Execute approved tool calls for workflows and reasoners under `ToolPolicy` | src/main/java/com/vinekeepers/tools/ToolRunner.java |
 | ASSET-REASONER-INPUT | Reasoner input model including workflow context, current state, and last user message | src/main/java/com/vinekeepers/reasoner/ReasonerInput.java |

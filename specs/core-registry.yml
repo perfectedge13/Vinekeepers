@@ -104,7 +104,7 @@ assets:
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots; run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
+    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
     requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
     feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
   - id: ASSET-OUTBOUND-RESPONSE
@@ -675,7 +675,7 @@ requirements:
 
   - id: REQ-CORE-003
     title: Event-driven engine routes events to bots
-    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. Reply delivery uses the connector contract (AppReplySink) with distinct lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); engine builds OutboundResponse from workflow or reasoner (rich or text-only), resolves ReplyTarget from event, and calls the sink registered for the event source (transitional source-prefix routing). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
+    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. For Discord message events, the engine additionally includes any registered bot that has a workflow runner and has persisted state with WAITING_INPUT for the event's session key, so conversational workflows can resume on later messages in the same session. Reply delivery uses the connector contract (AppReplySink) with distinct lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); engine builds OutboundResponse from workflow or reasoner (rich or text-only), resolves ReplyTarget from event, and calls the sink registered for the event source (transitional source-prefix routing). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
     status: active
     priority: high
     type: functional
@@ -688,6 +688,7 @@ requirements:
     acceptance:
       criteria:
         - Engine subscribes to event bus and dispatches to bots by routing rules
+        - For Discord message events, engine adds bots that have a workflow runner and stateStore state with WAITING_INPUT for the event's session key (waiting-session routing) so workflows resume in the same conversation
         - Engine uses registered runners and runner.runResult(event, stateStore, botId) for workflow execution
         - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message
         - Engine applies reasoner state patches and executes proposed tool calls through ToolRunner
@@ -695,7 +696,7 @@ requirements:
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:
-      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT]
+      assets: [ASSET-ENGINE, ASSET-ROUTER, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT]
       symbols: []
     validation:
       tests:

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -344,5 +345,109 @@ class VinekeepersEngineTest {
 
         assertNotNull(captured.get());
         assertTrue(captured.get().getIntent().isPresent());
+    }
+
+    // --- Discord waiting-session routing (engine adds bots with WAITING_INPUT for event session key) ---
+
+    @Test
+    void discordMessageWithoutMentionAndNoWaitingSession_doesNotRouteToLuna() {
+        BotDefinition luna = new BotDefinition(
+                "luna",
+                new Persona("Luna", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(luna);
+        engine.registerRunner("luna", new StubWorkflowRunner());
+        engine.registerReasoner("luna", new StubReasoner());
+        router.addRouting(new Routing(
+                new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "authorId", "user-1", "content", "hello"));
+        engine.onEvent(event);
+
+        assertTrue(auditLogs.stream().noneMatch(log -> "luna".equals(log.getBotId())),
+                "Luna must not be invoked when message has no mention and no waiting session");
+    }
+
+    @Test
+    void discordMessageWithMention_routesToLuna() {
+        BotDefinition luna = new BotDefinition(
+                "luna",
+                new Persona("Luna", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(luna);
+        engine.registerRunner("luna", new StubWorkflowRunner());
+        engine.registerReasoner("luna", new StubReasoner());
+        router.addRouting(new Routing(
+                new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "authorId", "user-1", "content", "@Luna help", "mentions", List.of("luna")));
+        engine.onEvent(event);
+
+        assertTrue(auditLogs.stream().anyMatch(log -> "luna".equals(log.getBotId())),
+                "Initial message with mention must route to Luna");
+    }
+
+    @Test
+    void followUpMessageWithoutMention_sameUserAndChannel_continuesWorkflowWhenLunaHasWaitingInput() {
+        BotDefinition luna = new BotDefinition(
+                "luna",
+                new Persona("Luna", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(luna);
+        engine.registerRunner("luna", new StubWorkflowRunner());
+        engine.registerReasoner("luna", new StubReasoner());
+        router.addRouting(new Routing(
+                new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
+
+        String sessionKey = "bot:luna:conv:ch-1:user-1";
+        ConfigurableWorkflowState waitingState = new ConfigurableWorkflowState();
+        waitingState.markWaiting("project", "Which project?");
+        stateStore.put(sessionKey, waitingState);
+
+        Event followUp = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "authorId", "user-1", "content", "my answer"));
+        engine.onEvent(followUp);
+
+        assertTrue(auditLogs.stream().anyMatch(log -> "luna".equals(log.getBotId())),
+                "Follow-up without mention from same user/channel must continue workflow when Luna has WAITING_INPUT for that session");
+    }
+
+    @Test
+    void messageFromDifferentUserOrChannel_doesNotContinueSession() {
+        BotDefinition luna = new BotDefinition(
+                "luna",
+                new Persona("Luna", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(luna);
+        engine.registerRunner("luna", new StubWorkflowRunner());
+        engine.registerReasoner("luna", new StubReasoner());
+        router.addRouting(new Routing(
+                new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
+
+        String sessionKeyOriginal = "bot:luna:conv:ch-1:user-1";
+        ConfigurableWorkflowState waitingState = new ConfigurableWorkflowState();
+        waitingState.markWaiting("project", "Which project?");
+        stateStore.put(sessionKeyOriginal, waitingState);
+
+        Event differentChannel = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-2", "authorId", "user-1", "content", "hello"));
+        engine.onEvent(differentChannel);
+
+        Event differentUser = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "authorId", "user-2", "content", "hello"));
+        engine.onEvent(differentUser);
+
+        assertTrue(auditLogs.stream().noneMatch(log -> "luna".equals(log.getBotId())),
+                "Messages from different user or channel must not continue the waiting session");
     }
 }
