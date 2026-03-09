@@ -138,4 +138,43 @@ class RouterTest {
         Event event = new Event("discord:g:ch", "message", Map.of("content", "Hello there"));
         assertTrue(router.route(event).isEmpty());
     }
+
+    @Test
+    void messageWithMentionRoutesToBot() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message", Map.of("content", "Hey @Luna, run it"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void interactionWithoutMentionRoutesToBot() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "interaction",
+                Map.of("channelId", "ch-1", "authorId", "user-1", "customId", "launch", "interactionId", "i1", "token", "t1"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void interactionFromAllowedAuthorRoutesToBot() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed-snowflake"), Set.of("ch-1"), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch-1", "interaction",
+                Map.of("channelId", "ch-1", "authorId", "allowed-snowflake", "author", "alice", "customId", "run"));
+        assertEquals(List.of("bot-a"), router.route(event));
+    }
+
+    @Test
+    void interactionFromOtherUserDoesNotRoute() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed-user-id"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "interaction",
+                Map.of("channelId", "ch-1", "authorId", "other-user-id", "customId", "launch", "interactionId", "i1", "token", "t1"));
+        assertTrue(router.route(event).isEmpty());
+    }
 }

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-09T12:00:00Z"
+  updated_utc: "2026-03-09T14:30:00Z"
 
 project:
   id: vinekeepers
@@ -158,7 +158,7 @@ assets:
   - id: ASSET-ROUTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/Router.java
-    role: Match events to bots by routing rules, including Discord mention and discordAuthors filters
+    role: Match events to bots by routing rules; Discord mention and trigger filters apply only to message events; interaction events use author/channel only
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
@@ -176,7 +176,7 @@ assets:
   - id: ASSET-ROUTING-FILTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/RoutingFilter.java
-    role: Apply routing filters to events, including discordTrigger, discordMention, and discordAuthors matching
+    role: Apply routing filters to events; for Discord, discordTrigger and discordMention apply only to message events; discordAuthors and discordChannels apply to all Discord events
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-NORMALIZED-EVENT-CONTEXT
@@ -750,7 +750,7 @@ requirements:
 
   - id: REQ-BOT-001
     title: Route events to bots by routing rules
-    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view; events are dispatched only to bots whose filters accept the event, including Discord mention-based routing from either payload metadata or @mention text when configured, and optional Discord author filtering (discordAuthors) by actor id or normalized actor username.
+    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view; events are dispatched only to bots whose filters accept the event, including Discord mention-based routing from either payload metadata or @mention text when configured, and optional Discord author filtering (discordAuthors) by actor id or normalized actor username. Discord trigger and mention filters apply only to message events; for Discord interaction events routing uses author and channel (and other non-trigger/mention criteria) only.
     status: active
     priority: high
     type: functional
@@ -766,7 +766,8 @@ requirements:
         - Filters apply Discord/GitHub and other criteria from routing config
         - Event routing can normalize actor, channel, text, mentions, repo, and label fields from incoming payloads
         - Normalized event context exposes actorId and actorUsername (e.g. from payload author/authorId) for routing
-        - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text
+        - discordTrigger and discordMention are enforced only for Discord message events; for Discord interaction events routing uses author, channel, and other criteria only (no trigger/mention check)
+        - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text (message events only)
         - discordAuthors filters match when event author (actorId or actorUsername normalized) is in the configured list
       examples: []
     traceability:
@@ -802,6 +803,24 @@ requirements:
           intent: Verify discordAuthors filter matches by actorId/actorUsername and rejects other authors
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildRouterParsesDiscordAuthorsRouting
+          preconditions: []
+        - id: UNIT-ROUTER-INTERACTION-NO-MENTION
+          title: RouterTest
+          intent: Verify Discord interaction events route without trigger/mention check (author and channel only)
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: interactionWithoutMentionRoutesToBot
+          preconditions: []
+        - id: UNIT-ROUTER-INTERACTION-ALLOWED-AUTHOR
+          title: RouterTest
+          intent: Verify interaction from allowed author (discordAuthors) routes to bot
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: interactionFromAllowedAuthorRoutesToBot
+          preconditions: []
+        - id: UNIT-ROUTER-INTERACTION-OTHER-USER
+          title: RouterTest
+          intent: Verify interaction from other user does not route when discordAuthors is set
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: interactionFromOtherUserDoesNotRoute
           preconditions: []
 
   - id: REQ-BOT-002

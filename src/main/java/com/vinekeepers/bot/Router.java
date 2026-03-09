@@ -55,13 +55,16 @@ public final class Router {
                 String channel = context.getChannelId();
                 if (channel == null || !f.getDiscordChannels().contains(channel)) return false;
             }
-            if (f.getDiscordTrigger() != null && !f.getDiscordTrigger().isEmpty()) {
-                String text = context.getText();
-                if (text == null || !text.contains(f.getDiscordTrigger())) return false;
-            }
-            if (f.getDiscordMention() != null && !f.getDiscordMention().isBlank()) {
-                String mention = f.getDiscordMention().trim().toLowerCase(Locale.ROOT);
-                if (!context.getMentions().contains(mention)) return false;
+            // Only enforce trigger/mention on message events; interactions have no mentions so use author/channel only
+            if (!"interaction".equals(kind)) {
+                if (f.getDiscordTrigger() != null && !f.getDiscordTrigger().isEmpty()) {
+                    String text = context.getText();
+                    if (text == null || !text.contains(f.getDiscordTrigger())) return false;
+                }
+                if (f.getDiscordMention() != null && !f.getDiscordMention().isBlank()) {
+                    String mention = f.getDiscordMention().trim().toLowerCase(Locale.ROOT);
+                    if (!context.getMentions().contains(mention)) return false;
+                }
             }
             return true;
         }

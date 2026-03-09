@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-09 — Discord interaction routing (no trigger/mention for interactions)
+
+**Context:** Discord interaction events (button clicks, modal submits) were being evaluated against `discordTrigger`/`discordMention`, which are message-only concepts; interactions from allowed users failed to route. **Decision:** Apply `discordTrigger` and `discordMention` only to Discord message events; for Discord interaction events, routing uses author, channel, and other criteria only (e.g. `discordAuthors`, `discordChannels`). **Consequence:** Button and modal responses from allowed authors route to the bot without requiring an @mention; README and core-registry updated for routing sentence.
+
 ## 2026-03-09 — Discord filter by user (discordAuthors)
 
 **Context:** Luna (and other bots) needed a way to restrict activation to specific Discord users when using mention-based routing. **Decision:** Add optional `discordAuthors` to routing filter in YAML; NormalizedEventContext exposes `actorId` and `actorUsername` from payload author/authorId; RoutingFilter matches when the event author is in the list. **Consequence:** Luna can be configured with e.g. `discordAuthors: [novawilde13_72571]` so only that user triggers the bot when mentioning @Luna; gateway must supply author in payload.
