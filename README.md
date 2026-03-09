@@ -83,8 +83,9 @@ Required for Luna on Discord:
 - `DISCORD_BOT_TOKEN`: Discord bot token used by the JDA connector. In the [Discord Developer Portal](https://discord.com/developers/applications), open your app → Bot → **Privileged Gateway Intents** and enable **Message Content Intent** (required for reading message text and mentions).
 - `CURSOR_API_KEY`: Cursor API key used for Cloud Agent launches and status polling.
 
-Optional Cursor settings:
+Optional:
 
+- `HEALTH_PORT`: port for the health HTTP server (default 8080); used by Prometheus blackbox for Grafana status dashboard. Set to 0 or omit to disable.
 - `CURSOR_API_BASE_URL`: defaults to `https://api.cursor.com`
 - `CURSOR_MODEL`: explicit model id for cloud launches
 - `CURSOR_BASE_BRANCH`: default base branch when Luna launches a run

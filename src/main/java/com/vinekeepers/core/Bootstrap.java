@@ -11,6 +11,7 @@ import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudAdapterImpl;
 import com.vinekeepers.core.cursor.CursorCloudRunMonitor;
 import com.vinekeepers.env.Env;
+import com.vinekeepers.env.HealthServer;
 import com.vinekeepers.events.EventBus;
 import com.vinekeepers.reasoner.StubReasoner;
 import com.vinekeepers.state.StateStore;
@@ -44,6 +45,7 @@ public final class Bootstrap {
     private final ToolRunner toolRunner;
     private DiscordEventSource discordSource;
     private GitHubEventSource githubSource;
+    private HealthServer healthServer;
 
     public Bootstrap() {
         this.eventBus = new EventBus();
@@ -116,6 +118,24 @@ public final class Bootstrap {
         return this;
     }
 
+    /**
+     * Start the health HTTP server for Prometheus/Grafana probes (optional).
+     * Port from HEALTH_PORT env, default 8080. No-op if port is &lt;= 0 or bind fails.
+     */
+    public Bootstrap withHealthServer() {
+        int port = parseInt(Env.get("HEALTH_PORT", "8080"), 8080);
+        if (port <= 0) {
+            return this;
+        }
+        try {
+            this.healthServer = new HealthServer(port);
+            healthServer.start();
+        } catch (Exception e) {
+            log.warn("Health server not started on port {}: {}", port, e.getMessage());
+        }
+        return this;
+    }
+
     private static void registerLegacyActions(WorkflowActionRegistry registry) {
         registry.register("cursor_cloud", (event, state, bind) -> "Cursor Cloud action (stub)");
     }
@@ -132,6 +152,7 @@ public final class Bootstrap {
     }
 
     public void shutdown() {
+        if (healthServer != null) healthServer.stop();
         if (discordSource != null) discordSource.stop();
         if (githubSource != null) githubSource.stop();
         cursorCloudRunMonitor.close();
@@ -143,6 +164,17 @@ public final class Bootstrap {
         }
         try {
             return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static int parseInt(String value, int fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
             return fallback;
         }

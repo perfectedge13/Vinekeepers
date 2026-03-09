@@ -23,6 +23,7 @@ public class VinekeepersApp {
         bootstrap.loadConfig(configPath);
         bootstrap.withDiscord();
         bootstrap.withGitHub();
+        bootstrap.withHealthServer();
         Runtime.getRuntime().addShutdownHook(new Thread(bootstrap::shutdown));
         log.info("Engine running; events will be processed from Discord and GitHub (stub)");
     }

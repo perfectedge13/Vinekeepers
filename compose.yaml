@@ -1,12 +1,15 @@
 # Vinekeepers — run with: docker compose up -d
 # Build first: docker build -t vinekeepers .   (or use: docker compose build)
 # Env: put DISCORD_BOT_TOKEN, CURSOR_API_KEY, etc. in .env (loaded into container).
+# Port 8080: health endpoint for Prometheus blackbox (Grafana status dashboard green/red tile).
 
 services:
   vinekeepers:
     image: vinekeepers
     build: .
     env_file: .env
+    ports:
+      - "8080:8080"
     volumes:
       - ./config:/app/config
     restart: unless-stopped
