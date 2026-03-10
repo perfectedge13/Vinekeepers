@@ -1,5 +1,6 @@
 package com.vinekeepers.core.cursor;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.env.Env;
@@ -45,7 +46,10 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
     CursorCloudAdapterImpl(CursorCloudTransport transport, ObjectMapper objectMapper,
                            String apiKey, String baseUrl, String defaultModel) {
         this.transport = transport;
-        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        // Omit nulls in JSON request body; no null fields serialized.
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        this.objectMapper = mapper;
         this.apiKey = apiKey != null ? apiKey.trim() : "";
         this.baseUrl = normalizeBaseUrl(baseUrl);
         this.defaultModel = defaultModel != null ? defaultModel.trim() : "";
@@ -65,6 +69,12 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
         }
         if (isBlank(request.repositoryUrl())) {
             throw new CursorCloudException("Cursor repository URL is required.");
+        }
+        // Safe request diagnostics: URI, key configured (masked), model, repo, branch only; no secrets.
+        if (log.isDebugEnabled()) {
+            log.debug("Cursor API launch: uri={}, keyConfigured={}, model={}, repo={}, branch={}",
+                    baseUrl + "/v0/agents", maskKey(apiKey), resolveModel(request.model()),
+                    request.repositoryUrl(), defaultIfBlank(request.branchName(), "(default)"));
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("prompt", Map.of("text", request.promptText()));
@@ -151,6 +161,9 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
             }
         }
         URI uri = URI.create(baseUrl + path);
+        if (log.isDebugEnabled()) {
+            log.debug("Cursor API request: method={}, uri={}, keyConfigured={}", method, uri, maskKey(apiKey));
+        }
         CursorCloudTransportResponse response;
         try {
             response = transport.exchange(method, uri, apiKey, requestBody);
@@ -162,24 +175,73 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
             throw new CursorCloudException("Cursor API request failed: " + e.getMessage(), e);
         }
         String responseBody = response.body() != null ? response.body() : "";
+        JsonNode root;
         try {
-            JsonNode root = responseBody.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(responseBody);
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                return root;
-            }
-            JsonNode errorNode = root.path("error");
-            String message = text(errorNode, "message");
-            String code = text(errorNode, "code");
-            log.warn("Cursor API non-2xx: statusCode={}, errorCode={}, errorMessage={}",
-                    response.statusCode(), code, message);
-            throw new CursorCloudException(
-                    !isBlank(message) ? message : "Cursor API request failed.",
-                    code,
-                    response.statusCode(),
-                    null
-            );
+            root = responseBody.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(responseBody);
         } catch (IOException e) {
-            throw new CursorCloudException("Could not parse Cursor API response.", e);
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                throw new CursorCloudException("Could not parse Cursor API response.", e);
+            }
+            root = objectMapper.createObjectNode();
+        }
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            return root;
+        }
+        ErrorMessageAndCode extracted = extractErrorMessageAndCode(root, responseBody);
+        int bodyLen = responseBody != null ? responseBody.length() : 0;
+        log.warn("Cursor API non-2xx: statusCode={}, errorCode={}, errorMessage={}, bodySummary=bodyLen={}",
+                response.statusCode(), extracted.code, extracted.message, bodyLen);
+        boolean useStatusAsDetail = isBlank(extracted.message) || "Cursor API request failed.".equals(extracted.message);
+        String detail = useStatusAsDetail ? ("status " + response.statusCode()) : extracted.message;
+        throw new CursorCloudException(
+                "Cursor API request failed: " + detail,
+                extracted.code,
+                response.statusCode(),
+                null
+        );
+    }
+
+    /**
+     * Extracts server error message and code from multiple response shapes:
+     * error as string, nested error.message/code, top-level message, plain text body, empty body.
+     */
+    private ErrorMessageAndCode extractErrorMessageAndCode(JsonNode root, String responseBody) {
+        String code = null;
+        // Nested error.message and error.code
+        JsonNode errorNode = root.path("error");
+        if (!errorNode.isMissingNode() && !errorNode.isNull()) {
+            if (errorNode.isTextual()) {
+                return new ErrorMessageAndCode(errorNode.asText(), null);
+            }
+            code = text(errorNode, "code");
+            String msg = text(errorNode, "message");
+            if (!isBlank(msg)) {
+                return new ErrorMessageAndCode(msg, code);
+            }
+        }
+        // Top-level message
+        String topMessage = text(root, "message");
+        if (!isBlank(topMessage)) {
+            return new ErrorMessageAndCode(topMessage, code);
+        }
+        // Plain text or empty body
+        String trimmed = responseBody != null ? responseBody.trim() : "";
+        if (!trimmed.isEmpty()) {
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                return new ErrorMessageAndCode("Cursor API request failed.", code);
+            }
+            return new ErrorMessageAndCode(trimmed.length() > 500 ? trimmed.substring(0, 500) + "..." : trimmed, code);
+        }
+        return new ErrorMessageAndCode("Cursor API request failed.", code);
+    }
+
+    private static final class ErrorMessageAndCode {
+        final String message;
+        final String code;
+
+        ErrorMessageAndCode(String message, String code) {
+            this.message = message;
+            this.code = code;
         }
     }
 
@@ -254,6 +316,7 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
         @Override
         public CursorCloudTransportResponse exchange(String method, URI uri, String bearerToken, String body) throws Exception {
             try {
+                // Bearer token per standard; no doc says otherwise.
                 HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                         .header("Authorization", "Bearer " + bearerToken)
                         .header("Accept", "application/json");

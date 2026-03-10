@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-09T16:00:00Z"
+  updated_utc: "2026-03-09T18:30:00Z"
 
 project:
   id: vinekeepers
@@ -518,7 +518,7 @@ assets:
   - id: ASSET-CURSOR-ADAPTER-IMPL
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudAdapterImpl.java
-    role: Cursor Cloud Agents API HTTP client implementation (env-based config); logs transport exceptions, non-2xx responses, and startup config without leaking key or body
+    role: Cursor Cloud Agents API HTTP client implementation (env-based config); robust non-2xx error parsing (extractErrorMessageAndCode for error string, nested error.message/code, top-level message, plain text, empty); safe request diagnostics (debug URI, key masked, model, repo, branch); NON_NULL payload serialization; Bearer auth; logs transport exceptions and config without leaking key or body
     requires: [REQ-LUNA-001]
     feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-LUNA-RUN-STATE
@@ -1166,6 +1166,7 @@ requirements:
         - Engine sends workflow reply to Discord when source is Discord
         - "Confirmation branch clear: luna_cursor edit_request branch clears codeChange and confirmAction from state before reprompting; edit_repo branch clears project, codeChange, and confirmAction before reprompting (branch clear config in bots.yaml)"
         - Cursor adapter logs transport exceptions, non-2xx responses (status and safe error message), and startup config (baseUrl, key presence); never logs API key, request body, or full response body
+        - "Cursor adapter parses non-2xx responses robustly (extractErrorMessageAndCode for error string, nested error.message/code, top-level message, plain text, empty body); uses safe request diagnostics (debug URI, key masked, model, repo, branch); serializes request payload with NON_NULL; uses Bearer token in Authorization header"
       examples: []
     traceability:
       assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-STEP-RESULT, ASSET-BRANCH-STEP]
@@ -1193,6 +1194,72 @@ requirements:
           intent: Verify Cursor Cloud API adapter implementation
           testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
           preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-API-KEY
+          title: CursorCloudAdapterImplTest
+          intent: Verify launch fails fast when CURSOR_API_KEY is not configured
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: launchAgentWithoutApiKeyFailsFast
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-NESTED
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx with nested error.message/code surfaces in exception
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: apiErrorsSurfaceCursorMessage
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-STRING
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx with error as string surfaces in exception
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: non2xxErrorAsStringSurfacesInException
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-TOPLEVEL
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx with top-level message surfaces in exception
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: non2xxTopLevelMessageSurfacesInException
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-PLAINTEXT
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx plain text body surfaces in exception
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: non2xxPlainTextBodySurfacesInException
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-EMPTY
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx empty body yields generic message with status
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: non2xxEmptyBodySurfacesGenericMessage
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-EMPTY-JSON
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx empty JSON object yields generic message with status
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: non2xxEmptyJsonObjectSurfacesGenericMessage
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-ERROR-NONJSON
+          title: CursorCloudAdapterImplTest
+          intent: Verify non-2xx non-JSON body content surfaces in exception
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: non2xxNonJsonBodySurfacesInException
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-TRANSPORT-EXCEPTION
+          title: CursorCloudAdapterImplTest
+          intent: Verify transport exceptions surface cause message and are wrapped in CursorCloudException
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: transportExceptionSurfacesMessage
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-BEARER-GET
+          title: CursorCloudAdapterImplTest
+          intent: Verify getAgent sends configured API key as Bearer token to transport
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: getAgentSendsConfiguredApiKeyAsBearerTokenToTransport
+          preconditions: []
+        - id: UNIT-CURSOR-ADAPTER-BEARER-LAUNCH
+          title: CursorCloudAdapterImplTest
+          intent: Verify launchAgent sends configured API key as Bearer token to transport
+          testClass: com.vinekeepers.core.cursor.CursorCloudAdapterImplTest
+          testMethod: transportReceivesBearerTokenAsConfiguredKey
+          preconditions: []
         - id: UNIT-CURSOR-FULL-RUN-TOOL
           title: CursorFullRunToolTest
           intent: Verify cursor.fullRun launches a Cursor cloud run and stores run state
@@ -1208,6 +1275,8 @@ requirements:
       - Storing secrets in state
       - Do not rely on discordTrigger alone for Luna activation because @mentions in Discord channels would be missed.
       - Do not log Cursor API key, request body, or full response body because it leaks secrets.
+      - Do not assume a single Cursor API error response shape; support error string, nested error.message/code, top-level message, and plain text or empty body.
+      - Do not serialize null fields in Cursor API request payload because it can cause API errors or unexpected behavior.
 
 features:
   - id: FEAT-ENV

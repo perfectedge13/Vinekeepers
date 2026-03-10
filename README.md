@@ -8,6 +8,7 @@ Vinekeepers is an AI-based bots collection. The bot core provides bootstrap, con
 - **Tests:** `mvn test` (unit tests cover core components: config, core, env, events, state, bot, workflow, connectors).
 - **Spec schema gate:** `npm run validate-specs`
 - **Spec drift gate:** `npm run validate-drift`
+- **Docs gate:** `npm run validate-docs`
 - **Main class:** `com.vinekeepers.VinekeepersApp` — run from your IDE or after packaging (e.g. `mvn package` then run the JAR with dependencies on the classpath).
 
 Requirements: Java 21, Maven, Node 18+ for the spec gates.
@@ -94,7 +95,7 @@ Optional:
 
 ## Logging and troubleshooting
 
-Cursor API failures are visible in application logs (WARN level: transport exceptions and non-2xx responses with status and error details) and surface as `CursorCloudException` with messages suitable for debugging (e.g. missing key, request/response errors).
+Cursor API failures are visible in application logs (WARN level: transport exceptions and non-2xx responses with status, error code, and message) and surface as `CursorCloudException` with messages suitable for debugging (e.g. missing key, request/response errors). At DEBUG level the adapter logs safe per-request diagnostics (URI, key configured, model, repo, branch) without secrets.
 
 ## Environment and Cursor wiki
 

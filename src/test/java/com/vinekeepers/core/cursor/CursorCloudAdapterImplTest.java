@@ -139,7 +139,7 @@ class CursorCloudAdapterImplTest {
 
         CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
 
-        assertEquals("plan limits exceeded", error.getMessage());
+        assertEquals("Cursor API request failed: plan limits exceeded", error.getMessage());
         assertEquals("forbidden", error.getCode());
         assertEquals(403, error.getStatusCode());
     }
@@ -164,5 +164,118 @@ class CursorCloudAdapterImplTest {
         assertEquals(cause, error.getCause());
         assertTrue(error.getCause() instanceof IOException);
         assertEquals(transportMessage, error.getCause().getMessage());
+    }
+
+    /** Verifies transport receives the configured API key (used as Bearer token in Authorization header). */
+    @Test
+    void getAgentSendsConfiguredApiKeyAsBearerTokenToTransport() {
+        AtomicReference<String> capturedToken = new AtomicReference<>();
+        CursorCloudTransport transport = (requestMethod, requestUri, bearerToken, requestBody) -> {
+            capturedToken.set(bearerToken);
+            return new CursorCloudTransportResponse(200, "{\"id\":\"bc_123\",\"status\":\"FINISHED\",\"source\":{},\"target\":{},\"createdAt\":\"2026-03-07T20:00:00Z\"}");
+        };
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                transport, new ObjectMapper(), "sk-abc123", "https://api.cursor.com", "");
+
+        impl.getAgent("bc_123");
+
+        assertEquals("sk-abc123", capturedToken.get(), "Transport must receive raw API key for Bearer auth");
+    }
+
+    @Test
+    void non2xxErrorAsStringSurfacesInException() {
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (m, u, t, b) -> new CursorCloudTransportResponse(500, """
+                        { "error": "Internal server error" }
+                        """),
+                new ObjectMapper(), "test-key", "https://api.cursor.com", "");
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertEquals("Cursor API request failed: Internal server error", error.getMessage());
+        assertEquals(500, error.getStatusCode());
+    }
+
+    @Test
+    void non2xxTopLevelMessageSurfacesInException() {
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (m, u, t, b) -> new CursorCloudTransportResponse(401, """
+                        { "message": "Unauthorized" }
+                        """),
+                new ObjectMapper(), "test-key", "https://api.cursor.com", "");
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertEquals("Cursor API request failed: Unauthorized", error.getMessage());
+        assertEquals(401, error.getStatusCode());
+    }
+
+    @Test
+    void non2xxPlainTextBodySurfacesInException() {
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (m, u, t, b) -> new CursorCloudTransportResponse(502, "Bad Gateway"),
+                new ObjectMapper(), "test-key", "https://api.cursor.com", "");
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertEquals("Cursor API request failed: Bad Gateway", error.getMessage());
+        assertEquals(502, error.getStatusCode());
+    }
+
+    @Test
+    void non2xxEmptyBodySurfacesGenericMessage() {
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (m, u, t, b) -> new CursorCloudTransportResponse(504, ""),
+                new ObjectMapper(), "test-key", "https://api.cursor.com", "");
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertTrue(error.getMessage().startsWith("Cursor API request failed"), "Empty body should yield generic message");
+        assertTrue(error.getMessage().contains("504"), "Message should include status for empty body");
+        assertEquals(504, error.getStatusCode());
+    }
+
+    @Test
+    void transportReceivesBearerTokenAsConfiguredKey() {
+        AtomicReference<String> capturedToken = new AtomicReference<>();
+        CursorCloudTransport transport = (requestMethod, requestUri, bearerToken, requestBody) -> {
+            capturedToken.set(bearerToken);
+            return new CursorCloudTransportResponse(201, "{\"id\":\"a1\",\"name\":\"x\",\"status\":\"CREATING\",\"source\":{},\"target\":{},\"createdAt\":\"2026-03-07T20:00:00Z\"}");
+        };
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                transport, new ObjectMapper(), "sk-bearer-key-42", "https://api.cursor.com", "");
+
+        impl.launchAgent(new CursorAgentLaunchRequest(
+                "Run", "https://github.com/org/repo", "main", "feature", true, ""));
+
+        assertEquals("sk-bearer-key-42", capturedToken.get(), "Transport must receive configured API key for Bearer header");
+    }
+
+    @Test
+    void non2xxEmptyJsonObjectSurfacesGenericMessage() {
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (m, u, t, b) -> new CursorCloudTransportResponse(503, "{}"),
+                new ObjectMapper(), "test-key", "https://api.cursor.com", "");
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertTrue(error.getMessage().startsWith("Cursor API request failed"), "Empty JSON body should yield generic message");
+        assertTrue(error.getMessage().contains("503"), "Message should include status for empty JSON object");
+        assertEquals(503, error.getStatusCode());
+    }
+
+    @Test
+    void non2xxNonJsonBodySurfacesInException() {
+        String body = "<html><body>Service Unavailable</body></html>";
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (m, u, t, b) -> new CursorCloudTransportResponse(503, body),
+                new ObjectMapper(), "test-key", "https://api.cursor.com", "");
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertTrue(error.getMessage().contains("Cursor API request failed"));
+        assertTrue(error.getMessage().contains("Service Unavailable") || error.getMessage().contains(body),
+                "Non-JSON body content should surface in exception message");
+        assertEquals(503, error.getStatusCode());
     }
 }

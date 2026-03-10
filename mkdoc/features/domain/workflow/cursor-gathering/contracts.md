@@ -13,6 +13,13 @@ This feature calls the official Cursor Cloud Agents API:
 
 Luna configuration in `config/bots.yaml` supplies bot routing, `workflowRef: luna_cursor`, and the ordered gathering steps. `ConfigurableWorkflowState` stores the conversational gather state, while `LunaCloudRunState` stores the launched run identity and Cursor feedback snapshot.
 
+# Cursor adapter behavior
+
+- **Authentication:** `Authorization: Bearer <CURSOR_API_KEY>`; launch fails fast when `CURSOR_API_KEY` is not configured.
+- **Request payload:** Serialized with Jackson `NON_NULL` so null fields are omitted (avoids API errors).
+- **Non-2xx handling:** `extractErrorMessageAndCode` parses: error as string, nested `error.message`/`error.code`, top-level `message`, plain text body, or empty body (generic message with status).
+- **Diagnostics:** At DEBUG, logs safe per-request data (URI, key configured, model, repo, branch); never logs API key, request body, or full response body.
+
 # Interfaces
 
 - **`CursorCloudAdapter`:** abstraction over Cursor Cloud Agent launch, status, conversation, and follow-up operations.
