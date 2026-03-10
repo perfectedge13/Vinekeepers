@@ -92,6 +92,10 @@ Optional:
 - `CURSOR_BASE_BRANCH`: default base branch when Luna launches a run
 - `CURSOR_POLL_INTERVAL_MS`: how often Vinekeepers polls Cursor for feedback updates
 
+## Logging and troubleshooting
+
+Cursor API failures are visible in application logs (WARN level: transport exceptions and non-2xx responses with status and error details) and surface as `CursorCloudException` with messages suitable for debugging (e.g. missing key, request/response errors).
+
 ## Environment and Cursor wiki
 
 The app loads a `.env` file (if present) into system properties at startup. For the **Cursor wiki** step, `WIKIJS_*` variables must be available: either export them in the orchestrator environment or put them in a `.env` file in the working directory.

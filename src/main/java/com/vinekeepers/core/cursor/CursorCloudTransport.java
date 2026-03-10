@@ -7,5 +7,5 @@ import java.net.URI;
  */
 public interface CursorCloudTransport {
 
-    CursorCloudTransportResponse exchange(String method, URI uri, String bearerToken, String body);
+    CursorCloudTransportResponse exchange(String method, URI uri, String bearerToken, String body) throws Exception;
 }

@@ -1,9 +1,13 @@
 # Diagrams
 
-# Context
+# Architecture
+
+See [Architecture](../../../../architecture.md) for the main system diagram.
+
+# Feature flow
 
 ```mermaid
-flowchart LR
+flowchart TB
   Event[Event] --> Normalized[NormalizedEventContext]
   Normalized --> Filter[RoutingFilter]
   Filter --> Router[Router]

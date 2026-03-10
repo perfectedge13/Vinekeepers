@@ -150,6 +150,9 @@ nav:
                   - architecture: cursor/skills/nova-wiki/sub-skills/architecture.md
                   - runbooks: cursor/skills/nova-wiki/sub-skills/runbooks.md
                   - feature-dossiers: cursor/skills/nova-wiki/sub-skills/feature-dossiers.md
+          - Nova-grafana:
+              - Overview: cursor/skills/nova-grafana.md
+              - checklist: cursor/skills/nova-grafana/checklist.md
           - Common:
               - Overview: cursor/skills/common/index.md
               - discovery: cursor/skills/common/discovery.md

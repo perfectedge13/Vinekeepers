@@ -1,9 +1,13 @@
 # Diagrams
 
-# Context
+# Architecture
+
+See [Architecture](../../../../architecture.md) for the main system diagram (event sources → event bus → engine → router, state, audit, tools).
+
+# Feature flow
 
 ```mermaid
-flowchart LR
+flowchart TB
   Bus[EventBus] --> Engine[VinekeepersEngine]
   Engine --> Router[Router]
   Engine --> Runner[WorkflowRunner]

@@ -11,6 +11,7 @@ Skills are orchestrators and sub-skills under `.cursor/skills/`. Each top-level 
 | Nova-pr | Create or update PR with last nova-code report as body. | [Nova-pr](nova-pr.md) |
 | Nova-spec | Full-repo scan and complete spec update; scan, update registries, sync mkdoc. | [Nova-spec](nova-spec.md) |
 | Nova-wiki | Wiki.js sync; prepare, index, architecture, runbooks, feature dossiers. | [Nova-wiki](nova-wiki.md) |
+| Nova-grafana | Grafana dashboard/provisioning changes for Datavine; preflight, deterministic edit, container-truth, UI verification. | [Nova-grafana](nova-grafana.md) |
 | Common | Shared sub-skills (discovery, run-tests, reconcile, etc.) used by nova-code and other workflows. | [Common](common/index.md) |
 
 

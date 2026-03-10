@@ -49,6 +49,9 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
         this.apiKey = apiKey != null ? apiKey.trim() : "";
         this.baseUrl = normalizeBaseUrl(baseUrl);
         this.defaultModel = defaultModel != null ? defaultModel.trim() : "";
+        if (log.isDebugEnabled()) {
+            log.debug("Cursor API adapter configured: baseUrl={}, key={}", this.baseUrl, maskKey(this.apiKey));
+        }
     }
 
     @Override
@@ -148,7 +151,16 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
             }
         }
         URI uri = URI.create(baseUrl + path);
-        CursorCloudTransportResponse response = transport.exchange(method, uri, apiKey, requestBody);
+        CursorCloudTransportResponse response;
+        try {
+            response = transport.exchange(method, uri, apiKey, requestBody);
+        } catch (CursorCloudException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Cursor API transport exception: uri={}, exception={}, message={}",
+                    uri, e.getClass().getName(), e.getMessage(), e);
+            throw new CursorCloudException("Cursor API request failed: " + e.getMessage(), e);
+        }
         String responseBody = response.body() != null ? response.body() : "";
         try {
             JsonNode root = responseBody.isBlank() ? objectMapper.createObjectNode() : objectMapper.readTree(responseBody);
@@ -158,6 +170,8 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
             JsonNode errorNode = root.path("error");
             String message = text(errorNode, "message");
             String code = text(errorNode, "code");
+            log.warn("Cursor API non-2xx: statusCode={}, errorCode={}, errorMessage={}",
+                    response.statusCode(), code, message);
             throw new CursorCloudException(
                     !isBlank(message) ? message : "Cursor API request failed.",
                     code,
@@ -219,6 +233,16 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
         return value == null || value.isBlank();
     }
 
+    private static String maskKey(String key) {
+        if (key == null || key.isBlank()) {
+            return "empty";
+        }
+        if (key.length() <= 4) {
+            return "***";
+        }
+        return key.substring(0, 4) + "***";
+    }
+
     private static final class HttpCursorCloudTransport implements CursorCloudTransport {
 
         private final HttpClient httpClient;
@@ -228,7 +252,7 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
         }
 
         @Override
-        public CursorCloudTransportResponse exchange(String method, URI uri, String bearerToken, String body) {
+        public CursorCloudTransportResponse exchange(String method, URI uri, String bearerToken, String body) throws Exception {
             try {
                 HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                         .header("Authorization", "Bearer " + bearerToken)
@@ -245,8 +269,9 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
-                log.warn("Cursor API request failed: {}", e.getMessage());
-                throw new CursorCloudException("Cursor API request failed.", e);
+                log.warn("Cursor API transport exception: uri={}, exception={}, message={}",
+                        uri, e.getClass().getName(), e.getMessage(), e);
+                throw new CursorCloudException("Cursor API request failed: " + e.getMessage(), e);
             }
         }
     }

@@ -1,9 +1,13 @@
 # Diagrams
 
-# Context
+# Architecture
+
+See [Architecture](../../../../architecture.md) for the main system diagram.
+
+# Feature flow
 
 ```mermaid
-flowchart LR
+flowchart TB
   Def[WorkflowDefinition] --> Step[WorkflowStep]
   Step --> Result[StepResult]
   Result --> Outcome{StepOutcome}

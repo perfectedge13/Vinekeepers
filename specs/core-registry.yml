@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-09T14:30:00Z"
+  updated_utc: "2026-03-09T16:00:00Z"
 
 project:
   id: vinekeepers
@@ -518,7 +518,7 @@ assets:
   - id: ASSET-CURSOR-ADAPTER-IMPL
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudAdapterImpl.java
-    role: Cursor Cloud Agents API HTTP client implementation (env-based config)
+    role: Cursor Cloud Agents API HTTP client implementation (env-based config); logs transport exceptions, non-2xx responses, and startup config without leaking key or body
     requires: [REQ-LUNA-001]
     feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-LUNA-RUN-STATE
@@ -1165,6 +1165,7 @@ requirements:
         - CursorCloudRunMonitor polls agent status and conversation feedback and relays updates such as running state, PR URL, and final summary to Discord
         - Engine sends workflow reply to Discord when source is Discord
         - "Confirmation branch clear: luna_cursor edit_request branch clears codeChange and confirmAction from state before reprompting; edit_repo branch clears project, codeChange, and confirmAction before reprompting (branch clear config in bots.yaml)"
+        - Cursor adapter logs transport exceptions, non-2xx responses (status and safe error message), and startup config (baseUrl, key presence); never logs API key, request body, or full response body
       examples: []
     traceability:
       assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-STEP-RESULT, ASSET-BRANCH-STEP]
@@ -1206,6 +1207,7 @@ requirements:
       - Hardcoding Discord channel in workflow
       - Storing secrets in state
       - Do not rely on discordTrigger alone for Luna activation because @mentions in Discord channels would be missed.
+      - Do not log Cursor API key, request body, or full response body because it leaks secrets.
 
 features:
   - id: FEAT-ENV
@@ -1332,7 +1334,7 @@ features:
     doc_path: features/domain/core/engine.md
     summary: VinekeepersEngine routes events to matched bots, executes workflow runners, applies reasoner output, and emits replies.
     requirement_ids: [REQ-CORE-003]
-    asset_ids: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT]
+    asset_ids: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT]
     status: active
 
 

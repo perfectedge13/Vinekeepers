@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -141,5 +142,27 @@ class CursorCloudAdapterImplTest {
         assertEquals("plan limits exceeded", error.getMessage());
         assertEquals("forbidden", error.getCode());
         assertEquals(403, error.getStatusCode());
+    }
+
+    @Test
+    void transportExceptionSurfacesMessage() {
+        String transportMessage = "Connection refused";
+        IOException cause = new IOException(transportMessage);
+        CursorCloudAdapterImpl impl = new CursorCloudAdapterImpl(
+                (requestMethod, requestUri, bearerToken, requestBody) -> {
+                    throw cause;
+                },
+                new ObjectMapper(),
+                "test-key",
+                "https://api.cursor.com",
+                ""
+        );
+
+        CursorCloudException error = assertThrows(CursorCloudException.class, () -> impl.getAgent("bc_123"));
+
+        assertTrue(error.getMessage().contains(transportMessage), "getMessage() should contain cause message");
+        assertEquals(cause, error.getCause());
+        assertTrue(error.getCause() instanceof IOException);
+        assertEquals(transportMessage, error.getCause().getMessage());
     }
 }
