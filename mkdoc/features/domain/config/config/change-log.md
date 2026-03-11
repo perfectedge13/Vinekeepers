@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-10
+
+- **discordAuthors in routing:** Optional `discordAuthors` in routing filter accepts numeric Discord user id (matches event `actorId`) or username (matches `actorUsername`, case-insensitive). Config comment in `config/bots.yaml` documents this; prefer numeric id when available.
+
 ## 2026-03-09
 
 - **bots.yaml and configured workflow:** `config/bots.yaml` updated for Luna and configured workflow references; aligns with Discord intake components and edit-reprompt (clearKeys) behavior in workflow runner/state.

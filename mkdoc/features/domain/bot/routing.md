@@ -12,7 +12,7 @@ Route events to bots by routing rules (REQ-BOT-001). `Router` matches events to 
 
 | Asset | Role | Path |
 |-------|------|------|
-| ASSET-ROUTER | Match events to bots by routing rules, including Discord mention filters | src/main/java/com/vinekeepers/bot/Router.java |
+| ASSET-ROUTER | Match events to bots by routing rules; discordAuthors by actorId (numeric) or actorUsername (case-insensitive); DEBUG log when no bot matched | src/main/java/com/vinekeepers/bot/Router.java |
 | ASSET-ROUTING | Routing and filter configuration | src/main/java/com/vinekeepers/bot/Routing.java |
 | ASSET-EVENT-FILTER | Filter events by criteria | src/main/java/com/vinekeepers/bot/EventFilter.java |
 | ASSET-ROUTING-FILTER | Apply routing filters to events; for Discord, `discordTrigger` and `discordMention` apply only to message events; `discordAuthors` and `discordChannels` apply to all Discord events | src/main/java/com/vinekeepers/bot/RoutingFilter.java |

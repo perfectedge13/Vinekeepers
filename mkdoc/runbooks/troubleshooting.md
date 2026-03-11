@@ -24,6 +24,17 @@ Steps:
 
 Resolution: Register the tool, fix the action id, or adjust the bot policy so the intended tool is allowed.
 
+## No bot matched for Discord event
+
+Cause: The router did not match any bot for the event (e.g. `discordAuthors` or `discordMention` filter not satisfied, or event kind/channel not in routing).
+
+Steps:
+1. Enable DEBUG logging for the router/engine to see which event was received (source, kind, authorId, actorUsername, mentions, channelId).
+2. Check `config/bots.yaml` routing for the intended bot: `discordAuthors` accepts numeric Discord user id (matches `actorId`) or username (matches `actorUsername`, case-insensitive); `discordMention` applies only to message events.
+3. For interaction events (buttons, modals), trigger and mention are not checked—only author, channel, and other criteria apply.
+
+Resolution: Align routing filter with the event payload (use numeric id when possible) or add the user/channel to the bot's routing filter.
+
 ## Discord event replies do not appear
 
 Cause: The event reached the engine, but no reply sender was configured or the workflow and reasoner both returned no reply text.

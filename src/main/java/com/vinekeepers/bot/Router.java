@@ -1,6 +1,8 @@
 package com.vinekeepers.bot;
 
 import com.vinekeepers.events.Event;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +14,17 @@ import java.util.Objects;
  */
 public final class Router {
 
+    private static final Logger log = LoggerFactory.getLogger(Router.class);
+
     private final List<Routing> routings = new ArrayList<>();
+
+    private static boolean isNumeric(String s) {
+        if (s == null || s.isEmpty()) return false;
+        for (int i = 0; i < s.length(); i++) {
+            if (!Character.isDigit(s.charAt(i))) return false;
+        }
+        return true;
+    }
 
     public void addRouting(Routing routing) {
         routings.add(Objects.requireNonNull(routing));
@@ -33,6 +45,12 @@ public final class Router {
                 botIds.add(r.getBotId());
             }
         }
+        if (botIds.isEmpty() && event != null) {
+            NormalizedEventContext ctx = NormalizedEventContext.from(event);
+            log.debug("No bot matched: source={}, kind={}, authorId={}, actorUsername={}, mentions={}, channelId={}",
+                    ctx.getSourceType(), ctx.getEventType(), ctx.getActorId(), ctx.getActorUsername(),
+                    ctx.getMentions(), ctx.getChannelId());
+        }
         return botIds;
     }
 
@@ -46,9 +64,15 @@ public final class Router {
                 String actorId = context.getActorId();
                 String actorUsername = context.getActorUsername();
                 String usernameNorm = actorUsername != null ? actorUsername.trim().toLowerCase(Locale.ROOT) : null;
-                boolean authorMatch = (actorId != null && f.getDiscordAuthors().contains(actorId))
-                        || (usernameNorm != null && !usernameNorm.isEmpty() && f.getDiscordAuthors().stream()
-                                .anyMatch(a -> a != null && a.trim().toLowerCase(Locale.ROOT).equals(usernameNorm)));
+                boolean authorMatch = f.getDiscordAuthors().stream().anyMatch(entry -> {
+                    if (entry == null || entry.isBlank()) return false;
+                    String trimmed = entry.trim();
+                    if (isNumeric(trimmed)) {
+                        return trimmed.equals(actorId);
+                    }
+                    return usernameNorm != null && !usernameNorm.isEmpty()
+                            && trimmed.toLowerCase(Locale.ROOT).equals(usernameNorm);
+                });
                 if (!authorMatch) return false;
             }
             if (!f.getDiscordChannels().isEmpty()) {

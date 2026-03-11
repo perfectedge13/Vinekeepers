@@ -23,6 +23,7 @@ routing:
   - botId: luna
     filter:
       discordMention: "luna"
+      # discordAuthors: numeric Discord user id (matches actorId) or username (matches actorUsername, case-insensitive)
       discordAuthors: ["novawilde13_72571"]
 
 # Workflows DSL: id -> steps (ask_input, prompt_for_field, capture_field, call_action, branch, done)

@@ -29,9 +29,9 @@ class RouterTest {
     @Test
     void addRoutingAndRouteMatchesDiscordByAuthor() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("u1"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+                Set.of("42"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
-        Event event = new Event("discord:g:ch", "message", Map.of("authorId", "u1"));
+        Event event = new Event("discord:g:ch", "message", Map.of("authorId", "42"));
         assertEquals(List.of("bot-a"), router.route(event));
     }
 
@@ -47,10 +47,10 @@ class RouterTest {
     @Test
     void routeMatchesWhenDiscordAuthorsContainsActorId() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("user-snowflake-123"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+                Set.of("123456789012345678"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
         Event event = new Event("discord:g:ch", "message",
-                Map.of("authorId", "user-snowflake-123", "author", "alice", "content", "hi"));
+                Map.of("authorId", "123456789012345678", "author", "alice", "content", "hi"));
         assertEquals(List.of("bot-a"), router.route(event));
     }
 
@@ -161,10 +161,10 @@ class RouterTest {
     @Test
     void interactionFromAllowedAuthorRoutesToBot() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("allowed-snowflake"), Set.of("ch-1"), null, "luna", Set.of(), Set.of(), Set.of());
+                Set.of("987654321012345678"), Set.of("ch-1"), null, "luna", Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
         Event event = new Event("discord:g:ch-1", "interaction",
-                Map.of("channelId", "ch-1", "authorId", "allowed-snowflake", "author", "alice", "customId", "run"));
+                Map.of("channelId", "ch-1", "authorId", "987654321012345678", "author", "alice", "customId", "run"));
         assertEquals(List.of("bot-a"), router.route(event));
     }
 
@@ -175,6 +175,66 @@ class RouterTest {
         router.addRouting(new Routing(filter, "luna"));
         Event event = new Event("discord:g:ch", "interaction",
                 Map.of("channelId", "ch-1", "authorId", "other-user-id", "customId", "launch", "interactionId", "i1", "token", "t1"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsNumericId() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("123456789012345678"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "123456789012345678", "author", "someone", "content", "hi"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsUsername() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("alice_dev"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "999", "author", "alice_dev", "content", "hi"));
+        assertEquals(List.of("bot-a"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchWhenDiscordAuthorsHasStaleUsername() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("old_nick"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "123", "author", "new_nick", "content", "hi"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeDoesNotMatchWhenDiscordAuthorsHasNumericIdButEventAuthorIdDifferent() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("111222333444555666"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "999888777666555444", "author", "someone", "content", "hi"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeMatchesWhenMentionAndAuthorInFilter() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed_user"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "1", "author", "allowed_user", "content", "Hey @Luna run it", "mentions", List.of("luna")));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchWhenMentionPresentButAuthorNotInFilter() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed_user"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "99", "author", "other_user", "content", "Hey @Luna run it", "mentions", List.of("luna")));
         assertTrue(router.route(event).isEmpty());
     }
 }

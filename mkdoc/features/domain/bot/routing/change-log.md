@@ -2,6 +2,11 @@
 
 # Entries
 
+## 2026-03-10
+
+- **discordAuthors: numeric id and username:** Router `discordAuthors` now supports both **numeric Discord user id** (stable, matches `actorId`) and **username** (matches `actorUsername`, case-insensitive). Prefer numeric id when available. Config comment in `config/bots.yaml` documents the behavior.
+- **DEBUG when no bot matched:** When no bot matches an event, the router logs at DEBUG: source, kind, authorId, actorUsername, mentions, channelId—for troubleshooting routing (e.g. discordAuthors or discordMention not matching).
+
 ## 2026-03-09
 
 - **Discord filter by user:** Routing supports optional `discordAuthors` filter: events match when the event author (by `actorId` or normalized `actorUsername`) is in the configured list. `NormalizedEventContext` exposes `actorId` and `actorUsername` from payload author/authorId for routing. Luna can be restricted to specific Discord users (e.g. `novawilde13_72571`) via `discordAuthors` in `config/bots.yaml`.

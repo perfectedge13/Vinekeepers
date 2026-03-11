@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-10T14:30:00Z"
+  updated_utc: "2026-03-10T16:00:00Z"
 
 project:
   id: vinekeepers
@@ -146,7 +146,7 @@ assets:
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
-    role: Bot definitions YAML (including Luna routing, Discord mention activation, optional discordAuthors filter, and lifecycleBotName in step bind/content for luna_cursor)
+    role: Bot definitions YAML (including Luna routing, Discord mention activation, optional discordAuthors filter with numeric id or username list, and lifecycleBotName in step bind/content for luna_cursor)
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -158,7 +158,7 @@ assets:
   - id: ASSET-ROUTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/Router.java
-    role: Match events to bots by routing rules; Discord mention and trigger filters apply only to message events; interaction events use author/channel only
+    role: Match events to bots by routing rules; discordAuthors match by actorId (numeric entries) or actorUsername (username entries, case-insensitive); Discord mention and trigger apply only to message events; interaction events use author/channel only
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
@@ -176,7 +176,7 @@ assets:
   - id: ASSET-ROUTING-FILTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/RoutingFilter.java
-    role: Apply routing filters to events; for Discord, discordTrigger and discordMention apply only to message events; discordAuthors and discordChannels apply to all Discord events
+    role: Apply routing filters to events; for Discord, discordTrigger and discordMention apply only to message events; discordAuthors (numeric id or username list) and discordChannels apply to all Discord events
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-NORMALIZED-EVENT-CONTEXT
@@ -778,7 +778,7 @@ requirements:
         - BotConfig maps to BotDefinition structure
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
-        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors keys from YAML
+        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
         - Workflow step bind keys (e.g. lifecycleBotName) and content with {{key}} interpolation are supported in step config
       examples: []
     traceability:
@@ -1225,7 +1225,7 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - Bot id luna and routing filter discordMention luna; optional discordAuthors in routing restricts Luna to listed Discord users (e.g. novawilde13_72571)
+        - Bot id luna and routing filter discordMention luna; optional discordAuthors in routing restricts Luna to listed Discord users (numeric id or username, e.g. novawilde13_72571)
         - Luna routing activates when Discord messages reference @Luna in text or mention metadata and satisfy discordAuthors when configured
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
         - Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before launching via launch_cursor_run (cursor.fullRun not used in luna_cursor)

@@ -2,63 +2,54 @@
 
 ## Scope
 
-**Request-derived:** Update Luna bot to use configured workflow. Remove CursorCloudGatheringRunner and `cursor_cloud_gathering` type; add `luna_cursor` workflow in YAML; register real Cursor actions (e.g. `cursor.fullRun`) in Bootstrap; set Luna to `workflow.type: configured`, `params: { workflowRef: luna_cursor }`. Delete CursorCloudGatheringRunner class and remove its use from WorkflowRunnerFactory.
+**Request:** Luna Discord routing bug fix (already implemented). Router supports numeric `discordAuthors` (match actorId) and non-numeric (match actorUsername); DEBUG log when no bot matched; config comment; RouterTest updates.
 
-**Impacted registry:** specs/core-registry.yml (change_triggers.paths: src, specs).
+**Impacted registry slice:** core-registry.yml — routing (FEAT-ROUTING), config (FEAT-CONFIG), Luna (FEAT-CURSOR-GATHERING).
 
-**Impacted features / requirements / assets:**
-- **FEAT-WORKFLOW** (REQ-WORKFLOW-001): WorkflowRunnerFactory drops `cursor_cloud_gathering` branch; types become `stub`, `configured` only. Traceability: remove ASSET-CURSOR-CLOUD-GATHERING-RUNNER from requirements and FEAT-WORKFLOW asset_ids.
-- **FEAT-LUNA** (REQ-LUNA-001): Luna uses configured workflow `luna_cursor`; bots.yaml workflow block becomes `type: configured`, `params: { workflowRef: luna_cursor }`. Traceability: remove ASSET-CURSOR-CLOUD-GATHERING-RUNNER from REQ-LUNA-001 and FEAT-LUNA asset_ids; retain ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW (or doc that Luna behavior is now defined by YAML workflow), ASSET-CURSOR-ADAPTER*, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML.
-- **FEAT-CONFIG** (REQ-CONFIG-001): No schema change; config already supports workflow.type and workflow.params; usage change only (Luna example becomes configured + workflowRef).
+**Features:** FEAT-ROUTING, FEAT-CONFIG, FEAT-CURSOR-GATHERING.
 
-**Removal:** ASSET-CURSOR-CLOUD-GATHERING-RUNNER — delete file `src/main/java/com/vinekeepers/workflow/CursorCloudGatheringRunner.java`. **removal_or_rename: true.**
+**Requirements:** REQ-BOT-001, REQ-CONFIG-001, REQ-LUNA-001.
+
+**Assets:** ASSET-ROUTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT, ASSET-BOTS-YAML.
 
 ---
 
 ## Per feature
 
-### Feature: Workflow (FEAT-WORKFLOW)
+### FEAT-ROUTING (Event routing and normalized context)
 
-- **Feature:** title "Workflow state machine and config-driven runners", status active, doc_path mkdoc/features/domain/core/workflow.md. Summary: WorkflowRunner runs workflow per bot; WorkflowRunnerFactory creates runners from workflow.type (stub, configured; cursor_cloud_gathering removed).
-- **Requirements:** REQ-WORKFLOW-001 — WorkflowRunner runs workflow for an event; WorkflowRunnerFactory creates runners from config workflow type and params (stub, configured). Acceptance: Workflow interface and WorkflowResult exist; WorkflowRunner and runner.run used by engine; WorkflowRunnerFactory creates runner by type (stub, configured); StubWorkflowRunner for default. Validation tests: UNIT-WORKFLOW-RUNNER-FACTORY (verify stub, configured; remove cursor_cloud_gathering case), others unchanged. Anti_patterns: (none on this requirement).
-- **Assets (impacted):** ASSET-WORKFLOW-RUNNER-FACTORY (path: WorkflowRunnerFactory.java) — remove `cursor_cloud_gathering` case and CursorCloudGatheringRunner import/use. ASSET-CURSOR-CLOUD-GATHERING-RUNNER — **removed** (delete file). Other workflow assets unchanged.
-- **Doc excerpts (mkdoc/features/domain/core/workflow):**
-  - **Contracts:** WorkflowRunnerFactory create(workflowType, workflowParams, workflows, actionRegistry) → WorkflowRunner. Types: `stub`, `configured` (cursor_cloud_gathering removed). For configured, resolves WorkflowDefinition from workflowParams.workflowRef or inline steps; uses WorkflowActionRegistry for CallActionStep.
-  - **Decisions:** (Add entries as needed.)
-  - **Known issues:** (None.)
+- **Feature:** id FEAT-ROUTING, slug routing, title "Event routing and normalized context", status active, doc_path features/domain/bot/routing.md. Summary: Router matches events to bots through routing filters over a normalized event view.
+- **Requirements:** REQ-BOT-001 — Route events to bots by routing rules. Statement: Router matches incoming events using Routing and EventFilter/RoutingFilter over a normalized event view; optional discordAuthors by actor id or normalized actor username. Criteria: Router.match returns matching BotDefinitions; discordAuthors filters match when event author (actorId or actorUsername normalized) is in the configured list. Validation tests: UNIT-ROUTER (RouterTest), UNIT-ROUTER-DISCORD-AUTHORS (ConfigLoaderTest.buildRouterParsesDiscordAuthorsRouting), UNIT-ROUTER-INTERACTION-ALLOWED-AUTHOR, UNIT-ROUTER-INTERACTION-OTHER-USER. Anti_patterns: (none on REQ-BOT-001 in registry).
+- **Assets:** ASSET-ROUTER (src/main/java/com/vinekeepers/bot/Router.java — match events by routing rules; Discord mention/trigger only for message events; interaction uses author/channel). ASSET-ROUTING-FILTER (RoutingFilter — discordAuthors and discordChannels apply to all Discord events). ASSET-NORMALIZED-EVENT-CONTEXT (actorId, actorUsername from payload author/authorId).
+- **Doc excerpts:**  
+  **Decisions:** discordAuthors added for restricting activation to specific Discord users; match when event author in list; NormalizedEventContext exposes actorId/actorUsername. Discord interaction routing: trigger/mention only for message events; interactions use author and channel only.  
+  **Contracts:** discordAuthors and discordChannels apply to all Discord events. NormalizedEventContext exposes actorId, actorUsername (from author/authorId).  
+  **Known-issues:** Routing fields depend on connector-published context; new predicates require filter code changes.
 
-### Feature: Luna (FEAT-LUNA)
+### FEAT-CONFIG (Bot config from YAML)
 
-- **Feature:** title "Luna bot — Discord /Luna, multi-turn gather, Cursor Cloud API", status active, doc_path mkdoc/features/domain/core/luna.md. Summary: Luna id luna, trigger /Luna; uses configured workflow luna_cursor (YAML); Cursor actions (e.g. cursor.fullRun) registered in Bootstrap; engine delivers replies to Discord.
-- **Requirements:** REQ-LUNA-001 — Luna bot id luna, trigger /Luna; workflow type configured with workflowRef luna_cursor in bots.yaml; state and Cursor behavior defined by luna_cursor workflow steps and registered Cursor actions; engine sends workflow reply to Discord when source is Discord. Acceptance: Bot id luna and routing discordTrigger /Luna; bots.yaml workflow type configured, params.workflowRef luna_cursor; workflow steps (e.g. ask_input, call_action) and Cursor adapter/actions used as defined in luna_cursor; Engine sends reply to Discord. Anti_patterns: Hardcoding Discord channel in workflow; storing secrets in state.
-- **Assets (impacted):** ASSET-BOTS-YAML — add workflows.luna_cursor (steps as needed for Luna); Luna bot workflow: type configured, params.workflowRef luna_cursor. ASSET-BOOTSTRAP — registerCursorActions: register real Cursor actions (e.g. cursor.fullRun) in addition to or replacing cursor_cloud/echo stubs. ASSET-CURSOR-CLOUD-GATHERING-RUNNER — **removed**. ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE — may remain for backward compatibility (e.g. CursorCloudGatheringWorkflow used elsewhere) or be referenced only from docs; implement may keep or simplify per product decision.
-- **Doc excerpts (mkdoc/features/domain/core/luna):**
-  - **Contracts:** GatheringState: step, project, codeChangeDescription. CursorCloudAdapter: createBranch, runNovaCommit, push, createPr. (Luna behavior can be expressed via configured workflow and actions.)
-  - **Decisions:** (No decision records yet.)
-  - **Known issues:** (No active issues.)
+- **Feature:** FEAT-CONFIG, slug config, doc_path features/domain/config/config.md. Summary: ConfigLoader loads bot definitions from YAML.
+- **Requirements:** REQ-CONFIG-001 — Load bot config from YAML. Parses routing filters including optional discordTrigger, discordMention, discordAuthors. Validation: ConfigLoaderTest.buildRouterParsesDiscordAuthorsRouting.
+- **Assets:** ASSET-BOTS-YAML (config/bots.yaml — Luna routing, optional discordAuthors; comment: numeric Discord user id matches actorId, username matches actorUsername case-insensitive).
 
-### Feature: Config (FEAT-CONFIG)
+### FEAT-CURSOR-GATHERING (Luna)
 
-- **Feature:** title "Bot config from YAML", status active, doc_path mkdoc/features/domain/core/config.md. Summary: ConfigLoader loads bot definitions; workflow.type and workflow.params parsed; Bootstrap uses WorkflowRunnerFactory per bot.
-- **Requirements:** REQ-CONFIG-001 — ConfigLoader loads YAML; BotConfig; workflow.type and workflow.params in BotDefinition. No change to requirement text; example in docs changes from cursor_cloud_gathering to configured + workflowRef.
-- **Assets:** ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML — no code schema change; bots.yaml content change only.
+- **Feature:** FEAT-CURSOR-GATHERING, slug cursor-gathering, doc_path features/domain/workflow/cursor-gathering.md. Luna routing uses discordMention and optional discordAuthors.
+- **Requirements:** REQ-LUNA-001 — Luna bot; optional discordAuthors restricts to listed Discord users (e.g. novawilde13_72571). Criteria: routing activates when message references @Luna and satisfies discordAuthors when configured.
+- **Assets:** ASSET-BOTS-YAML (Luna routing with discordAuthors). ASSET-ROUTER, ASSET-NORMALIZED-EVENT-CONTEXT (author data for routing).
+- **Doc excerpts (cursor-gathering change-log):** Luna discordAuthors in config so only listed users can trigger Luna; gateway and NormalizedEventContext supply author data.
 
 ---
 
-## Implement checklist (concise)
+## Implementation notes (already done)
 
-1. **YAML:** In config/bots.yaml, add `luna_cursor` under `workflows:` with steps (e.g. ask_input for project/change, call_action for cursor.fullRun or equivalent, done). Change Luna bot `workflow` to `type: configured`, `params: { workflowRef: luna_cursor }`.
-2. **Bootstrap:** In registerCursorActions, register real Cursor actions (e.g. `cursor.fullRun`) for use by CallActionStep; keep or replace existing cursor_cloud/echo as needed.
-3. **WorkflowRunnerFactory:** Remove the `case "cursor_cloud_gathering"` branch and the import/use of CursorCloudGatheringRunner. Types: stub, configured only.
-4. **Delete:** CursorCloudGatheringRunner.java.
-5. **Tests:** WorkflowRunnerFactoryTest — remove tests that assert create("cursor_cloud_gathering", ...) returns CursorCloudGatheringRunner; keep stub and configured cases. ConfigLoaderTest — if it asserts workflowType cursor_cloud_gathering, change to configured and workflowRef. VinekeepersEngineTest — replace registration of CursorCloudGatheringRunner for "luna" with ConfigurableWorkflowRunner (or create runner via factory with configured type and luna_cursor ref) so Luna still has a runner.
-6. **Spec drift repair:** In specs/core-registry.yml: remove asset ASSET-CURSOR-CLOUD-GATHERING-RUNNER from assets list; remove from REQ-WORKFLOW-001 and REQ-LUNA-001 traceability.assets and from FEAT-WORKFLOW and FEAT-LUNA asset_ids. Update REQ-WORKFLOW-001 statement/criteria to say stub and configured only. Update REQ-LUNA-001 statement/criteria to workflow type configured, workflowRef luna_cursor.
-7. **Mkdoc:** Update workflow and luna docs (change-log, how-it-works, contracts, workflow.md/luna.md key assets table) to remove CursorCloudGatheringRunner and cursor_cloud_gathering; document luna_cursor and configured Luna.
+- **Router:** Numeric `discordAuthors` entry → match by actorId; non-numeric → match by actorUsername (case-insensitive). When no bot matched, log at DEBUG: source, kind, authorId, actorUsername, mentions, channelId.
+- **config/bots.yaml:** Comment on discordAuthors: numeric Discord user id (matches actorId) or username (matches actorUsername, case-insensitive).
+- **RouterTest:** Tests for match by actorId (numeric), match by actorUsername (including case-insensitive), no match when author not in filter; interaction from allowed/other user; mention + author in filter.
 
 ---
 
 ## Schema constraints
 
-- Do not delete requirements; mark deprecated or adjust statement/criteria/traceability only.
-- Do not add new spec keys; stay within existing req-registry schema.
-- Guardrails: repair spec drift before coding; avoid anti_patterns on REQ-LUNA-001 (no hardcoding Discord channel, no secrets in state).
+- Requirement keys: id, title, statement, status, acceptance.criteria, traceability.assets, validation.tests. No new spec keys; stay within req-registry schema.
+- Guardrails: Do not delete requirements; avoid anti_patterns on requirements/assets; repair drift before coding.

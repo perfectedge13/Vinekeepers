@@ -23,7 +23,7 @@ Structure must match what ConfigLoader expects: `bots[].id`, `bots[].persona` (n
 1. Under `routing:` add an entry with `botId` matching a bot’s `id`.
 2. Set **filter** to control when events are routed to that bot, e.g.:
    - `discordMention: "luna"` — bot is invoked when mentioned on Discord.
-   - `discordAuthors: ["novawilde13_72571"]` — restrict to specific Discord user IDs.
+   - `discordAuthors: ["123456789", "novawilde13_72571"]` — restrict to specific Discord users: numeric Discord user id (matches actorId, stable) or username (matches actorUsername, case-insensitive).
    - Other filter keys (e.g. discordChannels, repos, prLabels, prAuthors) as supported by the Router.
 
 Events that match the filter are sent to the engine for that `botId`; the engine runs the bot’s workflow then reasoner, persists state, and replies (e.g. via Discord) when the source is Discord.
