@@ -25,6 +25,11 @@ Workflow step DSL and branching actions (REQ-WORKFLOW-001). `WorkflowDefinition`
 | ASSET-BRANCH-STEP | Step that branches by condition (state key truthy or when: { key, value } for value-based branch) | src/main/java/com/vinekeepers/workflow/steps/BranchStep.java |
 | ASSET-DYNAMIC-CHOICE-PROVIDER | Interface for dynamic choice providers used by prompt_for_field when choiceProvider is set | src/main/java/com/vinekeepers/workflow/DynamicChoiceProvider.java |
 | ASSET-DONE-STEP | Step that completes workflow with optional message | src/main/java/com/vinekeepers/workflow/steps/DoneStep.java |
+| ASSET-CREATE-CHANNEL-ACTION | Workflow action to create a Discord text channel via gateway | src/main/java/com/vinekeepers/workflow/actions/CreateChannelAction.java |
+| ASSET-POST-CHANNEL-MESSAGE-ACTION | Workflow action to post a message to a Discord channel | src/main/java/com/vinekeepers/workflow/actions/PostChannelMessageAction.java |
+| ASSET-PROVISION-BOT-INSTANCE-ACTION | Workflow action to provision a runtime bot instance (e.g. Arrietty) bound to a channel | src/main/java/com/vinekeepers/workflow/actions/ProvisionBotInstanceAction.java |
+| ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION | Workflow action to create and store a lifecycle context for a run | src/main/java/com/vinekeepers/workflow/actions/CreateLifecycleContextAction.java |
+| ASSET-LAUNCH-CURSOR-RUN-ACTION | Workflow action to launch a Cursor cloud run and register run record | src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java |
 
 # Sub-pages
 

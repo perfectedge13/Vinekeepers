@@ -54,4 +54,11 @@ public class DiscordEventSource implements EventSource, DiscordReplySender {
     public DiscordAppReplySink getReplySink() {
         return new DiscordAppReplySink(gateway);
     }
+
+    /**
+     * Gateway for lifecycle actions (e.g. createTextChannel). Used by Bootstrap when wiring Discord-backed workflow actions.
+     */
+    public DiscordGateway getGateway() {
+        return gateway;
+    }
 }

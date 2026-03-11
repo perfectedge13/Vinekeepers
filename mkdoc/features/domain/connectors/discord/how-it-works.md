@@ -10,6 +10,7 @@
 2. `DiscordEventSource` connects the gateway and subscribes live Discord message events.
 3. The gateway converts Discord messages into internal `Event` payloads with `channelId`, `authorId`, `author` (username), `messageId`, `content`, and normalized `mentions` so routing can apply `discordAuthors` by id or username.
 4. Downstream routing reads both message text and the `mentions` payload field to resolve mention-based bot activation.
+5. The gateway exposes `createTextChannel(guildId, channelName)` for lifecycle room provisioning; the `create_channel` workflow action delegates to it. When channel name is blank, the action derives it from workflow state (e.g. project + codeChange). The action **normalizes** the channel name to Discord-safe format (lowercase, allowed characters) before calling the gateway. On gateway failure the action returns the sentinel `CHANNEL_CREATE_FAILED` so the workflow can branch to a failure path.
 
 # Reply path
 

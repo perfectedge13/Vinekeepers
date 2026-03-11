@@ -14,6 +14,7 @@ import com.vinekeepers.env.Env;
 import com.vinekeepers.env.HealthServer;
 import com.vinekeepers.events.EventBus;
 import com.vinekeepers.reasoner.StubReasoner;
+import com.vinekeepers.state.LifecycleContextStore;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.CursorFullRunTool;
 import com.vinekeepers.tools.EchoTool;
@@ -24,6 +25,11 @@ import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.WorkflowRunnerFactory;
+import com.vinekeepers.workflow.actions.CreateChannelAction;
+import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
+import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
+import com.vinekeepers.workflow.actions.PostChannelMessageAction;
+import com.vinekeepers.workflow.actions.ProvisionBotInstanceAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,10 +47,12 @@ public final class Bootstrap {
     private final VinekeepersEngine engine;
     private final Router router;
     private final StateStore stateStore;
+    private final LifecycleContextStore lifecycleContextStore;
     private final CursorCloudAdapter cursorCloudAdapter;
     private final CursorCloudRunMonitor cursorCloudRunMonitor;
     private final ToolRegistry toolRegistry;
     private final ToolRunner toolRunner;
+    private final WorkflowActionRegistry actionRegistry;
     private DiscordEventSource discordSource;
     private GitHubEventSource githubSource;
     private HealthServer healthServer;
@@ -52,6 +60,7 @@ public final class Bootstrap {
     public Bootstrap() {
         this.eventBus = new EventBus();
         this.stateStore = new StateStore();
+        this.lifecycleContextStore = new LifecycleContextStore();
         this.cursorCloudAdapter = new CursorCloudAdapterImpl();
         this.cursorCloudRunMonitor = new CursorCloudRunMonitor(
                 cursorCloudAdapter,
@@ -59,6 +68,9 @@ public final class Bootstrap {
                 parseLong(Env.get("CURSOR_POLL_INTERVAL_MS", "15000"), 15000L));
         this.toolRegistry = new ToolRegistry();
         this.toolRunner = new ToolRunner(toolRegistry);
+        this.actionRegistry = new WorkflowActionRegistry();
+        registerLegacyActions(actionRegistry);
+        registerLifecycleActions(actionRegistry);
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
         this.router = new Router();
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
@@ -79,13 +91,12 @@ public final class Bootstrap {
             BotConfig config = loader.loadFromPath(configPath);
             router.clear();
             loader.addRoutings(config, router);
-            WorkflowActionRegistry actionRegistry = createActionRegistry();
             DynamicChoiceProviderRegistry choiceProviderRegistry = new DynamicChoiceProviderRegistry();
             choiceProviderRegistry.register("githubRepos", new GitHubReposChoiceProvider(stateStore));
             List<BotDefinition> bots = loader.buildBots(config);
             for (BotDefinition bot : bots) {
                 engine.registerBot(bot);
-                WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), actionRegistry, toolRunner, choiceProviderRegistry);
+                WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), this.actionRegistry, toolRunner, choiceProviderRegistry);
                 engine.registerRunner(bot.getId(), runner);
                 engine.registerReasoner(bot.getId(), new StubReasoner());
             }
@@ -113,6 +124,8 @@ public final class Bootstrap {
         engine.registerSink("discord", discordSource.getReplySink());
         discordSource.start(eventBus);
         cursorCloudRunMonitor.setReplySender(discordSource);
+        actionRegistry.register("create_channel", new CreateChannelAction(discordSource.getGateway()));
+        actionRegistry.register("post_channel_message", new PostChannelMessageAction(discordSource));
         return this;
     }
 
@@ -144,15 +157,15 @@ public final class Bootstrap {
         registry.register("cursor_cloud", (event, state, bind) -> "Cursor Cloud action (stub)");
     }
 
+    private void registerLifecycleActions(WorkflowActionRegistry registry) {
+        registry.register("provision_bot_instance", new ProvisionBotInstanceAction(stateStore));
+        registry.register("create_lifecycle_context", new CreateLifecycleContextAction(lifecycleContextStore));
+        registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore));
+    }
+
     private void registerTools(ToolRegistry registry) {
         registry.register(new CursorFullRunTool(cursorCloudAdapter, stateStore));
         registry.register(new EchoTool());
-    }
-
-    private static WorkflowActionRegistry createActionRegistry() {
-        WorkflowActionRegistry registry = new WorkflowActionRegistry();
-        registerLegacyActions(registry);
-        return registry;
     }
 
     public void shutdown() {

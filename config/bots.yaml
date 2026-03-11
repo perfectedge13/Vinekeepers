@@ -1,6 +1,7 @@
 # Bot definitions and routing for Vinekeepers
 # Luna: listens for @Luna mentions on Discord, gathers repository + feature request,
 # then launches a Cursor Cloud agent run and reports progress back to chat.
+# Arrietty: template for lifecycle room bot instances (provisioned at runtime per channel).
 
 bots:
   - id: luna
@@ -11,6 +12,12 @@ bots:
       type: configured
       params:
         workflowRef: luna_cursor
+  - id: arrietty
+    persona:
+      name: Arrietty
+      systemPrompt: You are Arrietty, a lifecycle room assistant. You help users in this channel with follow-up and context for Cursor runs.
+    workflow:
+      type: stub
 
 routing:
   - botId: luna
@@ -74,12 +81,37 @@ workflows:
             next: 5
             clear: [codeChange, confirmAction]
           - when: else
+            next: 18
+      - type: call_action
+        action: create_channel
+        bind: {}
+        storeIn: channelId
+      - type: branch
+        branches:
+          - when: { key: channelId, value: CHANNEL_CREATE_FAILED }
+            next: 17
+          - when: else
             next: 12
       - type: call_action
-        action: cursor.fullRun
+        action: provision_bot_instance
+        bind: { templateBotId: arrietty }
+        storeIn: instanceId
+      - type: call_action
+        action: create_lifecycle_context
+        bind: { configuredBotId: arrietty }
+        storeIn: contextId
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "This room is handled by {{lifecycleBotName}}. Repo: {{project}}. Request: {{codeChange}}. Launching Cursor…"
+          lifecycleBotName: "Arrietty"
+      - type: call_action
+        action: launch_cursor_run
         bind: {}
         storeIn: launchMessage
       - type: done
         message: "{{launchMessage}}"
+      - type: done
+        message: "Could not create room."
       - type: done
         message: "Cancelled."

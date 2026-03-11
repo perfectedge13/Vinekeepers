@@ -33,7 +33,7 @@ steps:
   mk_runbooks:
     skill: nova-mk-runbooks
     location: .cursor/skills/nova-code/mk/sub-skills/runbooks.md
-    description: Create/update docs-dir runbooks/ (index, operational, troubleshooting, recovery, maintenance); follow page-formats.md.
+    description: Create/update docs-dir runbooks/ (index, operational, troubleshooting, recovery, maintenance, configuring-bots); follow page-formats.md.
   mk_feature_dossiers:
     skill: nova-mk-feature-dossiers
     location: .cursor/skills/nova-code/mk/sub-skills/feature-dossiers.md

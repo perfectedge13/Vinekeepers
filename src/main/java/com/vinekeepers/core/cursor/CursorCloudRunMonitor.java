@@ -55,11 +55,11 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
 
     void tick() {
         for (String key : stateStore.keys()) {
-            Optional<LunaCloudRunState> candidate = stateStore.get(key, LunaCloudRunState.class);
+            Optional<LifecycleRunRecord> candidate = stateStore.get(key, LifecycleRunRecord.class);
             if (candidate.isEmpty()) {
                 continue;
             }
-            LunaCloudRunState runState = candidate.get();
+            LifecycleRunRecord runState = candidate.get();
             if (runState.isTerminal() && runState.isTerminalNotificationSent()) {
                 continue;
             }
@@ -67,7 +67,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         }
     }
 
-    private void pollRun(LunaCloudRunState runState) {
+    private void pollRun(LifecycleRunRecord runState) {
         String previousStatus = runState.getStatus();
         String previousPrUrl = runState.getPrUrl();
         String previousAssistantMessageId = runState.getLastAssistantMessageId();
@@ -96,7 +96,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         }
     }
 
-    private void sendUpdate(LunaCloudRunState runState, String message) {
+    private void sendUpdate(LifecycleRunRecord runState, String message) {
         DiscordReplySender sender = replySender;
         if (sender == null || message == null || message.isBlank()) {
             return;
@@ -104,7 +104,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         sender.send(runState.getChannelId(), runState.getReplyToMessageId(), message);
     }
 
-    private static String formatStatusUpdate(LunaCloudRunState runState) {
+    private static String formatStatusUpdate(LifecycleRunRecord runState) {
         StringBuilder message = new StringBuilder("Cursor agent status: ")
                 .append(runState.getStatus());
         if (runState.getBranchName() != null && !runState.getBranchName().isBlank()) {
@@ -116,7 +116,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         return message.toString();
     }
 
-    private static String formatTerminalUpdate(LunaCloudRunState runState) {
+    private static String formatTerminalUpdate(LifecycleRunRecord runState) {
         String status = runState.getStatus() != null ? runState.getStatus() : "UNKNOWN";
         if ("FINISHED".equalsIgnoreCase(status)) {
             StringBuilder message = new StringBuilder("Cursor finished the Luna request.");

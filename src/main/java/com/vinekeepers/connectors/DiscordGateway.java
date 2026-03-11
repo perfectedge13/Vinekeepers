@@ -59,4 +59,11 @@ public interface DiscordGateway {
     default void openModal(String interactionId, String token, String customId, String title, List<Map<String, Object>> fields) {
         // no-op by default
     }
+
+    /**
+     * Create a text channel in the given guild for lifecycle room. Returns channel id or null on failure.
+     */
+    default String createTextChannel(String guildId, String channelName) {
+        return null;
+    }
 }

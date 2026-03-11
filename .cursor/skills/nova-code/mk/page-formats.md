@@ -17,17 +17,21 @@ Sub-skills MUST follow these formats when creating or updating markdown files un
 | `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/tests.md` | **Title:** Tests. `# Coverage` (summary). `# Test list` (table: Test ID, Title, Class, Method, Intent). |
 | `&lt;docs_dir&gt;/features/domain/<domain>/<feature-name>/diagrams.md` | **Title:** Diagrams. `# Architecture` (link to main architecture or inline Mermaid). When linking to the main architecture page from this file, use `../../../../architecture.md` — four levels up to the docs root. `# Feature flow` (optional Mermaid for this feature). |
 | `&lt;docs_dir&gt;/architecture.md` | **Title:** Architecture. `# Overview` (2–3 sentences). `# System context` (external systems, boundaries). `# Major subsystems` (domains with short description). `# Runtime flows` (how components interact). `# Diagram` (Mermaid block or link). |
-| `&lt;docs_dir&gt;/runbooks/index.md` | **Title:** Runbooks. `# Index` (links to operational, troubleshooting, recovery, maintenance). Short intro. |
+
+**Runbooks (canonical list):** The runbook set below is canonical. mk_runbooks and sync-mkdoc must ensure every runbook listed here exists under `<docs_dir>/runbooks/` and is linked from runbooks/index.md and from the Runbooks nav.
+
+| `&lt;docs_dir&gt;/runbooks/index.md` | **Title:** Runbooks. `# Index` (links to operational, troubleshooting, recovery, maintenance, configuring-bots). Short intro. |
 | `&lt;docs_dir&gt;/runbooks/operational.md` | **Title:** Operational. `# Procedures` (heading per procedure; steps underneath). |
 | `&lt;docs_dir&gt;/runbooks/troubleshooting.md` | **Title:** Troubleshooting. `# Entries` (each: `## <symptom or issue>` then cause, steps, resolution). |
 | `&lt;docs_dir&gt;/runbooks/recovery.md` | **Title:** Recovery. `# Procedures` (recovery scenarios and steps). |
 | `&lt;docs_dir&gt;/runbooks/maintenance.md` | **Title:** Maintenance. `# Procedures` (maintenance tasks, schedule, steps). |
+| `&lt;docs_dir&gt;/runbooks/configuring-bots.md` | **Title:** Configuring bots. `# Procedures` (steps for editing bot definitions, routing, persona, workflows; reference config/bots.yaml and project.yml `scan.bots_config`). |
 
 ## When to update (by owning step)
 
 - **mk_index** owns: `&lt;docs_dir&gt;/index.md`, `&lt;docs_dir&gt;/features/index.md`, `&lt;docs_dir&gt;/features/domain.md`, `&lt;docs_dir&gt;/features/domain/<domain-slug>.md`.
 - **mk_architecture** owns: `&lt;docs_dir&gt;/architecture.md`.
-- **mk_runbooks** owns: `&lt;docs_dir&gt;/runbooks/index.md`, `&lt;docs_dir&gt;/runbooks/operational.md`, `&lt;docs_dir&gt;/runbooks/troubleshooting.md`, `&lt;docs_dir&gt;/runbooks/recovery.md`, `&lt;docs_dir&gt;/runbooks/maintenance.md`.
+- **mk_runbooks** owns: `&lt;docs_dir&gt;/runbooks/index.md`, `&lt;docs_dir&gt;/runbooks/operational.md`, `&lt;docs_dir&gt;/runbooks/troubleshooting.md`, `&lt;docs_dir&gt;/runbooks/recovery.md`, `&lt;docs_dir&gt;/runbooks/maintenance.md`, `&lt;docs_dir&gt;/runbooks/configuring-bots.md`.
 - **mk_feature_dossiers** owns: the resolved feature summary path plus its seven sub-pages (how-it-works.md, change-log.md, known-issues.md, decisions.md, contracts.md, tests.md, diagrams.md).
 
 ## Update semantics

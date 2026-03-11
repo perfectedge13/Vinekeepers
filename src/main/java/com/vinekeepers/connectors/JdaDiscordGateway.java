@@ -7,6 +7,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.interaction.GenericInteractionCreateEvent;
@@ -309,6 +310,29 @@ public final class JdaDiscordGateway implements DiscordGateway {
     @Override
     public boolean isConnected() {
         return connected;
+    }
+
+    @Override
+    public String createTextChannel(String guildId, String channelName) {
+        if (!connected || jda == null || guildId == null || guildId.isBlank()) {
+            return null;
+        }
+        String name = (channelName != null && !channelName.isBlank()) ? channelName.trim() : "lifecycle-room";
+        if (name.length() > 100) {
+            name = name.substring(0, 100);
+        }
+        try {
+            Guild guild = jda.getGuildById(guildId);
+            if (guild == null) {
+                log.warn("Discord guild {} not found for createTextChannel", guildId);
+                return null;
+            }
+            TextChannel channel = guild.createTextChannel(name).complete();
+            return channel != null ? channel.getId() : null;
+        } catch (Exception e) {
+            log.warn("Discord createTextChannel failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static Event toEvent(MessageReceivedEvent event) {

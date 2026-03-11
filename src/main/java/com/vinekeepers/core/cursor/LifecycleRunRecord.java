@@ -3,9 +3,10 @@ package com.vinekeepers.core.cursor;
 import java.time.Instant;
 
 /**
- * In-memory state for a Luna-triggered Cursor cloud agent run.
+ * Generic in-memory record for a lifecycle Cursor cloud agent run (channel, reply target, remote status).
+ * Indexed by channelId and externalRunId (agentId).
  */
-public final class LunaCloudRunState {
+public final class LifecycleRunRecord {
 
     private final String agentId;
     private final String sessionKey;
@@ -28,7 +29,7 @@ public final class LunaCloudRunState {
     private Instant completedAt;
     private boolean terminalNotificationSent;
 
-    public LunaCloudRunState(String agentId, String sessionKey, String projectInput,
+    public LifecycleRunRecord(String agentId, String sessionKey, String projectInput,
                              String repositoryUrl, String baseRef, String branchName,
                              String agentUrl, String changeRequest, String channelId,
                              String replyToMessageId, Instant launchedAt, String status) {

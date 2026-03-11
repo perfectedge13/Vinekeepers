@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-10
+
+- **Lifecycle room (Phase 1):** The `create_channel` workflow action (used by Luna lifecycle room) delegates to gateway `createTextChannel(guildId, channelName)`; the action normalizes channel name to Discord-safe format before calling the gateway and returns sentinel `CHANNEL_CREATE_FAILED` on failure. Documented in workflow-steps and cursor-gathering; gateway contract unchanged.
+
 ## 2026-03-09
 
 - **Discord intake initial components:** Gateway contract (`DiscordGateway`), JDA-backed gateway (`JdaDiscordGateway`), and reply sink (`DiscordAppReplySink`) updates for receive/send and interaction lifecycle; author (authorId, author) in payload for routing; adapter acks or defers within platform window; optional components on channel send and follow-up/update.

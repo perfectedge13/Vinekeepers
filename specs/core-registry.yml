@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-09T18:30:00Z"
+  updated_utc: "2026-03-10T14:30:00Z"
 
 project:
   id: vinekeepers
@@ -146,7 +146,7 @@ assets:
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
-    role: Bot definitions YAML (including Luna routing, Discord mention activation, and optional discordAuthors filter)
+    role: Bot definitions YAML (including Luna routing, Discord mention activation, optional discordAuthors filter, and lifecycleBotName in step bind/content for luna_cursor)
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -523,8 +523,8 @@ assets:
     feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-LUNA-RUN-STATE
     kind: source
-    path: src/main/java/com/vinekeepers/core/cursor/LunaCloudRunState.java
-    role: In-memory state for a launched Cursor cloud run, including Discord reply target and remote status
+    path: src/main/java/com/vinekeepers/core/cursor/LifecycleRunRecord.java
+    role: Generic run record for a lifecycle Cursor cloud run; indexed by channelId and externalRunId; Discord reply target and remote status
     requires: [REQ-LUNA-001]
     feature_ids: [FEAT-CURSOR-GATHERING]
   - id: ASSET-CURSOR-RUN-MONITOR
@@ -581,6 +581,60 @@ assets:
     role: Exception type for Cursor Cloud transport and adapter failures
     requires: [REQ-LUNA-001]
     feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CURSOR-INSTRUCTION-COMPOSER
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorInstructionComposer.java
+    role: Single prompt source for Cursor run instructions (repo, baseBranch, change) including /nova-code; used by LaunchCursorRunAction and CursorFullRunTool
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-LIFECYCLE-CONTEXT
+    kind: source
+    path: src/main/java/com/vinekeepers/state/LifecycleContext.java
+    role: Extended lifecycle run context (channelId, guildId, run record id, configuredBotId, runtimeBotInstanceId, optional repo/requestText) for Phase 1 lifecycle room
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-LIFECYCLE-CONTEXT-STORE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/LifecycleContextStore.java
+    role: Store and resolve lifecycle contexts by key for lifecycle room runs
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-RUNTIME-BOT-INSTANCE
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/RuntimeBotInstance.java
+    role: Runtime instance of a bot provisioned from a template (e.g. Arrietty); instanceId, templateBotId, displayName, channelId
+    requires: [REQ-LUNA-001]
+    feature_ids: [FEAT-CURSOR-GATHERING]
+  - id: ASSET-CREATE-CHANNEL-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/CreateChannelAction.java
+    role: Workflow action to create a Discord text channel via gateway for lifecycle room; returns channel id or sentinel CHANNEL_CREATE_FAILED on gateway failure; room naming from state (project + codeChange) or fallback; normalizeChannelName for Discord-safe lowercase
+    requires: [REQ-LUNA-001, REQ-WORKFLOW-001]
+    feature_ids: [FEAT-CURSOR-GATHERING, FEAT-WORKFLOW-STEPS]
+  - id: ASSET-POST-CHANNEL-MESSAGE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PostChannelMessageAction.java
+    role: Workflow action to post a message to a Discord channel; interpolation from merged map (state then bind, bind overrides); lifecycleBotName from bind for content
+    requires: [REQ-LUNA-001, REQ-WORKFLOW-001]
+    feature_ids: [FEAT-CURSOR-GATHERING, FEAT-WORKFLOW-STEPS]
+  - id: ASSET-PROVISION-BOT-INSTANCE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ProvisionBotInstanceAction.java
+    role: Workflow action to provision a runtime bot instance (e.g. Arrietty) bound to a channel; instance stored under generic prefix bot_instance:{instanceId}
+    requires: [REQ-LUNA-001, REQ-WORKFLOW-001]
+    feature_ids: [FEAT-CURSOR-GATHERING, FEAT-WORKFLOW-STEPS]
+  - id: ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/CreateLifecycleContextAction.java
+    role: Workflow action to create and store a lifecycle context for a run; bind precedence (state then bind, bind overrides)
+    requires: [REQ-LUNA-001, REQ-WORKFLOW-001]
+    feature_ids: [FEAT-CURSOR-GATHERING, FEAT-WORKFLOW-STEPS]
+  - id: ASSET-LAUNCH-CURSOR-RUN-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java
+    role: Workflow action to launch a Cursor cloud run and register run record; ack/status to Discord (e.g. launching) and directs user to lifecycle room
+    requires: [REQ-LUNA-001, REQ-WORKFLOW-001]
+    feature_ids: [FEAT-CURSOR-GATHERING, FEAT-WORKFLOW-STEPS]
 
 requirements:
   - id: REQ-CORE-001
@@ -725,6 +779,7 @@ requirements:
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors keys from YAML
+        - Workflow step bind keys (e.g. lifecycleBotName) and content with {{key}} interpolation are supported in step config
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML]
@@ -1067,9 +1122,10 @@ requirements:
         - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
         - StepResult may carry clearKeys; runner applies clearKeys to state before setStepIndex (edit-reprompt)
         - BranchStep branch config may include clear (list of state keys); returned StepResult carries clearKeys for runner to apply
+        - Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for actions that render content
       examples: []
     traceability:
-      assets: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-WORKFLOW-DEFINITION, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP]
+      assets: [ASSET-WORKFLOW, ASSET-WORKFLOW-RESULT, ASSET-STUB-WORKFLOW, ASSET-STUB-STATE, ASSET-LUNA-WORKFLOW, ASSET-LUNA-STATE, ASSET-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUN-RESULT, ASSET-STUB-WORKFLOW-RUNNER, ASSET-WORKFLOW-RUNNER-FACTORY, ASSET-SESSION-KEY-STRATEGY, ASSET-SESSION-KEY-STRATEGIES, ASSET-STEP-RESULT, ASSET-STEP-OUTCOME, ASSET-WORKFLOW-STEP, ASSET-WORKFLOW-ACTION, ASSET-WORKFLOW-ACTION-REGISTRY, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-WORKFLOW-DEFINITION, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-ASK-FOR-INPUT-STEP, ASSET-PROMPT-FOR-FIELD-STEP, ASSET-CAPTURE-FIELD-STEP, ASSET-CALL-ACTION-STEP, ASSET-BRANCH-STEP, ASSET-DONE-STEP, ASSET-CREATE-CHANNEL-ACTION, ASSET-POST-CHANNEL-MESSAGE-ACTION, ASSET-PROVISION-BOT-INSTANCE-ACTION, ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION, ASSET-LAUNCH-CURSOR-RUN-ACTION]
       symbols: []
     validation:
       tests:
@@ -1130,6 +1186,18 @@ requirements:
           intent: Verify DoneStep completes with message and template
           testClass: com.vinekeepers.workflow.steps.DoneStepTest
           preconditions: []
+        - id: UNIT-POST-CHANNEL-MESSAGE-INTERPOLATION
+          title: PostChannelMessageActionTest
+          intent: Verify post_channel_message interpolates content from merged map (state then bind, bind overrides)
+          testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
+          testMethod: runInterpolatesContentFromBindState
+          preconditions: []
+        - id: UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-PRECEDENCE
+          title: CreateLifecycleContextActionTest
+          intent: Verify create_lifecycle_context uses bind precedence (bind overrides state)
+          testClass: com.vinekeepers.workflow.actions.CreateLifecycleContextActionTest
+          testMethod: runPrefersBindOverStateForNewFields
+          preconditions: []
         - id: UNIT-CAPTURE-FIELD-STEP
           title: CaptureFieldFromEventStepTest
           intent: Verify CaptureFieldFromEventStep reads interaction values (nested or direct list) and customId fallback
@@ -1144,8 +1212,8 @@ requirements:
               expect: ["BUILD SUCCESS"]
 
   - id: REQ-LUNA-001
-    title: Luna bot — Discord mention trigger, multi-turn gather, Cursor Cloud API
-    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule and optional discordAuthors filter; workflowRef luna_cursor in bots.yaml; luna_cursor uses guided repo selection (choiceProvider githubRepos, GitHub API + last-repo memory), optional custom repo entry, codeChange prompt/capture, confirmation step (Launch/Edit repo/Edit request/Cancel), then cursor.fullRun; Vinekeepers stores in-memory run state and luna:lastRepo per author, polls Cursor, reports launch/progress/completion to Discord; config and routing stay in YAML."
+    title: Luna bot — Discord mention trigger, multi-turn gather, Cursor Cloud API, lifecycle room Phase 1
+    statement: "Luna bot is registered with id luna; Discord activation uses a configured discordMention: luna rule and optional discordAuthors filter; workflowRef luna_cursor in bots.yaml; luna_cursor uses guided repo selection (choiceProvider githubRepos, GitHub API + last-repo memory), optional custom repo entry, codeChange prompt/capture, confirmation step (Launch/Edit repo/Edit request/Cancel), then launch_cursor_run as the authoritative launch path (cursor.fullRun is not used in luna_cursor). CursorInstructionComposer is the single prompt source for Cursor run instructions including /nova-code. Vinekeepers stores in-memory run state and luna:lastRepo per author, polls Cursor, reports launch/progress/completion to Discord; config and routing stay in YAML. Phase 1 lifecycle room: LifecycleRunRecord (indexed by channelId and externalRunId); extended LifecycleContext (channelId, configuredBotId, runtimeBotInstanceId, optional repo/requestText) and LifecycleContextStore; RuntimeBotInstance for provisioned bots (e.g. Arrietty) stored under generic prefix bot_instance:; workflow actions create_channel (Discord createTextChannel, sentinel CHANNEL_CREATE_FAILED, room naming from state or fallback), post_channel_message, provision_bot_instance, create_lifecycle_context, launch_cursor_run."
     status: active
     priority: high
     type: functional
@@ -1160,19 +1228,28 @@ requirements:
         - Bot id luna and routing filter discordMention luna; optional discordAuthors in routing restricts Luna to listed Discord users (e.g. novawilde13_72571)
         - Luna routing activates when Discord messages reference @Luna in text or mention metadata and satisfy discordAuthors when configured
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
-        - Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before launching cursor.fullRun
-        - cursor.fullRun action resolves repository input, launches the official Cursor Cloud Agent API, stores LunaCloudRunState, and immediately acknowledges launch to Discord
+        - Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before launching via launch_cursor_run (cursor.fullRun not used in luna_cursor)
+        - launch_cursor_run action resolves repository input, uses CursorInstructionComposer for prompt (single source including /nova-code), launches the official Cursor Cloud Agent API, stores LifecycleRunRecord, and immediately acknowledges launch to Discord
         - CursorCloudRunMonitor polls agent status and conversation feedback and relays updates such as running state, PR URL, and final summary to Discord
         - Engine sends workflow reply to Discord when source is Discord
         - "Confirmation branch clear: luna_cursor edit_request branch clears codeChange and confirmAction from state before reprompting; edit_repo branch clears project, codeChange, and confirmAction before reprompting (branch clear config in bots.yaml)"
         - Cursor adapter logs transport exceptions, non-2xx responses (status and safe error message), and startup config (baseUrl, key presence); never logs API key, request body, or full response body
         - "Cursor adapter parses non-2xx responses robustly (extractErrorMessageAndCode for error string, nested error.message/code, top-level message, plain text, empty body); uses safe request diagnostics (debug URI, key masked, model, repo, branch); serializes request payload with NON_NULL; uses Bearer token in Authorization header"
+        - create_channel returns sentinel CHANNEL_CREATE_FAILED on gateway failure or null from createTextChannel; room naming uses normalizeChannelName (Discord-safe lowercase)
+        - post_channel_message interpolates content from merged map (state then bind, bind overrides); lifecycleBotName from bind for content
+        - create_lifecycle_context uses bind precedence (bind overrides state for configuredBotId, repo, requestText, runtimeBotInstanceId)
+        - launch_cursor_run acknowledgement to Discord includes optional status (e.g. launching) and directs user to lifecycle room
       examples: []
     traceability:
-      assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-STEP-RESULT, ASSET-BRANCH-STEP]
+      assets: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-INSTRUCTION-COMPOSER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-BOTS-YAML, ASSET-CONFIGURABLE-WORKFLOW-RUNNER, ASSET-CONFIGURABLE-WORKFLOW-STATE, ASSET-STEP-RESULT, ASSET-BRANCH-STEP, ASSET-LIFECYCLE-CONTEXT, ASSET-LIFECYCLE-CONTEXT-STORE, ASSET-RUNTIME-BOT-INSTANCE, ASSET-CREATE-CHANNEL-ACTION, ASSET-POST-CHANNEL-MESSAGE-ACTION, ASSET-PROVISION-BOT-INSTANCE-ACTION, ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION, ASSET-LAUNCH-CURSOR-RUN-ACTION, ASSET-GITHUB-REPOS-CHOICE-PROVIDER]
       symbols: []
     validation:
       tests:
+        - id: UNIT-CURSOR-INSTRUCTION-COMPOSER
+          title: CursorInstructionComposerTest
+          intent: Verify CursorInstructionComposer builds instruction from repo, baseBranch, change including /nova-code
+          testClass: com.vinekeepers.core.cursor.CursorInstructionComposerTest
+          preconditions: []
         - id: UNIT-LUNA-STATE
           title: GatheringStateTest
           intent: Verify Luna conversation state (project, code change, step)
@@ -1269,6 +1346,76 @@ requirements:
           title: CursorCloudRunMonitorTest
           intent: Verify CursorCloudRunMonitor reports Cursor status and feedback back to Discord
           testClass: com.vinekeepers.core.cursor.CursorCloudRunMonitorTest
+          preconditions: []
+        - id: UNIT-LIFECYCLE-RUN-RECORD
+          title: LifecycleRunRecordTest
+          intent: Verify LifecycleRunRecord model and indexing by channelId and externalRunId
+          testClass: com.vinekeepers.core.cursor.LifecycleRunRecordTest
+          preconditions: []
+        - id: UNIT-LIFECYCLE-CONTEXT
+          title: LifecycleContextTest
+          intent: Verify LifecycleContext model and builder
+          testClass: com.vinekeepers.state.LifecycleContextTest
+          preconditions: []
+        - id: UNIT-LIFECYCLE-CONTEXT-STORE
+          title: LifecycleContextStoreTest
+          intent: Verify LifecycleContextStore store and resolve by key
+          testClass: com.vinekeepers.state.LifecycleContextStoreTest
+          preconditions: []
+        - id: UNIT-RUNTIME-BOT-INSTANCE
+          title: RuntimeBotInstanceTest
+          intent: Verify RuntimeBotInstance model for provisioned bots
+          testClass: com.vinekeepers.bot.RuntimeBotInstanceTest
+          preconditions: []
+        - id: UNIT-CREATE-CHANNEL-ACTION
+          title: CreateChannelActionTest
+          intent: Verify create_channel action uses gateway createTextChannel for lifecycle room
+          testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
+          preconditions: []
+        - id: UNIT-CREATE-CHANNEL-ACTION-SENTINEL
+          title: CreateChannelActionTest
+          intent: Verify create_channel returns CHANNEL_CREATE_FAILED on gateway failure or null
+          testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
+          testMethod: runReturnsChannelCreateFailedWhenCreateTextChannelReturnsNull
+          preconditions: []
+        - id: UNIT-CREATE-CHANNEL-ACTION-NORMALIZE
+          title: CreateChannelActionTest
+          intent: Verify create_channel normalizes channel name to Discord-safe lowercase
+          testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
+          testMethod: runNormalizesChannelNameFromBindToLowercaseDiscordSafe
+          preconditions: []
+        - id: UNIT-POST-CHANNEL-MESSAGE-ACTION
+          title: PostChannelMessageActionTest
+          intent: Verify post_channel_message action posts to Discord channel
+          testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
+          preconditions: []
+        - id: UNIT-POST-CHANNEL-MESSAGE-LIFECYCLE-BOT-NAME
+          title: PostChannelMessageActionTest
+          intent: Verify post_channel_message interpolates lifecycleBotName from merged map (bind wins)
+          testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
+          testMethod: runInterpolatesLifecycleBotNameFromMergedMapBindWins
+          preconditions: []
+        - id: UNIT-PROVISION-BOT-INSTANCE-ACTION
+          title: ProvisionBotInstanceActionTest
+          intent: Verify provision_bot_instance action provisions runtime bot instance
+          testClass: com.vinekeepers.workflow.actions.ProvisionBotInstanceActionTest
+          preconditions: []
+        - id: UNIT-CREATE-LIFECYCLE-CONTEXT-ACTION
+          title: CreateLifecycleContextActionTest
+          intent: Verify create_lifecycle_context action creates and stores lifecycle context
+          testClass: com.vinekeepers.workflow.actions.CreateLifecycleContextActionTest
+          preconditions: []
+        - id: UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-WINS
+          title: CreateLifecycleContextActionTest
+          intent: Verify create_lifecycle_context bind precedence (bind overrides state for configuredBotId)
+          testClass: com.vinekeepers.workflow.actions.CreateLifecycleContextActionTest
+          testMethod: runConfiguredBotIdBindPrecedenceBindWinsOverState
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run action launches run, registers run record, and acknowledges to Discord with status (e.g. launching) and lifecycle room
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runLaunchesAndStoresRecordAndBindsContext
           preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
@@ -1383,9 +1530,9 @@ features:
     title: Cursor-backed gathering workflow
     domain_slug: workflow
     doc_path: features/domain/workflow/cursor-gathering.md
-    summary: Luna gathers repository and feature input over Discord, launches an official Cursor cloud agent run, and reports progress and PR results back to chat.
+    summary: Luna gathers repository and feature input over Discord, launches an official Cursor cloud agent run via launch_cursor_run (CursorInstructionComposer prompt source); lifecycle room Phase 1 (extended context, run record, provisioning actions, create_channel sentinel and room naming).
     requirement_ids: [REQ-LUNA-001]
-    asset_ids: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-GITHUB-REPOS-CHOICE-PROVIDER, ASSET-BOTS-YAML, ASSET-BOOTSTRAP, ASSET-ENGINE]
+    asset_ids: [ASSET-LUNA-STATE, ASSET-LUNA-WORKFLOW, ASSET-CURSOR-ADAPTER, ASSET-CURSOR-ADAPTER-IMPL, ASSET-LUNA-RUN-STATE, ASSET-CURSOR-RUN-MONITOR, ASSET-CURSOR-AGENT-LAUNCH-REQUEST, ASSET-CURSOR-AGENT-CONVERSATION, ASSET-CURSOR-AGENT-DETAILS, ASSET-CURSOR-AGENT-LAUNCH-RESULT, ASSET-CURSOR-AGENT-MESSAGE, ASSET-CURSOR-CLOUD-TRANSPORT, ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE, ASSET-CURSOR-CLOUD-EXCEPTION, ASSET-CURSOR-INSTRUCTION-COMPOSER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-GITHUB-REPOS-CHOICE-PROVIDER, ASSET-BOTS-YAML, ASSET-BOOTSTRAP, ASSET-ENGINE, ASSET-LIFECYCLE-CONTEXT, ASSET-LIFECYCLE-CONTEXT-STORE, ASSET-RUNTIME-BOT-INSTANCE, ASSET-CREATE-CHANNEL-ACTION, ASSET-POST-CHANNEL-MESSAGE-ACTION, ASSET-PROVISION-BOT-INSTANCE-ACTION, ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION, ASSET-LAUNCH-CURSOR-RUN-ACTION]
     status: active
   - id: FEAT-CORE
     slug: core

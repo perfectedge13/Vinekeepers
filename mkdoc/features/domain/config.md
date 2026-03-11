@@ -4,5 +4,5 @@
 
 | Feature | Status | Link |
 |---------|--------|------|
-| Bot config from YAML | active | [Bot config from YAML](core/config.md) |
+| Bot config from YAML | active | [Bot config from YAML](config/config.md) |
 

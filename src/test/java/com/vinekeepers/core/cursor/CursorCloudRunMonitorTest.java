@@ -50,7 +50,7 @@ class CursorCloudRunMonitorTest {
             }
         };
         StateStore store = new StateStore();
-        LunaCloudRunState runState = new LunaCloudRunState(
+        LifecycleRunRecord runState = new LifecycleRunRecord(
                 "bc_1", "session", "acme/vinekeepers", "https://github.com/acme/vinekeepers",
                 "main", "luna/add-tests", "https://cursor.com/agents?id=bc_1",
                 "Ship it", "chan-1", "msg-1", Instant.now(), "CREATING");
@@ -103,7 +103,7 @@ class CursorCloudRunMonitorTest {
             }
         };
         StateStore store = new StateStore();
-        LunaCloudRunState runState = new LunaCloudRunState(
+        LifecycleRunRecord runState = new LifecycleRunRecord(
                 "bc_2", "session", "acme/vinekeepers", "https://github.com/acme/vinekeepers",
                 "main", "luna/add-tests", "https://cursor.com/agents?id=bc_2",
                 "Ship it", "chan-1", "msg-1", Instant.now(), "RUNNING");

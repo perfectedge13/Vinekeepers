@@ -83,6 +83,7 @@ nav:
       - Troubleshooting: runbooks/troubleshooting.md
       - Recovery: runbooks/recovery.md
       - Maintenance: runbooks/maintenance.md
+      - Configuring bots: runbooks/configuring-bots.md
   - Cursor:
       - Overview: cursor/index.md
       - Rules:

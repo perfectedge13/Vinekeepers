@@ -2,37 +2,37 @@
 
 ## 1. Outcome
 
-**Pass.**
+**Pass.** Specs and mkdoc are in sync; no schema or drift violations. Scan and update phases confirmed current state; no spec file or doc changes were required.
 
 ## 2. Summary
 
-Scan confirmed source and registries are in sync (38 Java files; core and connectors domains with 11 + 2 features). No new requirements or assets. Refreshed `schema.updated_utc` in both registries. Mkdoc unchanged (features, architecture, runbooks, feature dossiers, and Cursor docs already current; Cursor skill pages include expandable source per sync-cursor-docs).
+Scanned the repository (source dirs, specs, registries); loaded current spec state from `specs/specs.yml`, `specs/core-registry.yml`, and `specs/connectors-registry.yml`. Update phase: domains (core, env, config, bot, events, state, tools, audit, reasoner, workflow, connectors) and registry mapping already match the spec index; feature categorization and traceability are consistent. Consistency check passed (requirements, assets, features, traceability). No spec index or registry edits were needed. Mkdoc was verified: index, features, architecture, runbooks (including configuring-bots), and Cursor docs satisfy the comprehensive checklist; `npm run validate-docs` passed. No mkdoc files were modified.
 
 ## 3. Phases executed
 
-| Phase  | Status |
-|--------|--------|
-| Scan   | Pass   |
-| Update | Pass   |
-| Write  | Pass   |
-| Mkdoc  | Pass   |
+| Phase  | Status  |
+|--------|---------|
+| Scan   | Pass    |
+| Update | Pass    |
+| Write  | Pass    |
+| Mkdoc  | Pass    |
 
 ## 4. Specs updated
 
-- `specs/core-registry.yml` (schema.updated_utc)
-- `specs/connectors-registry.yml` (schema.updated_utc)
+None.
 
 ## 5. Mkdoc updated
 
-None. (Docs dir and Cursor pages already in sync with specs and .cursor; no content or nav changes required.)
+None. (Docs already satisfy requirements; validate-docs passed.)
 
 ## 6. Domains
 
-Domains: **core**, **connectors**.
+Domains: core, env, config, bot, events, state, tools, audit, reasoner, workflow, connectors. Core-domain features live in `core-registry.yml`; connector features (discord, github) in `connectors-registry.yml`.
 
 ## 7. Issues / notes
 
-Consistency check passed; no schema violations.
+- Consistency check passed; no schema violations.
+- Runbooks index includes the new Configuring bots runbook; mkdocs nav and runbook files are complete.
 
 ---
 
