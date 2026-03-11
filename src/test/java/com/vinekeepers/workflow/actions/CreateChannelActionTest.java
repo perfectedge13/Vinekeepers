@@ -5,6 +5,8 @@ import com.vinekeepers.events.Event;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -122,6 +124,48 @@ class CreateChannelActionTest {
             @Override
             public String createTextChannel(String guildId, String channelName) {
                 throw new RuntimeException("Discord API error");
+            }
+        };
+        CreateChannelAction action = new CreateChannelAction(gateway);
+        Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
+    }
+
+    @Test
+    void runReturnsChannelCreateFailedWhenCreateTextChannelThrowsTimeoutException() {
+        DiscordGateway gateway = new DiscordGateway() {
+            @Override
+            public void connect(java.util.function.Consumer<com.vinekeepers.events.Event> publisher) {}
+            @Override
+            public void shutdown() {}
+            @Override
+            public void send(String channelId, String messageId, String content) {}
+            @Override
+            public boolean isConnected() { return true; }
+            @Override
+            public String createTextChannel(String guildId, String channelName) {
+                throw new RuntimeException(new TimeoutException("submit().get() timeout"));
+            }
+        };
+        CreateChannelAction action = new CreateChannelAction(gateway);
+        Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
+    }
+
+    @Test
+    void runReturnsChannelCreateFailedWhenCreateTextChannelThrowsExecutionException() {
+        DiscordGateway gateway = new DiscordGateway() {
+            @Override
+            public void connect(java.util.function.Consumer<com.vinekeepers.events.Event> publisher) {}
+            @Override
+            public void shutdown() {}
+            @Override
+            public void send(String channelId, String messageId, String content) {}
+            @Override
+            public boolean isConnected() { return true; }
+            @Override
+            public String createTextChannel(String guildId, String channelName) {
+                throw new RuntimeException(new ExecutionException(new IllegalStateException("JDA rest action failed")));
             }
         };
         CreateChannelAction action = new CreateChannelAction(gateway);

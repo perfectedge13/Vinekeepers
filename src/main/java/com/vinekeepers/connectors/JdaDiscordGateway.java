@@ -31,6 +31,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -39,6 +42,9 @@ import java.util.function.Consumer;
 public final class JdaDiscordGateway implements DiscordGateway {
 
     private static final Logger log = LoggerFactory.getLogger(JdaDiscordGateway.class);
+
+    /** Timeout for createTextChannel submit().get() — safe from callback threads. */
+    private static final int CREATE_CHANNEL_TIMEOUT_SECONDS = 15;
 
     private final String token;
     private volatile JDA jda;
@@ -327,8 +333,22 @@ public final class JdaDiscordGateway implements DiscordGateway {
                 log.warn("Discord guild {} not found for createTextChannel", guildId);
                 return null;
             }
-            TextChannel channel = guild.createTextChannel(name).complete();
+            // submit().get(timeout) is safe from callback threads; complete() is not.
+            TextChannel channel = guild.createTextChannel(name)
+                    .submit()
+                    .get(CREATE_CHANNEL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             return channel != null ? channel.getId() : null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Discord createTextChannel failed: {}", e.getMessage());
+            return null;
+        } catch (TimeoutException e) {
+            log.warn("Discord createTextChannel failed: timeout after {}s", CREATE_CHANNEL_TIMEOUT_SECONDS);
+            return null;
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            log.warn("Discord createTextChannel failed: {}", cause != null ? cause.getMessage() : e.getMessage());
+            return null;
         } catch (Exception e) {
             log.warn("Discord createTextChannel failed: {}", e.getMessage());
             return null;
