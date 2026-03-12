@@ -5,8 +5,11 @@ import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.Router;
 import com.vinekeepers.config.BotConfig;
 import com.vinekeepers.config.ConfigLoader;
+import com.vinekeepers.connectors.DiscordAppReplySink;
 import com.vinekeepers.connectors.DiscordEventSource;
 import com.vinekeepers.connectors.GitHubEventSource;
+import com.vinekeepers.connectors.JdaDiscordGateway;
+import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudAdapterImpl;
 import com.vinekeepers.core.cursor.CursorCloudRunMonitor;
@@ -34,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -53,6 +57,9 @@ public final class Bootstrap {
     private final ToolRegistry toolRegistry;
     private final ToolRunner toolRunner;
     private final WorkflowActionRegistry actionRegistry;
+    private final OutboundDeliveryRouter outboundDeliveryRouter;
+    private final List<BotDefinition> lastLoadedBots = new ArrayList<>();
+    private final List<DiscordEventSource> discordSources = new ArrayList<>();
     private DiscordEventSource discordSource;
     private GitHubEventSource githubSource;
     private HealthServer healthServer;
@@ -69,6 +76,7 @@ public final class Bootstrap {
         this.toolRegistry = new ToolRegistry();
         this.toolRunner = new ToolRunner(toolRegistry);
         this.actionRegistry = new WorkflowActionRegistry();
+        this.outboundDeliveryRouter = new OutboundDeliveryRouter(lifecycleContextStore);
         registerLegacyActions(actionRegistry);
         registerLifecycleActions(actionRegistry);
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
@@ -94,6 +102,8 @@ public final class Bootstrap {
             DynamicChoiceProviderRegistry choiceProviderRegistry = new DynamicChoiceProviderRegistry();
             choiceProviderRegistry.register("githubRepos", new GitHubReposChoiceProvider(stateStore));
             List<BotDefinition> bots = loader.buildBots(config);
+            lastLoadedBots.clear();
+            lastLoadedBots.addAll(bots);
             for (BotDefinition bot : bots) {
                 engine.registerBot(bot);
                 WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), this.actionRegistry, toolRunner, choiceProviderRegistry);
@@ -119,13 +129,51 @@ public final class Bootstrap {
     }
 
     public Bootstrap withDiscord() {
-        this.discordSource = new DiscordEventSource();
-        engine.setReplySender(discordSource);
-        engine.registerSink("discord", discordSource.getReplySink());
-        discordSource.start(eventBus);
-        cursorCloudRunMonitor.setReplySender(discordSource);
-        actionRegistry.register("create_channel", new CreateChannelAction(discordSource.getGateway()));
-        actionRegistry.register("post_channel_message", new PostChannelMessageAction(discordSource));
+        boolean anyWithToken = lastLoadedBots.stream()
+                .anyMatch(b -> b.getDiscordTokenEnvKey() != null && !b.getDiscordTokenEnvKey().isBlank());
+        if (anyWithToken) {
+            for (BotDefinition bot : lastLoadedBots) {
+                String envKey = bot.getDiscordTokenEnvKey();
+                if (envKey == null || envKey.isBlank()) {
+                    continue;
+                }
+                String token = Env.get(envKey, "");
+                if (token.isBlank()) {
+                    log.warn("Bot {} has discordTokenEnvKey {} but token is blank; skipping Discord connector for this bot.", bot.getId(), envKey);
+                    continue;
+                }
+                JdaDiscordGateway gateway = new JdaDiscordGateway(token);
+                DiscordEventSource source = new DiscordEventSource(gateway);
+                outboundDeliveryRouter.registerSender(bot.getId(), source, gateway);
+                if (outboundDeliveryRouter.getDefaultGateway() == null) {
+                    outboundDeliveryRouter.setDefaultSender(source);
+                    outboundDeliveryRouter.setDefaultGateway(gateway);
+                }
+                source.start(eventBus);
+                discordSources.add(source);
+            }
+        }
+        if (outboundDeliveryRouter.getDefaultGateway() == null) {
+            String token = Env.get("DISCORD_BOT_TOKEN", "");
+            if (!token.isBlank()) {
+                JdaDiscordGateway gateway = new JdaDiscordGateway(token);
+                this.discordSource = new DiscordEventSource(gateway);
+                outboundDeliveryRouter.setDefaultSender(discordSource);
+                outboundDeliveryRouter.setDefaultGateway(gateway);
+                for (BotDefinition bot : lastLoadedBots) {
+                    outboundDeliveryRouter.registerSender(bot.getId(), discordSource, gateway);
+                }
+                discordSource.start(eventBus);
+                discordSources.add(discordSource);
+            }
+        }
+        engine.setReplySender(outboundDeliveryRouter);
+        engine.registerSink("discord", new DiscordAppReplySink(outboundDeliveryRouter));
+        cursorCloudRunMonitor.setReplySender(outboundDeliveryRouter);
+        if (outboundDeliveryRouter.getDefaultGateway() != null) {
+            actionRegistry.register("create_channel", new CreateChannelAction(outboundDeliveryRouter.getDefaultGateway()));
+        }
+        actionRegistry.register("post_channel_message", new PostChannelMessageAction(outboundDeliveryRouter));
         return this;
     }
 
@@ -170,7 +218,10 @@ public final class Bootstrap {
 
     public void shutdown() {
         if (healthServer != null) healthServer.stop();
-        if (discordSource != null) discordSource.stop();
+        for (DiscordEventSource source : discordSources) {
+            if (source != null) source.stop();
+        }
+        discordSources.clear();
         if (githubSource != null) githubSource.stop();
         cursorCloudRunMonitor.close();
     }

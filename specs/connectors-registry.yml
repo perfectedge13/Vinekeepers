@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-09T19:00:00Z"
+  updated_utc: "2026-03-12T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -60,7 +60,13 @@ assets:
   - id: ASSET-DISCORD-REPLY-SINK
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordAppReplySink.java
-    role: Implements AppReplySink; lifecycle operations; channel send and follow-up/update with optional components; render intents to Discord; fallback to text; adapter owns timing and may auto-defer on interaction receive
+    role: Implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; lifecycle operations; channel send and follow-up/update with optional components; render intents to Discord; fallback to text; adapter owns timing and may auto-defer on interaction receive
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-OUTBOUND-DELIVERY-ROUTER
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/OutboundDeliveryRouter.java
+    role: Routes outbound Discord delivery; implements DiscordReplySender; resolves sender from delivery target and lifecycle context (configuredBotId); default sender for non-lifecycle channels; for lifecycle channels uses configured bot's sender and does not silently fall back (fail clearly if unavailable)
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-GITHUB-SOURCE
@@ -73,7 +79,7 @@ assets:
 requirements:
   - id: REQ-CONNECTORS-DISCORD-001
     title: Discord event source and reply
-    statement: DiscordEventSource implements EventSource and translates Discord payloads, including mention metadata when available, into internal events; the JDA-backed Discord gateway receives live Discord messages and interaction events, acks or defers interactions within the platform window (adapter-owned timing), and sends replies including channel send with optional components. Discord gateway exposes createTextChannel(guildId, channelName) for lifecycle room channel creation. DiscordReplySender provides legacy text reply (channelId, messageId, content). DiscordAppReplySink implements the connector contract with lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal); ChannelTarget path sends via gateway.send(channelId, messageId, content, components); adapter is responsible for ack/defer within Discord window and may auto-defer when sync reply is not safely possible; fallback to text when intent is not supported.
+    statement: DiscordEventSource implements EventSource and translates Discord payloads, including mention metadata when available, into internal events; the JDA-backed Discord gateway receives live Discord messages and interaction events, acks or defers interactions within the platform window (adapter-owned timing), and sends replies including channel send with optional components. Per-bot Discord identity is supported via optional discordTokenEnvKey in bot config; Bootstrap registers one sender per bot when that key is set and token is present. OutboundDeliveryRouter resolves the reply sender from delivery target and optional lifecycle context (configuredBotId); default sender for non-lifecycle channels; for lifecycle channels uses the configured bot's sender and does not silently fall back (logs error and does not send when that bot's sender is unavailable). Discord gateway exposes createTextChannel(guildId, channelName) for lifecycle room channel creation. DiscordReplySender provides legacy text reply (channelId, messageId, content). DiscordAppReplySink implements the connector contract with lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal); ChannelTarget path sends via OutboundDeliveryRouter; adapter is responsible for ack/defer within Discord window and may auto-defer when sync reply is not safely possible; fallback to text when intent is not supported.
     status: active
     priority: medium
     type: functional
@@ -87,15 +93,18 @@ requirements:
       criteria:
         - DiscordEventSource exists and implements EventSource and emits events onto the event bus
         - DiscordEventSource can pass Discord mention metadata and author (authorId, author) through the internal event payload for routing
+        - "Per-bot Discord identity: bot config may specify discordTokenEnvKey; when set and token present, Bootstrap registers that bot's sender and gateway with OutboundDeliveryRouter"
+        - "OutboundDeliveryRouter resolves sender from channel: lifecycle context (by channelId) yields configuredBotId then that bot's sender; absent context uses default sender"
+        - "Lifecycle sender resolution: for a channel with lifecycle context, delivery uses the configured bot's sender only; when no sender is registered for that bot, do not send and log error (no silent fallback to another bot)"
         - Discord gateway handles Interaction Create; on receive, adapter acks or defers within platform window and publishes Event with kind interaction and token
-        - DiscordAppReplySink implements AppReplySink; all lifecycle operations; render intents; channel send and follow-up/update with optional components; fallback to text
+        - DiscordAppReplySink implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; all lifecycle operations; render intents; channel send and follow-up/update with optional components; fallback to text
         - Discord connector can send replies back to the originating channel or message (including with components) through the Discord API
         - DiscordReplySender interface supports sending replies (channelId, messageId, content) to Discord
         - Replies from the engine are delivered to Discord via sink or legacy reply path when source is Discord
         - Gateway createTextChannel(guildId, channelName) creates a text channel in the guild for lifecycle room; returns channel id or null on failure
       examples: []
     traceability:
-      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK]
+      assets: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER]
       symbols: []
     validation:
       tests:
@@ -125,6 +134,11 @@ requirements:
           title: CreateChannelActionTest
           intent: Verify create_channel action uses Discord gateway createTextChannel for lifecycle room
           testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
+          preconditions: []
+        - id: UNIT-OUTBOUND-DELIVERY-ROUTER
+          title: OutboundDeliveryRouterTest
+          intent: Verify lifecycle context to configuredBotId sender resolution, default sender when no context, and no fallback when lifecycle channel has no sender for that bot
+          testClass: com.vinekeepers.connectors.OutboundDeliveryRouterTest
           preconditions: []
         - id: MANUAL-CONNECTORS-DISCORD
           title: Discord connector compiles and implements interface
@@ -169,7 +183,7 @@ features:
     slug: discord
     title: Discord event source and reply
     requirement_ids: [REQ-CONNECTORS-DISCORD-001]
-    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK]
+    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER]
     status: active
     domain_slug: connectors
     doc_path: features/domain/connectors/discord.md

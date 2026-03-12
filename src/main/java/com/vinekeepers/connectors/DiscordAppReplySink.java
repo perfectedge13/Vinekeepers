@@ -33,13 +33,34 @@ public final class DiscordAppReplySink implements AppReplySink {
     private static final int DISCORD_DEFER_MS = 2500;
 
     private final DiscordGateway gateway;
+    private final OutboundDeliveryRouter router;
 
+    /** Single-gateway sink (e.g. tests). */
     public DiscordAppReplySink(DiscordGateway gateway) {
         this.gateway = gateway;
+        this.router = null;
+    }
+
+    /** Router-based sink: resolves gateway by channel from lifecycle context. */
+    public DiscordAppReplySink(OutboundDeliveryRouter router) {
+        this.gateway = null;
+        this.router = router;
+    }
+
+    private DiscordGateway gatewayFor(ReplyTarget target) {
+        if (router != null && target != null) {
+            DiscordGateway g = router.getGatewayForChannel(target.channelId());
+            return g;
+        }
+        return gateway;
     }
 
     @Override
     public void respondImmediately(OutboundResponse response, ReplyTarget target) {
+        DiscordGateway gw = gatewayFor(target);
+        if (gw == null) {
+            return;
+        }
         String content = response.getText().orElse("");
         List<List<Map<String, Object>>> components = null;
         if (response.getIntent().isPresent() && getCapabilities().supportsIntent(response.getIntent().get())) {
@@ -52,11 +73,11 @@ public final class DiscordAppReplySink implements AppReplySink {
             return;
         }
         if (target instanceof ChannelTarget ct) {
-            gateway.send(ct.channelId(), ct.messageId(), content, components);
+            gw.send(ct.channelId(), ct.messageId(), content, components);
             return;
         }
         if (target instanceof InteractionTarget it) {
-            gateway.sendFollowUp(it.token(), content, components);
+            gw.sendFollowUp(it.token(), content, components);
         }
     }
 
@@ -66,6 +87,10 @@ public final class DiscordAppReplySink implements AppReplySink {
             log.debug("sendFollowUp requires InteractionTarget");
             return;
         }
+        DiscordGateway gw = gatewayFor(target);
+        if (gw == null) {
+            return;
+        }
         String content = response.getText().orElse("");
         List<List<Map<String, Object>>> components = null;
         if (response.getIntent().isPresent() && getCapabilities().supportsIntent(response.getIntent().get())) {
@@ -75,7 +100,7 @@ public final class DiscordAppReplySink implements AppReplySink {
             }
         }
         if (!content.isEmpty()) {
-            gateway.sendFollowUp(it.token(), content, components);
+            gw.sendFollowUp(it.token(), content, components);
         }
     }
 
@@ -85,6 +110,10 @@ public final class DiscordAppReplySink implements AppReplySink {
             log.debug("updateMessage requires InteractionTarget");
             return;
         }
+        DiscordGateway gw = gatewayFor(target);
+        if (gw == null) {
+            return;
+        }
         String content = response.getText().orElse("");
         List<List<Map<String, Object>>> components = null;
         if (response.getIntent().isPresent() && getCapabilities().supportsIntent(response.getIntent().get())) {
@@ -94,7 +123,7 @@ public final class DiscordAppReplySink implements AppReplySink {
             }
         }
         if (!content.isEmpty()) {
-            gateway.updateMessage(it.token(), content, components);
+            gw.updateMessage(it.token(), content, components);
         }
     }
 
@@ -103,14 +132,18 @@ public final class DiscordAppReplySink implements AppReplySink {
         if (!(target instanceof InteractionTarget it) || response.getIntent().isEmpty()) {
             return;
         }
+        DiscordGateway gw = gatewayFor(target);
+        if (gw == null) {
+            return;
+        }
         if (!getCapabilities().supportsModalInput()) {
             String text = response.getText().orElse(intentToText(response.getIntent().get()));
-            gateway.sendFollowUp(it.token(), text);
+            gw.sendFollowUp(it.token(), text);
             return;
         }
         // Phase 1: modal not implemented; fallback to text
         String text = response.getText().orElse(intentToText(response.getIntent().get()));
-        gateway.sendFollowUp(it.token(), text);
+        gw.sendFollowUp(it.token(), text);
     }
 
     @Override

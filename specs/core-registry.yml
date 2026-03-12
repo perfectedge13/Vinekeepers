@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-10T16:00:00Z"
+  updated_utc: "2026-03-12T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -104,7 +104,7 @@ assets:
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
+    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent fallback; build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
     requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
     feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
   - id: ASSET-OUTBOUND-RESPONSE
@@ -146,7 +146,7 @@ assets:
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
-    role: Bot definitions YAML (including Luna routing, Discord mention activation, optional discordAuthors filter with numeric id or username list, and lifecycleBotName in step bind/content for luna_cursor)
+    role: Bot definitions YAML (including Luna routing, Discord mention activation, optional discordAuthors filter, optional discordTokenEnvKey per bot for Discord identity, and lifecycleBotName in step bind/content for luna_cursor)
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -194,7 +194,7 @@ assets:
   - id: ASSET-BOT-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/bot/BotDefinition.java
-    role: Bot composition (persona, model, workflow, tools, and runtime conversation settings)
+    role: Bot composition (persona, model, workflow, tools, runtime conversation settings, and optional discordTokenEnvKey for per-bot Discord identity)
     requires: [REQ-BOT-003]
     feature_ids: [FEAT-BOT]
   - id: ASSET-CONVERSATION-MODE
@@ -729,7 +729,7 @@ requirements:
 
   - id: REQ-CORE-003
     title: Event-driven engine routes events to bots
-    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. For Discord message events, the engine additionally includes any registered bot that has a workflow runner and has persisted state with WAITING_INPUT for the event's session key, so conversational workflows can resume on later messages in the same session. Reply delivery uses the connector contract (AppReplySink) with distinct lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); engine builds OutboundResponse from workflow or reasoner (rich or text-only), resolves ReplyTarget from event, and calls the sink registered for the event source (transitional source-prefix routing). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
+    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. For Discord message events, the engine additionally includes any registered bot that has a workflow runner and has persisted state with WAITING_INPUT for the event's session key, so conversational workflows can resume on later messages in the same session. Reply delivery uses the connector contract (AppReplySink) with distinct lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); for Discord, delivery goes through OutboundDeliveryRouter, which resolves the sender from ReplyTarget and optional lifecycle context (configuredBotId)—no silent fallback when the lifecycle channel's bot has no registered sender. Engine builds OutboundResponse from workflow or reasoner (rich or text-only), resolves ReplyTarget from event, and calls the sink registered for the event source (transitional source-prefix routing). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
     status: active
     priority: high
     type: functional
@@ -747,6 +747,7 @@ requirements:
         - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message
         - Engine applies reasoner state patches and executes proposed tool calls through ToolRunner
         - Engine delivers replies via sink registry (source-prefix) and lifecycle methods (respondImmediately, sendFollowUp, updateMessage, openModal); sink exposes getCapabilities; no defer in engine
+        - For Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId; for lifecycle channels, do not silently fall back when that bot's sender is unavailable
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:
@@ -762,7 +763,7 @@ requirements:
 
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
     status: active
     priority: high
     type: functional
@@ -779,10 +780,11 @@ requirements:
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
+        - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - Workflow step bind keys (e.g. lifecycleBotName) and content with {{key}} interpolation are supported in step config
       examples: []
     traceability:
-      assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML]
+      assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
       symbols: []
     validation:
       tests:
@@ -909,7 +911,7 @@ requirements:
 
   - id: REQ-BOT-003
     title: Bot definition and persona/model
-    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, Routing, MemoryPolicy, and bot runtime conversation settings; bots are configured via YAML.
+    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, Routing, MemoryPolicy, optional discordTokenEnvKey for per-bot Discord identity, and bot runtime conversation settings; bots are configured via YAML.
     status: active
     priority: high
     type: functional
@@ -921,7 +923,7 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, routing, memory policy, conversation mode, and optional session key strategy
+        - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, routing, memory policy, conversation mode, optional session key strategy, and optional discordTokenEnvKey for per-bot Discord identity
         - Config loader produces BotDefinition from YAML (including workflow block and runtime options)
       examples: []
     traceability:
@@ -1442,7 +1444,7 @@ features:
     doc_path: features/domain/config/config.md
     summary: ConfigLoader loads bot definitions from YAML; BotConfig models the structure.
     requirement_ids: [REQ-CONFIG-001]
-    asset_ids: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML]
+    asset_ids: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
     status: active
   - id: FEAT-ROUTING
     slug: routing

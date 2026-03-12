@@ -136,9 +136,10 @@ public final class ConfigLoader {
         }
         ConversationMode conversationMode = ConversationMode.fromValue((String) b.get("conversationMode"));
         String sessionKeyStrategy = (String) b.get("sessionKeyStrategy");
+        String discordTokenEnvKey = (String) b.get("discordTokenEnvKey");
 
         return new BotDefinition(id, persona, modelProfile, toolPolicy, memoryPolicy,
-                workflowType, workflowParams, conversationMode, sessionKeyStrategy);
+                workflowType, workflowParams, conversationMode, sessionKeyStrategy, discordTokenEnvKey);
     }
 
     @SuppressWarnings("unchecked")

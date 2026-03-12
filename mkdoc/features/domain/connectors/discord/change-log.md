@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-12
+
+- **OutboundDeliveryRouter and lifecycle sender resolution:** New `OutboundDeliveryRouter` routes outbound Discord delivery and resolves the reply sender from the delivery target and optional lifecycle context (`configuredBotId`). For non-lifecycle channels a default sender is used; for lifecycle channels only the configured bot's sender is used—no silent fallback when that bot's sender is unavailable (error logged, message not sent). Per-bot Discord identity is supported via optional `discordTokenEnvKey` in bot config; Bootstrap registers one sender per bot when the key is set and token is present. `DiscordAppReplySink` uses the router for ChannelTarget delivery. See REQ-CONNECTORS-DISCORD-001 and OutboundDeliveryRouterTest.
+
 ## 2026-03-10
 
 - **Lifecycle room (Phase 1):** The `create_channel` workflow action (used by Luna lifecycle room) delegates to gateway `createTextChannel(guildId, channelName)`; the action normalizes channel name to Discord-safe format before calling the gateway and returns sentinel `CHANNEL_CREATE_FAILED` on failure. Documented in workflow-steps and cursor-gathering; gateway contract unchanged.

@@ -20,7 +20,8 @@ public class DiscordEventSource implements EventSource, DiscordReplySender {
         this(new JdaDiscordGateway(Env.get("DISCORD_BOT_TOKEN", "")));
     }
 
-    DiscordEventSource(DiscordGateway gateway) {
+    /** For multi-bot: create a source with a specific gateway (e.g. per-bot token). */
+    public DiscordEventSource(DiscordGateway gateway) {
         this.gateway = gateway;
     }
 

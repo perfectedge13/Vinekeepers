@@ -12,9 +12,10 @@
 1. Add an entry under `bots:` in `config/bots.yaml`.
 2. Set **required** `id` (e.g. `luna`). This id is used in routing and when registering workflows/reasoners in Bootstrap.
 3. Set **persona** with `name` and `systemPrompt` (and optional `model`, `toolPolicy`, `memory` as supported).
-4. Set **workflow** — e.g. `type: configured` and `params.workflowRef: <workflow_id>` to reference a workflow from the `workflows:` DSL in the same file (or a custom workflow registered in Bootstrap for that bot id).
+4. Optional **per-bot Discord identity:** set `discordTokenEnvKey` to an environment variable name (e.g. `DISCORD_LUNA_TOKEN`); when set and the env var is present, Bootstrap registers that bot's Discord sender with `OutboundDeliveryRouter` so lifecycle rooms and replies can use that bot's token. Used for multi-bot Discord identity (e.g. Luna vs Arrietty).
+5. Set **workflow** — e.g. `type: configured` and `params.workflowRef: <workflow_id>` to reference a workflow from the `workflows:` DSL in the same file (or a custom workflow registered in Bootstrap for that bot id).
 
-Structure must match what ConfigLoader expects: `bots[].id`, `bots[].persona` (name, systemPrompt), optional model/toolPolicy/memory; see [vinekeepers-standards](../cursor/rules/vinekeepers-standards.md) and `config/bots.yaml` at the project root.
+Structure must match what ConfigLoader expects: `bots[].id`, `bots[].persona` (name, systemPrompt), optional model/toolPolicy/memory, optional `discordTokenEnvKey` for per-bot Discord identity; see [vinekeepers-standards](../cursor/rules/vinekeepers-standards.md) and `config/bots.yaml` at the project root.
 
 **Template bots (lifecycle room):** The **Arrietty** bot in `config/bots.yaml` is a template for lifecycle room instances provisioned at runtime per channel. Provisioning workflows use `call_action` steps: `create_channel` (Discord), `create_lifecycle_context`, `provision_bot_instance`, `post_channel_message`, and `launch_cursor_run`. Runtime instances are stored as `RuntimeBotInstance`; context as `LifecycleContext` in `LifecycleContextStore`.
 

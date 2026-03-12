@@ -2,6 +2,8 @@
 # Luna: listens for @Luna mentions on Discord, gathers repository + feature request,
 # then launches a Cursor Cloud agent run and reports progress back to chat.
 # Arrietty: template for lifecycle room bot instances (provisioned at runtime per channel).
+# Optional per-bot Discord identity: set discordTokenEnvKey to an env var name (e.g. DISCORD_BOT_TOKEN)
+# so each bot can have its own token; if omitted, a single DISCORD_BOT_TOKEN is used for all.
 
 bots:
   - id: luna

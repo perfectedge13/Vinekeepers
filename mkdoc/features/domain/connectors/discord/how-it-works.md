@@ -14,7 +14,12 @@
 
 # Reply path
 
-The engine can set a `DiscordReplySender` (`DiscordEventSource` implements it). When a workflow or the Cursor run monitor produces a reply, the engine or monitor sends that reply back to Discord via `send(channelId, messageId, content)`. The gateway replies to the original message when a `messageId` is present and falls back to a plain channel message when needed.
+Reply delivery goes through **OutboundDeliveryRouter**. The router implements `DiscordReplySender` and resolves which sender (gateway + token) to use:
+
+- **Non-lifecycle channels:** The default sender is used (e.g. the primary Discord bot token).
+- **Lifecycle channels:** A lifecycle context keyed by channelId yields `configuredBotId`. The router uses that bot's registered sender only. If no sender is registered for that bot (e.g. token not configured), the router **does not** silently fall back to another bot—it logs an error and does not send the message.
+
+Bootstrap registers one sender per bot when the bot's config has `discordTokenEnvKey` set and the corresponding environment variable is present, so multiple Discord identities (e.g. Luna and Arrietty) can be used for different channels. The engine or Cursor run monitor sends replies via the sink; `DiscordAppReplySink` uses the router for ChannelTarget delivery. The gateway replies to the original message when a `messageId` is present and falls back to a plain channel message when needed.
 
 # Inputs and outputs
 
