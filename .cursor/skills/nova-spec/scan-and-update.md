@@ -28,19 +28,23 @@ When updating specs, consider and apply updates to:
 
 ### 2.1 Infer domains
 
-Run sub-skill **@.cursor/skills/nova-spec/sub-skills/infer-domains.md** (or launch sub-agent). Input: candidate features (with suggested_domain from scan), current spec index (path from project config; specs[].file), existing registry file paths. Output: list of { domain_slug, registry_file, exists }.
+Run sub-skill **@.cursor/skills/nova-spec/sub-skills/infer-domains.md** (or launch sub-agent). Input: candidate features (with suggested_domain from scan), current spec index (path from project config; specs[].file), existing registry file paths. Output: list of { domain_slug, registry_file, exists } (current domain list and which file each domain uses).
+
+### 2.1b Propose registry layout
+
+Run sub-skill **@.cursor/skills/nova-spec/sub-skills/propose-registry-layout.md** (or launch sub-agent). Input: domain list from 2.1 (domain_slug and current registry_file), current specs.yml `specs[]` and `domains[]`, layout strategy from **@.cursor/skills/common/project-config.md** (`specs.registry_layout`; default `preserve`). Output: definitive **registry layout** — list of `{ registry_file, domain_slugs[], exists }`. This is the authoritative target layout for this run (which registry files exist and which domain_slugs belong in each).
 
 ### 2.2 Categorize features to domains
 
-Run sub-skill **@.cursor/skills/nova-spec/sub-skills/categorize-features-to-domains.md** (or launch sub-agent). Input: candidate features, list of domains from 2.1, current registry contents. Output: feature_slug → domain_slug; per domain_slug: { requirement_ids[], asset_ids[], features[] }.
+Run sub-skill **@.cursor/skills/nova-spec/sub-skills/categorize-features-to-domains.md** (or launch sub-agent). Input: candidate features, list of domains from 2.1, current registry contents. Output: feature_slug → domain_slug; per domain_slug: { requirement_ids[], asset_ids[], features[] }. Categorize does not assign registry files; layout from 2.1b does.
 
 ### 2.3 Update specs index
 
-Run sub-skill **@.cursor/skills/nova-spec/sub-skills/update-specs-index.md** (or launch sub-agent). Input: list of registry files and the current domain-to-registry mapping from 2.1. Output: updated spec index with specs[] set to that list and `domains[]` updated to the authoritative domain catalog. Write the spec index file (path from **@.cursor/project.yml** `paths.specs_index` or `specs/specs.yml`).
+Run sub-skill **@.cursor/skills/nova-spec/sub-skills/update-specs-index.md** (or launch sub-agent). Input: **registry layout** from 2.1b — list of registry_file (one per layout entry) and domain-to-registry mapping derived from layout (each domain_slug in layout.domain_slugs[] maps to that entry's registry_file). Output: updated spec index with specs[] = one entry per registry_file in layout and `domains[]` = one entry per domain_slug with spec_file from layout. Write the spec index file (path from **@.cursor/project.yml** `paths.specs_index` or `specs/specs.yml`).
 
 ### 2.4 Update registries
 
-Run sub-skill **@.cursor/skills/nova-spec/sub-skills/update-registry.md** for each impacted registry file (or launch one sub-agent per registry file). Input: the registry file path plus the domains and feature groups that belong in that file; full project/schema/enums and full assets/requirements from current registries or scan for filtering. The sub-skill updates one registry file at a time while preserving multi-domain storage where appropriate. Internal logic (assets, requirements, traceability, validation, features, gap-fill, schema.updated_utc) is defined in **update-registry.md**.
+For **each** registry_file in the **registry layout** from 2.1b (including new files with exists: false), run sub-skill **@.cursor/skills/nova-spec/sub-skills/update-registry.md** (or launch one sub-agent per registry file). Input: (1) that registry_file, (2) the domain groups that belong in that file — from categorize output (2.2), filter to only the domain_slugs listed in layout.domain_slugs for this registry_file; pass requirement_ids[], asset_ids[], features[] for those domains. Full project/schema/enums and full assets/requirements from current registries or scan for filtering. The sub-skill creates or updates one registry file at a time; for new files it bootstraps from a canonical registry. Internal logic is defined in **update-registry.md**.
 
 ### 2.5 Consistency check
 
@@ -49,7 +53,7 @@ After applying updates:
 - Every id in `assets[].requires` and `assets[].symbols[].requires` must exist in `requirements[].id`.
 - Every id in `requirements[].traceability.assets` must exist in `assets[].id`, and that asset must list that requirement in its `requires` (or in a symbol's `requires`).
 - If the registry has a `features` array: every id in `features[].requirement_ids` must exist in `requirements[].id`; every id in `features[].asset_ids` must exist in `assets[].id`.
-- **Optional fields (when present):** Every id in `assets[].feature_ids` must exist in `features[].id`. Every feature's `domain_slug` must be declared in `specs/specs.yml` `domains[]`, and the `domains[]` entry for that slug must point to the registry file that stores the feature. Every feature's `doc_path` (if present) must be relative to docs_dir and should normally follow `features/domain/<domain_slug>/<slug>.md`; preserve only intentional overrides.
+- **Optional fields (when present):** Every id in `assets[].feature_ids` must exist in `features[].id`. Every feature's `domain_slug` must be declared in `specs/specs.yml` `domains[]`, and the `domains[]` entry for that slug must point to the registry file that stores the feature. Every feature's `doc_path` (if present) must be relative to docs_dir and should normally follow the default in **@.cursor/skills/common/project-config.md**; preserve only intentional overrides.
 - Avoid orphan requirements (each requirement should have at least one asset); avoid orphan assets (each asset should have at least one requirement unless the schema explicitly allows it).
 - Fix any mismatch before finishing.
 

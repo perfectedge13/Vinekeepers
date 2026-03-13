@@ -1,0 +1,121 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-REASONER
+    kind: source
+    path: src/main/java/com/vinekeepers/reasoner/Reasoner.java
+    role: Reasoner interface for bot decisions
+    requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
+  - id: ASSET-REASONER-INPUT
+    kind: source
+    path: src/main/java/com/vinekeepers/reasoner/ReasonerInput.java
+    role: Reasoner input model including workflow context, current state, and last user message
+    requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
+  - id: ASSET-REASONER-OUTPUT
+    kind: source
+    path: src/main/java/com/vinekeepers/reasoner/ReasonerOutput.java
+    role: Reasoner output model including reply text, optional OutboundResponse richReply, state patch, and proposed tool calls
+    requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
+  - id: ASSET-PROPOSED-TOOL-CALL
+    kind: source
+    path: src/main/java/com/vinekeepers/reasoner/ProposedToolCall.java
+    role: Proposed tool call emitted by a reasoner for engine-side execution
+    requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
+  - id: ASSET-STUB-REASONER
+    kind: source
+    path: src/main/java/com/vinekeepers/reasoner/StubReasoner.java
+    role: Stub reasoner implementation that returns an empty output
+    requires: [REQ-REASONER-001]
+    feature_ids: [FEAT-REASONER]
+  - id: ASSET-ENGINE
+    kind: source
+    path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
+    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent fallback; build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
+    requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
+    feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
+
+requirements:
+  - id: REQ-REASONER-001
+    title: Reasoner interface for bot decisions
+    statement: Reasoner.reason(ReasonerInput) returns ReasonerOutput with reply text, state patch, and proposed tool calls; the engine can persist patched state and execute approved proposed tools.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - Reasoner interface and ReasonerInput/ReasonerOutput models exist
+        - ReasonerInput includes workflow context, current state, and last normalized user message
+        - ReasonerOutput can return reply text, state patches, and proposed tool calls
+        - StubReasoner or real implementation used by engine
+      examples: []
+    traceability:
+      assets: [ASSET-REASONER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-PROPOSED-TOOL-CALL, ASSET-STUB-REASONER, ASSET-ENGINE]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-ENGINE-REASONER-INTEGRATION
+          title: VinekeepersEngineTest
+          intent: Verify reasoner state patches, tool proposals, and reply selection are applied by the engine
+          testClass: com.vinekeepers.core.VinekeepersEngineTest
+          testMethod: reasonerAppliesStatePatchRunsToolAndRepliesWhenWorkflowIsSilent
+          preconditions: []
+        - id: MANUAL-REASONER
+          title: Reasoner interface
+          intent: Verify reasoner is used in core loop
+          preconditions: []
+          steps:
+            - run: "mvn compile -q"
+              expect: ["BUILD SUCCESS"]
+
+features:
+  - id: FEAT-REASONER
+    slug: reasoner
+    title: Reasoner interface for bot decisions
+    domain_slug: reasoner
+    doc_path: features/domain/reasoner/reasoner.md
+    summary: Reasoner.reason(ReasonerInput) returns ReasonerOutput with reply text, state patch, and proposed tool calls.
+    requirement_ids: [REQ-REASONER-001]
+    asset_ids: [ASSET-REASONER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-PROPOSED-TOOL-CALL, ASSET-STUB-REASONER, ASSET-ENGINE]
+    status: active

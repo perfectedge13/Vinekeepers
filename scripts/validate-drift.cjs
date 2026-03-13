@@ -83,7 +83,21 @@ function main() {
     }
   }
 
-  // --- Registry checks (per file) ---
+  // --- Build global id sets across all registries (multi-registry / one-file-per-domain) ---
+  const allAssetIds = new Set();
+  const allReqIds = new Set();
+  const allFeatureIds = new Set();
+  for (const entry of index.specs || []) {
+    const regPath = path.join(SPECS_DIR, entry.file);
+    if (!fs.existsSync(regPath)) continue;
+    const reg = loadYaml(regPath);
+    if (reg?.schema?.id !== 'req-registry') continue;
+    for (const a of reg.assets || []) allAssetIds.add(a.id);
+    for (const r of reg.requirements || []) allReqIds.add(r.id);
+    for (const f of reg.features || []) allFeatureIds.add(f.id);
+  }
+
+  // --- Registry checks (per file); resolve requirement/asset/feature ids across all registries ---
   for (const entry of index.specs || []) {
     const regPath = path.join(SPECS_DIR, entry.file);
     if (!fs.existsSync(regPath)) continue;
@@ -101,7 +115,7 @@ function main() {
         failed = true;
       }
       for (const rid of a.requires || []) {
-        if (!reqIds.has(rid)) {
+        if (!allReqIds.has(rid)) {
           console.error('Drift:', entry.file, 'asset', a.id, 'requires unknown requirement:', rid);
           failed = true;
         }
@@ -109,7 +123,7 @@ function main() {
       if (a.symbols) {
         for (const sym of a.symbols) {
           for (const rid of sym.requires || []) {
-            if (!reqIds.has(rid)) {
+            if (!allReqIds.has(rid)) {
               console.error('Drift:', entry.file, 'asset', a.id, 'symbol requires unknown requirement:', rid);
               failed = true;
             }
@@ -117,34 +131,34 @@ function main() {
         }
       }
       for (const fid of a.feature_ids || []) {
-        if (!featureIds.has(fid)) {
+        if (!allFeatureIds.has(fid)) {
           console.error('Drift:', entry.file, 'asset', a.id, 'feature_ids unknown:', fid);
           failed = true;
         }
       }
     }
 
-    // requirements[].traceability.assets in assets[].id; each such asset must list this requirement in requires (or symbol.requires)
+    // requirements[].traceability.assets in assets (any registry)
     for (const r of reg.requirements || []) {
       for (const aid of r.traceability?.assets || []) {
-        if (!assetIds.has(aid)) {
+        if (!allAssetIds.has(aid)) {
           console.error('Drift:', entry.file, 'requirement', r.id, 'traceability.assets unknown:', aid);
           failed = true;
         }
       }
     }
 
-    // dependencies.items[].used_by_requirements
+    // dependencies.items[].used_by_requirements (any registry)
     for (const d of reg.dependencies?.items || []) {
       for (const rid of d.used_by_requirements || []) {
-        if (!reqIds.has(rid)) {
+        if (!allReqIds.has(rid)) {
           console.error('Drift:', entry.file, 'dependency', d.id, 'used_by_requirements unknown:', rid);
           failed = true;
         }
       }
     }
 
-    // features[].requirement_ids and asset_ids
+    // features[].requirement_ids and asset_ids (any registry)
     for (const f of reg.features || []) {
       if (f.domain_slug) {
         const mappedRegistryFile = domainRegistryMap.get(f.domain_slug);
@@ -167,13 +181,13 @@ function main() {
         }
       }
       for (const rid of f.requirement_ids || []) {
-        if (!reqIds.has(rid)) {
+        if (!allReqIds.has(rid)) {
           console.error('Drift:', entry.file, 'feature', f.id, 'requirement_ids unknown:', rid);
           failed = true;
         }
       }
       for (const aid of f.asset_ids || []) {
-        if (!assetIds.has(aid)) {
+        if (!allAssetIds.has(aid)) {
           console.error('Drift:', entry.file, 'feature', f.id, 'asset_ids unknown:', aid);
           failed = true;
         }

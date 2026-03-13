@@ -1,0 +1,99 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-EVENT-BUS
+    kind: source
+    path: src/main/java/com/vinekeepers/events/EventBus.java
+    role: Publish and subscribe to events
+    requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
+  - id: ASSET-EVENT
+    kind: source
+    path: src/main/java/com/vinekeepers/events/Event.java
+    role: Event payload and metadata
+    requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
+  - id: ASSET-EVENT-SOURCE
+    kind: source
+    path: src/main/java/com/vinekeepers/events/EventSource.java
+    role: Event source interface
+    requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
+  - id: ASSET-EVENT-SUBSCRIBER
+    kind: source
+    path: src/main/java/com/vinekeepers/events/EventSubscriber.java
+    role: Event subscriber interface
+    requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
+
+requirements:
+  - id: REQ-EVENTS-001
+    title: Event bus publish and subscribe
+    statement: EventBus allows event sources to publish events and subscribers to receive them; Event carries sourceId, kind, payload; EventSource and EventSubscriber are the interfaces.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - EventBus.publish and subscribe work; subscribers receive published events
+        - Event has sourceId, kind, and payload
+      examples: []
+    traceability:
+      assets: [ASSET-EVENT-BUS, ASSET-EVENT, ASSET-EVENT-SOURCE, ASSET-EVENT-SUBSCRIBER]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-EVENT-BUS
+          title: EventBusTest
+          intent: Verify publish/subscribe and event delivery
+          testClass: com.vinekeepers.events.EventBusTest
+          preconditions: []
+
+features:
+  - id: FEAT-EVENTS
+    slug: events
+    title: Event bus and publish/subscribe
+    domain_slug: events
+    doc_path: features/domain/events/events.md
+    summary: EventBus allows publish and subscribe; Event carries sourceId, kind, payload.
+    requirement_ids: [REQ-EVENTS-001]
+    asset_ids: [ASSET-EVENT-BUS, ASSET-EVENT, ASSET-EVENT-SOURCE, ASSET-EVENT-SUBSCRIBER]
+    status: active

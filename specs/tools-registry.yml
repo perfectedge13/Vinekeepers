@@ -1,0 +1,126 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-TOOL
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/Tool.java
+    role: Tool interface
+    requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
+  - id: ASSET-TOOL-REGISTRY
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/ToolRegistry.java
+    role: Register and resolve tools
+    requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
+  - id: ASSET-TOOL-RUNNER
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/ToolRunner.java
+    role: Execute approved tool calls for workflows and reasoners under ToolPolicy
+    requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
+  - id: ASSET-CURSOR-FULL-RUN-TOOL
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/CursorFullRunTool.java
+    role: Tool wrapper that launches a Cursor cloud run from gathered workflow state and stores launch metadata
+    requires: [REQ-TOOLS-001, REQ-LUNA-001]
+    feature_ids: [FEAT-TOOLS, FEAT-CURSOR-GATHERING]
+  - id: ASSET-ECHO-TOOL
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/EchoTool.java
+    role: Simple echo tool used by configured workflow and tool runner tests
+    requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
+  - id: ASSET-STUB-TOOL
+    kind: source
+    path: src/main/java/com/vinekeepers/tools/StubTool.java
+    role: Stub tool implementation
+    requires: [REQ-TOOLS-001]
+    feature_ids: [FEAT-TOOLS]
+  - id: ASSET-BOOTSTRAP
+    kind: source
+    path: src/main/java/com/vinekeepers/core/Bootstrap.java
+    role: Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and handlesOwnedSpaces map from loaded bots to Router
+    requires: [REQ-CORE-002, REQ-TOOLS-001, REQ-LUNA-001]
+    feature_ids: [FEAT-CORE, FEAT-TOOLS, FEAT-CURSOR-GATHERING]
+
+requirements:
+  - id: REQ-TOOLS-001
+    title: Tool registry and execution
+    statement: Tools are registered by name; ToolRunner enforces ToolPolicy and executes approved tool calls for workflows and reasoners; Tool interface defines the tool contract.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - ToolRegistry resolves tools by name
+        - ToolRunner runs approved actions and returns results
+        - ToolRunner rejects denied or unknown tools before execution
+        - Configured workflows can resolve registered tools such as cursor.fullRun and echo through ToolRunner
+      examples: []
+    traceability:
+      assets: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ECHO-TOOL, ASSET-STUB-TOOL, ASSET-BOOTSTRAP]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-TOOL-RUNNER
+          title: ToolRunnerTest
+          intent: Verify ToolRunner executes allowed tools and rejects denied or unknown ones
+          testClass: com.vinekeepers.tools.ToolRunnerTest
+          preconditions: []
+        - id: MANUAL-TOOLS
+          title: Tool registry and runner
+          intent: Verify tools are used by engine and policy
+          preconditions: []
+          steps:
+            - run: "mvn test -q"
+              expect: ["BUILD SUCCESS"]
+
+features:
+  - id: FEAT-TOOLS
+    slug: tools
+    title: Tool registry and execution
+    domain_slug: tools
+    doc_path: features/domain/tools/tools.md
+    summary: Tools registered by name; ToolRunner executes approved tool calls.
+    requirement_ids: [REQ-TOOLS-001]
+    asset_ids: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ECHO-TOOL, ASSET-STUB-TOOL, ASSET-BOOTSTRAP]
+    status: active

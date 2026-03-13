@@ -1,0 +1,87 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-STATE-STORE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/StateStore.java
+    role: Persist and load bot workflow state
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-LUNA-STATE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/GatheringState.java
+    role: Luna per-conversation state (project, code change, step)
+    requires: [REQ-STATE-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+    feature_ids: [FEAT-STATE, FEAT-CURSOR-GATHERING]
+
+requirements:
+  - id: REQ-STATE-001
+    title: State store for bot workflow state
+    statement: StateStore persists and loads per-bot, per-conversation workflow state (structured state objects).
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - StateStore.load(botId, conversationKey) returns state or empty
+        - StateStore.save persists state for bot and conversation
+      examples: []
+    traceability:
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-STATE-STORE
+          title: StateStoreTest
+          intent: Verify state load/save and key scoping
+          testClass: com.vinekeepers.state.StateStoreTest
+          preconditions: []
+
+features:
+  - id: FEAT-STATE
+    slug: state
+    title: State store for workflow state
+    domain_slug: state
+    doc_path: features/domain/state/state.md
+    summary: StateStore persists and loads per-bot, per-conversation workflow state.
+    requirement_ids: [REQ-STATE-001]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE]
+    status: active

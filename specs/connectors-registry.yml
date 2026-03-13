@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-12T14:30:00Z"
+  updated_utc: "2026-03-13T15:00:00Z"
 
 project:
   id: vinekeepers
@@ -192,20 +192,18 @@ features:
   - id: FEAT-CONNECTORS-DISCORD
     slug: discord
     title: Discord event source and reply
-    requirement_ids: [REQ-CONNECTORS-DISCORD-001]
-    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER]
-    status: active
     domain_slug: connectors
     doc_path: features/domain/connectors/discord.md
     summary: Discord event source and reply; a JDA-backed gateway receives live messages, preserves mention metadata for routing, and delivers workflow replies back to Discord.
+    requirement_ids: [REQ-CONNECTORS-DISCORD-001]
+    asset_ids: [ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER]
+    status: active
   - id: FEAT-CONNECTORS-GITHUB
     slug: github
     title: GitHub event source
-    requirement_ids: [REQ-CONNECTORS-GITHUB-001]
-    asset_ids: [ASSET-GITHUB-SOURCE]
-    status: active
     domain_slug: connectors
     doc_path: features/domain/connectors/github.md
     summary: GitHubEventSource implements EventSource and translates GitHub payloads into internal events on the event bus.
-
-
+    requirement_ids: [REQ-CONNECTORS-GITHUB-001]
+    asset_ids: [ASSET-GITHUB-SOURCE]
+    status: active

@@ -1,0 +1,93 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-ENV-LOADER
+    kind: source
+    path: src/main/java/com/vinekeepers/env/EnvLoader.java
+    role: Load .env file into system properties
+    requires: [REQ-ENV-001]
+    feature_ids: [FEAT-ENV]
+  - id: ASSET-ENV
+    kind: source
+    path: src/main/java/com/vinekeepers/env/Env.java
+    role: Read config from system properties
+    requires: [REQ-ENV-001]
+    feature_ids: [FEAT-ENV]
+  - id: ASSET-APP
+    kind: source
+    path: src/main/java/com/vinekeepers/VinekeepersApp.java
+    role: Application entrypoint; loads .env and bootstraps engine
+    requires: [REQ-CORE-002, REQ-ENV-001]
+    feature_ids: [FEAT-CORE, FEAT-ENV]
+
+requirements:
+  - id: REQ-ENV-001
+    title: Load .env at startup
+    statement: The application loads a .env file from the project root into system properties at startup and provides Env.get(key, default) for configuration access.
+    status: active
+    priority: medium
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - EnvLoader.load(".env") is called before bootstrap
+        - Env.get(key, default) returns value from system properties or default
+      examples: []
+    traceability:
+      assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-ENV-LOADER
+          title: EnvLoader loads and Env reads
+          intent: Verify .env loading and Env.get behavior
+          testClass: com.vinekeepers.env.EnvLoaderTest
+          preconditions: []
+
+features:
+  - id: FEAT-ENV
+    slug: env
+    title: Environment and .env loading
+    domain_slug: env
+    doc_path: features/domain/env/env.md
+    summary: Load .env at startup and provide Env.get(key, default) for configuration access.
+    requirement_ids: [REQ-ENV-001]
+    asset_ids: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]
+    status: active

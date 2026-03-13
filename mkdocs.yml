@@ -42,6 +42,10 @@ nav:
               - Overview: features/domain/core.md
               - Specs governance and bootstrap: features/domain/core/core.md
               - Event-driven engine orchestration: features/domain/core/engine.md
+          - Connectors:
+              - Overview: features/domain/connectors.md
+              - Discord event source and reply: features/domain/connectors/discord.md
+              - GitHub event source: features/domain/connectors/github.md
           - Env:
               - Overview: features/domain/env.md
               - Environment and .env loading: features/domain/env/env.md
@@ -72,10 +76,6 @@ nav:
               - Workflow runners and session lifecycle: features/domain/workflow/workflow.md
               - Workflow step DSL and branching actions: features/domain/workflow/workflow-steps.md
               - Cursor-backed gathering workflow: features/domain/workflow/cursor-gathering.md
-          - Connectors:
-              - Overview: features/domain/connectors.md
-              - Discord: features/domain/connectors/discord.md
-              - GitHub: features/domain/connectors/github.md
   - Architecture: architecture.md
   - Runbooks:
       - Index: runbooks/index.md
@@ -165,6 +165,7 @@ nav:
               - schema-gate: cursor/skills/common/schema-gate.md
               - static-analysis: cursor/skills/common/static-analysis.md
               - sync-cursor-docs: cursor/skills/common/sync-cursor-docs.md
+              - mkdoc-gap-fill-checklist: cursor/skills/common/mkdoc-gap-fill-checklist.md
               - update-readme: cursor/skills/common/update-readme.md
       - Workflows:
           - Overview: cursor/workflows/index.md

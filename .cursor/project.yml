@@ -22,6 +22,10 @@ validation_defaults:
   shell: powershell
   entrypoint: src/main/java/com/vinekeepers/VinekeepersApp.java
 
+# Optional: registry layout for nova-spec (preserve | one_file_per_domain). Default: preserve.
+specs:
+  registry_layout: one_file_per_domain
+
 # Optional: for scan and gate commands
 scan:
   root_config_files: [pom.xml, README.md, .env.example]
