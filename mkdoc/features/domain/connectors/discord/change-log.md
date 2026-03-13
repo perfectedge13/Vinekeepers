@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-13
+
+- **Delivery target channel or thread:** OutboundDeliveryRouter resolves sender from delivery target (channel id or thread id); LifecycleContextStore getByDeliveryTargetId used for both. getGatewayForChannel(deliveryTargetId) accepts thread or channel id so Cursor run updates can be sent to a thread when deliveryChannelId is set. Gateway contract unchanged; JDA gateway used for thread delivery when create_thread stores thread id in state.
+
 ## 2026-03-12
 
 - **Lifecycle delivery follow-up:** `getGatewayForChannel(channelId)` returns null when the lifecycle channel's configured bot has no registered gateway (no default fallback). `getDiscordUserIdForBot(botId)` returns that bot's Discord user id from its gateway `getSelfUserId`, or null. Gateway contract exposes `getSelfUserId()` and `addPermissionOverride(channelId, guildId, targetUserId, allow, deny)` for lifecycle room permission overwrites. Bootstrap may register an **outbound-only** gateway for bots not in routing (e.g. lifecycle room bot Arrietty); that gateway has no event listeners and is used only for sending. OutboundDeliveryRouter and DiscordAppReplySink use the router for sender resolution; when `getGatewayForChannel` returns null the sink does not send and logs. See REQ-CONNECTORS-DISCORD-001, OutboundDeliveryRouterTest, JdaDiscordGateway.

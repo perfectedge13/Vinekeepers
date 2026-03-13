@@ -1,8 +1,8 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.workflow.actions.CreateThreadAction;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -97,5 +97,49 @@ class CreateLifecycleContextActionTest {
         CreateLifecycleContextAction action = new CreateLifecycleContextAction(store);
         action.run(null, Map.of("channelId", "chan-from-state"), Map.of());
         assertTrue(store.getByChannelId("chan-from-state").isPresent());
+    }
+
+    @Test
+    void runStoresDeliveryChannelIdFromBindOrState() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        CreateLifecycleContextAction action = new CreateLifecycleContextAction(store);
+        action.run(null,
+                Map.of("channelId", "chan-1", "deliveryChannelId", "thread-abc"),
+                Map.of());
+        LifecycleContext ctx = store.getByChannelId("chan-1").orElseThrow();
+        assertEquals("thread-abc", ctx.getDeliveryChannelId());
+    }
+
+    @Test
+    void runPrefersBindDeliveryChannelIdOverState() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        CreateLifecycleContextAction action = new CreateLifecycleContextAction(store);
+        action.run(null,
+                Map.of("channelId", "chan-1", "deliveryChannelId", "thread-state"),
+                Map.of("deliveryChannelId", "thread-bind"));
+        LifecycleContext ctx = store.getByChannelId("chan-1").orElseThrow();
+        assertEquals("thread-bind", ctx.getDeliveryChannelId());
+    }
+
+    @Test
+    void runSetsDeliveryChannelIdNullWhenSentinelThreadCreateFailed() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        CreateLifecycleContextAction action = new CreateLifecycleContextAction(store);
+        action.run(null,
+                Map.of("channelId", "chan-1", "deliveryChannelId", CreateThreadAction.THREAD_CREATE_FAILED),
+                Map.of());
+        LifecycleContext ctx = store.getByChannelId("chan-1").orElseThrow();
+        assertEquals(null, ctx.getDeliveryChannelId());
+    }
+
+    @Test
+    void runSetsDeliveryChannelIdNullWhenBindHasSentinelStateHasThreadId() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        CreateLifecycleContextAction action = new CreateLifecycleContextAction(store);
+        action.run(null,
+                Map.of("channelId", "chan-1", "deliveryChannelId", "thread-ok"),
+                Map.of("deliveryChannelId", CreateThreadAction.THREAD_CREATE_FAILED));
+        LifecycleContext ctx = store.getByChannelId("chan-1").orElseThrow();
+        assertEquals(null, ctx.getDeliveryChannelId());
     }
 }

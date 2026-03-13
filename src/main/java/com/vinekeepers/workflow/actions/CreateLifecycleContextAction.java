@@ -38,10 +38,13 @@ public final class CreateLifecycleContextAction implements com.vinekeepers.workf
         String requestText = firstNonBlank(getString(bind, "requestText"), state != null ? getString(state, "codeChange") : null);
         String status = firstNonBlank(getString(bind, "status"), state != null ? getString(state, "status") : null);
         if (status == null || status.isBlank()) status = "provisioning";
+        String deliveryChannelIdRaw = firstNonBlank(getString(bind, "deliveryChannelId"), state != null ? getString(state, "deliveryChannelId") : null);
+        String deliveryChannelId = (deliveryChannelIdRaw != null && !deliveryChannelIdRaw.isBlank() && !CreateThreadAction.THREAD_CREATE_FAILED.equals(deliveryChannelIdRaw))
+                ? deliveryChannelIdRaw : null;
         String contextId = "ctx-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         LifecycleContext context = new LifecycleContext(
                 contextId, channelId, Instant.now(),
-                null, configuredBotId, runtimeBotInstanceId, repo, requestText, status);
+                null, configuredBotId, runtimeBotInstanceId, repo, requestText, status, deliveryChannelId);
         lifecycleContextStore.put(context);
         return contextId;
     }

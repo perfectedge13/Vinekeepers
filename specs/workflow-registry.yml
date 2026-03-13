@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T15:00:00Z'
+  updated_utc: '2026-03-13T16:30:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -408,8 +408,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/LifecycleRunRecord.java
     role: >-
-      Generic run record for a lifecycle Cursor cloud run; indexed by channelId and externalRunId; Discord reply target
-      and remote status
+      Generic run record for a lifecycle Cursor cloud run; indexed by channelId and externalRunId; optional
+      deliveryChannelId for thread delivery; Discord reply target and remote status
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -417,7 +417,9 @@ assets:
   - id: ASSET-CURSOR-RUN-MONITOR
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudRunMonitor.java
-    role: Poll Cursor cloud runs and relay status, feedback, and PR updates back to Discord
+    role: >-
+      Poll Cursor cloud runs and relay status, feedback, and PR updates back to Discord; when run record has
+      deliveryChannelId set, send to that target (thread); use messageId null when sending to thread
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -500,8 +502,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/state/LifecycleContext.java
     role: >-
-      Extended lifecycle run context (channelId, guildId, run record id, configuredBotId, runtimeBotInstanceId, optional
-      repo/requestText) for Phase 1 lifecycle room
+      Extended lifecycle run context (channelId, guildId, run record id, configuredBotId, runtimeBotInstanceId,
+      optional repo/requestText, optional deliveryChannelId) for Phase 1 lifecycle room; withDeliveryChannelId(id)
+      returns new instance with that deliveryChannelId for store updates after create_thread
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -509,7 +512,10 @@ assets:
   - id: ASSET-LIFECYCLE-CONTEXT-STORE
     kind: source
     path: src/main/java/com/vinekeepers/state/LifecycleContextStore.java
-    role: Store and resolve lifecycle contexts by key for lifecycle room runs
+    role: >-
+      Store and resolve lifecycle contexts by key for lifecycle room runs; setDeliveryTargetId(contextId,
+      deliveryTargetId) updates context delivery target (ignores null, blank, THREAD_CREATE_FAILED); used by
+      create_thread after success
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -542,8 +548,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostChannelMessageAction.java
     role: >-
-      Workflow action to post a message to a Discord channel; interpolation from merged map (state then bind, bind
-      overrides); lifecycleBotName from bind for content
+      Workflow action to post a message to a Discord channel; send target = deliveryChannelId or channelId (bind then
+      state); treat THREAD_CREATE_FAILED sentinel as fallback to channelId; interpolation from merged map (state then
+      bind); lifecycleBotName from bind for content
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -567,7 +574,23 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/CreateLifecycleContextAction.java
     role: >-
       Workflow action to create and store a lifecycle context for a run; bind precedence (state then bind, bind
-      overrides)
+      overrides); reads optional deliveryChannelId from bind/state (excludes THREAD_CREATE_FAILED sentinel)
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CREATE-THREAD-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/CreateThreadAction.java
+    role: >-
+      Workflow action to create a Discord thread under parent channel; bind channelId, threadName, optional contextId.
+      When channelId has a lifecycle context, uses that context's bot gateway (owner gateway, e.g. Arrietty); else
+      default gateway. Blank or missing channelId returns THREAD_CREATE_FAILED; no LifecycleContextStore update on
+      failure. After success, when contextId in bind/state, updates LifecycleContextStore via setDeliveryTargetId
+      (contextId, threadId). Returns thread id or THREAD_CREATE_FAILED; storeIn (e.g. deliveryChannelId) stores
+      result in state
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -578,8 +601,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java
     role: >-
-      Workflow action to launch a Cursor cloud run and register run record; ack/status to Discord (e.g. launching) and
-      directs user to lifecycle room
+      Workflow action to launch a Cursor cloud run and register run record; passes optional deliveryChannelId into
+      LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -626,6 +649,11 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
+        - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
+          contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
+          default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
+          bind/state updates LifecycleContextStore via setDeliveryTargetId(contextId, threadId); no store update on
+          failure; storeIn (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
       examples: []
     traceability:
       assets:
@@ -659,6 +687,7 @@ requirements:
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
         - ASSET-PROVISION-BOT-INSTANCE-ACTION
         - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
+        - ASSET-CREATE-THREAD-ACTION
         - ASSET-LAUNCH-CURSOR-RUN-ACTION
       symbols: []
     validation:
@@ -736,6 +765,14 @@ requirements:
           testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
           testMethod: runInterpolatesContentFromBindState
           preconditions: []
+        - id: UNIT-CREATE-THREAD-ACTION
+          title: CreateThreadActionTest
+          intent: >-
+            Verify create_thread action creates thread via gateway or returns THREAD_CREATE_FAILED; blank channelId
+            returns sentinel; lifecycle owner gateway when channel has context; setDeliveryTargetId on success when
+            contextId present; no store update on failure
+          testClass: com.vinekeepers.workflow.actions.CreateThreadActionTest
+          preconditions: []
         - id: UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-PRECEDENCE
           title: CreateLifecycleContextActionTest
           intent: Verify create_lifecycle_context uses bind precedence (bind overrides state)
@@ -807,8 +844,11 @@ requirements:
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
         - >-
           Arrietty template bot (id arrietty) with workflowRef arrietty_room and handlesOwnedSpaces true for lifecycle
-          room; arrietty_room workflow handles inbound room events (messages, interactions) with message-first capture
-          and optional trimAndLower for room name UX; no hardcoded bot ids in Router or engine
+          room; arrietty_room workflow may include create_thread step with storeIn deliveryChannelId and optional branch
+          on THREAD_CREATE_FAILED; create_thread uses lifecycle owner gateway when channel has context; after success
+          setDeliveryTargetId updates store when contextId present; LifecycleContext.withDeliveryChannelId and
+          LifecycleContextStore.setDeliveryTargetId (ignores null/blank/sentinel); done step may use main-room redirect
+          message (e.g. "Launching now. See <#{{channelId}}>."); no hardcoded bot ids in Router or engine
         - >-
           Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before
           launching via launch_cursor_run (cursor.fullRun not used in luna_cursor)
@@ -818,7 +858,9 @@ requirements:
           immediately acknowledges launch to Discord
         - >-
           CursorCloudRunMonitor polls agent status and conversation feedback and relays updates such as running state,
-          PR URL, and final summary to Discord
+          PR URL, and final summary to Discord; when LifecycleRunRecord has deliveryChannelId set, sends to that
+          target (thread) with messageId null; treats THREAD_CREATE_FAILED sentinel as no delivery target (use
+          channelId)
         - Engine sends workflow reply to Discord when source is Discord
         - >-
           Confirmation branch clear: luna_cursor edit_request branch clears codeChange and confirmAction from state
@@ -839,14 +881,15 @@ requirements:
           create_channel bind may include lifecycleOwnerBotId; after create, addPermissionOverride is called for that
           bot's Discord user id (resolved via gateway/getDiscordUserIdForBot) when gateway supports it
         - >-
-          post_channel_message interpolates content from merged map (state then bind, bind overrides); lifecycleBotName
-          from bind for content
+          post_channel_message send target = deliveryChannelId or channelId (bind then state); when deliveryChannelId is
+          THREAD_CREATE_FAILED sentinel, fallback to channelId; interpolates content from merged map (state then bind,
+          bind overrides); lifecycleBotName from bind for content
         - >-
           create_lifecycle_context uses bind precedence (bind overrides state for configuredBotId, repo, requestText,
-          runtimeBotInstanceId)
+          runtimeBotInstanceId, deliveryChannelId); excludes THREAD_CREATE_FAILED from context deliveryChannelId
         - >-
           launch_cursor_run acknowledgement to Discord includes optional status (e.g. launching) and directs user to
-          lifecycle room
+          lifecycle room; passes optional deliveryChannelId from bind/state into LifecycleRunRecord
       examples: []
     traceability:
       assets:
@@ -856,6 +899,7 @@ requirements:
         - ASSET-CURSOR-ADAPTER-IMPL
         - ASSET-LUNA-RUN-STATE
         - ASSET-CURSOR-RUN-MONITOR
+        - ASSET-CREATE-THREAD-ACTION
         - ASSET-CURSOR-AGENT-LAUNCH-REQUEST
         - ASSET-CURSOR-AGENT-CONVERSATION
         - ASSET-CURSOR-AGENT-DETAILS
@@ -986,8 +1030,17 @@ requirements:
           preconditions: []
         - id: UNIT-CURSOR-RUN-MONITOR
           title: CursorCloudRunMonitorTest
-          intent: Verify CursorCloudRunMonitor reports Cursor status and feedback back to Discord
+          intent: >-
+            Verify CursorCloudRunMonitor reports Cursor status and feedback back to Discord; when deliveryChannelId set,
+            sends to thread with messageId null
           testClass: com.vinekeepers.core.cursor.CursorCloudRunMonitorTest
+          preconditions: []
+        - id: UNIT-CREATE-THREAD-ACTION
+          title: CreateThreadActionTest
+          intent: >-
+            Verify create_thread uses owner gateway when channel has context, setDeliveryTargetId on success when
+            contextId present, no store update on failure, blank channelId returns THREAD_CREATE_FAILED
+          testClass: com.vinekeepers.workflow.actions.CreateThreadActionTest
           preconditions: []
         - id: UNIT-LIFECYCLE-RUN-RECORD
           title: LifecycleRunRecordTest
@@ -1168,5 +1221,6 @@ features:
       - ASSET-POST-CHANNEL-MESSAGE-ACTION
       - ASSET-PROVISION-BOT-INSTANCE-ACTION
       - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
+      - ASSET-CREATE-THREAD-ACTION
       - ASSET-LAUNCH-CURSOR-RUN-ACTION
     status: active

@@ -71,6 +71,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         String branchName = buildBranchName(change);
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
+        String deliveryChannelId = getString(args, "deliveryChannelId");
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -94,6 +95,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                     change,
                     channelId,
                     replyToMessageId,
+                    deliveryChannelId,
                     firstNonBlankInstant(launch.createdAt(), Instant.now()),
                     launch.status()
             );

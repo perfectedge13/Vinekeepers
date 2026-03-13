@@ -5,6 +5,7 @@
 ## 2026-03-13
 
 - **capture_field trimAndLower:** `CaptureFieldFromEventStep` supports optional **trimAndLower** (boolean) in step config. When true, captured text from message content is trimmed and lowercased before storing in state (e.g. room name in arrietty_room). `ConfigurableWorkflowRunner` parses `trimAndLower` from capture_field step config and passes it to the step. Tests: `CaptureFieldFromEventStepTest.messageEventWithTrimAndLowerTrimsAndLowercasesContent`, `ConfigurableWorkflowRunnerTest.runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue`.
+- **create_thread action:** New **CreateThreadAction** (`create_thread`): creates a Discord thread under parent channel; bind `channelId`, `threadName`; optional `storeIn` (e.g. `deliveryChannelId`) stores thread id or sentinel `THREAD_CREATE_FAILED` in state. Registered in WorkflowActionRegistry. PostChannelMessageAction send target = deliveryChannelId or channelId (bind then state); THREAD_CREATE_FAILED treated as fallback to channelId.
 
 ## 2026-03-10
 

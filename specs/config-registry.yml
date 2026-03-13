@@ -50,7 +50,12 @@ assets:
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
-    role: Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with workflowRef arrietty_room, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for blank/empty)
+    role: >-
+      Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
+      discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
+      workflowRef arrietty_room, optional create_thread step with storeIn deliveryChannelId, handlesOwnedSpaces,
+      capture_field trimAndLower for room name UX, branch value "" for blank/empty; done step main-room redirect
+      message e.g. "Launching now. See <#{{channelId}}>.")
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -88,7 +93,7 @@ requirements:
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
         - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
-        - Workflow step bind keys (e.g. lifecycleBotName) and content with {{key}} interpolation are supported in step config
+        - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
