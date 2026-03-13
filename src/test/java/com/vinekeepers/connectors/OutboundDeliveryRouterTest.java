@@ -110,6 +110,36 @@ class OutboundDeliveryRouterTest {
         assertSame(defaultGw, router.getGatewayForChannel("any-ch"));
     }
 
+    @Test
+    void getGatewayForChannel_withLifecycleContextButBotHasNoGateway_returnsNull() {
+        lifecycleContextStore.put(new LifecycleContext("ctx-5", "ch-no-gw", NOW, null, "other-bot", null, null, null));
+        router.registerSender("other-bot", lunaSender, null); // sender but no gateway
+        DiscordGateway defaultGw = new StubGateway();
+        router.setDefaultGateway(defaultGw);
+
+        assertNull(router.getGatewayForChannel("ch-no-gw"));
+    }
+
+    @Test
+    void getDiscordUserIdForBot_returnsUserIdWhenBotHasGateway() {
+        StubGatewayWithSelfId lunaGateway = new StubGatewayWithSelfId("luna-discord-user-id");
+        router.registerSender("luna", lunaSender, lunaGateway);
+
+        assertEquals("luna-discord-user-id", router.getDiscordUserIdForBot("luna"));
+    }
+
+    @Test
+    void getDiscordUserIdForBot_returnsNullWhenBotHasNoGateway() {
+        assertNull(router.getDiscordUserIdForBot("unknown-bot"));
+    }
+
+    @Test
+    void getDiscordUserIdForBot_returnsNullWhenBotIdNullOrBlank() {
+        assertNull(router.getDiscordUserIdForBot(null));
+        assertNull(router.getDiscordUserIdForBot(""));
+        assertNull(router.getDiscordUserIdForBot("   "));
+    }
+
     private static final class RecordingSender implements DiscordReplySender {
         final AtomicInteger sendCalls = new AtomicInteger(0);
         String lastChannelId;
@@ -125,7 +155,7 @@ class OutboundDeliveryRouterTest {
         }
     }
 
-    private static final class StubGateway implements DiscordGateway {
+    private static class StubGateway implements DiscordGateway {
         @Override
         public void connect(java.util.function.Consumer<com.vinekeepers.events.Event> publisher) {}
         @Override
@@ -144,5 +174,18 @@ class OutboundDeliveryRouterTest {
         public void updateMessage(String token, String content, java.util.List<java.util.List<java.util.Map<String, Object>>> components) {}
         @Override
         public boolean isConnected() { return false; }
+    }
+
+    private static final class StubGatewayWithSelfId extends StubGateway {
+        private final String selfUserId;
+
+        StubGatewayWithSelfId(String selfUserId) {
+            this.selfUserId = selfUserId;
+        }
+
+        @Override
+        public String getSelfUserId() {
+            return selfUserId;
+        }
     }
 }

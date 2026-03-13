@@ -1,9 +1,17 @@
 package com.vinekeepers.bot;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.state.LifecycleContext;
+import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -236,5 +244,98 @@ class RouterTest {
         Event event = new Event("discord:g:ch", "message",
                 Map.of("authorId", "99", "author", "other_user", "content", "Hey @Luna run it", "mentions", List.of("luna")));
         assertTrue(router.route(event).isEmpty());
+    }
+
+    // --- LifecycleContextStore + handlesOwnedSpaces (single-owner precedence) ---
+
+    @Test
+    void routeWithLifecycleStore_ownedChannel_returnsOnlyOwnerWhenOwnerHasHandlesOwnedSpaces() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "ch-owned", Instant.now(), null, "arrietty", null, null, null);
+        store.put(ctx);
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true, "luna", false));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "arrietty"));
+
+        Event event = new Event("discord:g:ch-owned", "message",
+                Map.of("channelId", "ch-owned", "content", "hello"));
+        assertEquals(List.of("arrietty"), r.route(event));
+    }
+
+    @Test
+    void routeWithLifecycleStore_ownedChannel_usesFilterBasedWhenOwnerDoesNotHaveHandlesOwnedSpaces() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "ch-owned", Instant.now(), null, "other-bot", null, null, null);
+        store.put(ctx);
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("other-bot", false, "luna", true));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch-owned", "message",
+                Map.of("channelId", "ch-owned", "content", "hello"));
+        assertEquals(List.of("luna"), r.route(event));
+    }
+
+    @Test
+    void routeWithLifecycleStore_ownedChannel_logsOwnershipMismatchWarningWhenOwnerDoesNotHaveHandlesOwnedSpaces() {
+        Logger routerLogger = (Logger) LoggerFactory.getLogger(Router.class);
+        ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+        listAppender.start();
+        routerLogger.addAppender(listAppender);
+        try {
+            LifecycleContextStore store = new LifecycleContextStore();
+            LifecycleContext ctx = new LifecycleContext("ctx-1", "ch-owned", Instant.now(), null, "other-bot", null, null, null);
+            store.put(ctx);
+            Router r = new Router(store);
+            r.setHandlesOwnedSpacesByBotId(Map.of("other-bot", false, "luna", true));
+            r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+            Event event = new Event("discord:g:ch-owned", "message",
+                    Map.of("channelId", "ch-owned", "content", "hello"));
+            r.route(event);
+
+            List<ILoggingEvent> warnings = listAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.WARN)
+                    .filter(e -> e.getFormattedMessage().contains("does not have handlesOwnedSpaces"))
+                    .toList();
+            assertTrue(warnings.size() >= 1,
+                    "Expected at least one WARN log containing 'does not have handlesOwnedSpaces'; got: " + listAppender.list);
+        } finally {
+            routerLogger.detachAppender(listAppender);
+            listAppender.stop();
+        }
+    }
+
+    @Test
+    void routeWithLifecycleStore_noContextForChannel_usesFilterBased() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch-unknown", "message",
+                Map.of("channelId", "ch-unknown", "content", "hi"));
+        assertEquals(List.of("luna"), r.route(event));
+    }
+
+    @Test
+    void routeWithLifecycleStore_eventWithoutChannelId_usesFilterBased() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        store.put(new LifecycleContext("ctx-1", "ch-1", Instant.now(), null, "arrietty", null, null, null));
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch-1", "message", Map.of("content", "hi"));
+        assertEquals(List.of("luna"), r.route(event));
+    }
+
+    @Test
+    void setHandlesOwnedSpacesByBotIdWithNullDoesNotThrow() {
+        Router r = new Router(new LifecycleContextStore());
+        r.setHandlesOwnedSpacesByBotId(null);
+        Event event = new Event("discord:g:ch", "message", Map.of("channelId", "ch", "content", "x"));
+        assertTrue(r.route(event).isEmpty());
     }
 }

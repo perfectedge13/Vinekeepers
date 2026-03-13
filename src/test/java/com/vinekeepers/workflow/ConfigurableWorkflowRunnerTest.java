@@ -384,4 +384,27 @@ class ConfigurableWorkflowRunnerTest {
         assertEquals("repo-B", finalState.get("project"));
         assertEquals("second request", finalState.get("codeChange"));
     }
+
+    @Test
+    void runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "ask_input", "prompt", "Room name?", "storeIn", "room"),
+                Map.of("type", "capture_field", "storeIn", "room", "trimAndLower", true),
+                Map.of("type", "done", "message", "Room: {{room}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("arrietty_room", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry());
+        StateStore store = new StateStore();
+
+        WorkflowRunResult result = runner.runResult(
+                new Event("test", "message", Map.of("content", "  Arrietty Room  ")),
+                store,
+                "arrietty");
+
+        assertFalse(result.isWaiting());
+        assertTrue(result.isCompleted());
+        assertEquals("Room: arrietty room", result.getReplyMessage());
+        ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals("arrietty room", state.get("room"));
+    }
 }

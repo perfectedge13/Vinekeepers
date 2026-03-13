@@ -38,7 +38,11 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Wires EventBus, Engine, Router, connectors, and optional YAML config.
@@ -59,6 +63,9 @@ public final class Bootstrap {
     private final WorkflowActionRegistry actionRegistry;
     private final OutboundDeliveryRouter outboundDeliveryRouter;
     private final List<BotDefinition> lastLoadedBots = new ArrayList<>();
+    private final Set<String> routedBotIds = new HashSet<>();
+    /** From config defaultDiscordTokenEnvKey; used only when no bot has discordTokenEnvKey. Bot-config driven. */
+    private String defaultDiscordTokenEnvKey;
     private final List<DiscordEventSource> discordSources = new ArrayList<>();
     private DiscordEventSource discordSource;
     private GitHubEventSource githubSource;
@@ -80,7 +87,7 @@ public final class Bootstrap {
         registerLegacyActions(actionRegistry);
         registerLifecycleActions(actionRegistry);
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
-        this.router = new Router();
+        this.router = new Router(lifecycleContextStore);
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
         eventBus.subscribe(engine);
         registerTools(toolRegistry);
@@ -97,13 +104,31 @@ public final class Bootstrap {
         try {
             ConfigLoader loader = new ConfigLoader();
             BotConfig config = loader.loadFromPath(configPath);
+            defaultDiscordTokenEnvKey = config.getDefaultDiscordTokenEnvKey();
+            if (defaultDiscordTokenEnvKey != null && defaultDiscordTokenEnvKey.isBlank()) {
+                defaultDiscordTokenEnvKey = null;
+            }
             router.clear();
+            routedBotIds.clear();
+            if (config.getRouting() != null) {
+                for (Map<String, Object> r : config.getRouting()) {
+                    Object botId = r != null ? r.get("botId") : null;
+                    if (botId != null && !botId.toString().isBlank()) {
+                        routedBotIds.add(botId.toString().trim());
+                    }
+                }
+            }
             loader.addRoutings(config, router);
             DynamicChoiceProviderRegistry choiceProviderRegistry = new DynamicChoiceProviderRegistry();
             choiceProviderRegistry.register("githubRepos", new GitHubReposChoiceProvider(stateStore));
             List<BotDefinition> bots = loader.buildBots(config);
             lastLoadedBots.clear();
             lastLoadedBots.addAll(bots);
+            Map<String, Boolean> handlesMap = new HashMap<>();
+            for (BotDefinition bot : bots) {
+                handlesMap.put(bot.getId(), bot.isHandlesOwnedSpaces());
+            }
+            router.setHandlesOwnedSpacesByBotId(handlesMap);
             for (BotDefinition bot : bots) {
                 engine.registerBot(bot);
                 WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), this.actionRegistry, toolRunner, choiceProviderRegistry);
@@ -142,7 +167,8 @@ public final class Bootstrap {
                     log.warn("Bot {} has discordTokenEnvKey {} but token is blank; skipping Discord connector for this bot.", bot.getId(), envKey);
                     continue;
                 }
-                JdaDiscordGateway gateway = new JdaDiscordGateway(token);
+                boolean outboundOnly = !routedBotIds.contains(bot.getId());
+                JdaDiscordGateway gateway = new JdaDiscordGateway(token, outboundOnly);
                 DiscordEventSource source = new DiscordEventSource(gateway);
                 outboundDeliveryRouter.registerSender(bot.getId(), source, gateway);
                 if (outboundDeliveryRouter.getDefaultGateway() == null) {
@@ -153,8 +179,8 @@ public final class Bootstrap {
                 discordSources.add(source);
             }
         }
-        if (outboundDeliveryRouter.getDefaultGateway() == null) {
-            String token = Env.get("DISCORD_BOT_TOKEN", "");
+        if (outboundDeliveryRouter.getDefaultGateway() == null && defaultDiscordTokenEnvKey != null && !defaultDiscordTokenEnvKey.isBlank()) {
+            String token = Env.get(defaultDiscordTokenEnvKey, "");
             if (!token.isBlank()) {
                 JdaDiscordGateway gateway = new JdaDiscordGateway(token);
                 this.discordSource = new DiscordEventSource(gateway);
@@ -171,7 +197,7 @@ public final class Bootstrap {
         engine.registerSink("discord", new DiscordAppReplySink(outboundDeliveryRouter));
         cursorCloudRunMonitor.setReplySender(outboundDeliveryRouter);
         if (outboundDeliveryRouter.getDefaultGateway() != null) {
-            actionRegistry.register("create_channel", new CreateChannelAction(outboundDeliveryRouter.getDefaultGateway()));
+            actionRegistry.register("create_channel", new CreateChannelAction(outboundDeliveryRouter));
         }
         actionRegistry.register("post_channel_message", new PostChannelMessageAction(outboundDeliveryRouter));
         return this;

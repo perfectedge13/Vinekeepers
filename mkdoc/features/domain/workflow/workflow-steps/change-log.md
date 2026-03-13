@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-13
+
+- **capture_field trimAndLower:** `CaptureFieldFromEventStep` supports optional **trimAndLower** (boolean) in step config. When true, captured text from message content is trimmed and lowercased before storing in state (e.g. room name in arrietty_room). `ConfigurableWorkflowRunner` parses `trimAndLower` from capture_field step config and passes it to the step. Tests: `CaptureFieldFromEventStepTest.messageEventWithTrimAndLowerTrimsAndLowercasesContent`, `ConfigurableWorkflowRunnerTest.runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue`.
+
 ## 2026-03-10
 
 - **Phase 1 correctness (docs sync):** Test list updated to include all workflow action tests from registry: CreateChannelActionTest (gateway, sentinel, normalize), PostChannelMessageActionTest (interpolation, lifecycleBotName from bind), CreateLifecycleContextActionTest (bind precedence), ProvisionBotInstanceActionTest, LaunchCursorRunActionTest (launch, ack, lifecycle room). Contracts and change-log aligned with bind precedence (bind overrides state), create_channel CHANNEL_CREATE_FAILED and normalizeChannelName, post_channel_message merged interpolation, launch_cursor_run ack with status.

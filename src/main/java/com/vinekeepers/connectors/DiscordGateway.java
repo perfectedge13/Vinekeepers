@@ -66,4 +66,20 @@ public interface DiscordGateway {
     default String createTextChannel(String guildId, String channelName) {
         return null;
     }
+
+    /**
+     * Discord user id of the bot (self) for this gateway. Returns null if not connected or unknown.
+     */
+    default String getSelfUserId() {
+        return null;
+    }
+
+    /**
+     * Add or update a permission override for a user on a channel. allow and deny are Discord permission bits.
+     * Completes synchronously so the workflow can rely on permissions before the first send.
+     * @return true if the override was applied successfully, false if not supported, not connected, or on failure
+     */
+    default boolean addPermissionOverride(String channelId, String guildId, String targetUserId, long allow, long deny) {
+        return false;
+    }
 }

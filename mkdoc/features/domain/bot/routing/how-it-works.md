@@ -8,8 +8,9 @@
 
 1. A connector publishes an internal `Event`.
 2. `NormalizedEventContext` derives normalized routing fields from the payload.
-3. `RoutingFilter` evaluates configured criteria; for Discord message events: repositories, labels, channels, `discordTrigger`, `discordMention`, `discordAuthors`; for Discord interaction events: author, channel, and other non-trigger/mention criteria only.
-4. `Router` returns the bot ids whose filters accept the event.
+3. **Ownership check:** If the event is from a Discord channel and `LifecycleContextStore` has a context for that channel: if the owner bot has `handlesOwnedSpaces`, the Router returns only that owner bot (single-owner precedence); if the owner bot does *not* have `handlesOwnedSpaces`, the Router logs a warning (channel has lifecycle owner but that bot does not have handlesOwnedSpaces; using filter-based routing) and continues with filter-based routing. Otherwise (no context) continue.
+4. `RoutingFilter` evaluates configured criteria; for Discord message events: repositories, labels, channels, `discordTrigger`, `discordMention`, `discordAuthors`; for Discord interaction events: author, channel, and other non-trigger/mention criteria only.
+5. `Router` returns the bot ids whose filters accept the event.
 
 # Inputs and outputs
 

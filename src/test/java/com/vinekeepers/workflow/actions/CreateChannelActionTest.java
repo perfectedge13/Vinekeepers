@@ -1,14 +1,20 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.connectors.DiscordGateway;
+import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CreateChannelActionTest {
@@ -32,7 +38,7 @@ class CreateChannelActionTest {
 
     @Test
     void runReturnsChannelCreateFailedWhenGatewayIsNull() {
-        CreateChannelAction action = new CreateChannelAction(null);
+        CreateChannelAction action = new CreateChannelAction((DiscordGateway) null);
         Object result = action.run(null, Map.of(), Map.of("guildId", "guild-1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
@@ -81,8 +87,8 @@ class CreateChannelActionTest {
         action.run(new Event("discord:g1", "m", Map.of()),
                 Map.of("project", "https://github.com/owner/repo", "codeChange", "phase-1-tests"),
                 Map.of("guildId", "g1"));
-        assertTrue(gateway.lastChannelName != null && gateway.lastChannelName.startsWith("owner-repo-phase-1-tests-"),
-                "expected channel name from state project+codeChange, got: " + gateway.lastChannelName);
+        assertTrue(gateway.lastChannelName != null && gateway.lastChannelName.startsWith("repo-phase-1-tests-"),
+                "expected channel name from state (repo name only, no owner), got: " + gateway.lastChannelName);
     }
 
     @Test
@@ -97,7 +103,7 @@ class CreateChannelActionTest {
         assertTrue(gateway.lastChannelName != null, "expected channel name");
         assertEquals(gateway.lastChannelName, gateway.lastChannelName.toLowerCase(java.util.Locale.ROOT),
                 "channel name must be fully lowercase");
-        assertTrue(gateway.lastChannelName.contains("owner-repo"), "expected repo segment lowercase");
+        assertTrue(gateway.lastChannelName.startsWith("repo-"), "expected repo segment (repo name only, no owner)");
     }
 
     @Test
@@ -174,6 +180,19 @@ class CreateChannelActionTest {
     }
 
     @Test
+    void runBuildsChannelNameWithRepoNameOnlyNotOwnerRepo() {
+        FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
+        gateway.connected = true;
+        gateway.createdChannelId = "chan-1";
+        CreateChannelAction action = new CreateChannelAction(gateway);
+        action.run(new Event("discord:g1", "m", Map.of()),
+                Map.of("project", "owner/repo", "codeChange", "add-feature"),
+                Map.of("guildId", "g1"));
+        assertTrue(gateway.lastChannelName != null && gateway.lastChannelName.startsWith("repo-add-feature-"),
+                "channel name must use repo name only (no owner), got: " + gateway.lastChannelName);
+        assertFalse(gateway.lastChannelName.startsWith("owner-"), "channel name must not start with owner");
+    }
+    @Test
     void runNormalizesChannelNameFromBindToLowercaseDiscordSafe() {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
@@ -201,6 +220,78 @@ class CreateChannelActionTest {
         assertTrue(result.matches("[a-z0-9_-]+"));
     }
 
+    /** CreateChannelAction(router) with lifecycleOwnerBotId adds permission overwrite after create (mock gateway). */
+    @Test
+    void runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate() {
+        long lifecycleOwnerAllow = (1L << 10) | (1L << 11); // VIEW_CHANNEL | SEND_MESSAGES
+        FakeGatewayWithPermissionOverride gateway = new FakeGatewayWithPermissionOverride("owner-discord-user-id");
+        gateway.connected = true;
+        gateway.createdChannelId = "new-channel-id";
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        router.registerSender("luna", (ch, msg, content) -> {}, gateway);
+
+        CreateChannelAction action = new CreateChannelAction(router);
+        Map<String, Object> bind = Map.of(
+                "guildId", "guild-1",
+                "channelName", "lifecycle-room",
+                "lifecycleOwnerBotId", "luna");
+        Object result = action.run(new Event("discord:guild-1", "m", Map.of()), Map.of(), bind);
+
+        assertEquals("new-channel-id", result);
+        assertNotNull(gateway.lastPermissionOverride, "addPermissionOverride should have been called");
+        assertEquals("new-channel-id", gateway.lastPermissionOverride.channelId);
+        assertEquals("guild-1", gateway.lastPermissionOverride.guildId);
+        assertEquals("owner-discord-user-id", gateway.lastPermissionOverride.targetUserId);
+        assertEquals(lifecycleOwnerAllow, gateway.lastPermissionOverride.allow);
+        assertEquals(0L, gateway.lastPermissionOverride.deny);
+    }
+
+    /** When addPermissionOverride returns false, create_channel fails with CHANNEL_CREATE_FAILED. */
+    @Test
+    void runWithRouterAndLifecycleOwnerBotId_whenAddPermissionOverrideReturnsFalse_returnsChannelCreateFailed() {
+        FakeGatewayWithPermissionOverride gateway = new FakeGatewayWithPermissionOverride("owner-id");
+        gateway.connected = true;
+        gateway.createdChannelId = "new-ch";
+        gateway.permissionOverrideReturn = false;
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
+        router.setDefaultGateway(gateway);
+        router.registerSender("luna", (ch, msg, content) -> {}, gateway);
+
+        CreateChannelAction action = new CreateChannelAction(router);
+        Map<String, Object> bind = Map.of(
+                "guildId", "g1",
+                "channelName", "room",
+                "lifecycleOwnerBotId", "luna");
+        Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), bind);
+
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
+        assertNotNull(gateway.lastPermissionOverride);
+    }
+
+    /** When lifecycleOwnerBotId is set but that bot has no Discord user id, create_channel fails. */
+    @Test
+    void runWithRouterAndLifecycleOwnerBotId_whenOwnerBotHasNoUserId_returnsChannelCreateFailed() {
+        FakeGatewayWithPermissionOverride gateway = new FakeGatewayWithPermissionOverride("luna-user-id");
+        gateway.connected = true;
+        gateway.createdChannelId = "new-ch";
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
+        router.setDefaultGateway(gateway);
+        router.registerSender("luna", (ch, msg, content) -> {}, gateway);
+        // Do not register any gateway for "arrietty" so getDiscordUserIdForBot("arrietty") returns null
+
+        CreateChannelAction action = new CreateChannelAction(router);
+        Map<String, Object> bind = Map.of(
+                "guildId", "g1",
+                "channelName", "room",
+                "lifecycleOwnerBotId", "arrietty");
+        Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), bind);
+
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
+        assertNull(gateway.lastPermissionOverride);
+    }
+
     private static DiscordGateway connectedGateway() {
         return new DiscordGateway() {
             @Override
@@ -214,7 +305,7 @@ class CreateChannelActionTest {
         };
     }
 
-    private static final class FakeCreateChannelGateway implements DiscordGateway {
+    private static class FakeCreateChannelGateway implements DiscordGateway {
         boolean connected;
         String createdChannelId;
         String lastGuildId;
@@ -233,6 +324,41 @@ class CreateChannelActionTest {
             this.lastGuildId = guildId;
             this.lastChannelName = channelName;
             return createdChannelId;
+        }
+    }
+
+    private static final class FakeGatewayWithPermissionOverride extends FakeCreateChannelGateway {
+        final String selfUserId;
+        PermissionOverrideCall lastPermissionOverride;
+
+        FakeGatewayWithPermissionOverride(String selfUserId) {
+            this.selfUserId = selfUserId;
+        }
+
+        @Override
+        public String getSelfUserId() {
+            return selfUserId;
+        }
+
+        boolean permissionOverrideReturn = true;
+
+        @Override
+        public boolean addPermissionOverride(String channelId, String guildId, String targetUserId, long allow, long deny) {
+            this.lastPermissionOverride = new PermissionOverrideCall(channelId, guildId, targetUserId, allow, deny);
+            return permissionOverrideReturn;
+        }
+
+        static final class PermissionOverrideCall {
+            final String channelId, guildId, targetUserId;
+            final long allow, deny;
+
+            PermissionOverrideCall(String channelId, String guildId, String targetUserId, long allow, long deny) {
+                this.channelId = channelId;
+                this.guildId = guildId;
+                this.targetUserId = targetUserId;
+                this.allow = allow;
+                this.deny = deny;
+            }
         }
     }
 }

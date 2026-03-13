@@ -2,6 +2,14 @@
 
 # Entries
 
+## 2026-03-13
+
+- **Arrietty room UX and message-first capture:** Arrietty template in `config/bots.yaml` uses `workflowRef: arrietty_room` with **message-first** flow: first step is `capture_field` (e.g. `storeIn: roomAction`) with optional **trimAndLower: true** for room name UX (trim and lowercase user input). Router ownership warning when lifecycle owner lacks handlesOwnedSpaces. No hardcoded bot ids in Router or engine.
+
+## 2026-03-12
+
+- **CreateChannelAction lifecycle owner and permission overwrite:** `create_channel` step bind may include `lifecycleOwnerBotId`. After creating the channel via gateway `createTextChannel`, the action calls `addPermissionOverride` for that bot's Discord user (resolved via router `getDiscordUserIdForBot(lifecycleOwnerBotId)`) when the gateway supports it, so the lifecycle room bot (e.g. Arrietty) has explicit permission on the new channel. Room naming and sentinel `CHANNEL_CREATE_FAILED` unchanged. See CreateChannelActionTest.runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate.
+
 ## 2026-03-10
 
 - **Phase 1 correctness (docs):** Bind precedence for call_action (bind overrides state). Merged interpolation for `post_channel_message`: content uses state then bind (bind overrides), e.g. `lifecycleBotName` in bind in `config/bots.yaml` for room intro. `create_channel` normalizes channel name to Discord-safe before gateway create; returns `CHANNEL_CREATE_FAILED` on failure. `launch_cursor_run` acknowledgement includes optional status (e.g. "Status: launching"). README and workflow-steps/cursor-gathering/Discord docs updated.

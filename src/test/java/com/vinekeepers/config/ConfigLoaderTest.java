@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -222,5 +223,56 @@ class ConfigLoaderTest {
         List<BotDefinition> bots = loader.buildBots(config);
         assertEquals(1, bots.size());
         assertNull(bots.get(0).getDiscordTokenEnvKey());
+    }
+
+    @Test
+    void loadFromPathParsesDefaultDiscordTokenEnvKey(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            defaultDiscordTokenEnvKey: MY_DISCORD_TOKEN_KEY
+            bots:
+              - id: bot1
+                persona:
+                  name: Bot1
+                  systemPrompt: ""
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        assertEquals("MY_DISCORD_TOKEN_KEY", config.getDefaultDiscordTokenEnvKey());
+    }
+
+    @Test
+    void buildBotsParsesHandlesOwnedSpacesTrue(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: arrietty
+                persona:
+                  name: Arrietty
+                  systemPrompt: ""
+                handlesOwnedSpaces: true
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertTrue(bots.get(0).isHandlesOwnedSpaces());
+    }
+
+    @Test
+    void buildBotsParsesHandlesOwnedSpacesAbsentAsFalse(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertFalse(bots.get(0).isHandlesOwnedSpaces());
     }
 }

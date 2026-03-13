@@ -4,6 +4,7 @@ import com.vinekeepers.bot.NormalizedEventContext;
 import com.vinekeepers.events.Event;
 
 import java.util.List;
+import java.util.Locale;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.StepResult;
 import com.vinekeepers.workflow.WorkflowStep;
@@ -15,16 +16,25 @@ public final class CaptureFieldFromEventStep implements WorkflowStep {
 
     private final String storeIn;
     private final String contentKey;
+    private final boolean trimAndLower;
 
     public CaptureFieldFromEventStep(String storeIn, String contentKey) {
+        this(storeIn, contentKey, false);
+    }
+
+    public CaptureFieldFromEventStep(String storeIn, String contentKey, boolean trimAndLower) {
         this.storeIn = storeIn != null ? storeIn : "input";
         this.contentKey = contentKey;
+        this.trimAndLower = trimAndLower;
     }
 
     @Override
     public StepResult execute(Event event, ConfigurableWorkflowState state, int stepIndex) {
         String content = readContent(event);
-        return StepResult.advance(storeIn, content);
+        if (trimAndLower && content != null) {
+            content = content.trim().toLowerCase(Locale.ROOT);
+        }
+        return StepResult.advance(storeIn, content != null ? content : "");
     }
 
     private String readContent(Event event) {

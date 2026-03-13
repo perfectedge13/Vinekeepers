@@ -51,4 +51,28 @@ class CaptureFieldFromEventStepTest {
         StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
         assertEquals("novawilde/Vinekeepers", result.getStoreValue());
     }
+
+    @Test
+    void messageEventWithTrimAndLowerTrimsAndLowercasesContent() {
+        Event event = new Event("discord:1", "message", Map.of("content", "  Arrietty Room  "));
+        CaptureFieldFromEventStep step = new CaptureFieldFromEventStep("room", null, true);
+        StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
+        assertEquals("arrietty room", result.getStoreValue());
+    }
+
+    @Test
+    void trimAndLowerFalseLeavesContentUnchanged() {
+        Event event = new Event("discord:1", "message", Map.of("content", "  Mixed CASE  "));
+        CaptureFieldFromEventStep step = new CaptureFieldFromEventStep("field", null, false);
+        StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
+        assertEquals("  Mixed CASE  ", result.getStoreValue());
+    }
+
+    @Test
+    void twoArgConstructorDefaultsTrimAndLowerToFalse() {
+        Event event = new Event("discord:1", "message", Map.of("content", "  Unchanged  "));
+        CaptureFieldFromEventStep step = new CaptureFieldFromEventStep("field", null);
+        StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
+        assertEquals("  Unchanged  ", result.getStoreValue());
+    }
 }

@@ -61,7 +61,8 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
 
     /**
      * Gateway for the given channel: lifecycle context by channelId -> configuredBotId -> that bot's gateway;
-     * else default gateway. Used by DiscordAppReplySink and CreateChannelAction.
+     * else default gateway. When the channel has lifecycle context and the configured bot has no gateway,
+     * returns null (no fallback to default). Used by DiscordAppReplySink and CreateChannelAction.
      */
     public DiscordGateway getGatewayForChannel(String channelId) {
         if (channelId == null || channelId.isBlank()) {
@@ -72,7 +73,7 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
                 .filter(id -> id != null && !id.isBlank());
         if (botId.isPresent()) {
             DiscordGateway gateway = botIdToGateway.get(botId.get());
-            return gateway != null ? gateway : defaultGateway;
+            return gateway;
         }
         return defaultGateway;
     }
@@ -82,6 +83,17 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
      */
     public DiscordGateway getDefaultGateway() {
         return defaultGateway;
+    }
+
+    /**
+     * Discord user id for the given bot (from that bot's gateway getSelfUserId). Returns null if no gateway for the bot.
+     */
+    public String getDiscordUserIdForBot(String botId) {
+        if (botId == null || botId.isBlank()) {
+            return null;
+        }
+        DiscordGateway gateway = botIdToGateway.get(botId);
+        return gateway != null ? gateway.getSelfUserId() : null;
     }
 
     @Override

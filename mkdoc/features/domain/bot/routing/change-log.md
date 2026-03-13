@@ -2,6 +2,14 @@
 
 # Entries
 
+## 2026-03-13
+
+- **Router ownership warning:** When a Discord channel has a lifecycle context but the owner bot does *not* have **handlesOwnedSpaces** in config, the Router logs a warning and falls back to filter-based routing instead of single-owner precedence. Ensures operators are informed when a lifecycle room is not exclusively owned by the expected bot.
+
+## 2026-03-12
+
+- **Ownership-based routing (handlesOwnedSpaces):** Router now applies **single-owner precedence** when a Discord channel has a lifecycle context and the context's owner bot has `handlesOwnedSpaces: true` in config: only that bot is returned for events in that channel. ConfigLoader loads optional `handlesOwnedSpaces` per bot; Bootstrap passes `LifecycleContextStore` and the per-bot map to Router via `setHandlesOwnedSpacesByBotId`. Enables Arrietty (and similar lifecycle room bots) to exclusively handle inbound room events (messages, interactions) without Luna or other bots being routed in those channels. BotDefinition extended with `handlesOwnedSpaces`; Router depends on LifecycleContextStore. Arrietty template uses `workflowRef: arrietty_room` for room commands (status, retry, close, echo).
+
 ## 2026-03-10
 
 - **discordAuthors: numeric id and username:** Router `discordAuthors` now supports both **numeric Discord user id** (stable, matches `actorId`) and **username** (matches `actorUsername`, case-insensitive). Prefer numeric id when available. Config comment in `config/bots.yaml` documents the behavior.

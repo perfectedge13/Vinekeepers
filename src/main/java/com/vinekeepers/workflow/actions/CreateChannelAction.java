@@ -1,32 +1,55 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.connectors.DiscordGateway;
+import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.events.Event;
 
 import java.util.Map;
 
 /**
- * Workflow action: create a Discord text channel (lifecycle room). Bind: guildId, channelName (or from state).
+ * Workflow action: create a Discord text channel (lifecycle room). Bind: guildId, channelName (or from state),
+ * optional lifecycleOwnerBotId (bot id whose Discord user gets a permission override on the new channel).
  * When channelName is blank, builds a Discord-valid name from state project + codeChange (repo segment + slug + short suffix).
  * Returns channel id or "CHANNEL_CREATE_FAILED" on gateway failure.
+ * When router is provided and bind/state has lifecycleOwnerBotId, after create calls addPermissionOverride for that bot's user id.
  */
 public final class CreateChannelAction implements com.vinekeepers.workflow.WorkflowAction {
 
     /** Sentinel returned when channel creation fails (e.g. for workflow branch). */
     public static final String CHANNEL_CREATE_FAILED = "CHANNEL_CREATE_FAILED";
 
+    /** Discord permission bits: VIEW_CHANNEL | SEND_MESSAGES for lifecycle owner override. */
+    private static final long LIFECYCLE_OWNER_ALLOW = (1L << 10) | (1L << 11);
+
     private static final int MAX_DISCORD_CHANNEL_NAME = 100;
     private static final String FALLBACK_NAME = "lifecycle-room";
 
     private final DiscordGateway gateway;
+    private final OutboundDeliveryRouter router;
 
+    /** Gateway-only (e.g. tests); no permission override. */
     public CreateChannelAction(DiscordGateway gateway) {
         this.gateway = gateway;
+        this.router = null;
+    }
+
+    /** Router: gateway from router.getDefaultGateway(); optional permission override from bind lifecycleOwnerBotId. */
+    public CreateChannelAction(OutboundDeliveryRouter router) {
+        this.gateway = null;
+        this.router = router;
+    }
+
+    private DiscordGateway effectiveGateway() {
+        if (gateway != null) {
+            return gateway;
+        }
+        return router != null ? router.getDefaultGateway() : null;
     }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        if (gateway == null || !gateway.isConnected()) {
+        DiscordGateway gw = effectiveGateway();
+        if (gw == null || !gw.isConnected()) {
             return CHANNEL_CREATE_FAILED;
         }
         String guildId = getString(bind, "guildId");
@@ -52,8 +75,24 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
         }
         channelName = normalizeChannelName(channelName);
         try {
-            String channelId = gateway.createTextChannel(guildId, channelName);
-            return channelId != null ? channelId : CHANNEL_CREATE_FAILED;
+            String channelId = gw.createTextChannel(guildId, channelName);
+            if (channelId == null) {
+                return CHANNEL_CREATE_FAILED;
+            }
+            String lifecycleOwnerBotId = getString(bind, "lifecycleOwnerBotId");
+            if (lifecycleOwnerBotId == null || lifecycleOwnerBotId.isBlank()) {
+                lifecycleOwnerBotId = getString(state, "lifecycleOwnerBotId");
+            }
+            if (router != null && lifecycleOwnerBotId != null && !lifecycleOwnerBotId.isBlank()) {
+                String ownerUserId = router.getDiscordUserIdForBot(lifecycleOwnerBotId);
+                if (ownerUserId == null) {
+                    return CHANNEL_CREATE_FAILED;
+                }
+                if (!gw.addPermissionOverride(channelId, guildId, ownerUserId, LIFECYCLE_OWNER_ALLOW, 0L)) {
+                    return CHANNEL_CREATE_FAILED;
+                }
+            }
+            return channelId;
         } catch (Exception e) {
             return CHANNEL_CREATE_FAILED;
         }
@@ -78,7 +117,7 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
 
     /**
      * Builds a Discord-valid channel name from state project and codeChange:
-     * repo segment (owner/repo or slug) + slug from codeChange + short uniqueness suffix.
+     * repo segment (repository name only, no owner/username) + slug from codeChange + short uniqueness suffix.
      */
     static String buildChannelNameFromState(Map<String, Object> state) {
         String project = getString(state, "project");
@@ -99,19 +138,29 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
         return name;
     }
 
+    /**
+     * Repo-derived segment for channel name: repository name only (segment after last '/').
+     * No owner/username in the channel name.
+     */
     private static String repoSegmentFromProject(String project) {
         if (project == null || project.isBlank()) return "repo";
         String t = project.trim();
+        String path = null;
         if (t.startsWith("https://github.com/")) {
-            String path = t.substring("https://github.com/".length());
+            path = t.substring("https://github.com/".length());
             int q = path.indexOf('?');
             if (q >= 0) path = path.substring(0, q);
-            if (!path.isBlank()) return path.replace("/", "-").replaceAll("[^a-zA-Z0-9_-]", "-").toLowerCase(java.util.Locale.ROOT);
+        } else if (t.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) {
+            path = t;
         }
-        if (t.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) {
-            return t.replace("/", "-").replaceAll("[^a-zA-Z0-9_-]", "-").toLowerCase(java.util.Locale.ROOT);
+        if (path != null && !path.isBlank()) {
+            int lastSlash = path.lastIndexOf('/');
+            String segment = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+            if (!segment.isBlank()) {
+                return segment.replaceAll("[^a-zA-Z0-9_-]", "-").replaceAll("-+", "-").replaceAll("(^-|-$)", "").toLowerCase(java.util.Locale.ROOT);
+            }
         }
-        return t.replaceAll("[^a-zA-Z0-9_-]", "-").toLowerCase(java.util.Locale.ROOT);
+        return t.replaceAll("[^a-zA-Z0-9_-]", "-").replaceAll("-+", "-").replaceAll("(^-|-$)", "").toLowerCase(java.util.Locale.ROOT);
     }
 
     private static String slugFromCodeChange(String codeChange) {

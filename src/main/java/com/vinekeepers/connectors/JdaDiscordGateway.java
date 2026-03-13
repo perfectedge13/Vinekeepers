@@ -14,6 +14,7 @@ import net.dv8tion.jda.api.events.interaction.GenericInteractionCreateEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.ItemComponent;
@@ -25,8 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +50,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
     private static final int CREATE_CHANNEL_TIMEOUT_SECONDS = 15;
 
     private final String token;
+    private final boolean outboundOnly;
     private volatile JDA jda;
     private volatile boolean connected;
     private volatile Consumer<Event> publisher;
@@ -54,37 +58,46 @@ public final class JdaDiscordGateway implements DiscordGateway {
     private final Map<String, net.dv8tion.jda.api.interactions.InteractionHook> tokenToHook = new ConcurrentHashMap<>();
 
     public JdaDiscordGateway(String token) {
+        this(token, false);
+    }
+
+    /**
+     * @param outboundOnly when true, do not add event listeners (gateway is used for outbound only, e.g. non-routed bots).
+     */
+    public JdaDiscordGateway(String token, boolean outboundOnly) {
         this.token = token != null ? token.trim() : "";
+        this.outboundOnly = outboundOnly;
     }
 
     @Override
     public void connect(Consumer<Event> publisher) {
         if (token.isBlank()) {
-            log.warn("DISCORD_BOT_TOKEN is not configured; Discord connector disabled.");
+            log.warn("Discord token is not configured; Discord connector disabled.");
             connected = false;
             return;
         }
         try {
             this.publisher = publisher;
-            jda = JDABuilder.createDefault(token)
-                    .enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.DIRECT_MESSAGES)
-                    .addEventListeners(new ListenerAdapter() {
-                        @Override
-                        public void onMessageReceived(@NotNull MessageReceivedEvent event) {
-                            if (event.getAuthor().isBot()) {
-                                return;
-                            }
-                            JdaDiscordGateway.this.publisher.accept(toEvent(event));
+            JDABuilder builder = JDABuilder.createDefault(token)
+                    .enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.DIRECT_MESSAGES);
+            if (!outboundOnly) {
+                builder.addEventListeners(new ListenerAdapter() {
+                    @Override
+                    public void onMessageReceived(@NotNull MessageReceivedEvent event) {
+                        if (event.getAuthor().isBot()) {
+                            return;
                         }
-                        @Override
-                        public void onGenericInteractionCreate(@NotNull GenericInteractionCreateEvent event) {
-                            handleInteraction(event);
-                        }
-                    })
-                    .build()
-                    .awaitReady();
+                        JdaDiscordGateway.this.publisher.accept(toEvent(event));
+                    }
+                    @Override
+                    public void onGenericInteractionCreate(@NotNull GenericInteractionCreateEvent event) {
+                        handleInteraction(event);
+                    }
+                });
+            }
+            jda = builder.build().awaitReady();
             connected = true;
-            log.info("Discord gateway connected");
+            log.info("Discord gateway connected" + (outboundOnly ? " (outbound-only)" : ""));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             connected = false;
@@ -316,6 +329,67 @@ public final class JdaDiscordGateway implements DiscordGateway {
     @Override
     public boolean isConnected() {
         return connected;
+    }
+
+    @Override
+    public String getSelfUserId() {
+        if (!connected || jda == null) {
+            return null;
+        }
+        try {
+            User self = jda.getSelfUser();
+            return self != null ? self.getId() : null;
+        } catch (Exception e) {
+            log.debug("getSelfUserId failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public boolean addPermissionOverride(String channelId, String guildId, String targetUserId, long allow, long deny) {
+        if (!connected || jda == null || channelId == null || channelId.isBlank()
+                || guildId == null || guildId.isBlank() || targetUserId == null || targetUserId.isBlank()) {
+            return false;
+        }
+        try {
+            Guild guild = jda.getGuildById(guildId);
+            if (guild == null) {
+                log.warn("Discord guild {} not found for addPermissionOverride", guildId);
+                return false;
+            }
+            TextChannel channel = guild.getTextChannelById(channelId);
+            if (channel == null) {
+                log.warn("Discord channel {} not found for addPermissionOverride", channelId);
+                return false;
+            }
+            Member member = guild.retrieveMemberById(targetUserId)
+                    .submit()
+                    .get(CREATE_CHANNEL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (member == null) {
+                log.warn("Discord member {} not found in guild {} for addPermissionOverride", targetUserId, guildId);
+                return false;
+            }
+            Set<Permission> allowSet = allow != 0 ? EnumSet.copyOf(Permission.getPermissions(allow)) : EnumSet.noneOf(Permission.class);
+            Set<Permission> denySet = deny != 0 ? EnumSet.copyOf(Permission.getPermissions(deny)) : EnumSet.noneOf(Permission.class);
+            channel.getManager().putPermissionOverride(member, allowSet, denySet)
+                    .submit()
+                    .get(CREATE_CHANNEL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("addPermissionOverride interrupted: {}", e.getMessage());
+            return false;
+        } catch (TimeoutException e) {
+            log.warn("addPermissionOverride timeout for member {} in guild {}", targetUserId, guildId);
+            return false;
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            log.warn("addPermissionOverride failed: {}", cause != null ? cause.getMessage() : e.getMessage());
+            return false;
+        } catch (Exception e) {
+            log.warn("addPermissionOverride failed: {}", e.getMessage());
+            return false;
+        }
     }
 
     @Override
