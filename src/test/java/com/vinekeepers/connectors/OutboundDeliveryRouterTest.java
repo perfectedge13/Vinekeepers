@@ -140,6 +140,33 @@ class OutboundDeliveryRouterTest {
         assertNull(router.getDiscordUserIdForBot("   "));
     }
 
+    @Test
+    void send_whenTargetIsThreadIdResolvesContextByDeliveryTargetId_usesThatBotsSender() {
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-parent", NOW, null, "luna", null, null, null, null, "thread-456");
+        lifecycleContextStore.put(ctx);
+        router.registerSender("luna", lunaSender, null);
+
+        router.send("thread-456", null, "Update in thread");
+
+        assertEquals(1, lunaSender.sendCalls.get());
+        assertEquals("thread-456", lunaSender.lastChannelId);
+        assertEquals(null, lunaSender.lastMessageId);
+        assertEquals("Update in thread", lunaSender.lastContent);
+        assertEquals(0, defaultSender.sendCalls.get());
+    }
+
+    @Test
+    void send_whenTargetIsThreadCreateFailed_doesNotResolveAsContext() {
+        lifecycleContextStore.put(new LifecycleContext("ctx-1", "chan-1", NOW, null, "luna", null, null, null, null, "THREAD_CREATE_FAILED"));
+        router.registerSender("luna", lunaSender, null);
+
+        router.send("THREAD_CREATE_FAILED", null, "content");
+
+        assertEquals(0, lunaSender.sendCalls.get());
+        assertEquals(1, defaultSender.sendCalls.get());
+        assertEquals("THREAD_CREATE_FAILED", defaultSender.lastChannelId);
+    }
+
     private static final class RecordingSender implements DiscordReplySender {
         final AtomicInteger sendCalls = new AtomicInteger(0);
         String lastChannelId;

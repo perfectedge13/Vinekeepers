@@ -7,7 +7,9 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.interaction.GenericInteractionCreateEvent;
@@ -425,6 +427,46 @@ public final class JdaDiscordGateway implements DiscordGateway {
             return null;
         } catch (Exception e) {
             log.warn("Discord createTextChannel failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public String createThreadChannel(String parentChannelId, String threadName) {
+        if (!connected || jda == null || parentChannelId == null || parentChannelId.isBlank()) {
+            return null;
+        }
+        String name = (threadName != null && !threadName.isBlank()) ? threadName.trim() : "Room updates";
+        if (name.length() > 100) {
+            name = name.substring(0, 100);
+        }
+        try {
+            TextChannel parent = jda.getTextChannelById(parentChannelId);
+            if (parent == null) {
+                log.warn("Discord parent channel {} not found for createThreadChannel", parentChannelId);
+                return null;
+            }
+            Message anchorMessage = parent.sendMessage(name).submit()
+                    .get(CREATE_CHANNEL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (anchorMessage == null) {
+                return null;
+            }
+            ThreadChannel thread = anchorMessage.createThreadChannel(name).submit()
+                    .get(CREATE_CHANNEL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return thread != null ? thread.getId() : null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Discord createThreadChannel failed: {}", e.getMessage());
+            return null;
+        } catch (TimeoutException e) {
+            log.warn("Discord createThreadChannel failed: timeout after {}s", CREATE_CHANNEL_TIMEOUT_SECONDS);
+            return null;
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            log.warn("Discord createThreadChannel failed: {}", cause != null ? cause.getMessage() : e.getMessage());
+            return null;
+        } catch (Exception e) {
+            log.warn("Discord createThreadChannel failed: {}", e.getMessage());
             return null;
         }
     }

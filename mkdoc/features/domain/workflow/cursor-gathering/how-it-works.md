@@ -12,7 +12,7 @@ The shipped Luna flow is configured in `config/bots.yaml` as workflow `luna_curs
 4. `CursorCloudRunMonitor` polls `GET /v0/agents/{id}` and `GET /v0/agents/{id}/conversation` for state changes and assistant feedback.
 5. The engine and monitor send launch/progress/final replies back to Discord when the source is Discord.
 
-**Lifecycle room (Phase 1):** The Luna workflow uses the full sequence above. Provisioning workflows (e.g. using the Arrietty template) can use the same actions: `create_channel`, branch on `CHANNEL_CREATE_FAILED`, `provision_bot_instance`, `create_lifecycle_context`, `post_channel_message`, `launch_cursor_run`. Run state uses `LifecycleRunRecord`; context uses `LifecycleContext` (extended with configuredBotId, runtimeBotInstanceId, optional repo/requestText) and `LifecycleContextStore`.
+**Lifecycle room (Phase 1):** The Luna workflow uses the full sequence above. Provisioning workflows (e.g. using the Arrietty template) can use the same actions: `create_channel`, branch on `CHANNEL_CREATE_FAILED`, `provision_bot_instance`, `create_lifecycle_context`, `post_channel_message`, `launch_cursor_run`. Arrietty can optionally use **create_thread** (bind `channelId`, `threadName`; `storeIn: deliveryChannelId`) so Cursor run updates are delivered to the thread; branch on `THREAD_CREATE_FAILED` when needed. Run state uses `LifecycleRunRecord` (optional `deliveryChannelId` for thread delivery); context uses `LifecycleContext` (extended with configuredBotId, runtimeBotInstanceId, optional repo/requestText, optional deliveryChannelId) and `LifecycleContextStore`. `CursorCloudRunMonitor` sends status and feedback to the thread when `deliveryChannelId` is set (messageId null).
 
 # Inputs and outputs
 

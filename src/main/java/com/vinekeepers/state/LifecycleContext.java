@@ -18,6 +18,7 @@ public final class LifecycleContext {
     private final String repo;
     private final String requestText;
     private volatile String status;
+    private final String deliveryChannelId;
 
     public LifecycleContext(String contextId, String channelId, Instant createdAt) {
         this(contextId, channelId, createdAt, null, null, null, null, null, null);
@@ -36,6 +37,12 @@ public final class LifecycleContext {
     public LifecycleContext(String contextId, String channelId, Instant createdAt,
                             String externalRunId, String configuredBotId, String runtimeBotInstanceId,
                             String repo, String requestText, String status) {
+        this(contextId, channelId, createdAt, externalRunId, configuredBotId, runtimeBotInstanceId, repo, requestText, status, null);
+    }
+
+    public LifecycleContext(String contextId, String channelId, Instant createdAt,
+                            String externalRunId, String configuredBotId, String runtimeBotInstanceId,
+                            String repo, String requestText, String status, String deliveryChannelId) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
         this.channelId = Objects.requireNonNull(channelId, "channelId");
         this.createdAt = createdAt != null ? createdAt : Instant.now();
@@ -45,6 +52,7 @@ public final class LifecycleContext {
         this.repo = repo;
         this.requestText = requestText;
         this.status = status != null && !status.isBlank() ? status : "active";
+        this.deliveryChannelId = deliveryChannelId;
     }
 
     public String getContextId() {
@@ -89,5 +97,9 @@ public final class LifecycleContext {
 
     public void setStatus(String status) {
         this.status = status != null && !status.isBlank() ? status : this.status;
+    }
+
+    public String getDeliveryChannelId() {
+        return deliveryChannelId;
     }
 }

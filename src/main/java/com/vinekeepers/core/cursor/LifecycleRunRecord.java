@@ -18,6 +18,7 @@ public final class LifecycleRunRecord {
     private final String changeRequest;
     private final String channelId;
     private final String replyToMessageId;
+    private final String deliveryChannelId;
     private final Instant launchedAt;
 
     private String status;
@@ -33,6 +34,13 @@ public final class LifecycleRunRecord {
                              String repositoryUrl, String baseRef, String branchName,
                              String agentUrl, String changeRequest, String channelId,
                              String replyToMessageId, Instant launchedAt, String status) {
+        this(agentId, sessionKey, projectInput, repositoryUrl, baseRef, branchName, agentUrl, changeRequest, channelId, replyToMessageId, null, launchedAt, status);
+    }
+
+    public LifecycleRunRecord(String agentId, String sessionKey, String projectInput,
+                             String repositoryUrl, String baseRef, String branchName,
+                             String agentUrl, String changeRequest, String channelId,
+                             String replyToMessageId, String deliveryChannelId, Instant launchedAt, String status) {
         this.agentId = agentId;
         this.sessionKey = sessionKey;
         this.projectInput = projectInput;
@@ -43,6 +51,7 @@ public final class LifecycleRunRecord {
         this.changeRequest = changeRequest;
         this.channelId = channelId;
         this.replyToMessageId = replyToMessageId;
+        this.deliveryChannelId = deliveryChannelId;
         this.launchedAt = launchedAt;
         this.status = status;
     }
@@ -85,6 +94,10 @@ public final class LifecycleRunRecord {
 
     public synchronized String getReplyToMessageId() {
         return replyToMessageId;
+    }
+
+    public synchronized String getDeliveryChannelId() {
+        return deliveryChannelId;
     }
 
     public synchronized Instant getLaunchedAt() {

@@ -30,6 +30,7 @@ import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.WorkflowRunnerFactory;
 import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
+import com.vinekeepers.workflow.actions.CreateThreadAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
 import com.vinekeepers.workflow.actions.ProvisionBotInstanceAction;
@@ -198,6 +199,7 @@ public final class Bootstrap {
         cursorCloudRunMonitor.setReplySender(outboundDeliveryRouter);
         if (outboundDeliveryRouter.getDefaultGateway() != null) {
             actionRegistry.register("create_channel", new CreateChannelAction(outboundDeliveryRouter));
+            actionRegistry.register("create_thread", new CreateThreadAction(outboundDeliveryRouter));
         }
         actionRegistry.register("post_channel_message", new PostChannelMessageAction(outboundDeliveryRouter));
         return this;

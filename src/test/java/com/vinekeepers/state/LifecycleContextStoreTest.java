@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LifecycleContextStoreTest {
@@ -89,5 +88,66 @@ class LifecycleContextStoreTest {
         assertTrue(store.getByChannelId(null).isEmpty());
         assertTrue(store.getByChannelId("").isEmpty());
         assertTrue(store.getByChannelId("   ").isEmpty());
+    }
+
+    @Test
+    void getByDeliveryTargetIdResolvesByChannelId() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, null);
+        store.put(ctx);
+        assertTrue(store.getByDeliveryTargetId("chan-1").isPresent());
+        assertEquals(ctx, store.getByDeliveryTargetId("chan-1").orElseThrow());
+    }
+
+    @Test
+    void getByDeliveryTargetIdResolvesByDeliveryChannelIdWhenSet() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, "thread-123");
+        store.put(ctx);
+        assertTrue(store.getByDeliveryTargetId("thread-123").isPresent());
+        assertEquals(ctx, store.getByDeliveryTargetId("thread-123").orElseThrow());
+        assertTrue(store.getByDeliveryTargetId("chan-1").isPresent());
+    }
+
+    @Test
+    void getByDeliveryTargetIdDoesNotIndexThreadCreateFailed() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, "THREAD_CREATE_FAILED");
+        store.put(ctx);
+        assertTrue(store.getByDeliveryTargetId("THREAD_CREATE_FAILED").isEmpty());
+        assertTrue(store.getByChannelId("chan-1").isPresent());
+    }
+
+    @Test
+    void rePutWithDifferentDeliveryChannelId_oldThreadNoLongerResolves() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, "thread-old");
+        store.put(ctx);
+        assertTrue(store.getByDeliveryTargetId("thread-old").isPresent());
+        LifecycleContext updated = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, "thread-new");
+        store.put(updated);
+        assertTrue(store.getByDeliveryTargetId("thread-old").isEmpty());
+        assertTrue(store.getByDeliveryTargetId("thread-new").isPresent());
+        assertEquals(updated, store.getByDeliveryTargetId("thread-new").orElseThrow());
+    }
+
+    @Test
+    void rePutWithNullDeliveryChannelId_removesOldDeliveryTargetFromIndex() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, "thread-1");
+        store.put(ctx);
+        assertTrue(store.getByDeliveryTargetId("thread-1").isPresent());
+        LifecycleContext updated = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, null);
+        store.put(updated);
+        assertTrue(store.getByDeliveryTargetId("thread-1").isEmpty());
+        assertTrue(store.getByChannelId("chan-1").isPresent());
+    }
+
+    @Test
+    void getByDeliveryTargetIdWithBlankReturnsEmpty() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        assertTrue(store.getByDeliveryTargetId(null).isEmpty());
+        assertTrue(store.getByDeliveryTargetId("").isEmpty());
+        assertTrue(store.getByDeliveryTargetId("   ").isEmpty());
     }
 }

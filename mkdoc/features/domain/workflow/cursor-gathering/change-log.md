@@ -5,6 +5,7 @@
 ## 2026-03-13
 
 - **Arrietty room UX and message-first capture:** Arrietty template in `config/bots.yaml` uses `workflowRef: arrietty_room` with **message-first** flow: first step is `capture_field` (e.g. `storeIn: roomAction`) with optional **trimAndLower: true** for room name UX (trim and lowercase user input). Router ownership warning when lifecycle owner lacks handlesOwnedSpaces. No hardcoded bot ids in Router or engine.
+- **Arrietty thread-based updates:** Routing fix for delivery by target (channel or thread id). **CreateThreadAction** (`create_thread` step): bind `channelId`, `threadName`; `storeIn` (e.g. `deliveryChannelId`) stores thread id or `THREAD_CREATE_FAILED`. **LifecycleContext** and **CreateLifecycleContextAction** support optional **deliveryChannelId** (excludes sentinel). **PostChannelMessageAction** send target = `deliveryChannelId` or `channelId` (bind then state); **LaunchCursorRunAction** passes `deliveryChannelId` into **LifecycleRunRecord**. **CursorCloudRunMonitor** sends status/feedback to the thread when `deliveryChannelId` is set (messageId null). **OutboundDeliveryRouter** resolves sender by delivery target id (thread or channel). Arrietty workflow config may include `create_thread` with `storeIn: deliveryChannelId` and optional branch on `THREAD_CREATE_FAILED`.
 
 ## 2026-03-12
 

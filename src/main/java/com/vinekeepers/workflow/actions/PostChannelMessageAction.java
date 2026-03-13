@@ -27,6 +27,11 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
         if (channelId == null || channelId.isBlank()) {
             return "Missing channelId for post_channel_message.";
         }
+        String deliveryChannelId = firstNonBlank(getString(bind, "deliveryChannelId"), state != null ? getString(state, "deliveryChannelId") : null);
+        String sendTarget = firstNonBlank(deliveryChannelId, channelId);
+        if (CreateThreadAction.THREAD_CREATE_FAILED.equals(sendTarget)) {
+            sendTarget = channelId;
+        }
         String content = firstNonBlank(getString(bind, "content"), state != null ? getString(state, "content") : null);
         if (content == null) {
             content = "";
@@ -38,7 +43,7 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
         if (content.isBlank()) {
             return "Blank content for post_channel_message.";
         }
-        replySender.send(channelId, null, content);
+        replySender.send(sendTarget, null, content);
         return "OK";
     }
 

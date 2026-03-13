@@ -66,7 +66,11 @@ assets:
   - id: ASSET-OUTBOUND-DELIVERY-ROUTER
     kind: source
     path: src/main/java/com/vinekeepers/connectors/OutboundDeliveryRouter.java
-    role: Routes outbound Discord delivery; implements DiscordReplySender; resolves sender from delivery target and lifecycle context (configuredBotId); getGatewayForChannel returns null when lifecycle bot has no gateway; getDiscordUserIdForBot(botId) returns that bot's Discord user id; default sender for non-lifecycle channels; for lifecycle channels uses configured bot's sender and does not silently fall back (fail clearly if unavailable)
+    role: >-
+      Routes outbound Discord delivery; implements DiscordReplySender; resolves sender from delivery target (channel or
+      thread id) via LifecycleContextStore getByDeliveryTargetId when present, else by channelId; lifecycle context
+      yields configuredBotId then that bot's sender; getGatewayForChannel(deliveryTargetId) for thread or channel;
+      default sender for non-lifecycle; for lifecycle does not silently fall back
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-GITHUB-SOURCE
@@ -94,9 +98,9 @@ requirements:
         - DiscordEventSource exists and implements EventSource and emits events onto the event bus
         - DiscordEventSource can pass Discord mention metadata and author (authorId, author) through the internal event payload for routing
         - "Per-bot Discord identity: bot config may specify discordTokenEnvKey; when set and token present, Bootstrap registers that bot's sender and gateway with OutboundDeliveryRouter"
-        - "OutboundDeliveryRouter resolves sender from channel: lifecycle context (by channelId) yields configuredBotId then that bot's sender; absent context uses default sender"
+        - "OutboundDeliveryRouter resolves sender from delivery target (channel or thread id): LifecycleContextStore getByDeliveryTargetId(targetId) when present yields context then configuredBotId and that bot's sender; else resolve by channelId; absent context uses default sender"
         - "Lifecycle sender resolution: for a channel with lifecycle context, delivery uses the configured bot's sender only; when no sender is registered for that bot, do not send and log error (no silent fallback to another bot)"
-        - getGatewayForChannel(channelId) returns null when lifecycle context exists for that channel but the configured bot has no registered gateway (do not return default gateway)
+        - getGatewayForChannel(channelIdOrDeliveryTargetId) returns null when lifecycle context exists for that channel or delivery target (e.g. thread) but the configured bot has no registered gateway (do not return default gateway)
         - getDiscordUserIdForBot(botId) returns the bot's Discord user id from that bot's gateway getSelfUserId, or null if the bot has no gateway or getSelfUserId returns null
         - Discord gateway contract exposes getSelfUserId() and addPermissionOverride(channelId, guildId, targetUserId, allow, deny); JDA gateway implements both
         - "Optional outbound-only gateway: Bootstrap may register a gateway for a bot that is not in routing (e.g. lifecycle room bot); that gateway is outbound-only (no event listeners)"

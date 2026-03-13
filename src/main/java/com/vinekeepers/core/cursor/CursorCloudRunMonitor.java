@@ -2,6 +2,7 @@ package com.vinekeepers.core.cursor;
 
 import com.vinekeepers.connectors.DiscordReplySender;
 import com.vinekeepers.state.StateStore;
+import com.vinekeepers.workflow.actions.CreateThreadAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +102,11 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         if (sender == null || message == null || message.isBlank()) {
             return;
         }
-        sender.send(runState.getChannelId(), runState.getReplyToMessageId(), message);
+        String deliveryId = runState.getDeliveryChannelId();
+        boolean useThread = deliveryId != null && !deliveryId.isBlank() && !CreateThreadAction.THREAD_CREATE_FAILED.equals(deliveryId);
+        String sendTarget = useThread ? deliveryId : runState.getChannelId();
+        String messageId = useThread ? null : runState.getReplyToMessageId();
+        sender.send(sendTarget, messageId, message);
     }
 
     private static String formatStatusUpdate(LifecycleRunRecord runState) {

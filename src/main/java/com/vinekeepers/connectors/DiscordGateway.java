@@ -68,6 +68,13 @@ public interface DiscordGateway {
     }
 
     /**
+     * Create a thread in the given parent text channel. Returns the new thread's channel id or null on failure.
+     */
+    default String createThreadChannel(String parentChannelId, String threadName) {
+        return null;
+    }
+
+    /**
      * Discord user id of the bot (self) for this gateway. Returns null if not connected or unknown.
      */
     default String getSelfUserId() {

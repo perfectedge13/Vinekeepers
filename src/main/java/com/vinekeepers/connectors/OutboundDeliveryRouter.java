@@ -68,7 +68,7 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
         if (channelId == null || channelId.isBlank()) {
             return defaultGateway;
         }
-        Optional<String> botId = lifecycleContextStore.getByChannelId(channelId)
+        Optional<String> botId = lifecycleContextStore.getByDeliveryTargetId(channelId)
                 .map(LifecycleContext::getConfiguredBotId)
                 .filter(id -> id != null && !id.isBlank());
         if (botId.isPresent()) {
@@ -101,7 +101,7 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
         if (channelId == null || content == null) {
             return;
         }
-        Optional<LifecycleContext> contextOpt = lifecycleContextStore.getByChannelId(channelId);
+        Optional<LifecycleContext> contextOpt = lifecycleContextStore.getByDeliveryTargetId(channelId);
         Optional<String> configuredBotId = contextOpt
                 .map(LifecycleContext::getConfiguredBotId)
                 .filter(id -> id != null && !id.isBlank());

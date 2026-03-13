@@ -119,4 +119,96 @@ class CursorCloudRunMonitorTest {
         assertTrue(messages.getLast().contains("pull/12"));
         monitor.close();
     }
+
+    @Test
+    void tickSendsToThreadWhenDeliveryChannelIdSet() {
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return new CursorAgentDetails(
+                        agentId, "Run", "RUNNING", "https://github.com/acme/repo",
+                        "main", "br", "https://cursor.com/agents?id=" + agentId, null, null, Instant.now());
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        StateStore store = new StateStore();
+        LifecycleRunRecord runState = new LifecycleRunRecord(
+                "bc_thread", "session", "acme/repo", "https://github.com/acme/repo",
+                "main", "br", "https://cursor.com/agents?id=bc_thread",
+                "Request", "chan-parent", "msg-1", "thread-123", Instant.now(), "CREATING");
+        store.put("cursor:run:bc_thread", runState);
+        CursorCloudRunMonitor monitor = new CursorCloudRunMonitor(adapter, store, 1000);
+        final String[] sentTarget = new String[1];
+        final String[] sentMessageId = new String[1];
+        monitor.setReplySender((channelId, messageId, content) -> {
+            sentTarget[0] = channelId;
+            sentMessageId[0] = messageId;
+        });
+
+        monitor.tick();
+
+        assertEquals("thread-123", sentTarget[0]);
+        assertEquals(null, sentMessageId[0]);
+        monitor.close();
+    }
+
+    @Test
+    void tickSendsToChannelWithReplyToMessageIdWhenDeliveryChannelIdNullOrThreadCreateFailed() {
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return new CursorAgentDetails(
+                        agentId, "Run", "RUNNING", "https://github.com/acme/repo",
+                        "main", "br", "https://cursor.com/agents?id=" + agentId, null, null, Instant.now());
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        StateStore store = new StateStore();
+        LifecycleRunRecord runState = new LifecycleRunRecord(
+                "bc_ch", "session", "acme/repo", "https://github.com/acme/repo",
+                "main", "br", "https://cursor.com/agents?id=bc_ch",
+                "Request", "chan-1", "msg-reply", null, Instant.now(), "CREATING");
+        store.put("cursor:run:bc_ch", runState);
+        CursorCloudRunMonitor monitor = new CursorCloudRunMonitor(adapter, store, 1000);
+        final String[] sentTarget = new String[1];
+        final String[] sentMessageId = new String[1];
+        monitor.setReplySender((channelId, messageId, content) -> {
+            sentTarget[0] = channelId;
+            sentMessageId[0] = messageId;
+        });
+
+        monitor.tick();
+
+        assertEquals("chan-1", sentTarget[0]);
+        assertEquals("msg-reply", sentMessageId[0]);
+        monitor.close();
+    }
 }

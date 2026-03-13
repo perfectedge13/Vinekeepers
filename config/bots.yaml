@@ -122,7 +122,7 @@ workflows:
             next: 5
             clear: [codeChange, confirmAction]
           - when: else
-            next: 18
+            next: 19
       - type: call_action
         action: create_channel
         bind: { lifecycleOwnerBotId: arrietty }
@@ -130,9 +130,13 @@ workflows:
       - type: branch
         branches:
           - when: { key: channelId, value: CHANNEL_CREATE_FAILED }
-            next: 17
+            next: 18
           - when: else
             next: 12
+      - type: call_action
+        action: create_thread
+        bind: { threadName: "Room updates" }
+        storeIn: deliveryChannelId
       - type: call_action
         action: provision_bot_instance
         bind: { templateBotId: arrietty }

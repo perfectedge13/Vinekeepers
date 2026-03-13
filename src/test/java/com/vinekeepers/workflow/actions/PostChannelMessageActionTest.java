@@ -1,7 +1,7 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.connectors.DiscordReplySender;
-import com.vinekeepers.events.Event;
+import com.vinekeepers.workflow.actions.CreateThreadAction;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -78,5 +78,16 @@ class PostChannelMessageActionTest {
         Map<String, Object> bind = Map.of("content", "Room handled by {{lifecycleBotName}}. Repo: {{project}}.", "lifecycleBotName", "Arrietty");
         action.run(null, state, bind);
         assertEquals("ch-1|Room handled by Arrietty. Repo: acme/repo.", sent.toString());
+    }
+
+    @Test
+    void runFallsBackToChannelIdWhenDeliveryChannelIdIsThreadCreateFailed() {
+        StringBuilder sent = new StringBuilder();
+        DiscordReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", CreateThreadAction.THREAD_CREATE_FAILED, "content", "Fallback to channel");
+        action.run(null, state, Map.of());
+        assertEquals("ch-room|Fallback to channel", sent.toString());
     }
 }
