@@ -1,0 +1,89 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-AUDIT-LOG
+    kind: source
+    path: src/main/java/com/vinekeepers/audit/AuditLog.java
+    role: Audit log interface
+    requires: [REQ-AUDIT-001]
+    feature_ids: [FEAT-AUDIT]
+  - id: ASSET-AUDIT-RECORDER
+    kind: source
+    path: src/main/java/com/vinekeepers/audit/AuditRecorder.java
+    role: Record tool calls and outcomes
+    requires: [REQ-AUDIT-001]
+    feature_ids: [FEAT-AUDIT]
+
+requirements:
+  - id: REQ-AUDIT-001
+    title: Audit log for tool calls and outcomes
+    statement: AuditLog records who triggered what, what tools were called, and results/errors for human-facing audit.
+    status: active
+    priority: medium
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - AuditRecorder or implementation logs event, bot, actions, results
+        - Audit is long-lived and human-facing
+      examples: []
+    traceability:
+      assets: [ASSET-AUDIT-LOG, ASSET-AUDIT-RECORDER]
+      symbols: []
+    validation:
+      tests:
+        - id: MANUAL-AUDIT
+          title: Audit log usage
+          intent: Verify audit is invoked by engine
+          preconditions: []
+          steps:
+            - run: "mvn compile -q"
+              expect: ["BUILD SUCCESS"]
+
+features:
+  - id: FEAT-AUDIT
+    slug: audit
+    title: Audit log for tool calls and outcomes
+    domain_slug: audit
+    doc_path: features/domain/audit/audit.md
+    summary: AuditLog records who triggered what, tools called, and results for human-facing audit.
+    requirement_ids: [REQ-AUDIT-001]
+    asset_ids: [ASSET-AUDIT-LOG, ASSET-AUDIT-RECORDER]
+    status: active

@@ -1,0 +1,296 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-ROUTER
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/Router.java
+    role: Match events to bots by routing rules and ownership; when lifecycle context exists for a Discord channel and the owner bot has handlesOwnedSpaces, single-owner precedence (only that bot is returned); Router depends on LifecycleContextStore and setHandlesOwnedSpacesByBotId(map); discordAuthors match by actorId or actorUsername; Discord mention and trigger apply only to message events; interaction events use author/channel only
+    requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
+  - id: ASSET-ROUTING
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/Routing.java
+    role: Routing and filter configuration
+    requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
+  - id: ASSET-EVENT-FILTER
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/EventFilter.java
+    role: Filter events by criteria
+    requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
+  - id: ASSET-ROUTING-FILTER
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/RoutingFilter.java
+    role: Apply routing filters to events; for Discord, discordTrigger and discordMention apply only to message events; discordAuthors (numeric id or username list) and discordChannels apply to all Discord events
+    requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
+  - id: ASSET-NORMALIZED-EVENT-CONTEXT
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/NormalizedEventContext.java
+    role: Normalize event payloads for routing and session decisions, including actorId and actorUsername (from payload author/authorId), mention extraction, and optional interaction payload (interactionId, token, customId, values)
+    requires: [REQ-BOT-001]
+    feature_ids: [FEAT-ROUTING]
+  - id: ASSET-TOOL-POLICY
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/ToolPolicy.java
+    role: Allow/deny policy for bot tools
+    requires: [REQ-BOT-002]
+    feature_ids: [FEAT-BOT]
+  - id: ASSET-BOT-DEFINITION
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/BotDefinition.java
+    role: Bot composition (persona, model, workflow, tools, runtime conversation settings, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces for ownership-based routing)
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+  - id: ASSET-CONVERSATION-MODE
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/ConversationMode.java
+    role: Runtime mode enum for single-event versus conversational bots
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+  - id: ASSET-PERSONA
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/Persona.java
+    role: Bot persona and tone
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+  - id: ASSET-MODEL-PROFILE
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/ModelProfile.java
+    role: LLM/model settings per bot
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+  - id: ASSET-MEMORY-POLICY
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/MemoryPolicy.java
+    role: Session and memory policy per bot
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+
+requirements:
+  - id: REQ-BOT-001
+    title: Route events to bots by routing rules and ownership
+    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view, and contextual/ownership-based routing when a Discord channel has a lifecycle context and the owner bot has handlesOwnedSpaces (single-owner precedence). When lifecycle owner exists but that bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing. Events are dispatched only to bots whose filters accept the event; Discord mention-based routing from payload metadata or @mention text and optional discordAuthors by actor id or username apply when configured. When lifecycle context exists for the event's channel and the owner bot has handlesOwnedSpaces, only that owner is returned; otherwise filter-based routing applies. Discord trigger and mention filters apply only to message events; interaction events use author and channel only.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - Router.match(event) returns list of matching bot ids; Router depends on LifecycleContextStore and handlesOwnedSpaces map (setHandlesOwnedSpacesByBotId)
+        - When event has channelId and LifecycleContextStore has a context for that channel whose owner bot has handlesOwnedSpaces, only that owner bot is returned (single-owner precedence)
+        - When channel has lifecycle context but owner bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing
+        - When channel has no lifecycle context or owner does not have handlesOwnedSpaces, filter-based routing applies
+        - Filters apply Discord/GitHub and other criteria from routing config
+        - Event routing can normalize actor, channel, text, mentions, repo, and label fields from incoming payloads
+        - Normalized event context exposes actorId and actorUsername (e.g. from payload author/authorId) for routing
+        - discordTrigger and discordMention are enforced only for Discord message events; for Discord interaction events routing uses author, channel, and other criteria only (no trigger/mention check)
+        - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text (message events only)
+        - discordAuthors filters match when event author (actorId or actorUsername normalized) is in the configured list
+      examples: []
+    traceability:
+      assets: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-ROUTER
+          title: RouterTest
+          intent: Verify event routing and filter matching
+          testClass: com.vinekeepers.bot.RouterTest
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-MENTION-TEXT
+          title: RouterTest
+          intent: Verify discordMention routing matches @mentions in message text case-insensitively
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeMatchesDiscordMentionFromTextCaseInsensitively
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-MENTION-METADATA
+          title: RouterTest
+          intent: Verify discordMention routing matches mention metadata case-insensitively
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeMatchesDiscordMentionFromMetadataListCaseInsensitively
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-MENTION-MISSING
+          title: RouterTest
+          intent: Verify discordMention routing does not match when the configured mention is absent
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeDoesNotMatchWhenDiscordMentionIsMissing
+          preconditions: []
+        - id: UNIT-ROUTER-DISCORD-AUTHORS
+          title: ConfigLoaderTest
+          intent: Verify discordAuthors filter matches by actorId/actorUsername and rejects other authors
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordAuthorsRouting
+          preconditions: []
+        - id: UNIT-ROUTER-INTERACTION-NO-MENTION
+          title: RouterTest
+          intent: Verify Discord interaction events route without trigger/mention check (author and channel only)
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: interactionWithoutMentionRoutesToBot
+          preconditions: []
+        - id: UNIT-ROUTER-INTERACTION-ALLOWED-AUTHOR
+          title: RouterTest
+          intent: Verify interaction from allowed author (discordAuthors) routes to bot
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: interactionFromAllowedAuthorRoutesToBot
+          preconditions: []
+        - id: UNIT-ROUTER-INTERACTION-OTHER-USER
+          title: RouterTest
+          intent: Verify interaction from other user does not route when discordAuthors is set
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: interactionFromOtherUserDoesNotRoute
+          preconditions: []
+        - id: UNIT-ROUTER-OWNED-CHANNEL-ONLY-OWNER
+          title: RouterTest
+          intent: Verify when channel has lifecycle context and owner has handlesOwnedSpaces, only owner bot is returned
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithLifecycleStore_ownedChannel_returnsOnlyOwnerWhenOwnerHasHandlesOwnedSpaces
+          preconditions: []
+        - id: UNIT-ROUTER-OWNED-CHANNEL-FILTER-WHEN-NO-HANDLES
+          title: RouterTest
+          intent: Verify when owner does not have handlesOwnedSpaces, filter-based routing is used
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithLifecycleStore_ownedChannel_usesFilterBasedWhenOwnerDoesNotHaveHandlesOwnedSpaces
+          preconditions: []
+        - id: UNIT-ROUTER-OWNED-CHANNEL-LOGS-OWNERSHIP-WARNING
+          title: RouterTest
+          intent: Verify Router logs ownership mismatch warning when channel has lifecycle owner but that bot does not have handlesOwnedSpaces
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithLifecycleStore_ownedChannel_logsOwnershipMismatchWarningWhenOwnerDoesNotHaveHandlesOwnedSpaces
+          preconditions: []
+        - id: UNIT-ROUTER-NO-CONTEXT-FILTER-BASED
+          title: RouterTest
+          intent: Verify when no lifecycle context for channel, filter-based routing is used
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithLifecycleStore_noContextForChannel_usesFilterBased
+          preconditions: []
+        - id: UNIT-ROUTER-NO-CHANNEL-ID-FILTER-BASED
+          title: RouterTest
+          intent: Verify when event has no channelId, filter-based routing is used
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithLifecycleStore_eventWithoutChannelId_usesFilterBased
+          preconditions: []
+        - id: UNIT-ROUTER-HANDLES-MAP-NULL-SAFE
+          title: RouterTest
+          intent: Verify setHandlesOwnedSpacesByBotId(null) does not throw and routing proceeds
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: setHandlesOwnedSpacesByBotIdWithNullDoesNotThrow
+          preconditions: []
+    anti_patterns:
+      - Do not hardcode bot ids (e.g. Arrietty) in Router or engine; use config-driven handlesOwnedSpaces and lifecycle context for ownership routing.
+
+  - id: REQ-BOT-002
+    title: Tool policy allow/deny lists
+    statement: ToolPolicy defines which tools a bot may use with allow and deny sets. Empty allow and deny sets permit any tool, denied tools always win, and a non-empty allow set restricts execution to the listed tool ids.
+    status: active
+    priority: medium
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - ToolPolicy.allowAll() and null allow/deny inputs permit any tool
+        - Denied tool ids override allowed tool ids, and a non-empty allow set acts as an allowlist
+      examples: []
+    traceability:
+      assets: [ASSET-TOOL-POLICY]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-TOOL-POLICY
+          title: ToolPolicyTest
+          intent: Verify allow-all, allowlist, and deny-precedence behavior
+          testClass: com.vinekeepers.bot.ToolPolicyTest
+          preconditions: []
+
+  - id: REQ-BOT-003
+    title: Bot definition and persona/model
+    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, Routing, MemoryPolicy, optional discordTokenEnvKey for per-bot Discord identity, optional handlesOwnedSpaces for ownership-based routing, and bot runtime conversation settings; bots are configured via YAML.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, routing, memory policy, conversation mode, optional session key strategy, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces (boolean) for ownership-based routing
+        - Config loader produces BotDefinition from YAML (including workflow block, runtime options, and handlesOwnedSpaces)
+      examples: []
+    traceability:
+      assets: [ASSET-BOT-DEFINITION, ASSET-CONFIG-LOADER, ASSET-BOTS-YAML, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
+      symbols: []
+    validation:
+      tests:
+        - id: MANUAL-BOT-DEF
+          title: Bot definition structure
+          intent: Verify BotDefinition and related models are used by config and engine
+          preconditions: []
+          steps:
+            - run: "mvn compile -q"
+              expect: ["BUILD SUCCESS"]
+
+features:
+  - id: FEAT-ROUTING
+    slug: routing
+    title: Event routing and normalized context
+    domain_slug: bot
+    doc_path: features/domain/bot/routing.md
+    summary: Router matches events to bots through routing filters over a normalized event view.
+    requirement_ids: [REQ-BOT-001]
+    asset_ids: [ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT]
+    status: active
+  - id: FEAT-BOT
+    slug: bot
+    title: Bot runtime definition and tool policy
+    domain_slug: bot
+    doc_path: features/domain/bot/bot.md
+    summary: BotDefinition composes persona, model, workflow settings, memory settings, and ToolPolicy for runtime execution.
+    requirement_ids: [REQ-BOT-002, REQ-BOT-003]
+    asset_ids: [ASSET-TOOL-POLICY, ASSET-BOT-DEFINITION, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
+    status: active

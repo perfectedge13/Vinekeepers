@@ -17,6 +17,7 @@ Shared sub-skills used by nova-code, nova-commit, and other workflows. All conte
 | Schema gate | Run validate-specs; Pass/Fail + Spec Drift Issue. | [schema-gate](schema-gate.md) |
 | Static analysis | Run project static-analysis command; Pass/Fail. | [static-analysis](static-analysis.md) |
 | Sync Cursor docs | Enumerate rules, skills, workflows; write cursor/ pages and update mkdocs nav. | [sync-cursor-docs](sync-cursor-docs.md) |
+| Mkdoc gap-fill checklist | Create missing docs; update existing that lack required sections or links. | [mkdoc-gap-fill-checklist](mkdoc-gap-fill-checklist.md) |
 | Update readme | Review 12 artifact categories; update only impacted (incl. README/docs). | [update-readme](update-readme.md) |
 
 

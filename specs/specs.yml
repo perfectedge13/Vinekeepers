@@ -24,30 +24,39 @@ change_triggers:
 specs:
   - file: core-registry.yml
   - file: connectors-registry.yml
+  - file: env-registry.yml
+  - file: config-registry.yml
+  - file: bot-registry.yml
+  - file: events-registry.yml
+  - file: state-registry.yml
+  - file: tools-registry.yml
+  - file: audit-registry.yml
+  - file: reasoner-registry.yml
+  - file: workflow-registry.yml
 
 domains:
   - slug: core
     spec_file: core-registry.yml
-  - slug: env
-    spec_file: core-registry.yml
-  - slug: config
-    spec_file: core-registry.yml
-  - slug: bot
-    spec_file: core-registry.yml
-  - slug: events
-    spec_file: core-registry.yml
-  - slug: state
-    spec_file: core-registry.yml
-  - slug: tools
-    spec_file: core-registry.yml
-  - slug: audit
-    spec_file: core-registry.yml
-  - slug: reasoner
-    spec_file: core-registry.yml
-  - slug: workflow
-    spec_file: core-registry.yml
   - slug: connectors
     spec_file: connectors-registry.yml
+  - slug: env
+    spec_file: env-registry.yml
+  - slug: config
+    spec_file: config-registry.yml
+  - slug: bot
+    spec_file: bot-registry.yml
+  - slug: events
+    spec_file: events-registry.yml
+  - slug: state
+    spec_file: state-registry.yml
+  - slug: tools
+    spec_file: tools-registry.yml
+  - slug: audit
+    spec_file: audit-registry.yml
+  - slug: reasoner
+    spec_file: reasoner-registry.yml
+  - slug: workflow
+    spec_file: workflow-registry.yml
 
 interfaces:
   cli:

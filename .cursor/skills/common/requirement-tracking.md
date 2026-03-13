@@ -32,6 +32,14 @@ When to create, update, or split requirements; how to keep ids and traceability 
 4. Update **dependencies.items[].used_by_requirements**: replace the old id with the new id(s) that use that dependency.
 5. Set the **old requirement** to `status: deprecated` (or remove only if fully replaced and permitted); do not leave the old id referenced in assets/dependencies.
 
+## Populating new requirements
+
+For the full requirement shape (including behavior and acceptance sub-structure), see **@specs/schema/req-registry.schema.json**. When adding a **new** requirement:
+
+- Set at least **statement** and **acceptance.criteria** (one or more items). These are the minimum for a valid, testable requirement.
+- Optionally set **behavior** (inputs, outputs, rules, defaults, errors) and **acceptance.examples** from existing registry, README, or code when inferable.
+- When copying from an existing requirement or from README/code, preserve the schema sub-keys: behavior.inputs, behavior.outputs, behavior.rules, behavior.defaults, behavior.errors; acceptance.criteria, acceptance.examples.
+
 ## Ids and traceability
 
 - **New requirements:** Use the registry's id convention (e.g. REQ-XXX-NNN). Update **assets[].requires**, **assets[].symbols[].requires**, traceability, validation.tests (per requirement), and **dependencies.items[].used_by_requirements** so no dangling refs.

@@ -1,0 +1,137 @@
+schema:
+  id: req-registry
+  version: "1.0.0"
+  updated_utc: "2026-03-13T15:00:00Z"
+
+project:
+  id: vinekeepers
+  name: Vinekeepers
+  description: Vinekeepers project with spec-driven workflow
+  stack:
+    language: Java
+    runtime: "21"
+
+enums:
+  status: [draft, active, deprecated]
+  priority: [low, medium, high]
+  type: [functional, non-functional, constraint]
+  handling_strategy: [fail, retry, skip]
+  asset_kind: [source, config, spec, workflow]
+  dependency_kind: [library, tool, service]
+  dependency_scope: [build, test, runtime]
+  dependency_criticality: [optional, required]
+
+dependencies:
+  items:
+    - id: DEP-SNAKEYAML
+      kind: library
+      name: snakeyaml
+      scope: runtime
+      criticality: required
+      spec: org.yaml:snakeyaml
+      install_hint: Maven dependency
+      used_by_requirements: [REQ-CONFIG-001]
+    - id: DEP-JUNIT
+      kind: library
+      name: junit-jupiter
+      scope: build
+      criticality: required
+      spec: org.junit.jupiter:junit-jupiter
+      install_hint: Maven test dependency
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+
+assets:
+  - id: ASSET-CONFIG-LOADER
+    kind: source
+    path: src/main/java/com/vinekeepers/config/ConfigLoader.java
+    role: Load bot definitions, routing, workflows, bot runtime options, optional handlesOwnedSpaces per bot, and Discord mention filters from YAML
+    requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
+  - id: ASSET-BOTS-YAML
+    kind: config
+    path: config/bots.yaml
+    role: Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with workflowRef arrietty_room, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for blank/empty)
+    requires: [REQ-CONFIG-001, REQ-LUNA-001]
+    feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
+  - id: ASSET-BOT-CONFIG
+    kind: source
+    path: src/main/java/com/vinekeepers/config/BotConfig.java
+    role: Bot configuration model
+    requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
+  - id: ASSET-BOT-DEFINITION
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/BotDefinition.java
+    role: Bot composition (persona, model, workflow, tools, runtime conversation settings, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces for ownership-based routing)
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
+
+requirements:
+  - id: REQ-CONFIG-001
+    title: Load bot config from YAML
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - ConfigLoader loads YAML and returns bot configs
+        - BotConfig maps to BotDefinition structure
+        - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
+        - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
+        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
+        - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
+        - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
+        - Workflow step bind keys (e.g. lifecycleBotName) and content with {{key}} interpolation are supported in step config
+      examples: []
+    traceability:
+      assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-CONFIG-LOADER
+          title: ConfigLoaderTest
+          intent: Verify YAML config loading
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-DISCORD-MENTION
+          title: ConfigLoaderTest
+          intent: Verify discordMention routing filters are parsed from YAML and produce a matching router
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordMentionRouting
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-DISCORD-AUTHORS
+          title: ConfigLoaderTest
+          intent: Verify discordAuthors routing filter is parsed from YAML and router matches by author/actorUsername
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildRouterParsesDiscordAuthorsRouting
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-HANDLES-OWNED-SPACES-TRUE
+          title: ConfigLoaderTest
+          intent: Verify handlesOwnedSpaces true is parsed from bot YAML into BotDefinition
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildBotsParsesHandlesOwnedSpacesTrue
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-HANDLES-OWNED-SPACES-ABSENT-FALSE
+          title: ConfigLoaderTest
+          intent: Verify handlesOwnedSpaces absent in bot YAML yields false on BotDefinition
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildBotsParsesHandlesOwnedSpacesAbsentAsFalse
+          preconditions: []
+
+features:
+  - id: FEAT-CONFIG
+    slug: config
+    title: Bot config from YAML
+    domain_slug: config
+    doc_path: features/domain/config/config.md
+    summary: ConfigLoader loads bot definitions from YAML; BotConfig models the structure.
+    requirement_ids: [REQ-CONFIG-001]
+    asset_ids: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
+    status: active
