@@ -16,11 +16,18 @@ public class DiscordEventSource implements EventSource, DiscordReplySender {
     private final DiscordGateway gateway;
     private volatile boolean running;
 
+    /** No-arg: token env key from VINEKEEPERS_DISCORD_TOKEN_ENV_KEY (value = env var name for token). No hardcoded key. */
     public DiscordEventSource() {
-        this(new JdaDiscordGateway(Env.get("DISCORD_BOT_TOKEN", "")));
+        this(createDefaultGateway());
     }
 
-    DiscordEventSource(DiscordGateway gateway) {
+    private static DiscordGateway createDefaultGateway() {
+        String key = Env.get("VINEKEEPERS_DISCORD_TOKEN_ENV_KEY", "").trim();
+        return new JdaDiscordGateway(key.isBlank() ? "" : Env.get(key, ""));
+    }
+
+    /** For multi-bot: create a source with a specific gateway (e.g. per-bot token). */
+    public DiscordEventSource(DiscordGateway gateway) {
         this.gateway = gateway;
     }
 
@@ -53,5 +60,12 @@ public class DiscordEventSource implements EventSource, DiscordReplySender {
      */
     public DiscordAppReplySink getReplySink() {
         return new DiscordAppReplySink(gateway);
+    }
+
+    /**
+     * Gateway for lifecycle actions (e.g. createTextChannel). Used by Bootstrap when wiring Discord-backed workflow actions.
+     */
+    public DiscordGateway getGateway() {
+        return gateway;
     }
 }

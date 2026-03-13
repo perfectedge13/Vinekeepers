@@ -27,7 +27,7 @@ Sub-skills MUST follow these formats when creating or updating Wiki.js pages. Or
 
 - **wiki_index** owns: `<path_prefix>`, `<path_prefix>/features`, `<path_prefix>/features/domain`, `<path_prefix>/features/domain/<domain-slug>`.
 - **wiki_architecture** owns: `<path_prefix>/architecture`.
-- **wiki_runbooks** owns: `<path_prefix>/runbooks`, `<path_prefix>/runbooks/operational`, `<path_prefix>/runbooks/troubleshooting`, `<path_prefix>/runbooks/recovery`, `<path_prefix>/runbooks/maintenance`.
+- **wiki_runbooks** owns: `<path_prefix>/runbooks`, `<path_prefix>/runbooks/operational`, `<path_prefix>/runbooks/troubleshooting`, `<path_prefix>/runbooks/recovery`, `<path_prefix>/runbooks/maintenance`, `<path_prefix>/runbooks/configuring-bots`.
 - **wiki_feature_dossiers** owns: `<path_prefix>/features/domain/<domain>/<feature-name>` and its seven sub-pages (how-it-works, change-log, known-issues, decisions, contracts, tests, diagrams).
 
 See the plan (section 4) for the full "when to update" triggers per page.

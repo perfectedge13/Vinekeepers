@@ -1,9 +1,17 @@
 package com.vinekeepers.bot;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.state.LifecycleContext;
+import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,9 +37,9 @@ class RouterTest {
     @Test
     void addRoutingAndRouteMatchesDiscordByAuthor() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("u1"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+                Set.of("42"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
-        Event event = new Event("discord:g:ch", "message", Map.of("authorId", "u1"));
+        Event event = new Event("discord:g:ch", "message", Map.of("authorId", "42"));
         assertEquals(List.of("bot-a"), router.route(event));
     }
 
@@ -47,10 +55,10 @@ class RouterTest {
     @Test
     void routeMatchesWhenDiscordAuthorsContainsActorId() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("user-snowflake-123"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+                Set.of("123456789012345678"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
         Event event = new Event("discord:g:ch", "message",
-                Map.of("authorId", "user-snowflake-123", "author", "alice", "content", "hi"));
+                Map.of("authorId", "123456789012345678", "author", "alice", "content", "hi"));
         assertEquals(List.of("bot-a"), router.route(event));
     }
 
@@ -161,10 +169,10 @@ class RouterTest {
     @Test
     void interactionFromAllowedAuthorRoutesToBot() {
         RoutingFilter filter = new RoutingFilter(
-                Set.of("allowed-snowflake"), Set.of("ch-1"), null, "luna", Set.of(), Set.of(), Set.of());
+                Set.of("987654321012345678"), Set.of("ch-1"), null, "luna", Set.of(), Set.of(), Set.of());
         router.addRouting(new Routing(filter, "bot-a"));
         Event event = new Event("discord:g:ch-1", "interaction",
-                Map.of("channelId", "ch-1", "authorId", "allowed-snowflake", "author", "alice", "customId", "run"));
+                Map.of("channelId", "ch-1", "authorId", "987654321012345678", "author", "alice", "customId", "run"));
         assertEquals(List.of("bot-a"), router.route(event));
     }
 
@@ -176,5 +184,158 @@ class RouterTest {
         Event event = new Event("discord:g:ch", "interaction",
                 Map.of("channelId", "ch-1", "authorId", "other-user-id", "customId", "launch", "interactionId", "i1", "token", "t1"));
         assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsNumericId() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("123456789012345678"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "123456789012345678", "author", "someone", "content", "hi"));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeMatchesWhenDiscordAuthorsContainsUsername() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("alice_dev"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "999", "author", "alice_dev", "content", "hi"));
+        assertEquals(List.of("bot-a"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchWhenDiscordAuthorsHasStaleUsername() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("old_nick"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "123", "author", "new_nick", "content", "hi"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeDoesNotMatchWhenDiscordAuthorsHasNumericIdButEventAuthorIdDifferent() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("111222333444555666"), Set.of(), null, null, Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "999888777666555444", "author", "someone", "content", "hi"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeMatchesWhenMentionAndAuthorInFilter() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed_user"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "1", "author", "allowed_user", "content", "Hey @Luna run it", "mentions", List.of("luna")));
+        assertEquals(List.of("luna"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchWhenMentionPresentButAuthorNotInFilter() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed_user"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new Routing(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("authorId", "99", "author", "other_user", "content", "Hey @Luna run it", "mentions", List.of("luna")));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    // --- LifecycleContextStore + handlesOwnedSpaces (single-owner precedence) ---
+
+    @Test
+    void routeWithLifecycleStore_ownedChannel_returnsOnlyOwnerWhenOwnerHasHandlesOwnedSpaces() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "ch-owned", Instant.now(), null, "arrietty", null, null, null);
+        store.put(ctx);
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true, "luna", false));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "arrietty"));
+
+        Event event = new Event("discord:g:ch-owned", "message",
+                Map.of("channelId", "ch-owned", "content", "hello"));
+        assertEquals(List.of("arrietty"), r.route(event));
+    }
+
+    @Test
+    void routeWithLifecycleStore_ownedChannel_usesFilterBasedWhenOwnerDoesNotHaveHandlesOwnedSpaces() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "ch-owned", Instant.now(), null, "other-bot", null, null, null);
+        store.put(ctx);
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("other-bot", false, "luna", true));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch-owned", "message",
+                Map.of("channelId", "ch-owned", "content", "hello"));
+        assertEquals(List.of("luna"), r.route(event));
+    }
+
+    @Test
+    void routeWithLifecycleStore_ownedChannel_logsOwnershipMismatchWarningWhenOwnerDoesNotHaveHandlesOwnedSpaces() {
+        Logger routerLogger = (Logger) LoggerFactory.getLogger(Router.class);
+        ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+        listAppender.start();
+        routerLogger.addAppender(listAppender);
+        try {
+            LifecycleContextStore store = new LifecycleContextStore();
+            LifecycleContext ctx = new LifecycleContext("ctx-1", "ch-owned", Instant.now(), null, "other-bot", null, null, null);
+            store.put(ctx);
+            Router r = new Router(store);
+            r.setHandlesOwnedSpacesByBotId(Map.of("other-bot", false, "luna", true));
+            r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+            Event event = new Event("discord:g:ch-owned", "message",
+                    Map.of("channelId", "ch-owned", "content", "hello"));
+            r.route(event);
+
+            List<ILoggingEvent> warnings = listAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.WARN)
+                    .filter(e -> e.getFormattedMessage().contains("does not have handlesOwnedSpaces"))
+                    .toList();
+            assertTrue(warnings.size() >= 1,
+                    "Expected at least one WARN log containing 'does not have handlesOwnedSpaces'; got: " + listAppender.list);
+        } finally {
+            routerLogger.detachAppender(listAppender);
+            listAppender.stop();
+        }
+    }
+
+    @Test
+    void routeWithLifecycleStore_noContextForChannel_usesFilterBased() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch-unknown", "message",
+                Map.of("channelId", "ch-unknown", "content", "hi"));
+        assertEquals(List.of("luna"), r.route(event));
+    }
+
+    @Test
+    void routeWithLifecycleStore_eventWithoutChannelId_usesFilterBased() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        store.put(new LifecycleContext("ctx-1", "ch-1", Instant.now(), null, "arrietty", null, null, null));
+        Router r = new Router(store);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true));
+        r.addRouting(new Routing(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:ch-1", "message", Map.of("content", "hi"));
+        assertEquals(List.of("luna"), r.route(event));
+    }
+
+    @Test
+    void setHandlesOwnedSpacesByBotIdWithNullDoesNotThrow() {
+        Router r = new Router(new LifecycleContextStore());
+        r.setHandlesOwnedSpacesByBotId(null);
+        Event event = new Event("discord:g:ch", "message", Map.of("channelId", "ch", "content", "x"));
+        assertTrue(r.route(event).isEmpty());
     }
 }

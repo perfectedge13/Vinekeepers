@@ -17,6 +17,10 @@ public final class BotDefinition {
     private final Map<String, Object> workflowParams;
     private final ConversationMode conversationMode;
     private final String sessionKeyStrategy;
+    /** Optional env key for this bot's Discord token (e.g. DISCORD_BOT_TOKEN); enables per-bot connector identity. */
+    private final String discordTokenEnvKey;
+    /** When true, this bot is routed inbound events for lifecycle rooms it owns (single-owner precedence). */
+    private final boolean handlesOwnedSpaces;
 
     public BotDefinition(
             String id,
@@ -50,6 +54,37 @@ public final class BotDefinition {
             Map<String, Object> workflowParams,
             ConversationMode conversationMode,
             String sessionKeyStrategy) {
+        this(id, persona, modelProfile, toolPolicy, memoryPolicy, workflowType, workflowParams,
+                conversationMode, sessionKeyStrategy, null);
+    }
+
+    public BotDefinition(
+            String id,
+            Persona persona,
+            ModelProfile modelProfile,
+            ToolPolicy toolPolicy,
+            MemoryPolicy memoryPolicy,
+            String workflowType,
+            Map<String, Object> workflowParams,
+            ConversationMode conversationMode,
+            String sessionKeyStrategy,
+            String discordTokenEnvKey) {
+        this(id, persona, modelProfile, toolPolicy, memoryPolicy, workflowType, workflowParams,
+                conversationMode, sessionKeyStrategy, discordTokenEnvKey, false);
+    }
+
+    public BotDefinition(
+            String id,
+            Persona persona,
+            ModelProfile modelProfile,
+            ToolPolicy toolPolicy,
+            MemoryPolicy memoryPolicy,
+            String workflowType,
+            Map<String, Object> workflowParams,
+            ConversationMode conversationMode,
+            String sessionKeyStrategy,
+            String discordTokenEnvKey,
+            boolean handlesOwnedSpaces) {
         this.id = Objects.requireNonNull(id, "id");
         this.persona = Objects.requireNonNull(persona, "persona");
         this.modelProfile = Objects.requireNonNull(modelProfile, "modelProfile");
@@ -59,6 +94,8 @@ public final class BotDefinition {
         this.workflowParams = workflowParams != null ? Map.copyOf(workflowParams) : Map.of();
         this.conversationMode = conversationMode != null ? conversationMode : ConversationMode.SINGLE_EVENT;
         this.sessionKeyStrategy = sessionKeyStrategy;
+        this.discordTokenEnvKey = (discordTokenEnvKey != null && !discordTokenEnvKey.isBlank()) ? discordTokenEnvKey : null;
+        this.handlesOwnedSpaces = handlesOwnedSpaces;
     }
 
     public String getId() {
@@ -95,5 +132,20 @@ public final class BotDefinition {
 
     public String getSessionKeyStrategy() {
         return sessionKeyStrategy;
+    }
+
+    /**
+     * Optional env key for this bot's Discord token (e.g. DISCORD_BOT_TOKEN).
+     * When set, Bootstrap can create a dedicated Discord gateway/sender for this bot.
+     */
+    public String getDiscordTokenEnvKey() {
+        return discordTokenEnvKey;
+    }
+
+    /**
+     * When true, the router adds this bot for inbound events in lifecycle rooms it owns (single-owner precedence).
+     */
+    public boolean isHandlesOwnedSpaces() {
+        return handlesOwnedSpaces;
     }
 }

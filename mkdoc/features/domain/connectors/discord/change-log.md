@@ -2,6 +2,15 @@
 
 # Entries
 
+## 2026-03-12
+
+- **Lifecycle delivery follow-up:** `getGatewayForChannel(channelId)` returns null when the lifecycle channel's configured bot has no registered gateway (no default fallback). `getDiscordUserIdForBot(botId)` returns that bot's Discord user id from its gateway `getSelfUserId`, or null. Gateway contract exposes `getSelfUserId()` and `addPermissionOverride(channelId, guildId, targetUserId, allow, deny)` for lifecycle room permission overwrites. Bootstrap may register an **outbound-only** gateway for bots not in routing (e.g. lifecycle room bot Arrietty); that gateway has no event listeners and is used only for sending. OutboundDeliveryRouter and DiscordAppReplySink use the router for sender resolution; when `getGatewayForChannel` returns null the sink does not send and logs. See REQ-CONNECTORS-DISCORD-001, OutboundDeliveryRouterTest, JdaDiscordGateway.
+- **OutboundDeliveryRouter and lifecycle sender resolution:** New `OutboundDeliveryRouter` routes outbound Discord delivery and resolves the reply sender from the delivery target and optional lifecycle context (`configuredBotId`). For non-lifecycle channels a default sender is used; for lifecycle channels only the configured bot's sender is used—no silent fallback when that bot's sender is unavailable (error logged, message not sent). Per-bot Discord identity is supported via optional `discordTokenEnvKey` in bot config; Bootstrap registers one sender per bot when the key is set and token is present. `DiscordAppReplySink` uses the router for ChannelTarget delivery. See REQ-CONNECTORS-DISCORD-001 and OutboundDeliveryRouterTest.
+
+## 2026-03-10
+
+- **Lifecycle room (Phase 1):** The `create_channel` workflow action (used by Luna lifecycle room) delegates to gateway `createTextChannel(guildId, channelName)`; the action normalizes channel name to Discord-safe format before calling the gateway and returns sentinel `CHANNEL_CREATE_FAILED` on failure. Documented in workflow-steps and cursor-gathering; gateway contract unchanged.
+
 ## 2026-03-09
 
 - **Discord intake initial components:** Gateway contract (`DiscordGateway`), JDA-backed gateway (`JdaDiscordGateway`), and reply sink (`DiscordAppReplySink`) updates for receive/send and interaction lifecycle; author (authorId, author) in payload for routing; adapter acks or defers within platform window; optional components on channel send and follow-up/update.

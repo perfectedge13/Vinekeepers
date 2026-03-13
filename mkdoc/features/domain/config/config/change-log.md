@@ -2,6 +2,18 @@
 
 # Entries
 
+## 2026-03-13
+
+- **Blank branch in step bind:** `config/bots.yaml` supports branch value `""` (blank/empty) in workflow step bindings (e.g. for branch steps). ConfigLoader and workflow runner treat empty string as blank branch; Arrietty template and Luna workflow can use this for UX (e.g. clear branch selection).
+
+## 2026-03-12
+
+- **discordTokenEnvKey per bot:** Bot definitions may set optional `discordTokenEnvKey` (env var name for that bot's Discord token). Used for per-bot Discord identity (e.g. luna, arrietty in `config/bots.yaml`); Bootstrap registers one sender/gateway per bot when the key is set and token is present. Enables lifecycle delivery and outbound-only gateways for bots not in routing.
+
+## 2026-03-10
+
+- **discordAuthors in routing:** Optional `discordAuthors` in routing filter accepts numeric Discord user id (matches event `actorId`) or username (matches `actorUsername`, case-insensitive). Config comment in `config/bots.yaml` documents this; prefer numeric id when available.
+
 ## 2026-03-09
 
 - **bots.yaml and configured workflow:** `config/bots.yaml` updated for Luna and configured workflow references; aligns with Discord intake components and edit-reprompt (clearKeys) behavior in workflow runner/state.

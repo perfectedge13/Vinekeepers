@@ -43,4 +43,20 @@ class BranchStepTest {
         assertEquals(2, result.getNextStepIndex());
         assertEquals(List.of(), result.getClearKeys());
     }
+
+    @Test
+    void branchWithEmptyStringValueMatchesEmptyState() {
+        List<Map<String, Object>> branches = List.of(
+                Map.of("when", Map.of("key", "roomName", "value", ""), "next", 1),
+                Map.of("when", "else", "next", 0)
+        );
+        BranchStep step = new BranchStep(branches);
+        ConfigurableWorkflowState state = new ConfigurableWorkflowState();
+        state.put("roomName", "");
+        Event event = new Event("test", "message", Map.of());
+
+        StepResult result = step.execute(event, state, 0);
+
+        assertEquals(1, result.getNextStepIndex());
+    }
 }

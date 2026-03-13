@@ -5,7 +5,8 @@ import com.vinekeepers.core.cursor.CursorAgentLaunchResult;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudAdapterImpl;
 import com.vinekeepers.core.cursor.CursorCloudException;
-import com.vinekeepers.core.cursor.LunaCloudRunState;
+import com.vinekeepers.core.cursor.CursorInstructionComposer;
+import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.state.StateStore;
 
@@ -67,7 +68,7 @@ public final class CursorFullRunTool implements Tool {
         String baseBranch = firstNonBlank(getString(args, "baseBranch"), Env.get("CURSOR_BASE_BRANCH", DEFAULT_BASE_BRANCH));
         String branchName = buildBranchName(change);
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
-                buildPrompt(repositoryUrl, baseBranch, change),
+                CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
                 repositoryUrl,
                 baseBranch,
                 branchName,
@@ -77,7 +78,7 @@ public final class CursorFullRunTool implements Tool {
 
         try {
             CursorAgentLaunchResult launch = adapter.launchAgent(request);
-            LunaCloudRunState runState = new LunaCloudRunState(
+            LifecycleRunRecord runState = new LifecycleRunRecord(
                     launch.id(),
                     sessionKey,
                     project,
@@ -150,26 +151,7 @@ public final class CursorFullRunTool implements Tool {
         return "luna/" + normalized + "-" + System.currentTimeMillis();
     }
 
-    private static String buildPrompt(String repositoryUrl, String baseBranch, String change) {
-        return """
-                Implement the following feature request in the repository.
-
-                Repository: %s
-                Base branch: %s
-
-                User request:
-                %s
-
-                Requirements:
-                - Follow the repository's Cursor rules and spec-driven workflow.
-                - Update specs, tests, README, and mkdoc content when behavior changes.
-                - Run the repository validation commands before finishing.
-                - Work on the feature branch created for this run and open a pull request.
-                - Summarize the final change set, tests, and any remaining issues.
-                """.formatted(repositoryUrl, baseBranch, change);
-    }
-
-    private static String buildLaunchAcknowledgement(LunaCloudRunState runState) {
+    private static String buildLaunchAcknowledgement(LifecycleRunRecord runState) {
         StringBuilder message = new StringBuilder("Launching Cursor Cloud run for `")
                 .append(runState.getRepositoryUrl())
                 .append("` on branch `")

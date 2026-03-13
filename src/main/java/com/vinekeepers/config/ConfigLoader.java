@@ -42,6 +42,8 @@ public final class ConfigLoader {
                 config.setBots((List<Map<String, Object>>) root.get("bots"));
                 config.setRouting((List<Map<String, Object>>) root.get("routing"));
                 config.setWorkflows((Map<String, Object>) root.get("workflows"));
+                Object defaultKey = root.get("defaultDiscordTokenEnvKey");
+                config.setDefaultDiscordTokenEnvKey(defaultKey != null ? defaultKey.toString().trim() : null);
             }
             return config;
         }
@@ -136,9 +138,11 @@ public final class ConfigLoader {
         }
         ConversationMode conversationMode = ConversationMode.fromValue((String) b.get("conversationMode"));
         String sessionKeyStrategy = (String) b.get("sessionKeyStrategy");
+        String discordTokenEnvKey = (String) b.get("discordTokenEnvKey");
+        boolean handlesOwnedSpaces = Boolean.TRUE.equals(b.get("handlesOwnedSpaces"));
 
         return new BotDefinition(id, persona, modelProfile, toolPolicy, memoryPolicy,
-                workflowType, workflowParams, conversationMode, sessionKeyStrategy);
+                workflowType, workflowParams, conversationMode, sessionKeyStrategy, discordTokenEnvKey, handlesOwnedSpaces);
     }
 
     @SuppressWarnings("unchecked")

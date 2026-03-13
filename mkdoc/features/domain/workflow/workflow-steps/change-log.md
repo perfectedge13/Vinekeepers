@@ -2,8 +2,18 @@
 
 # Entries
 
+## 2026-03-13
+
+- **capture_field trimAndLower:** `CaptureFieldFromEventStep` supports optional **trimAndLower** (boolean) in step config. When true, captured text from message content is trimmed and lowercased before storing in state (e.g. room name in arrietty_room). `ConfigurableWorkflowRunner` parses `trimAndLower` from capture_field step config and passes it to the step. Tests: `CaptureFieldFromEventStepTest.messageEventWithTrimAndLowerTrimsAndLowercasesContent`, `ConfigurableWorkflowRunnerTest.runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue`.
+
+## 2026-03-10
+
+- **Phase 1 correctness (docs sync):** Test list updated to include all workflow action tests from registry: CreateChannelActionTest (gateway, sentinel, normalize), PostChannelMessageActionTest (interpolation, lifecycleBotName from bind), CreateLifecycleContextActionTest (bind precedence), ProvisionBotInstanceActionTest, LaunchCursorRunActionTest (launch, ack, lifecycle room). Contracts and change-log aligned with bind precedence (bind overrides state), create_channel CHANNEL_CREATE_FAILED and normalizeChannelName, post_channel_message merged interpolation, launch_cursor_run ack with status.
+- **Docs sync:** Aligned feature dossier with implement changes: CreateChannelAction, CreateLifecycleContextAction, ProvisionBotInstanceAction, LaunchCursorRunAction (LaunchCursorRunAction uses CursorInstructionComposer for prompt); LifecycleContext and LifecycleContextStore; CursorFullRunTool and config/bots.yaml. No code change in workflow-steps; documentation reflects current registry.
+
 ## 2026-03-09
 
+- **Lifecycle room workflow actions:** Registered actions for Phase 1: `create_channel` (Discord gateway createTextChannel; returns `CHANNEL_CREATE_FAILED` on failure; room naming from state when blank), `post_channel_message`, `provision_bot_instance` (generic instance id), `create_lifecycle_context`, `launch_cursor_run` (authoritative for Luna; prompt via CursorInstructionComposer). Branch step used after create_channel to handle CHANNEL_CREATE_FAILED. CallActionStep invokes these via WorkflowActionRegistry when referenced in configured workflows (e.g. luna_cursor full provisioning sequence).
 - **Edit-reprompt and step/runner fixes:** `StepResult` supports optional `clearKeys` so the runner can remove given state keys before advancing (edit-reprompt). `ConfigurableWorkflowRunner` applies `StepResult.clearKeys` to state before `setStepIndex`. `ConfigurableWorkflowState.clearKeys(keys)` removes given keys from state. `BranchStep` and runner/state behavior aligned with spec. New tests: `BranchStepTest`, `ConfigurableWorkflowRunnerTest`; `StepResultTest` covers factory methods and outcome normalization.
 
 ## 2026-03-08

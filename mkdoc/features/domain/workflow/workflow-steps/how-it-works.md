@@ -9,7 +9,7 @@ Configured workflows are defined by `WorkflowDefinition` and executed as ordered
 1. Config loads a `WorkflowDefinition` with ordered step configs.
 2. `ConfigurableWorkflowRunner` resolves each config into a concrete step implementation.
 3. A step executes and returns `StepResult` describing the next outcome.
-4. The runner stores state updates, advances, waits, branches, or completes based on `StepOutcome`.
+4. The runner stores state updates, advances, waits, branches, or completes based on `StepOutcome`. For `branch` steps, blank or empty string values are not truthy; use value-based `when: { key, value: "" }` to route on blank input.
 
 # Inputs and outputs
 

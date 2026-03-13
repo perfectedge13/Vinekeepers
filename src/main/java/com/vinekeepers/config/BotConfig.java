@@ -11,6 +11,8 @@ public final class BotConfig {
     private List<Map<String, Object>> bots;
     private List<Map<String, Object>> routing;
     private Map<String, Object> workflows;
+    /** Optional default env key for Discord token when a bot does not set discordTokenEnvKey. Bot-config driven; no hardcoded key in code. */
+    private String defaultDiscordTokenEnvKey;
 
     public List<Map<String, Object>> getBots() {
         return bots;
@@ -34,5 +36,13 @@ public final class BotConfig {
 
     public void setWorkflows(Map<String, Object> workflows) {
         this.workflows = workflows;
+    }
+
+    public String getDefaultDiscordTokenEnvKey() {
+        return defaultDiscordTokenEnvKey;
+    }
+
+    public void setDefaultDiscordTokenEnvKey(String defaultDiscordTokenEnvKey) {
+        this.defaultDiscordTokenEnvKey = defaultDiscordTokenEnvKey;
     }
 }

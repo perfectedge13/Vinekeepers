@@ -2,8 +2,22 @@
 
 # Entries
 
+## 2026-03-13
+
+- **Arrietty room UX and message-first capture:** Arrietty template in `config/bots.yaml` uses `workflowRef: arrietty_room` with **message-first** flow: first step is `capture_field` (e.g. `storeIn: roomAction`) with optional **trimAndLower: true** for room name UX (trim and lowercase user input). Router ownership warning when lifecycle owner lacks handlesOwnedSpaces. No hardcoded bot ids in Router or engine.
+
+## 2026-03-12
+
+- **CreateChannelAction lifecycle owner and permission overwrite:** `create_channel` step bind may include `lifecycleOwnerBotId`. After creating the channel via gateway `createTextChannel`, the action calls `addPermissionOverride` for that bot's Discord user (resolved via router `getDiscordUserIdForBot(lifecycleOwnerBotId)`) when the gateway supports it, so the lifecycle room bot (e.g. Arrietty) has explicit permission on the new channel. Room naming and sentinel `CHANNEL_CREATE_FAILED` unchanged. See CreateChannelActionTest.runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate.
+
+## 2026-03-10
+
+- **Phase 1 correctness (docs):** Bind precedence for call_action (bind overrides state). Merged interpolation for `post_channel_message`: content uses state then bind (bind overrides), e.g. `lifecycleBotName` in bind in `config/bots.yaml` for room intro. `create_channel` normalizes channel name to Discord-safe before gateway create; returns `CHANNEL_CREATE_FAILED` on failure. `launch_cursor_run` acknowledgement includes optional status (e.g. "Status: launching"). README and workflow-steps/cursor-gathering/Discord docs updated.
+- **Phase 1 completion:** Luna workflow now uses the full provisioning sequence: `create_channel` → branch on `CHANNEL_CREATE_FAILED` → `provision_bot_instance` → `create_lifecycle_context` → `post_channel_message` → `launch_cursor_run`. `launch_cursor_run` is the authoritative launch path; `cursor.fullRun` is not used in luna_cursor. **CursorInstructionComposer** is the single source for the Cursor run prompt (includes /nova-code). Room naming: when channel name is blank, it is derived from state (project + codeChange). `create_channel` returns sentinel `CHANNEL_CREATE_FAILED` on gateway failure. **LifecycleContext** extended with `configuredBotId`, `runtimeBotInstanceId`, optional `repo`/`requestText`. **Provision_bot_instance** uses generic instance id. README and impacted docs updated.
+
 ## 2026-03-09
 
+- **Lifecycle room Phase 1:** Added `LifecycleContext`, `LifecycleContextStore`, `RuntimeBotInstance`; workflow actions `create_channel`, `post_channel_message`, `provision_bot_instance`, `create_lifecycle_context`, `launch_cursor_run`. Arrietty bot template in config for per-channel lifecycle room instances; Discord gateway `createTextChannel(guildId, channelName)` for channel creation.
 - **Cursor API error visibility:** CursorCloudAdapterImpl constructor masks API key in logs; transport/send logging added for diagnostics without leaking key or body. CursorCloudException message is surfaced to callers (e.g. CursorCloudAdapterImplTest.transportExceptionSurfacesMessage); CursorCloudTransport throws Exception so adapter can wrap and expose cause.
 - **Cursor adapter bug-fix:** Robust non-2xx error parsing (multiple response shapes: nested error.message/code, top-level message, plain text, empty body); safe per-request diagnostics at DEBUG (URI, key configured, model, repo, branch); JSON request body uses NON_NULL; CursorCloudAdapterImplTest extended with error-shape and auth tests. Auth tests (Bearer token for getAgent and launchAgent); non-2xx empty JSON object and non-JSON body tests (non2xxEmptyJsonObjectSurfacesGenericMessage, non2xxNonJsonBodySurfacesInException) added.
 - **Edit-reprompt and config alignment:** Luna and configured workflow use `ConfigurableWorkflowRunner` and `ConfigurableWorkflowState`; `StepResult.clearKeys` supports edit-reprompt so state keys can be cleared before re-prompting. `config/bots.yaml` and workflow runner/state assets updated for consistency.

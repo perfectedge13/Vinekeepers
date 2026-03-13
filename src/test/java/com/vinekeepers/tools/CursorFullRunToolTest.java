@@ -6,7 +6,7 @@ import com.vinekeepers.core.cursor.CursorAgentLaunchRequest;
 import com.vinekeepers.core.cursor.CursorAgentLaunchResult;
 import com.vinekeepers.core.cursor.CursorAgentMessage;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
-import com.vinekeepers.core.cursor.LunaCloudRunState;
+import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.state.StateStore;
 import org.junit.jupiter.api.Test;
 
@@ -67,7 +67,7 @@ class CursorFullRunToolTest {
 
         assertTrue(result.toString().contains("Launching Cursor Cloud run"));
         assertEquals("https://github.com/acme/vinekeepers", capturedRequest.get().repositoryUrl());
-        LunaCloudRunState runState = stateStore.get("cursor:run:bc_999", LunaCloudRunState.class).orElseThrow();
+        LifecycleRunRecord runState = stateStore.get("cursor:run:bc_999", LifecycleRunRecord.class).orElseThrow();
         assertEquals("bc_999", runState.getAgentId());
         assertEquals("chan-1", runState.getChannelId());
         assertEquals("msg-1", runState.getReplyToMessageId());

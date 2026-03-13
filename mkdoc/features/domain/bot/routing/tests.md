@@ -17,4 +17,5 @@ Unit tests cover base router matching, Discord mention matching from both messag
 | UNIT-ROUTER-INTERACTION-NO-MENTION | RouterTest | com.vinekeepers.bot.RouterTest | interactionWithoutMentionRoutesToBot | Verify Discord interaction events route without trigger/mention check (author and channel only) |
 | UNIT-ROUTER-INTERACTION-ALLOWED-AUTHOR | RouterTest | com.vinekeepers.bot.RouterTest | interactionFromAllowedAuthorRoutesToBot | Verify interaction from allowed author (discordAuthors) routes to bot |
 | UNIT-ROUTER-INTERACTION-OTHER-USER | RouterTest | com.vinekeepers.bot.RouterTest | interactionFromOtherUserDoesNotRoute | Verify interaction from other user does not route when discordAuthors is set |
+| UNIT-ROUTER-OWNERSHIP-WARNING | RouterTest | com.vinekeepers.bot.RouterTest | routeWithLifecycleStore_ownedChannel_logsOwnershipMismatchWarningWhenOwnerDoesNotHaveHandlesOwnedSpaces | Verify Router logs WARN when channel has lifecycle owner bot but that bot does not have handlesOwnedSpaces; uses filter-based routing |
 

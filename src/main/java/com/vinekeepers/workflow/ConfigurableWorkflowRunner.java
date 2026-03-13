@@ -155,9 +155,14 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                             (List<Map<String, Object>>) stepMap.get("fields"),
                             provider));
                 }
-                case "capture_field" -> out.add(new com.vinekeepers.workflow.steps.CaptureFieldFromEventStep(
-                        (String) stepMap.get("storeIn"),
-                        (String) stepMap.get("contentKey")));
+                case "capture_field" -> {
+                    Boolean trimAndLower = stepMap.get("trimAndLower") instanceof Boolean b ? b
+                            : (stepMap.get("trimAndLower") != null ? Boolean.parseBoolean(String.valueOf(stepMap.get("trimAndLower"))) : null);
+                    out.add(new com.vinekeepers.workflow.steps.CaptureFieldFromEventStep(
+                            (String) stepMap.get("storeIn"),
+                            (String) stepMap.get("contentKey"),
+                            Boolean.TRUE.equals(trimAndLower)));
+                }
                 case "call_action" -> out.add(new com.vinekeepers.workflow.steps.CallActionStep(
                         registry,
                         toolRunner,
