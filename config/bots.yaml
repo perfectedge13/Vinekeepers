@@ -134,10 +134,6 @@ workflows:
           - when: else
             next: 12
       - type: call_action
-        action: create_thread
-        bind: { threadName: "Room updates" }
-        storeIn: deliveryChannelId
-      - type: call_action
         action: provision_bot_instance
         bind: { templateBotId: arrietty }
         storeIn: instanceId
@@ -145,6 +141,10 @@ workflows:
         action: create_lifecycle_context
         bind: { configuredBotId: arrietty }
         storeIn: contextId
+      - type: call_action
+        action: create_thread
+        bind: { threadName: "Room updates" }
+        storeIn: deliveryChannelId
       - type: call_action
         action: post_channel_message
         bind:
@@ -155,7 +155,7 @@ workflows:
         bind: {}
         storeIn: launchMessage
       - type: done
-        message: "{{launchMessage}}"
+        message: "Launching now. See <#{{channelId}}>."
       - type: done
         message: "Could not create room."
       - type: done

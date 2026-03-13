@@ -150,4 +150,29 @@ class LifecycleContextStoreTest {
         assertTrue(store.getByDeliveryTargetId("").isEmpty());
         assertTrue(store.getByDeliveryTargetId("   ").isEmpty());
     }
+
+    @Test
+    void setDeliveryTargetIdIgnoresNullBlankAndSentinel() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, null, null, null, null, null, null);
+        store.put(ctx);
+        store.setDeliveryTargetId("ctx-1", null);
+        store.setDeliveryTargetId("ctx-1", "");
+        store.setDeliveryTargetId("ctx-1", "THREAD_CREATE_FAILED");
+        assertTrue(store.getByDeliveryTargetId("thread-1").isEmpty());
+        assertTrue(store.getByContextId("ctx-1").orElseThrow().getDeliveryChannelId() == null);
+    }
+
+    @Test
+    void setDeliveryTargetIdUpdatesContextAndIndex() {
+        LifecycleContextStore store = new LifecycleContextStore();
+        LifecycleContext ctx = new LifecycleContext("ctx-1", "chan-1", NOW, null, "arrietty", null, null, null, null, null);
+        store.put(ctx);
+        assertTrue(store.getByDeliveryTargetId("thread-xyz").isEmpty());
+        store.setDeliveryTargetId("ctx-1", "thread-xyz");
+        assertTrue(store.getByDeliveryTargetId("thread-xyz").isPresent());
+        assertEquals(ctx.getContextId(), store.getByDeliveryTargetId("thread-xyz").orElseThrow().getContextId());
+        assertTrue(store.getByChannelId("chan-1").isPresent());
+        assertEquals("thread-xyz", store.getByContextId("ctx-1").orElseThrow().getDeliveryChannelId());
+    }
 }

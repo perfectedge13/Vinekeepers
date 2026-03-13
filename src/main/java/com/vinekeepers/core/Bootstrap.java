@@ -199,7 +199,7 @@ public final class Bootstrap {
         cursorCloudRunMonitor.setReplySender(outboundDeliveryRouter);
         if (outboundDeliveryRouter.getDefaultGateway() != null) {
             actionRegistry.register("create_channel", new CreateChannelAction(outboundDeliveryRouter));
-            actionRegistry.register("create_thread", new CreateThreadAction(outboundDeliveryRouter));
+            actionRegistry.register("create_thread", new CreateThreadAction(outboundDeliveryRouter, lifecycleContextStore));
         }
         actionRegistry.register("post_channel_message", new PostChannelMessageAction(outboundDeliveryRouter));
         return this;

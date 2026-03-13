@@ -102,4 +102,13 @@ public final class LifecycleContext {
     public String getDeliveryChannelId() {
         return deliveryChannelId;
     }
+
+    /**
+     * Returns a new LifecycleContext with the same fields but the given deliveryChannelId.
+     * Used to update the store after create_thread stores the thread id.
+     */
+    public LifecycleContext withDeliveryChannelId(String deliveryChannelId) {
+        return new LifecycleContext(contextId, channelId, createdAt, externalRunId, configuredBotId,
+                runtimeBotInstanceId, repo, requestText, status, deliveryChannelId);
+    }
 }

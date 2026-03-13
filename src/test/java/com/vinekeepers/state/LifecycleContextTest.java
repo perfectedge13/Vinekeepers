@@ -101,4 +101,15 @@ class LifecycleContextTest {
         ctx.setStatus("failed");
         assertEquals("failed", ctx.getStatus());
     }
+
+    @Test
+    void withDeliveryChannelIdReturnsNewContextWithThatIdOthersUnchanged() {
+        LifecycleContext ctx = new LifecycleContext("ctx-9", "chan-9", NOW, "run-1", "arrietty", "inst-1", "repo", "req", "active", null);
+        LifecycleContext withThread = ctx.withDeliveryChannelId("thread-999");
+        assertNull(ctx.getDeliveryChannelId());
+        assertEquals("thread-999", withThread.getDeliveryChannelId());
+        assertEquals("ctx-9", withThread.getContextId());
+        assertEquals("chan-9", withThread.getChannelId());
+        assertEquals("arrietty", withThread.getConfiguredBotId());
+    }
 }

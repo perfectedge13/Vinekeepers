@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T15:00:00Z'
+  updated_utc: '2026-03-13T16:30:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -503,7 +503,8 @@ assets:
     path: src/main/java/com/vinekeepers/state/LifecycleContext.java
     role: >-
       Extended lifecycle run context (channelId, guildId, run record id, configuredBotId, runtimeBotInstanceId,
-      optional repo/requestText, optional deliveryChannelId) for Phase 1 lifecycle room
+      optional repo/requestText, optional deliveryChannelId) for Phase 1 lifecycle room; withDeliveryChannelId(id)
+      returns new instance with that deliveryChannelId for store updates after create_thread
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -511,7 +512,10 @@ assets:
   - id: ASSET-LIFECYCLE-CONTEXT-STORE
     kind: source
     path: src/main/java/com/vinekeepers/state/LifecycleContextStore.java
-    role: Store and resolve lifecycle contexts by key for lifecycle room runs
+    role: >-
+      Store and resolve lifecycle contexts by key for lifecycle room runs; setDeliveryTargetId(contextId,
+      deliveryTargetId) updates context delivery target (ignores null, blank, THREAD_CREATE_FAILED); used by
+      create_thread after success
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -581,8 +585,12 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/CreateThreadAction.java
     role: >-
-      Workflow action to create a Discord thread under parent channel; bind channelId, threadName; uses default gateway;
-      returns thread id or THREAD_CREATE_FAILED; storeIn (e.g. deliveryChannelId) stores result in state
+      Workflow action to create a Discord thread under parent channel; bind channelId, threadName, optional contextId.
+      When channelId has a lifecycle context, uses that context's bot gateway (owner gateway, e.g. Arrietty); else
+      default gateway. Blank or missing channelId returns THREAD_CREATE_FAILED; no LifecycleContextStore update on
+      failure. After success, when contextId in bind/state, updates LifecycleContextStore via setDeliveryTargetId
+      (contextId, threadId). Returns thread id or THREAD_CREATE_FAILED; storeIn (e.g. deliveryChannelId) stores
+      result in state
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -641,8 +649,11 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
-        - create_thread action creates a Discord thread under parent channel; bind channelId, threadName; storeIn
-          (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
+        - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
+          contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
+          default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
+          bind/state updates LifecycleContextStore via setDeliveryTargetId(contextId, threadId); no store update on
+          failure; storeIn (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
       examples: []
     traceability:
       assets:
@@ -756,7 +767,10 @@ requirements:
           preconditions: []
         - id: UNIT-CREATE-THREAD-ACTION
           title: CreateThreadActionTest
-          intent: Verify create_thread action creates thread via gateway or returns THREAD_CREATE_FAILED
+          intent: >-
+            Verify create_thread action creates thread via gateway or returns THREAD_CREATE_FAILED; blank channelId
+            returns sentinel; lifecycle owner gateway when channel has context; setDeliveryTargetId on success when
+            contextId present; no store update on failure
           testClass: com.vinekeepers.workflow.actions.CreateThreadActionTest
           preconditions: []
         - id: UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-PRECEDENCE
@@ -831,8 +845,10 @@ requirements:
         - >-
           Arrietty template bot (id arrietty) with workflowRef arrietty_room and handlesOwnedSpaces true for lifecycle
           room; arrietty_room workflow may include create_thread step with storeIn deliveryChannelId and optional branch
-          on THREAD_CREATE_FAILED; handles inbound room events (messages, interactions) with message-first capture and
-          optional trimAndLower for room name UX; no hardcoded bot ids in Router or engine
+          on THREAD_CREATE_FAILED; create_thread uses lifecycle owner gateway when channel has context; after success
+          setDeliveryTargetId updates store when contextId present; LifecycleContext.withDeliveryChannelId and
+          LifecycleContextStore.setDeliveryTargetId (ignores null/blank/sentinel); done step may use main-room redirect
+          message (e.g. "Launching now. See <#{{channelId}}>."); no hardcoded bot ids in Router or engine
         - >-
           Workflow luna_cursor prompts and captures project and codeChange across multiple Discord messages before
           launching via launch_cursor_run (cursor.fullRun not used in luna_cursor)
@@ -1021,7 +1037,9 @@ requirements:
           preconditions: []
         - id: UNIT-CREATE-THREAD-ACTION
           title: CreateThreadActionTest
-          intent: Verify create_thread action creates thread or returns THREAD_CREATE_FAILED
+          intent: >-
+            Verify create_thread uses owner gateway when channel has context, setDeliveryTargetId on success when
+            contextId present, no store update on failure, blank channelId returns THREAD_CREATE_FAILED
           testClass: com.vinekeepers.workflow.actions.CreateThreadActionTest
           preconditions: []
         - id: UNIT-LIFECYCLE-RUN-RECORD

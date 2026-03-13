@@ -63,6 +63,20 @@ public final class LifecycleContextStore {
     }
 
     /**
+     * Set the delivery target id (e.g. thread id) for an existing context.
+     * Ignores null, blank, and THREAD_CREATE_FAILED so the sentinel is never indexed.
+     */
+    public void setDeliveryTargetId(String contextId, String deliveryTargetId) {
+        if (deliveryTargetId == null || deliveryTargetId.isBlank() || THREAD_CREATE_FAILED.equals(deliveryTargetId)) {
+            return;
+        }
+        LifecycleContext ctx = byId.get(contextId);
+        if (ctx != null) {
+            put(ctx.withDeliveryChannelId(deliveryTargetId));
+        }
+    }
+
+    /**
      * Bind an external run id to an existing context (e.g. after launch_cursor_run).
      * Updates the context and the externalRunId index.
      */
