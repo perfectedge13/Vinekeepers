@@ -75,4 +75,41 @@ class CaptureFieldFromEventStepTest {
         StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
         assertEquals("  Unchanged  ", result.getStoreValue());
     }
+
+    @Test
+    void transformOrderTrimThenLowerApplied() {
+        Event event = new Event("discord:1", "message", Map.of("content", "  Mixed CASE  "));
+        CaptureFieldFromEventStep step = new CaptureFieldFromEventStep("field", null, false,
+                List.of("trim", "lower"), null);
+        StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
+        assertEquals("mixed case", result.getStoreValue());
+    }
+
+    @Test
+    void trimAndLowerWinsWhenBothTrimAndLowerAndTransformsPresent() {
+        Event event = new Event("discord:1", "message", Map.of("content", "  UPPER  "));
+        CaptureFieldFromEventStep step = new CaptureFieldFromEventStep("field", null, true,
+                List.of("upper"), null);
+        StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
+        assertEquals("upper", result.getStoreValue());
+    }
+
+    @Test
+    void trimAndLowerBackwardCompatSameAsTrimAndLowerTransforms() {
+        Event event = new Event("discord:1", "message", Map.of("content", "  Same  "));
+        CaptureFieldFromEventStep withFlag = new CaptureFieldFromEventStep("a", null, true);
+        CaptureFieldFromEventStep withTransforms = new CaptureFieldFromEventStep("a", null, false,
+                List.of("trim", "lower"), null);
+        assertEquals(withFlag.execute(event, new ConfigurableWorkflowState(), 1).getStoreValue(),
+                withTransforms.execute(event, new ConfigurableWorkflowState(), 1).getStoreValue());
+    }
+
+    @Test
+    void transformsWithDefaultUsesDefaultWhenContentBlank() {
+        Event event = new Event("discord:1", "message", Map.of("content", "   "));
+        CaptureFieldFromEventStep step = new CaptureFieldFromEventStep("field", null, false,
+                List.of("trim", "default"), "fallback");
+        StepResult result = step.execute(event, new ConfigurableWorkflowState(), 1);
+        assertEquals("fallback", result.getStoreValue());
+    }
 }

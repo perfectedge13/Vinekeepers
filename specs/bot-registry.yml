@@ -41,8 +41,8 @@ assets:
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
     kind: source
-    path: src/main/java/com/vinekeepers/bot/Routing.java
-    role: Routing and filter configuration
+    path: src/main/java/com/vinekeepers/bot/RoutingRule.java
+    role: One rule in routing policy (filter + botId)
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-EVENT-FILTER
@@ -103,7 +103,7 @@ assets:
 requirements:
   - id: REQ-BOT-001
     title: Route events to bots by routing rules and ownership
-    statement: Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view, and contextual/ownership-based routing when a Discord channel has a lifecycle context and the owner bot has handlesOwnedSpaces (single-owner precedence). When lifecycle owner exists but that bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing. Events are dispatched only to bots whose filters accept the event; Discord mention-based routing from payload metadata or @mention text and optional discordAuthors by actor id or username apply when configured. When lifecycle context exists for the event's channel and the owner bot has handlesOwnedSpaces, only that owner is returned; otherwise filter-based routing applies. Discord trigger and mention filters apply only to message events; interaction events use author and channel only.
+    statement: Router matches incoming events to bots using RoutingRule and EventFilter/RoutingFilter over a normalized event view, and contextual/ownership-based routing when a Discord channel has a lifecycle context and the owner bot has handlesOwnedSpaces (single-owner precedence). When lifecycle owner exists but that bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing. Events are dispatched only to bots whose filters accept the event; Discord mention-based routing from payload metadata or @mention text and optional discordAuthors by actor id or username apply when configured. When lifecycle context exists for the event's channel and the owner bot has handlesOwnedSpaces, only that owner is returned; otherwise filter-based routing applies. Discord trigger and mention filters apply only to message events; interaction events use author and channel only.
     status: active
     priority: high
     type: functional
@@ -247,7 +247,7 @@ requirements:
 
   - id: REQ-BOT-003
     title: Bot definition and persona/model
-    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, Routing, MemoryPolicy, optional discordTokenEnvKey for per-bot Discord identity, optional handlesOwnedSpaces for ownership-based routing, and bot runtime conversation settings; bots are configured via YAML.
+    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, RoutingRule, MemoryPolicy, optional discordTokenEnvKey for per-bot Discord identity, optional handlesOwnedSpaces for ownership-based routing, and bot runtime conversation settings; bots are configured via YAML.
     status: active
     priority: high
     type: functional

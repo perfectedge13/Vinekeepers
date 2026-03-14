@@ -4,6 +4,7 @@
 
 ## 2026-03-13
 
+- **Routing policy and workflow DSL in config:** ConfigLoader builds routing as an **ordered list of RoutingRule** (filter + botId) from YAML; workflow step config supports `trimAndLower`, `transforms`, and `fromEvent` (extract_event) in addition to existing bind keys. Aligns config with workflow-dsl-routing-policy-lite (WorkflowTransforms, ExtractEventFieldsStep, branch operators).
 - **Blank branch in step bind:** `config/bots.yaml` supports branch value `""` (blank/empty) in workflow step bindings (e.g. for branch steps). ConfigLoader and workflow runner treat empty string as blank branch; Arrietty template and Luna workflow can use this for UX (e.g. clear branch selection).
 - **create_thread and deliveryChannelId in step bind:** Workflow step bind keys support `deliveryChannelId`; step action `create_thread` with `storeIn` (e.g. `deliveryChannelId`) is supported in workflow config. Arrietty template may include a `create_thread` step in `arrietty_room` so Cursor run updates are delivered to the thread.
 

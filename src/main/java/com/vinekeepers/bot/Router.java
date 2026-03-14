@@ -15,7 +15,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Routes events to bot ids using event filters (from Routing).
+ * Routes events to bot ids using event filters (from RoutingRule).
  * When lifecycle context exists for a Discord channel and the owner bot has handlesOwnedSpaces,
  * single-owner precedence applies: only the owner bot is returned for that channel.
  */
@@ -23,7 +23,7 @@ public final class Router {
 
     private static final Logger log = LoggerFactory.getLogger(Router.class);
 
-    private final List<Routing> routings = new ArrayList<>();
+    private final List<RoutingRule> routings = new ArrayList<>();
     private final LifecycleContextStore lifecycleContextStore;
     private volatile Map<String, Boolean> handlesOwnedSpacesByBotId = Map.of();
 
@@ -50,7 +50,7 @@ public final class Router {
         this.handlesOwnedSpacesByBotId = handlesOwnedSpacesByBotId != null ? Map.copyOf(handlesOwnedSpacesByBotId) : Map.of();
     }
 
-    public void addRouting(Routing routing) {
+    public void addRouting(RoutingRule routing) {
         routings.add(Objects.requireNonNull(routing));
     }
 
@@ -66,7 +66,7 @@ public final class Router {
     public List<String> route(Event event) {
         NormalizedEventContext context = event != null ? NormalizedEventContext.from(event) : null;
         List<String> filterBotIds = new ArrayList<>();
-        for (Routing r : routings) {
+        for (RoutingRule r : routings) {
             if (matches(r.getFilter(), event)) {
                 filterBotIds.add(r.getBotId());
             }

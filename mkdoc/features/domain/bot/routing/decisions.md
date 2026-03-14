@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-13 — RoutingRule and ordered policy list
+
+**Context:** Routing needed a clear model for one rule (filter + botId) and an ordered list so config order defines evaluation. **Decision:** Replace the prior routing type with **RoutingRule** as the single rule model; Router holds an ordered list of RoutingRule; ConfigLoader builds this list from YAML routing entries. **Consequence:** Routing.java removed; RoutingRule.java holds filter and botId; routing behavior (lifecycle owner precedence, filter-based matching) unchanged; docs and contracts updated to reference RoutingRule and ordered policy list.
+
 ## 2026-03-12 — Ownership-based routing (handlesOwnedSpaces)
 
 **Context:** Lifecycle rooms (e.g. created by Luna with Arrietty as owner) need inbound events (messages, button clicks, etc.) to be handled only by the room owner bot, not by Luna or other bots that might match by mention or channel. **Decision:** Add optional per-bot `handlesOwnedSpaces` in YAML; when true, Router checks `LifecycleContextStore` for the event's channel and, if the context's `configuredBotId` is that bot, returns only that bot (single-owner precedence). Bootstrap passes the store and a map of botId → handlesOwnedSpaces from ConfigLoader to Router. **Consequence:** No hardcoded bot ids in Router; Arrietty sets `handlesOwnedSpaces: true` and `workflowRef: arrietty_room` so it exclusively handles room events; docs and specs updated for Router, BotDefinition, ConfigLoader, Bootstrap, and config.

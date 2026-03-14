@@ -158,11 +158,17 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 case "capture_field" -> {
                     Boolean trimAndLower = stepMap.get("trimAndLower") instanceof Boolean b ? b
                             : (stepMap.get("trimAndLower") != null ? Boolean.parseBoolean(String.valueOf(stepMap.get("trimAndLower"))) : null);
+                    List<String> captureTransforms = toTransformList(stepMap.get("transforms"));
+                    String captureDefault = stepMap.get("default") != null ? String.valueOf(stepMap.get("default")) : null;
                     out.add(new com.vinekeepers.workflow.steps.CaptureFieldFromEventStep(
                             (String) stepMap.get("storeIn"),
                             (String) stepMap.get("contentKey"),
-                            Boolean.TRUE.equals(trimAndLower)));
+                            Boolean.TRUE.equals(trimAndLower),
+                            captureTransforms,
+                            captureDefault));
                 }
+                case "extract_event" -> out.add(new com.vinekeepers.workflow.steps.ExtractEventFieldsStep(
+                        (List<Map<String, Object>>) stepMap.get("fromEvent")));
                 case "call_action" -> out.add(new com.vinekeepers.workflow.steps.CallActionStep(
                         registry,
                         toolRunner,
@@ -178,5 +184,17 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    private static List<String> toTransformList(Object transformObj) {
+        if (transformObj == null) return List.of();
+        if (transformObj instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object e : list) {
+                if (e != null) out.add(e.toString().trim());
+            }
+            return out;
+        }
+        return List.of(transformObj.toString().trim());
     }
 }

@@ -5,7 +5,7 @@ import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.MemoryPolicy;
 import com.vinekeepers.bot.ModelProfile;
 import com.vinekeepers.bot.Persona;
-import com.vinekeepers.bot.Routing;
+import com.vinekeepers.bot.RoutingRule;
 import com.vinekeepers.bot.RoutingFilter;
 import com.vinekeepers.bot.Router;
 import com.vinekeepers.bot.ToolPolicy;
@@ -68,7 +68,7 @@ public final class ConfigLoader {
             RoutingFilter filter = parseRoutingFilter(r.get("filter") != null ? (Map<String, Object>) r.get("filter") : null);
             String botId = (String) r.get("botId");
             if (botId != null) {
-                router.addRouting(new Routing(filter != null ? filter : new RoutingFilter(null, null, null, null, null, null, null), botId));
+                router.addRouting(new RoutingRule(filter != null ? filter : new RoutingFilter(null, null, null, null, null, null, null), botId));
             }
         }
     }

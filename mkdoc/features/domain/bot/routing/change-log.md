@@ -4,6 +4,7 @@
 
 ## 2026-03-13
 
+- **Routing policy (RoutingRule, ordered list):** Routing is now an **ordered policy list** of **RoutingRule** instances (filter + botId). The former `Routing` type was removed; **RoutingRule** is the single rule model. Router matches events by evaluating rules in order; lifecycle owner precedence (handlesOwnedSpaces) still applies when a channel has a lifecycle context. ConfigLoader builds the ordered list from YAML routing entries.
 - **Router ownership warning:** When a Discord channel has a lifecycle context but the owner bot does *not* have **handlesOwnedSpaces** in config, the Router logs a warning and falls back to filter-based routing instead of single-owner precedence. Ensures operators are informed when a lifecycle room is not exclusively owned by the expected bot.
 
 ## 2026-03-12

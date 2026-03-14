@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-03-13T17:00:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -298,8 +298,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
     role: >-
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
-      intent, choices, confirmLabel, cancelLabel, fields, and trimAndLower for steps; applies StepResult clearKeys to
-      state before setStepIndex
+      intent, choices, confirmLabel, cancelLabel, fields, trimAndLower, transforms, and fromEvent for steps; registers
+      extract_event step; applies StepResult clearKeys to state before setStepIndex
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -328,7 +328,7 @@ assets:
     role: >-
       Step that captures a field from the current event; for kind interaction normalizes payload.values (Map or List)
       and reads selected value or customId; for message events reads from contentKey or payload content/text; optional
-      trimAndLower trims and lowercases captured text
+      transforms list (trim, lower, upper, default); when both trimAndLower and transforms present, trimAndLower wins
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -345,8 +345,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/BranchStep.java
     role: >-
-      Step that branches by condition (state key truthy, or when key/value map for value-based branch); optional clear
-      config (list of state keys) for edit-reprompt flows
+      Step that branches by condition; when key/value (optional operator, transform on state value); operators equals,
+      not_equals, blank, nonblank, contains, starts_with, regex (full-string), one_of; optional clear for edit-reprompt
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -380,6 +380,30 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/DoneStep.java
     role: Step that completes workflow with optional message
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-WORKFLOW-TRANSFORMS
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/WorkflowTransforms.java
+    role: Shared string transforms for workflow steps; trim, lower, upper, default; null/blank-safe; branch uses trim/lower/upper only
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-WORKFLOW-CONDITION-EVALUATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/WorkflowConditionEvaluator.java
+    role: Evaluates branch condition (stateValue, operator, compareValue, transformList); operators equals, not_equals, blank, nonblank, contains, starts_with, regex full-string, one_of
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-EXTRACT-EVENT-FIELDS-STEP
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/steps/ExtractEventFieldsStep.java
+    role: Step that extracts event fields into state; fromEvent list with from (payload.key or context.field), storeIn, default, transforms; list-valued context as List
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -647,6 +671,15 @@ requirements:
           Branch when key/value may use value "" to match empty string from capture_field (e.g. arrietty_room blank
           branch)
         - >-
+          extract_event step populates state from event; fromEvent list with from (payload.key or context.field),
+          storeIn, optional default, optional transforms; list-valued context stored as List
+        - >-
+          WorkflowTransforms provide trim, lower, upper, default (null/blank-safe); branch uses trim/lower/upper only;
+          capture_field and extract_event may use transforms list
+        - >-
+          WorkflowConditionEvaluator evaluates branch conditions: operators equals, not_equals, blank, nonblank,
+          contains, starts_with, regex (full-string), one_of; optional transform list applied to state value before compare
+        - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
         - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
@@ -683,6 +716,9 @@ requirements:
         - ASSET-CALL-ACTION-STEP
         - ASSET-BRANCH-STEP
         - ASSET-DONE-STEP
+        - ASSET-WORKFLOW-TRANSFORMS
+        - ASSET-WORKFLOW-CONDITION-EVALUATOR
+        - ASSET-EXTRACT-EVENT-FIELDS-STEP
         - ASSET-CREATE-CHANNEL-ACTION
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
         - ASSET-PROVISION-BOT-INSTANCE-ACTION
@@ -791,6 +827,21 @@ requirements:
             content unchanged
           testClass: com.vinekeepers.workflow.steps.CaptureFieldFromEventStepTest
           testMethod: messageEventWithTrimAndLowerTrimsAndLowercasesContent
+          preconditions: []
+        - id: UNIT-WORKFLOW-TRANSFORMS
+          title: WorkflowTransformsTest
+          intent: Verify WorkflowTransforms trim, lower, upper, default; null/blank-safe behavior
+          testClass: com.vinekeepers.workflow.WorkflowTransformsTest
+          preconditions: []
+        - id: UNIT-WORKFLOW-CONDITION-EVALUATOR
+          title: WorkflowConditionEvaluatorTest
+          intent: Verify WorkflowConditionEvaluator operators equals, not_equals, blank, nonblank, contains, starts_with, regex, one_of
+          testClass: com.vinekeepers.workflow.WorkflowConditionEvaluatorTest
+          preconditions: []
+        - id: UNIT-EXTRACT-EVENT-FIELDS-STEP
+          title: ExtractEventFieldsStepTest
+          intent: Verify extract_event step extracts from payload/context into state with from, storeIn, default, transforms
+          testClass: com.vinekeepers.workflow.steps.ExtractEventFieldsStepTest
           preconditions: []
         - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-TRIM-LOWER
           title: ConfigurableWorkflowRunnerTest
@@ -1181,6 +1232,9 @@ features:
       - ASSET-BRANCH-STEP
       - ASSET-DYNAMIC-CHOICE-PROVIDER
       - ASSET-DONE-STEP
+      - ASSET-WORKFLOW-TRANSFORMS
+      - ASSET-WORKFLOW-CONDITION-EVALUATOR
+      - ASSET-EXTRACT-EVENT-FIELDS-STEP
     status: active
   - id: FEAT-CURSOR-GATHERING
     slug: cursor-gathering

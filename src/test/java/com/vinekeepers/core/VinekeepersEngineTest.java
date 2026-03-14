@@ -7,7 +7,7 @@ import com.vinekeepers.bot.MemoryPolicy;
 import com.vinekeepers.bot.ModelProfile;
 import com.vinekeepers.bot.Persona;
 import com.vinekeepers.bot.Router;
-import com.vinekeepers.bot.Routing;
+import com.vinekeepers.bot.RoutingRule;
 import com.vinekeepers.bot.RoutingFilter;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
@@ -72,7 +72,7 @@ class VinekeepersEngineTest {
         engine.registerRunner("test-bot", new StubWorkflowRunner());
         engine.registerReasoner("test-bot", new StubReasoner());
 
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "test-bot"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "test-bot"));
 
         Event event = new Event("discord:g:ch", "message", Map.of());
         engine.onEvent(event);
@@ -83,7 +83,7 @@ class VinekeepersEngineTest {
 
     @Test
     void onEventWithUnregisteredBotIdDoesNotThrow() {
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "no-such-bot"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "no-such-bot"));
         Event event = new Event("discord:g:ch", "message", Map.of());
         engine.onEvent(event);
         assertTrue(auditLogs.isEmpty());
@@ -119,7 +119,7 @@ class VinekeepersEngineTest {
             capturedContent.set(content);
         };
         engine.setReplySender(mockSender);
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "luna"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "luna"));
 
         Event event = new Event("discord:default", "message",
                 Map.of("channelId", "ch-123", "content", "my-repo"));
@@ -154,7 +154,7 @@ class VinekeepersEngineTest {
         engine.registerBot(luna);
         engine.registerRunner("luna", lunaRunner);
         engine.registerReasoner("luna", new StubReasoner());
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "luna"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "luna"));
 
         Event first = new Event("discord:default", "message",
                 Map.of("channelId", "ch-A", "content", "project-one"));
@@ -199,7 +199,7 @@ class VinekeepersEngineTest {
                 List.of(new ProposedToolCall("echo", Map.of("message", input.getLastUserMessage())))));
         AtomicReference<String> capturedReply = new AtomicReference<>();
         engine.setReplySender((channelId, messageId, content) -> capturedReply.set(content));
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "reasoner-bot"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "reasoner-bot"));
 
         Event event = new Event("discord:default", "message",
                 Map.of("channelId", "chan-9", "authorId", "user-1", "content", "ship it"));
@@ -250,7 +250,7 @@ class VinekeepersEngineTest {
         engine.registerRunner("sink-bot", (event, store, botId) ->
                 com.vinekeepers.workflow.WorkflowRunResult.completed(OutboundResponse.ofText("Via sink")));
         engine.registerReasoner("sink-bot", new StubReasoner());
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
 
         Event event = new Event("discord:g:ch", "message",
                 Map.of("channelId", "ch-99", "content", "hi"));
@@ -295,7 +295,7 @@ class VinekeepersEngineTest {
         engine.registerRunner("sink-bot", (event, store, botId) ->
                 com.vinekeepers.workflow.WorkflowRunResult.completed(OutboundResponse.ofText("OK")));
         engine.registerReasoner("sink-bot", new StubReasoner());
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
 
         Event event = new Event("discord:g:ch", "interaction",
                 Map.of("channelId", "ch-1", "interactionId", "int-1", "token", "tok-1", "deferred", true));
@@ -338,7 +338,7 @@ class VinekeepersEngineTest {
         engine.registerRunner("sink-bot", (event, store, botId) ->
                 com.vinekeepers.workflow.WorkflowRunResult.completed(rich));
         engine.registerReasoner("sink-bot", new StubReasoner());
-        router.addRouting(new Routing(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
 
         Event event = new Event("discord:g:ch", "message", Map.of("channelId", "ch-1"));
         engine.onEvent(event);
@@ -360,7 +360,7 @@ class VinekeepersEngineTest {
         engine.registerBot(luna);
         engine.registerRunner("luna", new StubWorkflowRunner());
         engine.registerReasoner("luna", new StubReasoner());
-        router.addRouting(new Routing(
+        router.addRouting(new RoutingRule(
                 new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
 
         Event event = new Event("discord:g:ch", "message",
@@ -382,7 +382,7 @@ class VinekeepersEngineTest {
         engine.registerBot(luna);
         engine.registerRunner("luna", new StubWorkflowRunner());
         engine.registerReasoner("luna", new StubReasoner());
-        router.addRouting(new Routing(
+        router.addRouting(new RoutingRule(
                 new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
 
         Event event = new Event("discord:g:ch", "message",
@@ -404,7 +404,7 @@ class VinekeepersEngineTest {
         engine.registerBot(luna);
         engine.registerRunner("luna", new StubWorkflowRunner());
         engine.registerReasoner("luna", new StubReasoner());
-        router.addRouting(new Routing(
+        router.addRouting(new RoutingRule(
                 new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
 
         String sessionKey = "bot:luna:conv:ch-1:user-1";
@@ -431,7 +431,7 @@ class VinekeepersEngineTest {
         engine.registerBot(luna);
         engine.registerRunner("luna", new StubWorkflowRunner());
         engine.registerReasoner("luna", new StubReasoner());
-        router.addRouting(new Routing(
+        router.addRouting(new RoutingRule(
                 new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
 
         String sessionKeyOriginal = "bot:luna:conv:ch-1:user-1";
