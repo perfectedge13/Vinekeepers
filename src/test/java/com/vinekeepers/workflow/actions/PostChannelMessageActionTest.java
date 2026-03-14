@@ -1,6 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +27,7 @@ class PostChannelMessageActionTest {
     @Test
     void runSendsContentFromBindThenState() {
         StringBuilder sent = new StringBuilder();
-        DiscordReplySender sender = (channelId, messageId, content) ->
+        ReplySender sender = (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content);
         PostChannelMessageAction action = new PostChannelMessageAction(sender);
         Object result = action.run(null, Map.of("channelId", "ch-1", "content", "Hello"),
@@ -39,7 +39,7 @@ class PostChannelMessageActionTest {
     @Test
     void runUsesStateWhenBindMissingChannelIdOrContent() {
         StringBuilder sent = new StringBuilder();
-        DiscordReplySender sender = (channelId, messageId, content) ->
+        ReplySender sender = (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content);
         PostChannelMessageAction action = new PostChannelMessageAction(sender);
         action.run(null, Map.of("channelId", "ch-state", "content", "From state"), Map.of());
@@ -49,7 +49,7 @@ class PostChannelMessageActionTest {
     @Test
     void runReturnsErrorWhenContentBlankAndDoesNotSend() {
         StringBuilder sent = new StringBuilder();
-        DiscordReplySender sender = (channelId, messageId, content) -> sent.append("sent");
+        ReplySender sender = (channelId, messageId, content) -> sent.append("sent");
         PostChannelMessageAction action = new PostChannelMessageAction(sender);
         Object result = action.run(null, Map.of("channelId", "ch-1"), Map.of("channelId", "ch-1"));
         assertEquals("Blank content for post_channel_message.", result);
@@ -59,7 +59,7 @@ class PostChannelMessageActionTest {
     @Test
     void runInterpolatesContentFromBindState() {
         StringBuilder sent = new StringBuilder();
-        DiscordReplySender sender = (channelId, messageId, content) ->
+        ReplySender sender = (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content);
         PostChannelMessageAction action = new PostChannelMessageAction(sender);
         Map<String, Object> args = Map.of("channelId", "ch-lifecycle", "content",
@@ -71,7 +71,7 @@ class PostChannelMessageActionTest {
     @Test
     void runInterpolatesLifecycleBotNameFromMergedMapBindWins() {
         StringBuilder sent = new StringBuilder();
-        DiscordReplySender sender = (channelId, messageId, content) ->
+        ReplySender sender = (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content);
         PostChannelMessageAction action = new PostChannelMessageAction(sender);
         Map<String, Object> state = Map.of("channelId", "ch-1", "project", "acme/repo", "codeChange", "Phase 1", "lifecycleBotName", "StateBot");
@@ -83,7 +83,7 @@ class PostChannelMessageActionTest {
     @Test
     void runFallsBackToChannelIdWhenDeliveryChannelIdIsThreadCreateFailed() {
         StringBuilder sent = new StringBuilder();
-        DiscordReplySender sender = (channelId, messageId, content) ->
+        ReplySender sender = (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content);
         PostChannelMessageAction action = new PostChannelMessageAction(sender);
         Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", CreateThreadAction.THREAD_CREATE_FAILED, "content", "Fallback to channel");

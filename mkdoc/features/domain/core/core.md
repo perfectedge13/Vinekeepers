@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Specs bootstrap and traceability (REQ-CORE-001) and application bootstrap and entrypoint (REQ-CORE-002). `specs/specs.yml` and `specs/core-registry.yml` anchor traceability, while `VinekeepersApp` loads `.env` and hands startup to `Bootstrap`, which wires the event bus, router, state store, tool execution, connectors, and configured bot runners.
+Spec metadata anchors traceability, and VinekeepersApp plus Bootstrap wire the runtime before events begin flowing.
 
 # Key assets
 
@@ -14,8 +14,8 @@ Specs bootstrap and traceability (REQ-CORE-001) and application bootstrap and en
 |-------|------|------|
 | ASSET-SPEC-INDEX | Spec index and validation entrypoint | specs/specs.yml |
 | ASSET-REGISTRY | Core requirements registry | specs/core-registry.yml |
-| ASSET-APP | Application entrypoint; loads `.env` and bootstraps runtime wiring | src/main/java/com/vinekeepers/VinekeepersApp.java |
-| ASSET-BOOTSTRAP | Wire engine, config loader, connectors, shared tools, and configured workflow runners | src/main/java/com/vinekeepers/core/Bootstrap.java |
+| ASSET-APP | Application entrypoint; loads .env and bootstraps engine | src/main/java/com/vinekeepers/VinekeepersApp.java |
+| ASSET-BOOTSTRAP | Wire engine, config, ConnectorRegistry; build Discord adapter; registerBots; action and sink registration | src/main/java/com/vinekeepers/core/Bootstrap.java |
 | ASSET-PACKAGE-MARKER | Package marker utility | src/main/java/com/vinekeepers/util/PackageMarker.java |
 
 # Sub-pages
@@ -27,4 +27,3 @@ Specs bootstrap and traceability (REQ-CORE-001) and application bootstrap and en
 - [Contracts](core/contracts.md)
 - [Tests](core/tests.md)
 - [Diagrams](core/diagrams.md)
-

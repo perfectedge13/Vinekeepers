@@ -3,11 +3,11 @@
 # then launches a Cursor Cloud agent run and reports progress back to chat.
 # Arrietty: template for lifecycle room bot instances (provisioned at runtime per channel).
 #
-# Discord identity is bot-config driven. Each bot may set discordTokenEnvKey to the *name* of an
-# env var that holds that bot's Discord token (never put raw tokens here). Set the same env var
-# name in .env with the actual token. Optional top-level defaultDiscordTokenEnvKey is used when
-# a bot has no discordTokenEnvKey (e.g. single-token setup). Example: set env vars matching the
-# keys below (e.g. LUNA_DISCORD_TOKEN, ARRIETTY_DISCORD_TOKEN) and reference them here.
+# Discord identity is connector-scoped under identities.discord. Each bot may set
+# identities.discord.tokenEnvKey to the env var name for that bot's Discord token (never put
+# raw tokens here). identities.discord.handlesOwnedSpaces is connector-scoped ownership for
+# Discord lifecycle channels (single-owner precedence). Optional top-level defaultDiscordTokenEnvKey
+# is a retained transitional setting when a bot has no identities.discord.tokenEnvKey.
 
 defaultDiscordTokenEnvKey: LUNA_DISCORD_TOKEN
 
@@ -20,7 +20,9 @@ bots:
       type: configured
       params:
         workflowRef: luna_cursor
-    discordTokenEnvKey: LUNA_DISCORD_TOKEN
+    identities:
+      discord:
+        tokenEnvKey: LUNA_DISCORD_TOKEN
   - id: arrietty
     persona:
       name: Arrietty
@@ -29,8 +31,10 @@ bots:
       type: configured
       params:
         workflowRef: arrietty_room
-    handlesOwnedSpaces: true
-    discordTokenEnvKey: ARRIETTY_DISCORD_TOKEN
+    identities:
+      discord:
+        handlesOwnedSpaces: true
+        tokenEnvKey: ARRIETTY_DISCORD_TOKEN
 
 routing:
   - botId: luna

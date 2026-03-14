@@ -69,10 +69,16 @@ assets:
     role: Allow/deny policy for bot tools
     requires: [REQ-BOT-002]
     feature_ids: [FEAT-BOT]
+  - id: ASSET-CONNECTOR-IDENTITY
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/ConnectorIdentity.java
+    role: Immutable connector-scoped identity; getAttribute(key)/getAttributes() so adapters read tokenEnvKey, handlesOwnedSpaces without core depending on connector names
+    requires: [REQ-BOT-003]
+    feature_ids: [FEAT-BOT]
   - id: ASSET-BOT-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/bot/BotDefinition.java
-    role: Bot composition (persona, model, workflow, tools, runtime conversation settings, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces for ownership-based routing)
+    role: Bot composition (persona, model, workflow, tools, runtime conversation settings); connector-scoped identity via Map of ConnectorIdentity and getConnectorIdentity(connectorId); no top-level Discord-named fields
     requires: [REQ-BOT-003]
     feature_ids: [FEAT-BOT]
   - id: ASSET-CONVERSATION-MODE
@@ -115,7 +121,7 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - Router.match(event) returns list of matching bot ids; Router depends on LifecycleContextStore and handlesOwnedSpaces map (setHandlesOwnedSpacesByBotId)
+        - Router.match(event) returns list of matching bot ids; Router depends on LifecycleContextStore and handlesOwnedSpaces map (setHandlesOwnedSpacesByBotId); handlesMap built from bot.getConnectorIdentity("discord").getAttribute("handlesOwnedSpaces") per bot
         - When event has channelId and LifecycleContextStore has a context for that channel whose owner bot has handlesOwnedSpaces, only that owner bot is returned (single-owner precedence)
         - When channel has lifecycle context but owner bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing
         - When channel has no lifecycle context or owner does not have handlesOwnedSpaces, filter-based routing applies
@@ -247,7 +253,7 @@ requirements:
 
   - id: REQ-BOT-003
     title: Bot definition and persona/model
-    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, RoutingRule, MemoryPolicy, optional discordTokenEnvKey for per-bot Discord identity, optional handlesOwnedSpaces for ownership-based routing, and bot runtime conversation settings; bots are configured via YAML.
+    statement: BotDefinition composes Persona, ModelProfile, workflowType/workflowParams, ToolPolicy, MemoryPolicy, and bot runtime conversation settings; holds Map of ConnectorIdentity per connector id (e.g. discord) with getConnectorIdentity(connectorId); ConnectorIdentity is immutable with getAttribute(key)/getAttributes(); adapters read tokenEnvKey, handlesOwnedSpaces from discord identity; no top-level Discord-named fields in preferred API; bots are configured via YAML.
     status: active
     priority: high
     type: functional
@@ -259,14 +265,24 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, routing, memory policy, conversation mode, optional session key strategy, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces (boolean) for ownership-based routing
-        - Config loader produces BotDefinition from YAML (including workflow block, runtime options, and handlesOwnedSpaces)
+        - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, memory policy, conversation mode, optional session key strategy, and connectorIdentities (getConnectorIdentity(connectorId) for adapter-specific attributes)
+        - Config loader produces BotDefinition from YAML (including workflow block, runtime options, and identities.discord or legacy keys normalized to ConnectorIdentity)
       examples: []
     traceability:
-      assets: [ASSET-BOT-DEFINITION, ASSET-CONFIG-LOADER, ASSET-BOTS-YAML, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
+      assets: [ASSET-CONNECTOR-IDENTITY, ASSET-BOT-DEFINITION, ASSET-CONFIG-LOADER, ASSET-BOTS-YAML, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
       symbols: []
     validation:
       tests:
+        - id: UNIT-CONNECTOR-IDENTITY
+          title: ConnectorIdentityTest
+          intent: Verify ConnectorIdentity immutable model and getAttribute/getAttributes
+          testClass: com.vinekeepers.bot.ConnectorIdentityTest
+          preconditions: []
+        - id: UNIT-BOT-DEFINITION
+          title: BotDefinitionTest
+          intent: Verify BotDefinition composition and getConnectorIdentity(connectorId)
+          testClass: com.vinekeepers.bot.BotDefinitionTest
+          preconditions: []
         - id: MANUAL-BOT-DEF
           title: Bot definition structure
           intent: Verify BotDefinition and related models are used by config and engine
@@ -292,5 +308,5 @@ features:
     doc_path: features/domain/bot/bot.md
     summary: BotDefinition composes persona, model, workflow settings, memory settings, and ToolPolicy for runtime execution.
     requirement_ids: [REQ-BOT-002, REQ-BOT-003]
-    asset_ids: [ASSET-TOOL-POLICY, ASSET-BOT-DEFINITION, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
+    asset_ids: [ASSET-TOOL-POLICY, ASSET-CONNECTOR-IDENTITY, ASSET-BOT-DEFINITION, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]
     status: active

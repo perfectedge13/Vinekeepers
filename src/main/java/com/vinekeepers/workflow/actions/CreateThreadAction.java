@@ -1,7 +1,7 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.connectors.DiscordGateway;
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
+import com.vinekeepers.connectors.OutboundGateway;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContextStore;
 
@@ -36,7 +36,7 @@ public final class CreateThreadAction implements com.vinekeepers.workflow.Workfl
         if (channelId == null || channelId.isBlank()) {
             return THREAD_CREATE_FAILED;
         }
-        DiscordGateway gateway = (channelId != null && !channelId.isBlank())
+        OutboundGateway gateway = (channelId != null && !channelId.isBlank())
                 ? router.getGatewayForChannel(channelId)
                 : null;
         if (gateway == null) {

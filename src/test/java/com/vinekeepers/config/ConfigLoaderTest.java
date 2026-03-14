@@ -205,7 +205,7 @@ class ConfigLoaderTest {
         List<BotDefinition> bots = loader.buildBots(config);
         assertNotNull(bots);
         assertEquals(1, bots.size());
-        assertEquals("DISCORD_LUNA_TOKEN", bots.get(0).getDiscordTokenEnvKey());
+        assertEquals("DISCORD_LUNA_TOKEN", bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("tokenEnvKey"));
     }
 
     @Test
@@ -222,7 +222,7 @@ class ConfigLoaderTest {
         BotConfig config = loader.loadFromPath(yaml);
         List<BotDefinition> bots = loader.buildBots(config);
         assertEquals(1, bots.size());
-        assertNull(bots.get(0).getDiscordTokenEnvKey());
+        assertTrue(bots.get(0).getConnectorIdentity("discord").isEmpty());
     }
 
     @Test
@@ -256,7 +256,7 @@ class ConfigLoaderTest {
         BotConfig config = loader.loadFromPath(yaml);
         List<BotDefinition> bots = loader.buildBots(config);
         assertEquals(1, bots.size());
-        assertTrue(bots.get(0).isHandlesOwnedSpaces());
+        assertTrue(Boolean.TRUE.equals(bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("handlesOwnedSpaces")));
     }
 
     @Test
@@ -273,6 +273,201 @@ class ConfigLoaderTest {
         BotConfig config = loader.loadFromPath(yaml);
         List<BotDefinition> bots = loader.buildBots(config);
         assertEquals(1, bots.size());
-        assertFalse(bots.get(0).isHandlesOwnedSpaces());
+        assertTrue(bots.get(0).getConnectorIdentity("discord").isEmpty());
+    }
+
+    // --- Dual-read: new shape identities.discord only ---
+
+    @Test
+    void buildBotsParsesIdentitiesDiscordNewShapeOnly(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: nova
+                persona:
+                  name: Nova
+                  systemPrompt: ""
+                identities:
+                  discord:
+                    tokenEnvKey: DISCORD_NOVA_TOKEN
+                    handlesOwnedSpaces: true
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertEquals("DISCORD_NOVA_TOKEN", bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("tokenEnvKey"));
+        assertTrue(Boolean.TRUE.equals(bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("handlesOwnedSpaces")));
+    }
+
+    @Test
+    void buildBotsDualReadNewWinsOverLegacy(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: dual
+                persona:
+                  name: Dual
+                  systemPrompt: ""
+                discordTokenEnvKey: LEGACY_TOKEN
+                handlesOwnedSpaces: false
+                identities:
+                  discord:
+                    tokenEnvKey: NEW_SHAPE_TOKEN
+                    handlesOwnedSpaces: true
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        // New shape wins: token and handlesOwnedSpaces from identities.discord
+        assertEquals("NEW_SHAPE_TOKEN", bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("tokenEnvKey"));
+        assertTrue(Boolean.TRUE.equals(bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("handlesOwnedSpaces")));
+    }
+
+    // --- Malformed identity config: warn and ignore / predictable behavior ---
+
+    @Test
+    void buildBotsIdentitiesNotMapIgnoresNewShape(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: bad-identities
+                persona:
+                  name: Bad
+                  systemPrompt: ""
+                identities: 123
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertTrue(bots.get(0).getConnectorIdentity("discord").isEmpty());
+    }
+
+    @Test
+    void buildBotsIdentitiesDiscordNotMapIgnoresNewShape(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: bad-discord
+                persona:
+                  name: Bad
+                  systemPrompt: ""
+                identities:
+                  discord: "not-a-map"
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertTrue(bots.get(0).getConnectorIdentity("discord").isEmpty());
+    }
+
+    @Test
+    void buildBotsTokenEnvKeyMalformedTreatedAsAbsent(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: bad-token
+                persona:
+                  name: Bad
+                  systemPrompt: ""
+                identities:
+                  discord:
+                    tokenEnvKey: 42
+                    handlesOwnedSpaces: true
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        var identity = bots.get(0).getConnectorIdentity("discord").orElseThrow();
+        assertNull(identity.getAttribute("tokenEnvKey"));
+        assertTrue(Boolean.TRUE.equals(identity.getAttribute("handlesOwnedSpaces")));
+    }
+
+    @Test
+    void buildBotsHandlesOwnedSpacesMalformedTreatedAsFalse(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: bad-handles
+                persona:
+                  name: Bad
+                  systemPrompt: ""
+                identities:
+                  discord:
+                    tokenEnvKey: TOKEN_KEY
+                    handlesOwnedSpaces: "yes"
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        var identity = bots.get(0).getConnectorIdentity("discord").orElseThrow();
+        assertEquals("TOKEN_KEY", identity.getAttribute("tokenEnvKey"));
+        assertFalse(Boolean.TRUE.equals(identity.getAttribute("handlesOwnedSpaces")));
+    }
+
+    @Test
+    void buildBotsHandlesOwnedSpacesStringTrueFalseAccepted(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: str-true
+                persona:
+                  name: Str
+                  systemPrompt: ""
+                identities:
+                  discord:
+                    tokenEnvKey: T
+                    handlesOwnedSpaces: "true"
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertTrue(Boolean.TRUE.equals(bots.get(0).getConnectorIdentity("discord").orElseThrow().getAttribute("handlesOwnedSpaces")));
+    }
+
+    @Test
+    void buildBotsNoDiscordIdentityDoesNotCrash(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: no-identity
+                persona:
+                  name: NoId
+                  systemPrompt: ""
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertTrue(bots.get(0).getConnectorIdentity("discord").isEmpty());
+        assertTrue(bots.get(0).getConnectorIdentity("unknown").isEmpty());
+    }
+
+    @Test
+    void buildBotsConnectorIdentityTypedAccessors(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: typed
+                persona:
+                  name: Typed
+                  systemPrompt: ""
+                identities:
+                  discord:
+                    tokenEnvKey: MY_TOKEN
+                    handlesOwnedSpaces: true
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        var identity = bots.get(0).getConnectorIdentity("discord").orElseThrow();
+        assertEquals("MY_TOKEN", identity.getString("tokenEnvKey"));
+        assertTrue(identity.getBoolean("handlesOwnedSpaces"));
     }
 }

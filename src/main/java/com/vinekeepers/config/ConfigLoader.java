@@ -1,6 +1,7 @@
 package com.vinekeepers.config;
 
 import com.vinekeepers.bot.BotDefinition;
+import com.vinekeepers.bot.ConnectorIdentity;
 import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.MemoryPolicy;
 import com.vinekeepers.bot.ModelProfile;
@@ -9,6 +10,8 @@ import com.vinekeepers.bot.RoutingRule;
 import com.vinekeepers.bot.RoutingFilter;
 import com.vinekeepers.bot.Router;
 import com.vinekeepers.bot.ToolPolicy;
+
+import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -138,11 +141,66 @@ public final class ConfigLoader {
         }
         ConversationMode conversationMode = ConversationMode.fromValue((String) b.get("conversationMode"));
         String sessionKeyStrategy = (String) b.get("sessionKeyStrategy");
-        String discordTokenEnvKey = (String) b.get("discordTokenEnvKey");
-        boolean handlesOwnedSpaces = Boolean.TRUE.equals(b.get("handlesOwnedSpaces"));
+        Map<String, ConnectorIdentity> connectorIdentities = buildConnectorIdentities(b);
 
         return new BotDefinition(id, persona, modelProfile, toolPolicy, memoryPolicy,
-                workflowType, workflowParams, conversationMode, sessionKeyStrategy, discordTokenEnvKey, handlesOwnedSpaces);
+                workflowType, workflowParams, conversationMode, sessionKeyStrategy, connectorIdentities);
+    }
+
+    /**
+     * Dual-read: identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy top-level
+     * discordTokenEnvKey / handlesOwnedSpaces. New shape preferred; new wins if both present.
+     * Malformed identity config is warned and ignored (treated as absent or default).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, ConnectorIdentity> buildConnectorIdentities(Map<String, Object> b) {
+        String tokenEnvKey = null;
+        boolean handlesOwnedSpaces = false;
+        String botId = b.get("id") != null ? b.get("id").toString() : "?";
+
+        // Legacy top-level (deprecated but still accepted)
+        Object legacyToken = b.get("discordTokenEnvKey");
+        if (legacyToken instanceof String s && !s.isBlank()) tokenEnvKey = s.trim();
+        if (Boolean.TRUE.equals(b.get("handlesOwnedSpaces"))) handlesOwnedSpaces = true;
+
+        // New shape: identities.discord (preferred; overwrites legacy when valid)
+        Object identitiesObj = b.get("identities");
+        if (identitiesObj != null && !(identitiesObj instanceof Map)) {
+            log.warn("Bot config 'identities' is not a map; ignoring. Bot id: {}", botId);
+        } else if (identitiesObj instanceof Map<?, ?> identitiesMap) {
+            Object discordObj = ((Map<String, Object>) identitiesMap).get("discord");
+            if (discordObj != null && !(discordObj instanceof Map)) {
+                log.warn("Bot config 'identities.discord' is not a map; ignoring. Bot id: {}", botId);
+            } else if (discordObj instanceof Map<?, ?> discordMap) {
+                Map<String, Object> discord = (Map<String, Object>) discordMap;
+                Object t = discord.get("tokenEnvKey");
+                if (t != null) {
+                    if (t instanceof String s && !s.isBlank()) {
+                        tokenEnvKey = s.trim();
+                    } else {
+                        log.warn("Bot config 'identities.discord.tokenEnvKey' is not a non-blank string; ignoring. Bot id: {}", botId);
+                    }
+                }
+                Object h = discord.get("handlesOwnedSpaces");
+                if (h != null) {
+                    if (h instanceof Boolean) {
+                        handlesOwnedSpaces = Boolean.TRUE.equals(h);
+                    } else if (h instanceof String s && ("true".equalsIgnoreCase(s.trim()) || "false".equalsIgnoreCase(s.trim()))) {
+                        handlesOwnedSpaces = Boolean.parseBoolean(s.trim());
+                    } else {
+                        log.warn("Bot config 'identities.discord.handlesOwnedSpaces' is not a boolean or true/false string; ignoring, using false. Bot id: {}", botId);
+                    }
+                }
+            }
+        }
+
+        if (tokenEnvKey == null && !handlesOwnedSpaces) {
+            return Map.of();
+        }
+        Map<String, Object> attrs = new HashMap<>();
+        if (tokenEnvKey != null) attrs.put("tokenEnvKey", tokenEnvKey);
+        attrs.put("handlesOwnedSpaces", handlesOwnedSpaces);
+        return Map.of("discord", new ConnectorIdentity(attrs));
     }
 
     @SuppressWarnings("unchecked")

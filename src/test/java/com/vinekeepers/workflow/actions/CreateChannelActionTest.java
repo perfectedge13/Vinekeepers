@@ -279,7 +279,7 @@ class CreateChannelActionTest {
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
         router.setDefaultGateway(gateway);
         router.registerSender("luna", (ch, msg, content) -> {}, gateway);
-        // Do not register any gateway for "arrietty" so getDiscordUserIdForBot("arrietty") returns null
+        // Do not register any gateway for "arrietty" so getSelfUserIdForBot("arrietty") returns null
 
         CreateChannelAction action = new CreateChannelAction(router);
         Map<String, Object> bind = Map.of(

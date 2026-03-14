@@ -8,9 +8,10 @@ import java.util.function.Consumer;
 
 /**
  * Transport layer for Discord messaging and events.
- * Extended with interaction lifecycle: defer (adapter-internal), follow-up, update, modal.
+ * Extends OutboundGateway for core send/channel/thread/permission operations;
+ * adds interaction lifecycle: defer (adapter-internal), follow-up, update, modal.
  */
-public interface DiscordGateway {
+public interface DiscordGateway extends OutboundGateway {
 
     void connect(Consumer<Event> publisher);
 

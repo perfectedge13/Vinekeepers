@@ -13,7 +13,7 @@ import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.reasoner.StubReasoner;
 import com.vinekeepers.state.StateStore;
-import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.interactions.AppReplySink;
 import com.vinekeepers.interactions.ChannelTarget;
 import com.vinekeepers.interactions.InteractionTarget;
@@ -114,7 +114,7 @@ class VinekeepersEngineTest {
         engine.registerReasoner("luna", new StubReasoner());
         AtomicReference<String> capturedChannel = new AtomicReference<>();
         AtomicReference<String> capturedContent = new AtomicReference<>();
-        DiscordReplySender mockSender = (channelId, messageId, content) -> {
+        ReplySender mockSender = (channelId, messageId, content) -> {
             capturedChannel.set(channelId);
             capturedContent.set(content);
         };

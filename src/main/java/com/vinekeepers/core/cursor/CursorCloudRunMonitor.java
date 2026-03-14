@@ -1,6 +1,6 @@
 package com.vinekeepers.core.cursor;
 
-import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
 import org.slf4j.Logger;
@@ -25,7 +25,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final long pollIntervalMs;
 
-    private volatile DiscordReplySender replySender;
+    private volatile ReplySender replySender;
 
     public CursorCloudRunMonitor(CursorCloudAdapter adapter, StateStore stateStore, long pollIntervalMs) {
         this.adapter = Objects.requireNonNull(adapter, "adapter");
@@ -38,7 +38,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         this.pollIntervalMs = pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS;
     }
 
-    public void setReplySender(DiscordReplySender replySender) {
+    public void setReplySender(ReplySender replySender) {
         this.replySender = replySender;
     }
 
@@ -98,7 +98,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
     }
 
     private void sendUpdate(LifecycleRunRecord runState, String message) {
-        DiscordReplySender sender = replySender;
+        ReplySender sender = replySender;
         if (sender == null || message == null || message.isBlank()) {
             return;
         }

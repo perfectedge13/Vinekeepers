@@ -1,7 +1,7 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.connectors.DiscordGateway;
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
+import com.vinekeepers.connectors.OutboundGateway;
 import com.vinekeepers.events.Event;
 
 import java.util.Map;
@@ -24,11 +24,11 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
     private static final int MAX_DISCORD_CHANNEL_NAME = 100;
     private static final String FALLBACK_NAME = "lifecycle-room";
 
-    private final DiscordGateway gateway;
+    private final OutboundGateway gateway;
     private final OutboundDeliveryRouter router;
 
     /** Gateway-only (e.g. tests); no permission override. */
-    public CreateChannelAction(DiscordGateway gateway) {
+    public CreateChannelAction(OutboundGateway gateway) {
         this.gateway = gateway;
         this.router = null;
     }
@@ -39,7 +39,7 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
         this.router = router;
     }
 
-    private DiscordGateway effectiveGateway() {
+    private OutboundGateway effectiveGateway() {
         if (gateway != null) {
             return gateway;
         }
@@ -48,7 +48,7 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        DiscordGateway gw = effectiveGateway();
+        OutboundGateway gw = effectiveGateway();
         if (gw == null || !gw.isConnected()) {
             return CHANNEL_CREATE_FAILED;
         }
@@ -84,7 +84,7 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
                 lifecycleOwnerBotId = getString(state, "lifecycleOwnerBotId");
             }
             if (router != null && lifecycleOwnerBotId != null && !lifecycleOwnerBotId.isBlank()) {
-                String ownerUserId = router.getDiscordUserIdForBot(lifecycleOwnerBotId);
+                String ownerUserId = router.getSelfUserIdForBot(lifecycleOwnerBotId);
                 if (ownerUserId == null) {
                     return CHANNEL_CREATE_FAILED;
                 }

@@ -44,18 +44,18 @@ assets:
   - id: ASSET-CONFIG-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/config/ConfigLoader.java
-    role: Load bot definitions, routing, workflows, bot runtime options, optional handlesOwnedSpaces per bot, and Discord mention filters from YAML
+    role: Load bot definitions, routing, workflows; dual-read identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy top-level keys; normalize to ConnectorIdentity per connector; Discord mention filters from YAML
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-BOTS-YAML
     kind: config
     path: config/bots.yaml
     role: >-
-      Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
-      discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
-      workflowRef arrietty_room, optional create_thread step with storeIn deliveryChannelId, handlesOwnedSpaces,
-      capture_field trimAndLower for room name UX, branch value "" for blank/empty; done step main-room redirect
-      message e.g. "Launching now. See <#{{channelId}}>.")
+      Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors;
+      preferred identity shape identities.discord.tokenEnvKey and identities.discord.handlesOwnedSpaces;
+      legacy top-level discordTokenEnvKey/handlesOwnedSpaces deprecated but still accepted; defaultDiscordTokenEnvKey at root is
+      retained transitional; lifecycleBotName in step bind; Arrietty template workflowRef arrietty_room;
+      create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.")
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -67,14 +67,14 @@ assets:
   - id: ASSET-BOT-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/bot/BotDefinition.java
-    role: Bot composition (persona, model, workflow, tools, runtime conversation settings, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces for ownership-based routing)
+    role: Bot composition (persona, model, workflow, tools, runtime conversation settings); connector identity via getConnectorIdentity(connectorId)
     requires: [REQ-BOT-003]
     feature_ids: [FEAT-BOT]
 
 requirements:
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML; BotConfig models the structure. Dual-read identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy top-level discordTokenEnvKey/handlesOwnedSpaces (deprecated); normalize into ConnectorIdentity per connector; new shape preferred, new wins if both present. defaultDiscordTokenEnvKey at root is retained transitional. Workflow block, conversationMode, sessionKeyStrategy, routing filters (discordTrigger, discordMention, discordAuthors) parsed into runtime configuration.
     status: active
     priority: high
     type: functional
@@ -91,8 +91,8 @@ requirements:
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
-        - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
-        - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
+        - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
+        - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
       examples: []
     traceability:

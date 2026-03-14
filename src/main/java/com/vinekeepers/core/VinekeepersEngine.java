@@ -5,7 +5,7 @@ import com.vinekeepers.audit.AuditRecorder;
 import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.NormalizedEventContext;
 import com.vinekeepers.bot.Router;
-import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.events.EventSubscriber;
 import com.vinekeepers.interactions.AppReplySink;
@@ -49,7 +49,7 @@ public final class VinekeepersEngine implements EventSubscriber {
     private final ToolRunner toolRunner;
     /** Transitional: sink per sourceId prefix (e.g. "discord"). */
     private final Map<String, AppReplySink> sinks = new ConcurrentHashMap<>();
-    private volatile DiscordReplySender replySender;
+    private volatile ReplySender replySender;
 
     public VinekeepersEngine(Router router, StateStore stateStore, AuditRecorder auditRecorder) {
         this(router, stateStore, auditRecorder, new ToolRunner(new ToolRegistry()));
@@ -85,9 +85,9 @@ public final class VinekeepersEngine implements EventSubscriber {
     }
 
     /**
-     * Set the Discord reply sender for legacy text-only delivery when no sink is registered.
+     * Set the reply sender for legacy text-only delivery when no sink is registered.
      */
-    public void setReplySender(DiscordReplySender replySender) {
+    public void setReplySender(ReplySender replySender) {
         this.replySender = replySender;
     }
 

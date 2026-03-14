@@ -96,7 +96,7 @@ class OutboundDeliveryRouterTest {
 
     @Test
     void getGatewayForChannel_withLifecycleContext_returnsThatBotsGateway() {
-        DiscordGateway lunaGateway = new StubGateway();
+        OutboundGateway lunaGateway = new StubGateway();
         lifecycleContextStore.put(new LifecycleContext("ctx-4", "ch-gw", NOW, null, "luna", null, null, null));
         router.registerSender("luna", lunaSender, lunaGateway);
 
@@ -105,39 +105,46 @@ class OutboundDeliveryRouterTest {
 
     @Test
     void getGatewayForChannel_withNoContext_returnsDefaultGateway() {
-        DiscordGateway defaultGw = new StubGateway();
+        OutboundGateway defaultGw = new StubGateway();
         router.setDefaultGateway(defaultGw);
         assertSame(defaultGw, router.getGatewayForChannel("any-ch"));
+    }
+
+    @Test
+    void getDefaultGateway_returnsSetDefaultGateway() {
+        OutboundGateway defaultGw = new StubGateway();
+        router.setDefaultGateway(defaultGw);
+        assertSame(defaultGw, router.getDefaultGateway());
     }
 
     @Test
     void getGatewayForChannel_withLifecycleContextButBotHasNoGateway_returnsNull() {
         lifecycleContextStore.put(new LifecycleContext("ctx-5", "ch-no-gw", NOW, null, "other-bot", null, null, null));
         router.registerSender("other-bot", lunaSender, null); // sender but no gateway
-        DiscordGateway defaultGw = new StubGateway();
+        OutboundGateway defaultGw = new StubGateway();
         router.setDefaultGateway(defaultGw);
 
         assertNull(router.getGatewayForChannel("ch-no-gw"));
     }
 
     @Test
-    void getDiscordUserIdForBot_returnsUserIdWhenBotHasGateway() {
+    void getSelfUserIdForBot_returnsUserIdWhenBotHasGateway() {
         StubGatewayWithSelfId lunaGateway = new StubGatewayWithSelfId("luna-discord-user-id");
         router.registerSender("luna", lunaSender, lunaGateway);
 
-        assertEquals("luna-discord-user-id", router.getDiscordUserIdForBot("luna"));
+        assertEquals("luna-discord-user-id", router.getSelfUserIdForBot("luna"));
     }
 
     @Test
-    void getDiscordUserIdForBot_returnsNullWhenBotHasNoGateway() {
-        assertNull(router.getDiscordUserIdForBot("unknown-bot"));
+    void getSelfUserIdForBot_returnsNullWhenBotHasNoGateway() {
+        assertNull(router.getSelfUserIdForBot("unknown-bot"));
     }
 
     @Test
-    void getDiscordUserIdForBot_returnsNullWhenBotIdNullOrBlank() {
-        assertNull(router.getDiscordUserIdForBot(null));
-        assertNull(router.getDiscordUserIdForBot(""));
-        assertNull(router.getDiscordUserIdForBot("   "));
+    void getSelfUserIdForBot_returnsNullWhenBotIdNullOrBlank() {
+        assertNull(router.getSelfUserIdForBot(null));
+        assertNull(router.getSelfUserIdForBot(""));
+        assertNull(router.getSelfUserIdForBot("   "));
     }
 
     @Test
@@ -167,7 +174,7 @@ class OutboundDeliveryRouterTest {
         assertEquals("THREAD_CREATE_FAILED", defaultSender.lastChannelId);
     }
 
-    private static final class RecordingSender implements DiscordReplySender {
+    private static final class RecordingSender implements ReplySender {
         final AtomicInteger sendCalls = new AtomicInteger(0);
         String lastChannelId;
         String lastMessageId;
@@ -182,25 +189,19 @@ class OutboundDeliveryRouterTest {
         }
     }
 
-    private static class StubGateway implements DiscordGateway {
-        @Override
-        public void connect(java.util.function.Consumer<com.vinekeepers.events.Event> publisher) {}
-        @Override
-        public void shutdown() {}
+    private static class StubGateway implements OutboundGateway {
         @Override
         public void send(String channelId, String messageId, String content) {}
         @Override
-        public void send(String channelId, String messageId, String content, java.util.List<java.util.List<java.util.Map<String, Object>>> components) {}
-        @Override
-        public void sendFollowUp(String token, String content) {}
-        @Override
-        public void sendFollowUp(String token, String content, java.util.List<java.util.List<java.util.Map<String, Object>>> components) {}
-        @Override
-        public void updateMessage(String token, String content) {}
-        @Override
-        public void updateMessage(String token, String content, java.util.List<java.util.List<java.util.Map<String, Object>>> components) {}
+        public String getSelfUserId() { return null; }
         @Override
         public boolean isConnected() { return false; }
+        @Override
+        public String createTextChannel(String guildId, String channelName) { return null; }
+        @Override
+        public String createThreadChannel(String parentChannelId, String threadName) { return null; }
+        @Override
+        public boolean addPermissionOverride(String channelId, String guildId, String targetUserId, long allow, long deny) { return true; }
     }
 
     private static final class StubGatewayWithSelfId extends StubGateway {

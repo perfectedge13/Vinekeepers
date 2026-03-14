@@ -47,10 +47,13 @@ public final class DiscordAppReplySink implements AppReplySink {
         this.router = router;
     }
 
+    /**
+     * Resolves gateway for the target. When using router, casts to DiscordGateway — this sink intentionally
+     * relies on DiscordGateway for interaction methods (sendFollowUp, updateMessage, openModal, send with components); accepted debt.
+     */
     private DiscordGateway gatewayFor(ReplyTarget target) {
         if (router != null && target != null) {
-            DiscordGateway g = router.getGatewayForChannel(target.channelId());
-            return g;
+            return (DiscordGateway) router.getGatewayForChannel(target.channelId());
         }
         return gateway;
     }

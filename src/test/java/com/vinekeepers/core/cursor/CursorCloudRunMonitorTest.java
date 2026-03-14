@@ -1,6 +1,6 @@
 package com.vinekeepers.core.cursor;
 
-import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.state.StateStore;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +57,7 @@ class CursorCloudRunMonitorTest {
         store.put("cursor:run:bc_1", runState);
         CursorCloudRunMonitor monitor = new CursorCloudRunMonitor(adapter, store, 1000);
         List<String> messages = new ArrayList<>();
-        DiscordReplySender sender = (channelId, messageId, content) -> messages.add(content);
+        ReplySender sender = (channelId, messageId, content) -> messages.add(content);
         monitor.setReplySender(sender);
 
         monitor.tick();

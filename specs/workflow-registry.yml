@@ -1,7 +1,7 @@
 schema:
   id: req-registry
-  version: 1.0.0
-  updated_utc: '2026-03-13T17:00:00Z'
+  version: "1.0.0"
+  updated_utc: "2026-03-13T18:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -558,10 +558,10 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/CreateChannelAction.java
     role: >-
-      Workflow action to create a Discord text channel via gateway for lifecycle room; optional bind
-      lifecycleOwnerBotId; after create calls addPermissionOverride for that bot's Discord user when gateway supports
-      it; returns channel id or sentinel CHANNEL_CREATE_FAILED on gateway failure; room naming from state (project +
-      codeChange) or fallback; normalizeChannelName for Discord-safe lowercase
+      Workflow action to create a Discord text channel via OutboundGateway for lifecycle room; optional bind
+      lifecycleOwnerBotId; after create calls addPermissionOverride for that bot's Discord user (OutboundDeliveryRouter
+      getSelfUserIdForBot) when gateway supports it; returns channel id or sentinel CHANNEL_CREATE_FAILED on gateway
+      failure; room naming from state (project + codeChange) or fallback; normalizeChannelName for Discord-safe lowercase
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -572,9 +572,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostChannelMessageAction.java
     role: >-
-      Workflow action to post a message to a Discord channel; send target = deliveryChannelId or channelId (bind then
-      state); treat THREAD_CREATE_FAILED sentinel as fallback to channelId; interpolation from merged map (state then
-      bind); lifecycleBotName from bind for content
+      Workflow action to post a message to a Discord channel via ReplySender; send target = deliveryChannelId or
+      channelId (bind then state); treat THREAD_CREATE_FAILED sentinel as fallback to channelId; interpolation from
+      merged map (state then bind); lifecycleBotName from bind for content
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -682,11 +682,11 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
-        - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
-          contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
-          default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
-          bind/state updates LifecycleContextStore via setDeliveryTargetId(contextId, threadId); no store update on
-          failure; storeIn (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
+        - create_thread action creates a Discord thread under parent channel via OutboundGateway; bind channelId,
+          threadName, optional contextId; when channelId has a lifecycle context uses that context's bot gateway (owner
+          gateway), else default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when
+          contextId in bind/state updates LifecycleContextStore via setDeliveryTargetId(contextId, threadId); no store
+          update on failure; storeIn (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
       examples: []
     traceability:
       assets:
@@ -930,7 +930,7 @@ requirements:
           naming uses normalizeChannelName (Discord-safe lowercase)
         - >-
           create_channel bind may include lifecycleOwnerBotId; after create, addPermissionOverride is called for that
-          bot's Discord user id (resolved via gateway/getDiscordUserIdForBot) when gateway supports it
+          bot's Discord user id (resolved via OutboundDeliveryRouter getSelfUserIdForBot) when OutboundGateway supports it
         - >-
           post_channel_message send target = deliveryChannelId or channelId (bind then state); when deliveryChannelId is
           THREAD_CREATE_FAILED sentinel, fallback to channelId; interpolates content from merged map (state then bind,
@@ -979,6 +979,8 @@ requirements:
         - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
         - ASSET-LAUNCH-CURSOR-RUN-ACTION
         - ASSET-GITHUB-REPOS-CHOICE-PROVIDER
+        - ASSET-REPLY-SENDER
+        - ASSET-OUTBOUND-GATEWAY
       symbols: []
     validation:
       tests:
@@ -1277,4 +1279,6 @@ features:
       - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
       - ASSET-CREATE-THREAD-ACTION
       - ASSET-LAUNCH-CURSOR-RUN-ACTION
+      - ASSET-REPLY-SENDER
+      - ASSET-OUTBOUND-GATEWAY
     status: active

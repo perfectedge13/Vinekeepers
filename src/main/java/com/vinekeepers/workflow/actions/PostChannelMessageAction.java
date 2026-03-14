@@ -1,6 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.connectors.DiscordReplySender;
+import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 
 import java.util.HashMap;
@@ -12,9 +12,9 @@ import java.util.Map;
  */
 public final class PostChannelMessageAction implements com.vinekeepers.workflow.WorkflowAction {
 
-    private final DiscordReplySender replySender;
+    private final ReplySender replySender;
 
-    public PostChannelMessageAction(DiscordReplySender replySender) {
+    public PostChannelMessageAction(ReplySender replySender) {
         this.replySender = replySender;
     }
 

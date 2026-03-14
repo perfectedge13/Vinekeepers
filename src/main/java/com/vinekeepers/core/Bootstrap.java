@@ -5,10 +5,13 @@ import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.Router;
 import com.vinekeepers.config.BotConfig;
 import com.vinekeepers.config.ConfigLoader;
+import com.vinekeepers.connectors.ConnectorContext;
+import com.vinekeepers.connectors.ConnectorRegistry;
 import com.vinekeepers.connectors.DiscordAppReplySink;
+import com.vinekeepers.connectors.DiscordConnectorAdapter;
+import com.vinekeepers.connectors.DiscordConnectorConfig;
 import com.vinekeepers.connectors.DiscordEventSource;
 import com.vinekeepers.connectors.GitHubEventSource;
-import com.vinekeepers.connectors.JdaDiscordGateway;
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudAdapterImpl;
@@ -63,12 +66,11 @@ public final class Bootstrap {
     private final ToolRunner toolRunner;
     private final WorkflowActionRegistry actionRegistry;
     private final OutboundDeliveryRouter outboundDeliveryRouter;
+    private final ConnectorRegistry connectorRegistry = new ConnectorRegistry();
     private final List<BotDefinition> lastLoadedBots = new ArrayList<>();
     private final Set<String> routedBotIds = new HashSet<>();
-    /** From config defaultDiscordTokenEnvKey; used only when no bot has discordTokenEnvKey. Bot-config driven. */
+    /** From config defaultDiscordTokenEnvKey (retained transitional root-level); used when no bot has identities.discord.tokenEnvKey. */
     private String defaultDiscordTokenEnvKey;
-    private final List<DiscordEventSource> discordSources = new ArrayList<>();
-    private DiscordEventSource discordSource;
     private GitHubEventSource githubSource;
     private HealthServer healthServer;
 
@@ -127,7 +129,10 @@ public final class Bootstrap {
             lastLoadedBots.addAll(bots);
             Map<String, Boolean> handlesMap = new HashMap<>();
             for (BotDefinition bot : bots) {
-                handlesMap.put(bot.getId(), bot.isHandlesOwnedSpaces());
+                boolean handles = bot.getConnectorIdentity("discord")
+                        .map(d -> d.getBoolean("handlesOwnedSpaces"))
+                        .orElse(false);
+                handlesMap.put(bot.getId(), handles);
             }
             router.setHandlesOwnedSpacesByBotId(handlesMap);
             for (BotDefinition bot : bots) {
@@ -155,45 +160,12 @@ public final class Bootstrap {
     }
 
     public Bootstrap withDiscord() {
-        boolean anyWithToken = lastLoadedBots.stream()
-                .anyMatch(b -> b.getDiscordTokenEnvKey() != null && !b.getDiscordTokenEnvKey().isBlank());
-        if (anyWithToken) {
-            for (BotDefinition bot : lastLoadedBots) {
-                String envKey = bot.getDiscordTokenEnvKey();
-                if (envKey == null || envKey.isBlank()) {
-                    continue;
-                }
-                String token = Env.get(envKey, "");
-                if (token.isBlank()) {
-                    log.warn("Bot {} has discordTokenEnvKey {} but token is blank; skipping Discord connector for this bot.", bot.getId(), envKey);
-                    continue;
-                }
-                boolean outboundOnly = !routedBotIds.contains(bot.getId());
-                JdaDiscordGateway gateway = new JdaDiscordGateway(token, outboundOnly);
-                DiscordEventSource source = new DiscordEventSource(gateway);
-                outboundDeliveryRouter.registerSender(bot.getId(), source, gateway);
-                if (outboundDeliveryRouter.getDefaultGateway() == null) {
-                    outboundDeliveryRouter.setDefaultSender(source);
-                    outboundDeliveryRouter.setDefaultGateway(gateway);
-                }
-                source.start(eventBus);
-                discordSources.add(source);
-            }
-        }
-        if (outboundDeliveryRouter.getDefaultGateway() == null && defaultDiscordTokenEnvKey != null && !defaultDiscordTokenEnvKey.isBlank()) {
-            String token = Env.get(defaultDiscordTokenEnvKey, "");
-            if (!token.isBlank()) {
-                JdaDiscordGateway gateway = new JdaDiscordGateway(token);
-                this.discordSource = new DiscordEventSource(gateway);
-                outboundDeliveryRouter.setDefaultSender(discordSource);
-                outboundDeliveryRouter.setDefaultGateway(gateway);
-                for (BotDefinition bot : lastLoadedBots) {
-                    outboundDeliveryRouter.registerSender(bot.getId(), discordSource, gateway);
-                }
-                discordSource.start(eventBus);
-                discordSources.add(discordSource);
-            }
-        }
+        DiscordConnectorConfig discordConfig = new DiscordConnectorConfig(defaultDiscordTokenEnvKey);
+        DiscordConnectorAdapter discordAdapter = new DiscordConnectorAdapter(discordConfig, routedBotIds);
+        connectorRegistry.register("discord", discordAdapter);
+        ConnectorContext context = new ConnectorContext(eventBus, outboundDeliveryRouter);
+        discordAdapter.registerBots(lastLoadedBots, context);
+
         engine.setReplySender(outboundDeliveryRouter);
         engine.registerSink("discord", new DiscordAppReplySink(outboundDeliveryRouter));
         cursorCloudRunMonitor.setReplySender(outboundDeliveryRouter);
@@ -246,10 +218,12 @@ public final class Bootstrap {
 
     public void shutdown() {
         if (healthServer != null) healthServer.stop();
-        for (DiscordEventSource source : discordSources) {
-            if (source != null) source.stop();
+        var discordAdapter = connectorRegistry.get("discord");
+        if (discordAdapter instanceof DiscordConnectorAdapter d) {
+            for (DiscordEventSource source : d.getDiscordSources()) {
+                if (source != null) source.stop();
+            }
         }
-        discordSources.clear();
         if (githubSource != null) githubSource.stop();
         cursorCloudRunMonitor.close();
     }

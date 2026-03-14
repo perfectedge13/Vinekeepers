@@ -11,29 +11,29 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Routes outbound Discord delivery by channel and lifecycle context.
- * Implements DiscordReplySender: resolves sender from delivery target and lifecycle context
+ * Routes outbound delivery by channel and lifecycle context.
+ * Implements ReplySender: resolves sender from delivery target and lifecycle context
  * (configuredBotId). For lifecycle rooms, fails clearly if the resolved bot's sender is unavailable
  * (no silent fallback).
  */
-public final class OutboundDeliveryRouter implements DiscordReplySender {
+public final class OutboundDeliveryRouter implements ReplySender {
 
     private static final Logger log = LoggerFactory.getLogger(OutboundDeliveryRouter.class);
 
     private final LifecycleContextStore lifecycleContextStore;
-    private final Map<String, DiscordReplySender> botIdToSender = new ConcurrentHashMap<>();
-    private final Map<String, DiscordGateway> botIdToGateway = new ConcurrentHashMap<>();
-    private volatile DiscordReplySender defaultSender;
-    private volatile DiscordGateway defaultGateway;
+    private final Map<String, ReplySender> botIdToSender = new ConcurrentHashMap<>();
+    private final Map<String, OutboundGateway> botIdToGateway = new ConcurrentHashMap<>();
+    private volatile ReplySender defaultSender;
+    private volatile OutboundGateway defaultGateway;
 
     public OutboundDeliveryRouter(LifecycleContextStore lifecycleContextStore) {
         this.lifecycleContextStore = Objects.requireNonNull(lifecycleContextStore, "lifecycleContextStore");
     }
 
     /**
-     * Register a sender and gateway for a bot id. Used when the bot has its own Discord identity.
+     * Register a sender and gateway for a bot id. Used when the bot has its own connector identity.
      */
-    public void registerSender(String botId, DiscordReplySender sender, DiscordGateway gateway) {
+    public void registerSender(String botId, ReplySender sender, OutboundGateway gateway) {
         if (botId == null || botId.isBlank()) {
             return;
         }
@@ -48,14 +48,14 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
     /**
      * Set the default sender used when the channel has no lifecycle context (e.g. main intake channel).
      */
-    public void setDefaultSender(DiscordReplySender sender) {
+    public void setDefaultSender(ReplySender sender) {
         this.defaultSender = sender;
     }
 
     /**
      * Set the default gateway (e.g. for create_channel and sink when channel has no lifecycle context).
      */
-    public void setDefaultGateway(DiscordGateway gateway) {
+    public void setDefaultGateway(OutboundGateway gateway) {
         this.defaultGateway = gateway;
     }
 
@@ -64,7 +64,7 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
      * else default gateway. When the channel has lifecycle context and the configured bot has no gateway,
      * returns null (no fallback to default). Used by DiscordAppReplySink and CreateChannelAction.
      */
-    public DiscordGateway getGatewayForChannel(String channelId) {
+    public OutboundGateway getGatewayForChannel(String channelId) {
         if (channelId == null || channelId.isBlank()) {
             return defaultGateway;
         }
@@ -72,8 +72,7 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
                 .map(LifecycleContext::getConfiguredBotId)
                 .filter(id -> id != null && !id.isBlank());
         if (botId.isPresent()) {
-            DiscordGateway gateway = botIdToGateway.get(botId.get());
-            return gateway;
+            return botIdToGateway.get(botId.get());
         }
         return defaultGateway;
     }
@@ -81,18 +80,18 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
     /**
      * Default gateway for operations that are not channel-scoped (e.g. create_channel from workflow).
      */
-    public DiscordGateway getDefaultGateway() {
+    public OutboundGateway getDefaultGateway() {
         return defaultGateway;
     }
 
     /**
-     * Discord user id for the given bot (from that bot's gateway getSelfUserId). Returns null if no gateway for the bot.
+     * Self user id for the given bot (from that bot's gateway getSelfUserId). Returns null if no gateway for the bot.
      */
-    public String getDiscordUserIdForBot(String botId) {
+    public String getSelfUserIdForBot(String botId) {
         if (botId == null || botId.isBlank()) {
             return null;
         }
-        DiscordGateway gateway = botIdToGateway.get(botId);
+        OutboundGateway gateway = botIdToGateway.get(botId);
         return gateway != null ? gateway.getSelfUserId() : null;
     }
 
@@ -106,7 +105,7 @@ public final class OutboundDeliveryRouter implements DiscordReplySender {
                 .map(LifecycleContext::getConfiguredBotId)
                 .filter(id -> id != null && !id.isBlank());
 
-        DiscordReplySender sender;
+        ReplySender sender;
         if (configuredBotId.isPresent()) {
             sender = botIdToSender.get(configuredBotId.get());
             if (sender == null) {

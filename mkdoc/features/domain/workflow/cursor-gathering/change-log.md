@@ -10,7 +10,7 @@
 
 ## 2026-03-12
 
-- **CreateChannelAction lifecycle owner and permission overwrite:** `create_channel` step bind may include `lifecycleOwnerBotId`. After creating the channel via gateway `createTextChannel`, the action calls `addPermissionOverride` for that bot's Discord user (resolved via router `getDiscordUserIdForBot(lifecycleOwnerBotId)`) when the gateway supports it, so the lifecycle room bot (e.g. Arrietty) has explicit permission on the new channel. Room naming and sentinel `CHANNEL_CREATE_FAILED` unchanged. See CreateChannelActionTest.runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate.
+- **CreateChannelAction lifecycle owner and permission overwrite:** `create_channel` step bind may include `lifecycleOwnerBotId`. After creating the channel via gateway `createTextChannel`, the action calls `addPermissionOverride` for that bot's Discord user (resolved via router `getSelfUserIdForBot(lifecycleOwnerBotId)`) when the gateway supports it, so the lifecycle room bot (e.g. Arrietty) has explicit permission on the new channel. Room naming and sentinel `CHANNEL_CREATE_FAILED` unchanged. See CreateChannelActionTest.runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate.
 
 ## 2026-03-10
 
