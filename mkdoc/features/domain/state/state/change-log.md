@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-19 (Phase C state)
+
+- **Planning gate models:** **PlanCritiqueFinding**, **PlanCritiqueSnapshot**, **PlanReadinessStatus**, **PlanApprovalStatus**; **PlanConfidence** extended with **readinessStatus** and **computedAt**; **FeaturePlanState** carries optional critique snapshot and **withPlanConfidence** / **withPlanApproval** / **withPlanCritiqueSnapshot**.
+
 ## 2026-03-19
 
 - **Structured discovery models (mk sync):** Summary, **key assets**, **contracts**, and **how-it-works** updated for **DiscoveryGap**, **DiscoveryQuestion**, **DiscoveryAgenda**, **DiscoveryFinding** (REQ-STATE-001).

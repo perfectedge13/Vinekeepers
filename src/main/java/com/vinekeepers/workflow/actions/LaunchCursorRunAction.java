@@ -9,12 +9,14 @@ import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.StateStore;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanApproval;
+import com.vinekeepers.state.planning.PlanApprovalStatus;
 
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
-
-import com.vinekeepers.state.StateStore;
 
 /**
  * Workflow action: launch Cursor run and atomically bind to lifecycle context.
@@ -27,12 +29,20 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
     private final CursorCloudAdapter adapter;
     private final StateStore stateStore;
     private final LifecycleContextStore lifecycleContextStore;
+    private final FeaturePlanStateStore featurePlanStateStore;
 
     public LaunchCursorRunAction(CursorCloudAdapter adapter, StateStore stateStore,
                                  LifecycleContextStore lifecycleContextStore) {
+        this(adapter, stateStore, lifecycleContextStore, null);
+    }
+
+    public LaunchCursorRunAction(CursorCloudAdapter adapter, StateStore stateStore,
+                                 LifecycleContextStore lifecycleContextStore,
+                                 FeaturePlanStateStore featurePlanStateStore) {
         this.adapter = adapter;
         this.stateStore = stateStore;
         this.lifecycleContextStore = lifecycleContextStore;
+        this.featurePlanStateStore = featurePlanStateStore;
     }
 
     @Override
@@ -61,6 +71,19 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         String sessionKey = getString(args, "__sessionKey");
         if (sessionKey == null || sessionKey.isBlank()) {
             return "Missing workflow session key.";
+        }
+
+        if (!launchApprovalGateSkipped()
+                && featurePlanStateStore != null
+                && contextId != null
+                && !contextId.isBlank()) {
+            PlanApproval ap = featurePlanStateStore
+                    .getByContextId(contextId)
+                    .map(p -> p.getPlanApproval())
+                    .orElse(null);
+            if (ap == null || !PlanApprovalStatus.allowsLaunch(ap.getStatus())) {
+                return "Plan approval required before launch (contextId: " + contextId + ").";
+            }
         }
 
         String repositoryUrl = normalizeRepository(project);
@@ -113,6 +136,11 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         } catch (CursorCloudException e) {
             return "Cursor launch failed: " + e.getMessage();
         }
+    }
+
+    private static boolean launchApprovalGateSkipped() {
+        String v = Env.get("CURSOR_LAUNCH_SKIP_APPROVAL_GATE", "");
+        return "true".equalsIgnoreCase(v != null ? v.trim() : "");
     }
 
     private static String runKey(String agentId) {

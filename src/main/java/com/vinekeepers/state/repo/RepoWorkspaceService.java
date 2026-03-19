@@ -1,20 +1,32 @@
 package com.vinekeepers.state.repo;
 
 import com.vinekeepers.env.Env;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * Resolves repo input to a local path: existing local repo, or shallow clone under workspace root when allowed.
  */
 public final class RepoWorkspaceService {
+
+    private static final Logger log = LoggerFactory.getLogger(RepoWorkspaceService.class);
+
+    private static final int GIT_OUTPUT_CAP = 4096;
+    private static final long GIT_TIMEOUT_SHORT_SEC = 120;
+    private static final long GIT_TIMEOUT_CLONE_SEC = 300;
 
     private final Path workspaceRoot;
     private final boolean allowGitClone;
@@ -36,10 +48,21 @@ public final class RepoWorkspaceService {
      * Ensure a workspace for the given context and raw repo input. Does not persist to store.
      */
     public RepoWorkspaceState ensure(String contextId, String rawRepoInput) {
+        return ensure(contextId, rawRepoInput, null);
+    }
+
+    /**
+     * Ensure a workspace for the given context and raw repo input. Does not persist to store.
+     *
+     * @param progress optional milestone callback (e.g. Discord thread updates)
+     */
+    public RepoWorkspaceState ensure(String contextId, String rawRepoInput, RepoWorkspaceProgressCallback progress) {
         Objects.requireNonNull(contextId, "contextId");
         Instant now = Instant.now();
         String repoRef = resolver.resolve(rawRepoInput);
         if (repoRef == null || repoRef.isBlank()) {
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, "Could not normalize repo reference");
+            log.warn("Repo workspace [{}]: could not normalize ref from input", contextId);
             return new RepoWorkspaceState(
                     contextId,
                     null,
@@ -54,35 +77,19 @@ public final class RepoWorkspaceService {
                     now,
                     now);
         }
+        notify(progress, RepoWorkspaceProgressPhase.RESOLVED_REF, repoRef);
+        log.info("Repo workspace [{}]: resolved ref {}", contextId, safeRefForLog(repoRef));
+
         String workspaceId = shortWorkspaceId(contextId, repoRef);
 
         if (repoRef.startsWith("local:")) {
-            String pathStr = repoRef.substring("local:".length());
-            Path localPath = Path.of(pathStr);
-            if (!Files.isDirectory(localPath)) {
-                return failed(contextId, repoRef, rawRepoInput, workspaceId, "Local path is not a directory: " + pathStr, now);
-            }
-            GitInfo info = readGitInfo(localPath);
-            if (info == null) {
-                return failed(contextId, repoRef, rawRepoInput, workspaceId, "Not a git repository: " + pathStr, now);
-            }
-            String absLocal = localPath.normalize().toAbsolutePath().toString().replace('\\', '/');
-            return new RepoWorkspaceState(
-                    contextId,
-                    repoRef,
-                    rawRepoInput,
-                    workspaceId,
-                    absLocal,
-                    info.branch,
-                    info.commit,
-                    RepoMaterializationMode.EXISTING_LOCAL,
-                    RepoWorkspaceStatus.RESOLVED_LOCAL,
-                    null,
-                    now,
-                    now);
+            return ensureLocal(contextId, rawRepoInput, repoRef, workspaceId, progress, now);
         }
 
         if (!allowGitClone) {
+            String reason = "Git clone disabled (set VINEKEEPERS_ALLOW_GIT_CLONE=true)";
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason);
             return new RepoWorkspaceState(
                     contextId,
                     repoRef,
@@ -93,13 +100,16 @@ public final class RepoWorkspaceService {
                     null,
                     RepoMaterializationMode.UNKNOWN,
                     RepoWorkspaceStatus.UNAVAILABLE,
-                    "Git clone disabled (set VINEKEEPERS_ALLOW_GIT_CLONE=true)",
+                    reason,
                     now,
                     now);
         }
 
         String cloneUrl = toCloneUrl(repoRef);
         if (cloneUrl == null) {
+            String reason = "Unsupported repo reference for clone: " + repoRef;
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason);
             return new RepoWorkspaceState(
                     contextId,
                     repoRef,
@@ -110,35 +120,62 @@ public final class RepoWorkspaceService {
                     null,
                     RepoMaterializationMode.UNKNOWN,
                     RepoWorkspaceStatus.UNAVAILABLE,
-                    "Unsupported repo reference for clone: " + repoRef,
+                    reason,
                     now,
                     now);
         }
 
         try {
+            notify(progress, RepoWorkspaceProgressPhase.CREATING_WORKSPACE_ROOT, null);
+            log.info("Repo workspace [{}]: ensuring workspace root {}", contextId, workspaceRoot);
             Files.createDirectories(workspaceRoot);
         } catch (IOException e) {
-            return failed(contextId, repoRef, rawRepoInput, workspaceId, "Could not create workspace root: " + e.getMessage(), now);
+            String reason = "Could not create workspace root: " + e.getMessage();
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason, e);
+            return failed(contextId, repoRef, rawRepoInput, workspaceId, reason, now);
         }
 
         Path targetDir = workspaceRoot.resolve(workspaceId);
         try {
             if (Files.exists(targetDir)) {
-                deleteRecursive(targetDir);
+                notify(progress, RepoWorkspaceProgressPhase.REMOVING_STALE_CLONE, targetDir.getFileName().toString());
+                log.info("Repo workspace [{}]: removing stale workspace dir {}", contextId, targetDir);
+                deleteRecursiveWithRetry(targetDir);
             }
         } catch (IOException e) {
-            return failed(contextId, repoRef, rawRepoInput, workspaceId, "Could not clear target dir: " + e.getMessage(), now);
+            String reason = "Could not clear target dir: " + e.getMessage();
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason, e);
+            return failed(contextId, repoRef, rawRepoInput, workspaceId, reason, now);
         }
 
-        int code = runGit(localPathForProcess(workspaceRoot), "clone", "--depth", "1", cloneUrl, targetDir.toString());
-        if (code != 0) {
-            return failed(contextId, repoRef, rawRepoInput, workspaceId, "git clone failed with exit " + code, now);
+        notify(progress, RepoWorkspaceProgressPhase.CLONING, null);
+        log.info("Repo workspace [{}]: cloning into {}", contextId, targetDir);
+        GitRunResult cloneResult = runGitWithOutput(
+                localPathForProcess(workspaceRoot),
+                GIT_TIMEOUT_CLONE_SEC,
+                "clone",
+                "--depth",
+                "1",
+                cloneUrl,
+                targetDir.toString());
+        if (cloneResult.exitCode() != 0) {
+            String snippet = truncateForMessage(cloneResult.output());
+            String reason = "git clone failed (exit " + cloneResult.exitCode() + ")" + (snippet.isBlank() ? "" : ": " + snippet);
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason);
+            return failed(contextId, repoRef, rawRepoInput, workspaceId, reason, now);
         }
 
+        notify(progress, RepoWorkspaceProgressPhase.VERIFYING_GIT, null);
         GitInfo info = readGitInfo(targetDir);
         String branch = info != null ? info.branch : null;
         String commit = info != null ? info.commit : null;
         String abs = targetDir.normalize().toAbsolutePath().toString().replace('\\', '/');
+        String readyDetail = formatReadyCloned(branch, commit);
+        notify(progress, RepoWorkspaceProgressPhase.READY_CLONED, readyDetail);
+        log.info("Repo workspace [{}]: materialized at {} ({})", contextId, abs, readyDetail);
         return new RepoWorkspaceState(
                 contextId,
                 repoRef,
@@ -152,6 +189,88 @@ public final class RepoWorkspaceService {
                 null,
                 now,
                 now);
+    }
+
+    private RepoWorkspaceState ensureLocal(
+            String contextId,
+            String rawRepoInput,
+            String repoRef,
+            String workspaceId,
+            RepoWorkspaceProgressCallback progress,
+            Instant now) {
+        String pathStr = repoRef.substring("local:".length());
+        Path localPath = Path.of(pathStr);
+        notify(progress, RepoWorkspaceProgressPhase.VERIFYING_GIT, null);
+        if (!Files.isDirectory(localPath)) {
+            String reason = "Local path is not a directory: " + pathStr;
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason);
+            return failed(contextId, repoRef, rawRepoInput, workspaceId, reason, now);
+        }
+        GitInfo info = readGitInfo(localPath);
+        if (info == null) {
+            String reason = "Not a git repository: " + pathStr;
+            notify(progress, RepoWorkspaceProgressPhase.FAILED, reason);
+            log.warn("Repo workspace [{}]: {}", contextId, reason);
+            return failed(contextId, repoRef, rawRepoInput, workspaceId, reason, now);
+        }
+        String absLocal = localPath.normalize().toAbsolutePath().toString().replace('\\', '/');
+        notify(progress, RepoWorkspaceProgressPhase.READY_LOCAL, absLocal);
+        log.info("Repo workspace [{}]: using local repo {}", contextId, absLocal);
+        return new RepoWorkspaceState(
+                contextId,
+                repoRef,
+                rawRepoInput,
+                workspaceId,
+                absLocal,
+                info.branch,
+                info.commit,
+                RepoMaterializationMode.EXISTING_LOCAL,
+                RepoWorkspaceStatus.RESOLVED_LOCAL,
+                null,
+                now,
+                now);
+    }
+
+    private static void notify(RepoWorkspaceProgressCallback progress, RepoWorkspaceProgressPhase phase, String detail) {
+        if (progress != null) {
+            progress.onProgress(phase, detail);
+        }
+    }
+
+    private static String safeRefForLog(String repoRef) {
+        if (repoRef == null) {
+            return "?";
+        }
+        if (repoRef.startsWith("local:")) {
+            return "local:<path>";
+        }
+        return repoRef;
+    }
+
+    private static String formatReadyCloned(String branch, String commit) {
+        String b = branch != null ? branch : "?";
+        String c = shortSha(commit);
+        return b + " @ " + c;
+    }
+
+    private static String shortSha(String commit) {
+        if (commit == null || commit.isBlank()) {
+            return "?";
+        }
+        String t = commit.trim();
+        return t.length() > 7 ? t.substring(0, 7) : t;
+    }
+
+    private static String truncateForMessage(String s) {
+        if (s == null || s.isBlank()) {
+            return "";
+        }
+        String t = s.trim().replace("\r\n", "\n");
+        if (t.length() <= GIT_OUTPUT_CAP) {
+            return t;
+        }
+        return "…" + t.substring(t.length() - GIT_OUTPUT_CAP);
     }
 
     private static String shortWorkspaceId(String contextId, String repoRef) {
@@ -197,13 +316,13 @@ public final class RepoWorkspaceService {
         return null;
     }
 
-    private static GitInfo readGitInfo(Path repoRoot) {
-        int ok = runGit(repoRoot, "rev-parse", "--is-inside-work-tree");
+    private GitInfo readGitInfo(Path repoRoot) {
+        int ok = runGitSimple(repoRoot, GIT_TIMEOUT_SHORT_SEC, "rev-parse", "--is-inside-work-tree");
         if (ok != 0) {
             return null;
         }
-        String branch = trimOrNull(runGitOutput(repoRoot, "rev-parse", "--abbrev-ref", "HEAD"));
-        String commit = trimOrNull(runGitOutput(repoRoot, "rev-parse", "HEAD"));
+        String branch = trimOrNull(runGitOutputOnly(repoRoot, GIT_TIMEOUT_SHORT_SEC, "rev-parse", "--abbrev-ref", "HEAD"));
+        String commit = trimOrNull(runGitOutputOnly(repoRoot, GIT_TIMEOUT_SHORT_SEC, "rev-parse", "HEAD"));
         return new GitInfo(branch, commit);
     }
 
@@ -215,25 +334,7 @@ public final class RepoWorkspaceService {
         return t.isEmpty() ? null : t;
     }
 
-    private static int runGit(Path cwd, String... args) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder();
-            pb.command(listWithGit(args));
-            pb.directory(cwd.toFile());
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            boolean finished = p.waitFor(120, TimeUnit.SECONDS);
-            if (!finished) {
-                p.destroyForcibly();
-                return -1;
-            }
-            return p.exitValue();
-        } catch (Exception e) {
-            return -1;
-        }
-    }
-
-    private static String runGitOutput(Path cwd, String... args) {
+    private static GitRunResult runGitWithOutput(Path cwd, long timeoutSec, String... args) {
         try {
             ProcessBuilder pb = new ProcessBuilder();
             pb.command(listWithGit(args));
@@ -241,22 +342,33 @@ public final class RepoWorkspaceService {
             pb.redirectErrorStream(true);
             Process p = pb.start();
             byte[] out = p.getInputStream().readAllBytes();
-            boolean finished = p.waitFor(60, TimeUnit.SECONDS);
+            boolean finished = p.waitFor(timeoutSec, TimeUnit.SECONDS);
             if (!finished) {
                 p.destroyForcibly();
-                return null;
+                return new GitRunResult(-1, "git timed out after " + timeoutSec + "s");
             }
-            if (p.exitValue() != 0) {
-                return null;
-            }
-            return new String(out, StandardCharsets.UTF_8);
+            String text = new String(out, StandardCharsets.UTF_8);
+            return new GitRunResult(p.exitValue(), text);
         } catch (Exception e) {
-            return null;
+            return new GitRunResult(-1, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         }
     }
 
-    private static java.util.List<String> listWithGit(String... args) {
-        java.util.List<String> cmd = new java.util.ArrayList<>();
+    private static int runGitSimple(Path cwd, long timeoutSec, String... args) {
+        GitRunResult r = runGitWithOutput(cwd, timeoutSec, args);
+        return r.exitCode();
+    }
+
+    private static String runGitOutputOnly(Path cwd, long timeoutSec, String... args) {
+        GitRunResult r = runGitWithOutput(cwd, timeoutSec, args);
+        if (r.exitCode() != 0) {
+            return null;
+        }
+        return r.output();
+    }
+
+    private static List<String> listWithGit(String... args) {
+        List<String> cmd = new ArrayList<>();
         cmd.add(gitExecutable());
         for (String a : args) {
             cmd.add(a);
@@ -265,27 +377,56 @@ public final class RepoWorkspaceService {
     }
 
     private static String gitExecutable() {
-        String g = Env.get("GIT_EXECUTABLE", "git");
-        return g;
+        return Env.get("GIT_EXECUTABLE", "git");
     }
 
     private static Path localPathForProcess(Path p) {
         return Path.of(p.toAbsolutePath().toString());
     }
 
-    private static void deleteRecursive(Path root) throws IOException {
+    private static void deleteRecursiveWithRetry(Path root) throws IOException {
+        try {
+            deleteRecursiveStrict(root);
+        } catch (IOException e) {
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            deleteRecursiveStrict(root);
+        }
+    }
+
+    /**
+     * Deletes {@code root} and all descendants; throws if anything remains or any delete fails.
+     */
+    private static void deleteRecursiveStrict(Path root) throws IOException {
         if (!Files.exists(root)) {
             return;
         }
-        try (var walk = Files.walk(root)) {
-            walk.sorted((a, b) -> b.compareTo(a)).forEach(path -> {
+        IOException first = null;
+        try (Stream<Path> walk = Files.walk(root)) {
+            List<Path> paths = walk.sorted(Comparator.reverseOrder()).toList();
+            for (Path p : paths) {
                 try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ignored) {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    if (first == null) {
+                        first = e;
+                    }
+                    log.debug("Delete failed for {}: {}", p, e.getMessage());
                 }
-            });
+            }
+        }
+        if (Files.exists(root)) {
+            if (first != null) {
+                throw new IOException("Could not fully remove " + root + ": " + first.getMessage(), first);
+            }
+            throw new IOException("Could not fully remove: " + root);
         }
     }
+
+    private record GitRunResult(int exitCode, String output) {}
 
     private static final class GitInfo {
         final String branch;

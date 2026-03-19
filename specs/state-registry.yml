@@ -66,7 +66,10 @@ assets:
   - id: ASSET-FEATURE-PLAN-STATE
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/FeaturePlanState.java
-    role: Canonical structured planning state for a feature room; legacy section lists, sectionStatuses, repo workspace linkage fields, profileId, and generic artifacts map (ArtifactState per artifact id from work profile)
+    role: >-
+      Canonical structured planning state for a feature room; legacy section lists, sectionStatuses, repo workspace
+      linkage fields, profileId, generic artifacts map (ArtifactState per artifact id from work profile), optional
+      PlanCritiqueSnapshot, PlanConfidence (readiness + level + notes + computedAt), PlanApproval (status, actorId, at)
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-DISCOVERY-GAP
@@ -91,6 +94,30 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/DiscoveryFinding.java
     role: Captured answer metadata for discovery logs (optional future persistence)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLAN-CRITIQUE-FINDING
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanCritiqueFinding.java
+    role: One rule-based critique finding (id, category, severity, code, message, ref) for Phase C
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLAN-CRITIQUE-SNAPSHOT
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanCritiqueSnapshot.java
+    role: Persisted critique run (generatedAt, source, findings list) on FeaturePlanState
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLAN-READINESS-STATUS
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanReadinessStatus.java
+    role: String constants BLOCKED, NEEDS_REVISION, NEEDS_HUMAN_DECISION, READY for machine readiness
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLAN-APPROVAL-STATUS
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanApprovalStatus.java
+    role: Canonical approval statuses and allowsLaunch helper for Phase C gate
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-WORK-PROFILE-REGISTRY
@@ -135,10 +162,26 @@ assets:
     role: Normalizes https/git URLs, owner/repo shorthand, and absolute local directory paths to canonical repo refs
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
+  - id: ASSET-REPO-WORKSPACE-PROGRESS-PHASE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceProgressPhase.java
+    role: Enum milestones for RepoWorkspaceService.ensure progress hook
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK
+    kind: source
+    path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceProgressCallback.java
+    role: Functional interface for RepoWorkspaceService.ensure optional progress notifications
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
   - id: ASSET-REPO-WORKSPACE-SERVICE
     kind: source
     path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceService.java
-    role: Ensures local git workspace from repo input (existing checkout or optional shallow clone via VINEKEEPERS_ALLOW_GIT_CLONE)
+    role: >-
+      Ensures local git workspace from repo input (existing checkout or optional shallow clone via
+      VINEKEEPERS_ALLOW_GIT_CLONE); creates workspace root dirs; removes stale per-context clone dir before re-clone when
+      removal succeeds; SLF4J milestones and optional RepoWorkspaceProgressCallback; git stderr/stdout tail on clone failure;
+      retry once on directory delete before failing closed
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-LUNA-STATE
@@ -169,12 +212,12 @@ requirements:
         - FeatureRoomStateStore.getByContextId and getByRoomChannelId return empty for null or blank keys; put(null) does not store; put skips secondary indexes when optional keys are null or blank
         - FeatureRoomStateStore.resolveCoordinatorConfiguredBotId returns the participant marked primaryCoordinator when present, else the ORCHESTRATOR participant when present, else empty for null state or empty participants
         - FeaturePlanStateStore stores FeaturePlanState by contextId and secondary indexes (featureId, roomChannelId, intakeThreadId)
-        - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows
+        - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows; creates VINEKEEPERS_REPO_WORKSPACE_ROOT when missing; deletes existing per-context workspace directory before shallow clone when present; fails closed if stale directory cannot be removed; logs milestones and supports optional progress callback; surfaces git output snippet on clone failure
         - FeaturePlanState carries optional profileId and artifacts map (per-artifact section/field values) alongside legacy planning fields; with* methods preserve profileId and artifacts
         - Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, and DiscoveryFinding models for structured discovery (JSON-serializable; used by Luna guided discovery loop)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
       symbols: []
     validation:
       tests:
@@ -269,6 +312,12 @@ requirements:
           intent: Verify local git repo resolution and UNAVAILABLE when clone disabled for remote URLs
           testClass: com.vinekeepers.state.repo.RepoWorkspaceServiceTest
           preconditions: []
+        - id: UNIT-REPO-WORKSPACE-SERVICE-PROGRESS
+          title: RepoWorkspaceServiceTest
+          intent: Verify progress callback milestones for local repo ensure path
+          testClass: com.vinekeepers.state.repo.RepoWorkspaceServiceTest
+          testMethod: ensureLocalInvokesProgressPhases
+          preconditions: []
         - id: UNIT-ARTIFACT-STATE-FACTORY
           title: ArtifactStateFactoryTest
           intent: Verify ArtifactStateFactory builds empty artifact trees from profile definitions
@@ -288,5 +337,5 @@ features:
     doc_path: features/domain/state/state.md
     summary: StateStore persists and loads per-bot, per-conversation workflow state.
     requirement_ids: [REQ-STATE-001]
-    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
     status: active

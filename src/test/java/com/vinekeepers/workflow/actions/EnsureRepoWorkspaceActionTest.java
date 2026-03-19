@@ -4,6 +4,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import com.vinekeepers.state.repo.DefaultRepoRefResolver;
+import com.vinekeepers.state.repo.RepoWorkspaceProgressPhase;
 import com.vinekeepers.state.repo.RepoWorkspaceService;
 import com.vinekeepers.state.repo.RepoWorkspaceStateStore;
 import com.vinekeepers.state.repo.RepoWorkspaceStatus;
@@ -13,8 +14,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -58,6 +63,7 @@ class EnsureRepoWorkspaceActionTest {
                 null,
                 null,
                 null,
+                null,
                 java.util.Map.of(),
                 null,
                 null);
@@ -65,7 +71,8 @@ class EnsureRepoWorkspaceActionTest {
 
         RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("w"), false, new DefaultRepoRefResolver());
         RepoWorkspaceStateStore rwStore = new RepoWorkspaceStateStore();
-        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, rwStore, plans, new FeatureRoomStateStore());
+        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, rwStore, plans, new FeatureRoomStateStore(),
+                (ExplicitBotSender) null);
 
         Object r = action.run(null, Map.of("contextId", "ctx-1", "project", repo.toAbsolutePath().toString()), Map.of());
         assertEquals("OK", r);
@@ -82,9 +89,84 @@ class EnsureRepoWorkspaceActionTest {
     @Test
     void returnsErrorWhenRepoMissing() {
         RepoWorkspaceService svc = new RepoWorkspaceService(Path.of(System.getProperty("java.io.tmpdir")), false, new DefaultRepoRefResolver());
-        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, new RepoWorkspaceStateStore(), new FeaturePlanStateStore(), new FeatureRoomStateStore());
+        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, new RepoWorkspaceStateStore(), new FeaturePlanStateStore(), new FeatureRoomStateStore(),
+                (ExplicitBotSender) null);
         Object r = action.run(null, Map.of("contextId", "c"), Map.of());
         assertEquals("Missing repo input for ensure_repo_workspace.", r);
+    }
+
+    @Test
+    void formatProgressChatLine_skipsNoisePhases() {
+        assertNull(EnsureRepoWorkspaceAction.formatProgressChatLine(RepoWorkspaceProgressPhase.RESOLVED_REF, "x"));
+        assertNull(EnsureRepoWorkspaceAction.formatProgressChatLine(RepoWorkspaceProgressPhase.VERIFYING_GIT, null));
+        assertNotNull(EnsureRepoWorkspaceAction.formatProgressChatLine(RepoWorkspaceProgressPhase.CLONING, null));
+    }
+
+    @Test
+    void postsArriettyProgressWhenExplicitSenderAndTargetsPresent(@TempDir Path tmp) throws Exception {
+        Assumptions.assumeTrue(gitWorks());
+        Path repo = tmp.resolve("r");
+        Files.createDirectories(repo);
+        assertEquals(0, runGit(repo, "init"));
+        assertEquals(0, runGit(repo, "config", "user.email", "t@t.c"));
+        assertEquals(0, runGit(repo, "config", "user.name", "t"));
+        Files.writeString(repo.resolve("a.txt"), "1");
+        assertEquals(0, runGit(repo, "add", "a.txt"));
+        assertEquals(0, runGit(repo, "commit", "-m", "i"));
+
+        FeaturePlanStateStore plans = new FeaturePlanStateStore();
+        FeaturePlanState plan = new FeaturePlanState(
+                "ctx-1",
+                "f1",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                null,
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                java.util.Map.of(),
+                null,
+                null);
+        plans.put(plan);
+
+        List<String> messages = new ArrayList<>();
+        AtomicReference<String> lastChannel = new AtomicReference<>();
+        ExplicitBotSender sender = (channelId, messageId, content, botId) -> {
+            lastChannel.set(channelId);
+            messages.add(content);
+            assertEquals("arrietty", botId);
+            return Optional.empty();
+        };
+
+        RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("w"), false, new DefaultRepoRefResolver());
+        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, new RepoWorkspaceStateStore(), plans, new FeatureRoomStateStore(), sender);
+
+        Object r = action.run(null, Map.of(
+                "contextId", "ctx-1",
+                "project", repo.toAbsolutePath().toString(),
+                "channelId", "room-ch",
+                "deliveryChannelId", "thread-ch"), Map.of());
+        assertEquals("OK", r);
+        assertEquals("thread-ch", lastChannel.get());
+        assertEquals(1, messages.size());
+        assertTrue(messages.get(0).contains("Using local repository"), messages.get(0));
     }
 
     private static boolean gitWorks() {

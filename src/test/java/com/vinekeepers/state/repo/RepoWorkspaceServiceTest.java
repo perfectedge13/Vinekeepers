@@ -6,6 +6,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,6 +56,27 @@ class RepoWorkspaceServiceTest {
         assertEquals(RepoMaterializationMode.EXISTING_LOCAL, s.getMaterializationMode());
         assertNotNull(s.getLocalPath());
         assertNotNull(s.getCommit());
+    }
+
+    @Test
+    void ensureLocalInvokesProgressPhases(@TempDir Path tmp) throws Exception {
+        Assumptions.assumeTrue(gitAvailable());
+        Path repo = tmp.resolve("myrepo");
+        Files.createDirectories(repo);
+        git(repo, "init");
+        git(repo, "config", "user.email", "t@t.c");
+        git(repo, "config", "user.name", "T");
+        Files.writeString(repo.resolve("f.txt"), "x");
+        git(repo, "add", "f.txt");
+        git(repo, "commit", "-m", "init");
+
+        List<RepoWorkspaceProgressPhase> phases = new ArrayList<>();
+        RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("work"), false, new DefaultRepoRefResolver());
+        svc.ensure("ctx-p", repo.toAbsolutePath().toString(), (phase, detail) -> phases.add(phase));
+
+        assertTrue(phases.contains(RepoWorkspaceProgressPhase.RESOLVED_REF));
+        assertTrue(phases.contains(RepoWorkspaceProgressPhase.READY_LOCAL));
+        assertFalse(phases.contains(RepoWorkspaceProgressPhase.CLONING));
     }
 
     @Test

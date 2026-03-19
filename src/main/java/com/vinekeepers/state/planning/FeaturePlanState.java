@@ -35,6 +35,7 @@ public final class FeaturePlanState {
     private final Map<PlanSectionKey, PlanSectionStatus> sectionStatuses;
     private final PlanConfidence planConfidence;
     private final PlanApproval planApproval;
+    private final PlanCritiqueSnapshot planCritiqueSnapshot;
     private final String repoWorkspaceId;
     private final String repoWorkspaceStatus;
     private final String repoLocalPath;
@@ -64,6 +65,7 @@ public final class FeaturePlanState {
             Map<PlanSectionKey, PlanSectionStatus> sectionStatuses,
             PlanConfidence planConfidence,
             PlanApproval planApproval,
+            PlanCritiqueSnapshot planCritiqueSnapshot,
             String repoWorkspaceId,
             String repoWorkspaceStatus,
             String repoLocalPath,
@@ -91,6 +93,7 @@ public final class FeaturePlanState {
         this.sectionStatuses = copySectionMap(sectionStatuses);
         this.planConfidence = planConfidence;
         this.planApproval = planApproval;
+        this.planCritiqueSnapshot = planCritiqueSnapshot;
         this.repoWorkspaceId = repoWorkspaceId;
         this.repoWorkspaceStatus = repoWorkspaceStatus;
         this.repoLocalPath = repoLocalPath;
@@ -134,8 +137,8 @@ public final class FeaturePlanState {
         sm.put(PlanSectionKey.REQUIREMENTS, PlanSectionStatus.DRAFT);
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, n, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, repoWorkspaceId, repoWorkspaceStatus,
-                repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
+                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
     }
 
     public FeaturePlanState withAppendedAssumption(AssumptionEntry e) {
@@ -145,8 +148,8 @@ public final class FeaturePlanState {
         sm.put(PlanSectionKey.ASSUMPTIONS, PlanSectionStatus.DRAFT);
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, n, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, repoWorkspaceId, repoWorkspaceStatus,
-                repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
+                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
     }
 
     public FeaturePlanState withAppendedIssue(IssueEntry e) {
@@ -156,8 +159,8 @@ public final class FeaturePlanState {
         sm.put(PlanSectionKey.ISSUES, PlanSectionStatus.DRAFT);
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, assumptions, n, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, repoWorkspaceId, repoWorkspaceStatus,
-                repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
+                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
     }
 
     public FeaturePlanState withAppendedValidationNote(ValidationEntry e) {
@@ -167,8 +170,8 @@ public final class FeaturePlanState {
         sm.put(PlanSectionKey.VALIDATION_NOTES, PlanSectionStatus.DRAFT);
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, assumptions, issues, n, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, repoWorkspaceId, repoWorkspaceStatus,
-                repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
+                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
     }
 
     public FeaturePlanState withSectionStatus(PlanSectionKey key, PlanSectionStatus status) {
@@ -176,8 +179,8 @@ public final class FeaturePlanState {
         sm.put(Objects.requireNonNull(key), Objects.requireNonNull(status));
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, repoWorkspaceId, repoWorkspaceStatus,
-                repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
+                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
     }
 
     public FeaturePlanState withSolutionOutline(SolutionOutline outline) {
@@ -187,8 +190,9 @@ public final class FeaturePlanState {
         }
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes,
-                outline, traceability, projectContext, sm, planConfidence, planApproval, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+                outline, traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot,
+                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
+                createdAt, Instant.now());
     }
 
     public FeaturePlanState withWorkspaceLinkage(
@@ -198,7 +202,7 @@ public final class FeaturePlanState {
             String accessNotes) {
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, planConfidence, planApproval,
+                traceability, projectContext, sectionStatuses, planConfidence, planApproval, planCritiqueSnapshot,
                 workspaceId, workspaceStatusName, localPath, accessNotes, profileId, artifacts, createdAt, Instant.now());
     }
 
@@ -208,8 +212,33 @@ public final class FeaturePlanState {
     public FeaturePlanState withArtifacts(Map<String, ArtifactState> newArtifacts) {
         return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
                 title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, planConfidence, planApproval, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, newArtifacts, createdAt, Instant.now());
+                traceability, projectContext, sectionStatuses, planConfidence, planApproval, planCritiqueSnapshot,
+                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, newArtifacts,
+                createdAt, Instant.now());
+    }
+
+    public FeaturePlanState withPlanConfidence(PlanConfidence confidence) {
+        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
+                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
+                traceability, projectContext, sectionStatuses, confidence, planApproval, planCritiqueSnapshot,
+                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
+                createdAt, Instant.now());
+    }
+
+    public FeaturePlanState withPlanApproval(PlanApproval approval) {
+        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
+                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
+                traceability, projectContext, sectionStatuses, planConfidence, approval, planCritiqueSnapshot,
+                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
+                createdAt, Instant.now());
+    }
+
+    public FeaturePlanState withPlanCritiqueSnapshot(PlanCritiqueSnapshot snapshot) {
+        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
+                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
+                traceability, projectContext, sectionStatuses, planConfidence, planApproval, snapshot,
+                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
+                createdAt, Instant.now());
     }
 
     public String getContextId() {
@@ -286,6 +315,10 @@ public final class FeaturePlanState {
 
     public PlanApproval getPlanApproval() {
         return planApproval;
+    }
+
+    public PlanCritiqueSnapshot getPlanCritiqueSnapshot() {
+        return planCritiqueSnapshot;
     }
 
     public String getRepoWorkspaceId() {

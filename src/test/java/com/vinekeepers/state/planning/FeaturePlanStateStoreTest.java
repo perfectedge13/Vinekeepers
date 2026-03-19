@@ -44,6 +44,7 @@ class FeaturePlanStateStoreTest {
                 null,
                 null,
                 null,
+                null,
                 Map.of(),
                 null,
                 null);
@@ -82,6 +83,7 @@ class FeaturePlanStateStoreTest {
                 null,
                 null,
                 null,
+                null,
                 Map.of(),
                 null,
                 null);
@@ -104,6 +106,7 @@ class FeaturePlanStateStoreTest {
                 null,
                 null,
                 FeaturePlanState.initialSectionStatuses(),
+                null,
                 null,
                 null,
                 null,

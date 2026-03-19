@@ -35,6 +35,12 @@ Luna configuration in `config/bots.yaml` supplies bot routing, `workflowRef: lun
 - **Support and actions:** **`StructuredDiscoverySupport`** derives gaps from **`FeaturePlanState`** and the work profile, builds **`DiscoveryAgenda`** / **`DiscoveryQuestion`**, and exposes JSON and branch flags for workflow state. Actions map to `call_action` names above; **`classify_assumption_or_issue`** uses simple text rules to call **`append_plan_issue`** or **`append_plan_assumption`**.
 - **Planning models:** Typed **`DiscoveryGap`**, **`DiscoveryQuestion`**, **`DiscoveryAgenda`**, **`DiscoveryFinding`** live under `com.vinekeepers.state.planning` (REQ-STATE-001); JSON-serializable for workflow snapshots.
 
+# Phase C (pre-launch critique and approval)
+
+- **Placement:** After Phase B converges (or exits on blocking gaps), **`run_plan_critique_and_readiness`** (`storeSpread`) → branch on **`planReadinessStatus`** (**`BLOCKED`**, **`NEEDS_REVISION`**, **`READY`**, **`NEEDS_HUMAN_DECISION`**) → optional thread review + choices → **`persist_plan_approval`** → role posts → **`launch_cursor_run`**.
+- **Actions:** **`run_plan_critique_and_readiness`** persists **`PlanCritiqueSnapshot`** and **`PlanConfidence`** on **`FeaturePlanState`**; spreads **`planReadinessStatus`**, **`planReadinessSummary`**, **`planCritiqueSummary`**, **`planCritiqueFindingsJson`**, **`planConfidenceLevel`**. **`persist_plan_approval`** maps **`planApprovalDecision`** (`approve`, `approve_with_risks`, `revise`, `reject`) to **`PlanApproval`** with **`authorId`** from **`__event`**. **`LaunchCursorRunAction`** when **`FeaturePlanStateStore`** is wired and **`contextId`** is set requires **`PlanApproval`** status **`APPROVE`** or **`APPROVE_WITH_RISKS`** unless **`CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true`**.
+- **Support:** **`PlanCritiqueSupport`** (rule-based findings), **`PlanReadinessEvaluator`** (readiness from gaps + findings + plan lists).
+
 # Interfaces
 
 - **`CursorCloudAdapter`:** abstraction over Cursor Cloud Agent launch, status, conversation, and follow-up operations.

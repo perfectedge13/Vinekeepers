@@ -57,6 +57,8 @@ import com.vinekeepers.workflow.actions.GetStructuredDiscoveryGapsAction;
 import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import com.vinekeepers.workflow.actions.InitializeFeatureRoomStateAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
+import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
+import com.vinekeepers.workflow.actions.RunPlanCritiqueAndReadinessAction;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
 import com.vinekeepers.workflow.actions.ProvisionBotInstanceAction;
 import com.vinekeepers.workflow.actions.ProvisionRoomParticipantsAction;
@@ -267,8 +269,9 @@ public final class Bootstrap {
         registry.register("set_plan_section_status", new SetPlanSectionStatusAction(featurePlanStateStore));
         registry.register("set_solution_outline", new SetSolutionOutlineAction(featurePlanStateStore));
         registry.register("ensure_repo_workspace", new EnsureRepoWorkspaceAction(
-                repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore));
-        registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore));
+                repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore,
+                outboundDeliveryRouter));
+        registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore, featurePlanStateStore));
     }
 
     private void registerTools(ToolRegistry registry) {

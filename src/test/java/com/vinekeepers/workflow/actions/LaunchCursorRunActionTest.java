@@ -10,6 +10,10 @@ import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
 import com.vinekeepers.state.StateStore;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanApproval;
+import com.vinekeepers.state.planning.PlanApprovalStatus;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -97,7 +101,9 @@ class LaunchCursorRunActionTest {
             @Override
             public void addFollowup(String agentId, String promptText) {}
         };
-        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        planStore.put(minPlanWithApproval("ctx-1", "chan-1"));
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore, planStore);
         Map<String, Object> bind = Map.of(
                 "project", "acme/repo",
                 "codeChange", "Add tests",
@@ -121,6 +127,22 @@ class LaunchCursorRunActionTest {
         assertNotNull(contextStore.getByExternalRunId("agent-123").orElse(null));
         assertEquals("acme/repo", stateStore.get("luna:lastRepo:user-1", String.class).orElse(null));
         assertEquals("active", contextStore.getByContextId("ctx-1").orElseThrow().getStatus());
+    }
+
+    @Test
+    void runReturnsErrorWhenContextIdPresentButPlanNotApproved() {
+        CursorCloudAdapter adapter = stubAdapter();
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        planStore.put(minPlanWithApproval("ctx-1", "chan-1").withPlanApproval(null));
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore, planStore);
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "acme/repo",
+                "codeChange", "Add feature",
+                "contextId", "ctx-1",
+                "__sessionKey", "s1"));
+        assertTrue(result.toString().contains("Plan approval required"));
     }
 
     @Test
@@ -176,6 +198,38 @@ class LaunchCursorRunActionTest {
         Object result = action.run(null, Map.of(), Map.of(
                 "project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
         assertTrue(result.toString().startsWith("Cursor launch failed:"));
+    }
+
+    private static FeaturePlanState minPlanWithApproval(String contextId, String roomChannelId) {
+        return new FeaturePlanState(
+                contextId,
+                "f1",
+                "s",
+                roomChannelId,
+                null,
+                null,
+                "t",
+                null,
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                new PlanApproval(PlanApprovalStatus.APPROVE, "u1", NOW),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                java.util.Map.of(),
+                null,
+                null);
     }
 
     private static CursorCloudAdapter stubAdapter() {

@@ -579,6 +579,16 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-EXPLICIT-BOT-SENDER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ExplicitBotSender.java
+    role: Functional interface for sendAsExplicit(channelId, messageId, content, asBotId); used by EnsureRepoWorkspaceAction and implemented by OutboundDeliveryRouter
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-POST-CHANNEL-MESSAGE-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostChannelMessageAction.java
@@ -640,8 +650,10 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/EnsureRepoWorkspaceAction.java
     role: >-
-      Workflow action to resolve/materialize repo workspace via RepoWorkspaceService, persist RepoWorkspaceState, and
-      update FeaturePlanState workspace linkage when plan exists
+      Workflow action to resolve/materialize repo workspace via RepoWorkspaceService (with optional RepoWorkspaceProgressCallback), persist RepoWorkspaceState, and
+      update FeaturePlanState workspace linkage when plan exists; when OutboundDeliveryRouter is wired, posts short progress lines
+      to the lifecycle thread as bot arrietty using the same send-target rules as post_channel_message (deliveryChannelId with
+      THREAD_CREATE_FAILED fallback to channelId)
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -726,6 +738,48 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/RecomputePlanProgressAction.java
     role: Workflow action recompute_plan_progress — refresh section statuses from artifacts, recompute gaps spread for loop exit
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLAN-CRITIQUE-SUPPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanCritiqueSupport.java
+    role: Rule-based critique findings from gaps and plan lists (Phase C)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLAN-READINESS-EVALUATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanReadinessEvaluator.java
+    role: Maps gaps and findings to PlanConfidence readiness (Phase C)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RunPlanCritiqueAndReadinessAction.java
+    role: >-
+      Workflow action run_plan_critique_and_readiness — persists PlanCritiqueSnapshot and PlanConfidence; storeSpread
+      keys planReadinessStatus, planConfidenceLevel, planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PERSIST-PLAN-APPROVAL-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PersistPlanApprovalAction.java
+    role: Workflow action persist_plan_approval — writes PlanApproval from planApprovalDecision and event authorId
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -822,7 +876,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java
     role: >-
       Workflow action to launch a Cursor cloud run and register run record; passes optional deliveryChannelId into
-      LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room
+      LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room; when
+      FeaturePlanStateStore is wired and contextId is non-blank, requires PlanApproval APPROVE or APPROVE_WITH_RISKS unless
+      env CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -896,7 +952,8 @@ requirements:
         - >-
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, upsert_artifact_section_data,
           get_profile_missing_fields, get_structured_discovery_gaps, build_discovery_agenda, capture_and_apply_discovery_answer,
-          classify_assumption_or_issue, recompute_plan_progress, append_plan_requirement,
+          classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness, persist_plan_approval,
+          append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry
         - >-
@@ -947,6 +1004,7 @@ requirements:
         - ASSET-WORKFLOW-CONDITION-EVALUATOR
         - ASSET-EXTRACT-EVENT-FIELDS-STEP
         - ASSET-CREATE-CHANNEL-ACTION
+        - ASSET-EXPLICIT-BOT-SENDER
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
         - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
         - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
@@ -960,6 +1018,10 @@ requirements:
         - ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
         - ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
         - ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION
+        - ASSET-PLAN-CRITIQUE-SUPPORT
+        - ASSET-PLAN-READINESS-EVALUATOR
+        - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
+        - ASSET-PERSIST-PLAN-APPROVAL-ACTION
         - ASSET-APPEND-PLAN-REQUIREMENT-ACTION
         - ASSET-APPEND-PLAN-ASSUMPTION-ACTION
         - ASSET-APPEND-PLAN-ISSUE-ACTION
@@ -1105,6 +1167,18 @@ requirements:
           title: EnsureRepoWorkspaceActionTest
           intent: Verify ensure_repo_workspace links plan state after workspace resolution
           testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          preconditions: []
+        - id: UNIT-ENSURE-REPO-WORKSPACE-ACTION-PROGRESS-LINE
+          title: EnsureRepoWorkspaceActionTest
+          intent: Verify chat progress line formatting skips noisy RepoWorkspaceProgressPhase values
+          testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          testMethod: formatProgressChatLine_skipsNoisePhases
+          preconditions: []
+        - id: UNIT-ENSURE-REPO-WORKSPACE-ACTION-ARRIETTY-POST
+          title: EnsureRepoWorkspaceActionTest
+          intent: Verify ensure_repo_workspace posts Arrietty progress via ExplicitBotSender when thread target present
+          testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          testMethod: postsArriettyProgressWhenExplicitSenderAndTargetsPresent
           preconditions: []
         - id: UNIT-UPSERT-ARTIFACT-SECTION-DATA-ACTION
           title: UpsertArtifactSectionDataActionTest
@@ -1262,9 +1336,13 @@ requirements:
           (storeSpread), branch on discoveryHasOpenGaps, build_discovery_agenda (storeSpread), prompt_for_field /
           capture_field for discoveryAnswerRaw, capture_and_apply_discovery_answer, classify_assumption_or_issue,
           recompute_plan_progress (storeSpread), then branch (exit loop on discoveryBlockingIssueMode or no open gaps,
-          else clear discoveryAnswerRaw and rebuild agenda); when no gaps, flow continues to intake/spec role posts and
-          launch_cursor_run; confirm cancel branches to cancelled done step; channel create failure branches to
-          could-not-create-room done step
+          else clear discoveryAnswerRaw and rebuild agenda); when no gaps, Phase C runs run_plan_critique_and_readiness
+          (storeSpread), branches on planReadinessStatus (BLOCKED → thread+room posts and blocked done; NEEDS_REVISION →
+          discovery loop with clear; READY/NEEDS_HUMAN_DECISION → intake/spec thread review packet and choices approve /
+          approve_with_risks / revise / reject); persist_plan_approval after approve paths; revise/reject skip
+          launch_cursor_run; then role posts and launch_cursor_run; launch_cursor_run when contextId is set requires
+          canonical PlanApproval APPROVE or APPROVE_WITH_RISKS unless CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true; confirm cancel
+          branches to cancelled done step; channel create failure branches to could-not-create-room done step
       examples: []
     traceability:
       assets:
@@ -1301,6 +1379,7 @@ requirements:
         - ASSET-LIFECYCLE-CONTEXT-STORE
         - ASSET-RUNTIME-BOT-INSTANCE
         - ASSET-CREATE-CHANNEL-ACTION
+        - ASSET-EXPLICIT-BOT-SENDER
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
         - ASSET-PROVISION-BOT-INSTANCE-ACTION
         - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
@@ -1316,6 +1395,10 @@ requirements:
         - ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
         - ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
         - ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION
+        - ASSET-PLAN-CRITIQUE-SUPPORT
+        - ASSET-PLAN-READINESS-EVALUATOR
+        - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
+        - ASSET-PERSIST-PLAN-APPROVAL-ACTION
         - ASSET-LAUNCH-CURSOR-RUN-ACTION
         - ASSET-GITHUB-REPOS-CHOICE-PROVIDER
         - ASSET-REPLY-SENDER
@@ -1520,6 +1603,18 @@ requirements:
           intent: Verify ensure_repo_workspace persists workspace state and links FeaturePlanState
           testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
           preconditions: []
+        - id: UNIT-ENSURE-REPO-WORKSPACE-ACTION-PROGRESS-LINE-REQ
+          title: EnsureRepoWorkspaceActionTest
+          intent: Verify chat progress line formatting skips noisy RepoWorkspaceProgressPhase values
+          testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          testMethod: formatProgressChatLine_skipsNoisePhases
+          preconditions: []
+        - id: UNIT-ENSURE-REPO-WORKSPACE-ACTION-ARRIETTY-POST-REQ
+          title: EnsureRepoWorkspaceActionTest
+          intent: Verify ensure_repo_workspace posts Arrietty progress via ExplicitBotSender when thread target present
+          testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          testMethod: postsArriettyProgressWhenExplicitSenderAndTargetsPresent
+          preconditions: []
         - id: UNIT-CREATE-LIFECYCLE-CONTEXT-ACTION
           title: CreateLifecycleContextActionTest
           intent: Verify create_lifecycle_context action creates and stores lifecycle context
@@ -1538,6 +1633,22 @@ requirements:
             (e.g. launching) and lifecycle room
           testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
           testMethod: runLaunchesAndStoresRecordAndBindsContext
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-APPROVAL-GATE
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run returns error when contextId set but plan lacks APPROVE/APPROVE_WITH_RISKS
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runReturnsErrorWhenContextIdPresentButPlanNotApproved
+          preconditions: []
+        - id: UNIT-PHASE-C-PLAN-ACTIONS
+          title: PhaseCPlanActionsTest
+          intent: Verify run_plan_critique_and_readiness and persist_plan_approval update FeaturePlanState
+          testClass: com.vinekeepers.workflow.actions.PhaseCPlanActionsTest
+          preconditions: []
+        - id: UNIT-PLAN-READINESS-EVALUATOR
+          title: PlanReadinessEvaluatorTest
+          intent: Verify readiness classification from gaps, findings, and plan issues
+          testClass: com.vinekeepers.workflow.planreview.PlanReadinessEvaluatorTest
           preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
@@ -1639,6 +1750,7 @@ features:
       - ASSET-LIFECYCLE-CONTEXT-STORE
       - ASSET-RUNTIME-BOT-INSTANCE
       - ASSET-CREATE-CHANNEL-ACTION
+      - ASSET-EXPLICIT-BOT-SENDER
       - ASSET-POST-CHANNEL-MESSAGE-ACTION
       - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
       - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
@@ -1649,6 +1761,10 @@ features:
       - ASSET-PROVISION-BOT-INSTANCE-ACTION
       - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
       - ASSET-CREATE-THREAD-ACTION
+      - ASSET-PLAN-CRITIQUE-SUPPORT
+      - ASSET-PLAN-READINESS-EVALUATOR
+      - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
+      - ASSET-PERSIST-PLAN-APPROVAL-ACTION
       - ASSET-LAUNCH-CURSOR-RUN-ACTION
       - ASSET-SPACE-OPERATIONS
       - ASSET-SPACE-OPERATIONS-REGISTRY
