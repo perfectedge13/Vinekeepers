@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T18:00:00Z"
+  updated_utc: "2026-03-18T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -70,13 +70,19 @@ assets:
   - id: ASSET-BOOTSTRAP
     kind: source
     path: src/main/java/com/vinekeepers/core/Bootstrap.java
-    role: Wire engine, config, ConnectorRegistry; build DiscordConnectorConfig and DiscordConnectorAdapter; call adapter.registerBots(bots, ConnectorContext); build handlesMap from getConnectorIdentity("discord"); action and sink registration stay in Bootstrap
+    role: >-
+      Wire engine, config, ConnectorRegistry; build DiscordConnectorConfig and DiscordConnectorAdapter; call
+      adapter.registerBots(bots, ConnectorContext); build handlesMap from getConnectorIdentity("discord"); create
+      FeatureRoomStateStore and pass to Router and OutboundDeliveryRouter; register engine reply sender, sink, and
+      ReplyTargetResolver by connector id; register workflow actions provision_room_participants
+      (ProvisionRoomParticipantsAction) and initialize_feature_room_state (InitializeFeatureRoomStateAction); action
+      and sink registration stay in Bootstrap
     requires: [REQ-CORE-002, REQ-TOOLS-001, REQ-LUNA-001]
     feature_ids: [FEAT-CORE, FEAT-TOOLS, FEAT-CURSOR-GATHERING]
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via ReplySender (e.g. OutboundDeliveryRouter) and connector sink registry with lifecycle operations (respondImmediately, sendFollowUp, updateMessage); for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent fallback; build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
+    role: Route events to bots (router plus waiting-session for message events); run workflow and reasoner; apply tool/state side effects; deliver replies via sink registry then fallback to reply-sender registry, both keyed by event source prefix (connector id)—no connector literal in engine; ReplySender and AppReplySink registered by Bootstrap; lifecycle (respondImmediately, sendFollowUp, updateMessage); build OutboundResponse from workflow/reasoner; obtains ReplyTarget only via connector-owned ReplyTargetResolver by connector id—fail closed when no resolver or resolver returns empty; no defer in engine
     requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
     feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
   - id: ASSET-OUTBOUND-RESPONSE
@@ -188,7 +194,7 @@ requirements:
     acceptance:
       criteria:
         - Main class runs Bootstrap and starts engine
-        - Bootstrap wires engine, config loader, ConnectorRegistry; creates Discord adapter with DiscordConnectorConfig; calls adapter.registerBots(bots, context); engine/sink/cursor/action registration remain in Bootstrap
+        - Bootstrap wires engine, config loader, ConnectorRegistry; creates Discord adapter with DiscordConnectorConfig; calls adapter.registerBots(bots, context); Bootstrap registers engine reply sender and sink by connector id (e.g. engine.setReplySender("discord", outboundDeliveryRouter), registerSink("discord", DiscordAppReplySink)); engine/sink/cursor/action registration remain in Bootstrap
         - Bootstrap creates WorkflowRunner per bot via WorkflowRunnerFactory and registerRunner(botId, runner)
         - Bootstrap registers shared tools and passes ToolRunner into configured workflows
       examples: []
@@ -210,7 +216,7 @@ requirements:
 
   - id: REQ-CORE-003
     title: Event-driven engine routes events to bots
-    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. For Discord message events, the engine additionally includes any registered bot that has a workflow runner and has persisted state with WAITING_INPUT for the event's session key, so conversational workflows can resume on later messages in the same session. Reply delivery uses ReplySender (e.g. OutboundDeliveryRouter implementing ReplySender) and the connector contract (AppReplySink) with lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities); for Discord, OutboundDeliveryRouter resolves the sender from ReplyTarget and optional lifecycle context (configuredBotId)—no silent fallback when the lifecycle channel's bot has no registered sender. Engine builds OutboundResponse from workflow or reasoner (rich or text-only), resolves ReplyTarget from event, and calls the sink registered for the event source (transitional source-prefix routing). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
+    statement: VinekeepersEngine receives events, routes them to matching bots, runs the registered WorkflowRunner, then passes workflow context and session state to the reasoner before choosing a reply and recording audit events. For message events, the engine additionally includes any registered bot that has a workflow runner and has persisted state with WAITING_INPUT for the event's session key. Reply delivery uses reply senders and sinks registered by connector id (source prefix); engine has no connector-specific literal (e.g. no "discord"). Delivery uses the sink for the event's source prefix when registered, else fallback to the reply sender for that source prefix. ReplySender (e.g. OutboundDeliveryRouter) and AppReplySink are registered by Bootstrap; lifecycle operations (respondImmediately, sendFollowUp, updateMessage, openModal, getCapabilities). Engine builds OutboundResponse from workflow or reasoner; ReplyTarget is obtained only via ReplyTargetResolver registered by connector id—when no resolver is registered for the source prefix or the resolver returns empty, the engine does not deliver the reply (fail closed). Interaction events (kind interaction) are supported; platform timing and defer are connector-owned only.
     status: active
     priority: high
     type: functional
@@ -227,12 +233,13 @@ requirements:
         - Engine uses registered runners and runner.runResult(event, stateStore, botId) for workflow execution
         - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message
         - Engine applies reasoner state patches and executes proposed tool calls through ToolRunner
-        - Engine delivers replies via sink registry (source-prefix) and lifecycle methods (respondImmediately, sendFollowUp, updateMessage, openModal); sink exposes getCapabilities; no defer in engine
-        - For Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId; for lifecycle channels, do not silently fall back when that bot's sender is unavailable
+        - Engine registers reply senders and sinks by connector id (setReplySender(connectorId, sender), registerSink(sourcePrefix, sink)); delivery uses sink for event's source prefix when present, else fallback to reply sender for that source prefix; no connector literal (e.g. no "discord") in engine
+        - Engine delivers replies via sink registry and lifecycle methods (respondImmediately, sendFollowUp, updateMessage, openModal); sink exposes getCapabilities; no defer in engine
+        - Engine uses ReplyTargetResolver registered by connector id to obtain ReplyTarget; when no resolver is registered for the source prefix or resolver returns empty, engine does not deliver reply (fail closed)
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:
-      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT, ASSET-REPLY-SENDER]
+      assets: [ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT, ASSET-REPLY-SENDER, ASSET-REPLY-TARGET-RESOLVER, ASSET-DISCORD-REPLY-TARGET-RESOLVER]
       symbols: []
     validation:
       tests:
@@ -240,6 +247,11 @@ requirements:
           title: VinekeepersEngineTest
           intent: Verify engine receives events and routes to bots
           testClass: com.vinekeepers.core.VinekeepersEngineTest
+          preconditions: []
+        - id: UNIT-DISCORD-REPLY-TARGET-RESOLVER
+          title: DiscordReplyTargetResolverTest
+          intent: Verify DiscordReplyTargetResolver resolves Event to ChannelTarget or InteractionTarget from payload; supports engine ReplyTarget resolution by connector id
+          testClass: com.vinekeepers.connectors.DiscordReplyTargetResolverTest
           preconditions: []
 
 features:
@@ -259,5 +271,5 @@ features:
     doc_path: features/domain/core/engine.md
     summary: VinekeepersEngine routes events to matched bots, executes workflow runners, applies reasoner output, and emits replies.
     requirement_ids: [REQ-CORE-003]
-    asset_ids: [ASSET-ENGINE, ASSET-ROUTER, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT, ASSET-REPLY-SENDER]
+    asset_ids: [ASSET-ENGINE, ASSET-ROUTER, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT, ASSET-REPLY-SENDER, ASSET-REPLY-TARGET-RESOLVER, ASSET-DISCORD-REPLY-TARGET-RESOLVER]
     status: active

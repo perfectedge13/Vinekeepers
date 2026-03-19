@@ -1,7 +1,9 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.state.planning.PlanningRole;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -9,13 +11,22 @@ import java.util.Map;
 /**
  * Workflow action: state-driven post to a channel (e.g. lifecycle room). Bind/state: channelId, content.
  * Interpolation uses a merged map (state then bind); bind overrides state, so {{lifecycleBotName}} from bind wins.
+ * Optional bind: asRole (orchestrator, architect, auditor, scribe) or asBotId — when set, uses
+ * OutboundDeliveryRouter.sendAsRole or sendAs so the message is sent as that participant.
+ * Optional bind/state: target (room | thread) or targetChannelId for explicit send target:
+ * - If targetChannelId present and non-blank, use as send target.
+ * - If target is "room", use channelId.
+ * - If target is "thread", use deliveryChannelId (THREAD_CREATE_FAILED fallback to channelId).
+ * - Else legacy: firstNonBlank(deliveryChannelId, channelId).
  */
 public final class PostChannelMessageAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final ReplySender replySender;
+    private final OutboundDeliveryRouter outboundDeliveryRouter;
 
     public PostChannelMessageAction(ReplySender replySender) {
         this.replySender = replySender;
+        this.outboundDeliveryRouter = replySender instanceof OutboundDeliveryRouter r ? r : null;
     }
 
     @Override
@@ -28,9 +39,23 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
             return "Missing channelId for post_channel_message.";
         }
         String deliveryChannelId = firstNonBlank(getString(bind, "deliveryChannelId"), state != null ? getString(state, "deliveryChannelId") : null);
-        String sendTarget = firstNonBlank(deliveryChannelId, channelId);
-        if (CreateThreadAction.THREAD_CREATE_FAILED.equals(sendTarget)) {
+        String targetChannelId = firstNonBlank(getString(bind, "targetChannelId"), state != null ? getString(state, "targetChannelId") : null);
+        String target = firstNonBlank(getString(bind, "target"), state != null ? getString(state, "target") : null);
+        String sendTarget;
+        if (targetChannelId != null && !targetChannelId.isBlank()) {
+            sendTarget = targetChannelId;
+        } else if ("room".equalsIgnoreCase(target != null ? target.trim() : null)) {
             sendTarget = channelId;
+        } else if ("thread".equalsIgnoreCase(target != null ? target.trim() : null)) {
+            sendTarget = firstNonBlank(deliveryChannelId, channelId);
+            if (CreateThreadAction.THREAD_CREATE_FAILED.equals(sendTarget)) {
+                sendTarget = channelId;
+            }
+        } else {
+            sendTarget = firstNonBlank(deliveryChannelId, channelId);
+            if (CreateThreadAction.THREAD_CREATE_FAILED.equals(sendTarget)) {
+                sendTarget = channelId;
+            }
         }
         String content = firstNonBlank(getString(bind, "content"), state != null ? getString(state, "content") : null);
         if (content == null) {
@@ -43,8 +68,30 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
         if (content.isBlank()) {
             return "Blank content for post_channel_message.";
         }
-        replySender.send(sendTarget, null, content);
+        String asBotId = firstNonBlank(getString(bind, "asBotId"), state != null ? getString(state, "asBotId") : null);
+        String asRoleStr = firstNonBlank(getString(bind, "asRole"), state != null ? getString(state, "asRole") : null);
+        if (outboundDeliveryRouter != null && asBotId != null && !asBotId.isBlank()) {
+            outboundDeliveryRouter.sendAs(sendTarget, null, content, asBotId);
+        } else if (outboundDeliveryRouter != null && asRoleStr != null && !asRoleStr.isBlank()) {
+            PlanningRole role = parseRole(asRoleStr);
+            if (role != null) {
+                outboundDeliveryRouter.sendAsRole(sendTarget, null, content, role);
+            } else {
+                replySender.send(sendTarget, null, content);
+            }
+        } else {
+            replySender.send(sendTarget, null, content);
+        }
         return "OK";
+    }
+
+    private static PlanningRole parseRole(String s) {
+        if (s == null || s.isBlank()) return null;
+        String upper = s.trim().toUpperCase();
+        for (PlanningRole r : PlanningRole.values()) {
+            if (r.name().equals(upper)) return r;
+        }
+        return null;
     }
 
     private static String getString(Map<String, Object> map, String key) {

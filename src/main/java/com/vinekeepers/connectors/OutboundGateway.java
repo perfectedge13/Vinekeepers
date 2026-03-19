@@ -1,9 +1,12 @@
 package com.vinekeepers.connectors;
 
 /**
- * Small transitional generic gateway for outbound delivery: send text, get self identity,
- * create channels/threads, and manage permission overrides. Connector-specific gateways
- * (e.g. Discord) extend this; interaction-specific methods remain on the connector interface.
+ * Connector execution surface for outbound operations. This interface exposes a Discord-shaped
+ * API (guildId, createTextChannel, createThreadChannel, addPermissionOverride) and is used only
+ * by connector-owned code (e.g. DiscordSpaceOperations, DiscordAppReplySink) and by
+ * OutboundDeliveryRouter for gateway resolution. It is not a generic core abstraction; core
+ * uses ReplySender and ReplyTargetResolver for delivery; gateways are resolved and used by
+ * connector code via the router.
  */
 public interface OutboundGateway {
 

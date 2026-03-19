@@ -1,0 +1,112 @@
+package com.vinekeepers.workflow.actions;
+
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.repo.DefaultRepoRefResolver;
+import com.vinekeepers.state.repo.RepoWorkspaceService;
+import com.vinekeepers.state.repo.RepoWorkspaceStateStore;
+import com.vinekeepers.state.repo.RepoWorkspaceStatus;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class EnsureRepoWorkspaceActionTest {
+
+    @Test
+    void linksPlanStateAfterEnsure(@TempDir Path tmp) throws Exception {
+        Assumptions.assumeTrue(gitWorks());
+        Path repo = tmp.resolve("r");
+        Files.createDirectories(repo);
+        assertEquals(0, runGit(repo, "init"));
+        assertEquals(0, runGit(repo, "config", "user.email", "t@t.c"));
+        assertEquals(0, runGit(repo, "config", "user.name", "t"));
+        Files.writeString(repo.resolve("a.txt"), "1");
+        assertEquals(0, runGit(repo, "add", "a.txt"));
+        assertEquals(0, runGit(repo, "commit", "-m", "i"));
+
+        FeaturePlanStateStore plans = new FeaturePlanStateStore();
+        FeaturePlanState plan = new FeaturePlanState(
+                "ctx-1",
+                "f1",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                null,
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                java.util.Map.of(),
+                null,
+                null);
+        plans.put(plan);
+
+        RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("w"), false, new DefaultRepoRefResolver());
+        RepoWorkspaceStateStore rwStore = new RepoWorkspaceStateStore();
+        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, rwStore, plans, new FeatureRoomStateStore());
+
+        Object r = action.run(null, Map.of("contextId", "ctx-1", "project", repo.toAbsolutePath().toString()), Map.of());
+        assertEquals("OK", r);
+
+        assertTrue(rwStore.getByContextId("ctx-1").isPresent());
+        assertEquals(RepoWorkspaceStatus.RESOLVED_LOCAL, rwStore.getByContextId("ctx-1").get().getStatus());
+
+        FeaturePlanState updated = plans.getByContextId("ctx-1").orElseThrow();
+        assertEquals(RepoWorkspaceStatus.RESOLVED_LOCAL.name(), updated.getRepoWorkspaceStatus());
+        assertNotNull(updated.getRepoLocalPath());
+        assertNotNull(updated.getRepoWorkspaceId());
+    }
+
+    @Test
+    void returnsErrorWhenRepoMissing() {
+        RepoWorkspaceService svc = new RepoWorkspaceService(Path.of(System.getProperty("java.io.tmpdir")), false, new DefaultRepoRefResolver());
+        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, new RepoWorkspaceStateStore(), new FeaturePlanStateStore(), new FeatureRoomStateStore());
+        Object r = action.run(null, Map.of("contextId", "c"), Map.of());
+        assertEquals("Missing repo input for ensure_repo_workspace.", r);
+    }
+
+    private static boolean gitWorks() {
+        try {
+            Process p = new ProcessBuilder("git", "--version").start();
+            return p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static int runGit(Path cwd, String... args) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder();
+        java.util.List<String> cmd = new java.util.ArrayList<>();
+        cmd.add("git");
+        for (String a : args) {
+            cmd.add(a);
+        }
+        pb.command(cmd);
+        pb.directory(cwd.toFile());
+        Process p = pb.start();
+        assertTrue(p.waitFor(60, TimeUnit.SECONDS));
+        return p.exitValue();
+    }
+}

@@ -14,4 +14,5 @@ Unit tests cover event routing through the engine plus reasoner integration for 
 | UNIT-ENGINE-DISCORD-MENTION | VinekeepersEngineTest | com.vinekeepers.core.VinekeepersEngineTest | discordMessageWithMention_routesToLuna | Discord message with @mention routes to Luna |
 | UNIT-ENGINE-WAITING-SESSION | VinekeepersEngineTest | com.vinekeepers.core.VinekeepersEngineTest | followUpMessageWithoutMention_sameUserAndChannel_continuesWorkflowWhenLunaHasWaitingInput | Follow-up message without @mention in same user and channel continues workflow when Luna has WAITING_INPUT |
 | UNIT-ENGINE-SESSION-SCOPE | VinekeepersEngineTest | com.vinekeepers.core.VinekeepersEngineTest | messageFromDifferentUserOrChannel_doesNotContinueSession | Message from different user or channel does not continue session |
+| UNIT-DISCORD-REPLY-TARGET-RESOLVER | DiscordReplyTargetResolverTest | com.vinekeepers.connectors.DiscordReplyTargetResolverTest | — | Verify DiscordReplyTargetResolver resolves Event to ChannelTarget or InteractionTarget from payload; supports engine ReplyTarget resolution by connector id |
 

@@ -1,0 +1,88 @@
+# Work profiles: config-driven information shapes (artifact / section / field).
+# Not Discord- or Git-specific; code loads this generically via WorkProfileLoader.
+
+profiles:
+  software_feature_planning:
+    profileId: software_feature_planning
+    title: Software feature planning
+    artifacts:
+      - artifactId: requirements_spec
+        title: Requirements specification
+        ownerRoles: [ORCHESTRATOR, SCRIBE]
+        requiredForApproval: true
+        sections:
+          - sectionId: narrative
+            title: Feature narrative
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: feature_summary
+                label: Feature summary
+                type: text
+                required: true
+                promptHint: One paragraph describing the change or feature goal.
+              - fieldId: acceptance_criteria
+                label: Acceptance criteria
+                type: text
+                required: false
+                promptHint: Bullet-style criteria; optional for early draft.
+      - artifactId: decision_log
+        title: Decision log
+        ownerRoles: [ARCHITECT, ORCHESTRATOR]
+        requiredForApproval: false
+        sections:
+          - sectionId: decisions
+            title: Decisions
+            repeatable: true
+            required: false
+            fields:
+              - fieldId: decision_text
+                label: Decision
+                type: text
+                required: true
+                promptHint: What was decided and why.
+      - artifactId: overall_plan
+        title: Overall plan
+        ownerRoles: [ARCHITECT]
+        requiredForApproval: true
+        sections:
+          - sectionId: outline
+            title: Plan outline
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: plan_body
+                label: Plan
+                type: markdown
+                required: true
+                promptHint: High-level steps and sequencing.
+      - artifactId: validation_plan
+        title: Validation plan
+        ownerRoles: [AUDITOR]
+        requiredForApproval: true
+        sections:
+          - sectionId: checks
+            title: Validation checks
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: validation_notes
+                label: Validation approach
+                type: text
+                required: true
+                promptHint: How correctness will be verified.
+      - artifactId: project_context
+        title: Project context
+        ownerRoles: [SCRIBE]
+        requiredForApproval: false
+        sections:
+          - sectionId: context
+            title: Context
+            repeatable: false
+            required: false
+            fields:
+              - fieldId: context_summary
+                label: Context summary
+                type: text
+                required: false
+                promptHint: Links, constraints, or background.

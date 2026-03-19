@@ -9,6 +9,7 @@ A feature is a cohesive capability backed by spec requirements and traced assets
 | Domain | Description | Link |
 |--------|-------------|------|
 | Core | Specs governance, application bootstrap, and engine orchestration | [Core](domain/core.md) |
+| Connectors | External event ingress and reply integrations | [Connectors](domain/connectors.md) |
 | Env | Startup environment loading and property access | [Env](domain/env.md) |
 | Config | YAML-driven bot, routing, and workflow configuration | [Config](domain/config.md) |
 | Bot | Bot runtime models, tool policy, and routing filters | [Bot](domain/bot.md) |
@@ -18,5 +19,4 @@ A feature is a cohesive capability backed by spec requirements and traced assets
 | Audit | Human-facing audit of tool activity and outcomes | [Audit](domain/audit.md) |
 | Reasoner | Bot decision interface and output contract | [Reasoner](domain/reasoner.md) |
 | Workflow | Workflow runners, step DSL, and gathering flows | [Workflow](domain/workflow.md) |
-| Connectors | External event ingress and reply integrations | [Connectors](domain/connectors.md) |
 

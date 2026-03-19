@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T18:00:00Z"
+  updated_utc: "2026-03-18T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -72,7 +72,7 @@ assets:
   - id: ASSET-OUTBOUND-GATEWAY
     kind: source
     path: src/main/java/com/vinekeepers/connectors/OutboundGateway.java
-    role: Generic gateway for outbound delivery (send, getSelfUserId, isConnected, createTextChannel, createThreadChannel, addPermissionOverride); connector gateways extend this
+    role: Connector execution surface for outbound operations; Discord-shaped API (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride); used only by connector code and OutboundDeliveryRouter; not a generic core abstraction
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-DISCORD-SOURCE
@@ -109,11 +109,86 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/connectors/OutboundDeliveryRouter.java
     role: >-
-      Implements ReplySender; routes outbound delivery; registerSender(botId, ReplySender, OutboundGateway); resolves
-      sender from delivery target (channel or thread id) via LifecycleContextStore getByDeliveryTargetId when present,
-      else by channelId; lifecycle context yields configuredBotId then that bot's sender; getGatewayForChannel returns
-      OutboundGateway; getSelfUserIdForBot(botId) from that bot's gateway; default sender for non-lifecycle; for
-      lifecycle does not silently fall back
+      Routing (sender resolution by target and lifecycle context) plus gateway resolution; implements ReplySender and
+      delegates to resolved sender; optional FeatureRoomStateStore for sendAsRole(channelId, messageId, content, role)
+      and sendAs(channelId, messageId, content, botId); registerSender(botId, ReplySender, OutboundGateway);
+      getGatewayForChannel returns gateway for channel; getSelfUserIdForBot(botId); used by DiscordSpaceOperations and
+      DiscordAppReplySink; no silent fallback for lifecycle when bot has no sender
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-CREATE-ROOM-RESULT
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/CreateRoomResult.java
+    role: "Typed result of createRoom: success with channel id or failure with CreateRoomFailureReason"
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-CREATE-THREAD-RESULT
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/CreateThreadResult.java
+    role: "Typed result of createThread: success with thread id or failure with CreateThreadFailureReason"
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-CREATE-ROOM-FAILURE-REASON
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/CreateRoomFailureReason.java
+    role: Enum of reasons for create-room (create channel) failure from SpaceOperations
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-CREATE-THREAD-FAILURE-REASON
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/CreateThreadFailureReason.java
+    role: Enum of reasons for create-thread failure from SpaceOperations
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-SPACE-OPERATIONS
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/SpaceOperations.java
+    role: >-
+      Interface for connector-specific space operations: createRoom(CreateRoomRequest) returns CreateRoomResult,
+      createThread(CreateThreadRequest) returns CreateThreadResult; resolved by source prefix from SpaceOperationsRegistry;
+      no default for missing prefix — callers fail closed
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-SPACE-OPERATIONS-REGISTRY
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/SpaceOperationsRegistry.java
+    role: Thread-safe registry of SpaceOperations by connector id (source prefix); register(connectorId, ops), get(connectorId)
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-DISCORD-SPACE-OPERATIONS
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/DiscordSpaceOperations.java
+    role: >-
+      Implements SpaceOperations for Discord; returns typed CreateRoomResult and CreateThreadResult; reads only request
+      getters; createRoom/createThread delegate to gateway; when CreateRoomRequest has non-empty participantBotIds,
+      addPermissionOverride for each bot (multi-bot feature room)
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-CREATE-ROOM-REQUEST
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/CreateRoomRequest.java
+    role: >-
+      Request DTO with explicit intent fields (sourceId, guildId, channelName, lifecycleOwnerBotId, participantBotIds,
+      project, codeChange); from(event, state, bind) with bind precedence; optional participantBotIds for multi-bot
+      feature room permission overrides; consumed by SpaceOperations.createRoom
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-CREATE-THREAD-REQUEST
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/CreateThreadRequest.java
+    role: Request DTO with explicit intent fields; factory (caller) owns bind/state resolution; consumed by SpaceOperations.createThread
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-REPLY-TARGET-RESOLVER
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/ReplyTargetResolver.java
+    role: Connector contract to resolve Event to ReplyTarget; engine uses by connector id
+    requires: [REQ-CONNECTORS-DISCORD-001]
+    feature_ids: [FEAT-CONNECTORS-DISCORD]
+  - id: ASSET-DISCORD-REPLY-TARGET-RESOLVER
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/DiscordReplyTargetResolver.java
+    role: Implements ReplyTargetResolver; reads event payload (channelId, messageId, interactionId, token, deferred) and returns InteractionTarget or ChannelTarget
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-GITHUB-SOURCE
@@ -126,7 +201,7 @@ assets:
 requirements:
   - id: REQ-CONNECTORS-DISCORD-001
     title: Discord event source and reply
-    statement: Discord event source and reply; generic outbound abstraction ReplySender (send) and OutboundGateway (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride). DiscordReplySender extends ReplySender; DiscordGateway extends OutboundGateway. Per-bot identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces). ConnectorContext is generic (EventBus, OutboundDeliveryRouter only). Adapter registerBots() does per-bot gateway/sender/default registration only; Bootstrap keeps sink and action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId; getGatewayForChannel returns OutboundGateway or null when lifecycle bot has no gateway; getSelfUserIdForBot(botId) returns that bot's gateway getSelfUserId. DiscordAppReplySink with lifecycle operations; ack/defer adapter-owned; fallback to text when intent not supported.
+    statement: Discord event source and reply; generic outbound abstraction ReplySender (send) and OutboundGateway (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride). DiscordReplySender extends ReplySender; DiscordGateway extends OutboundGateway. Per-bot identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces). ConnectorContext is generic (EventBus, OutboundDeliveryRouter only). Adapter registerBots() does per-bot gateway/sender/default registration only. Bootstrap registers engine reply sender, sink, and Discord ReplyTargetResolver by connector id (engine.setReplySender("discord", outboundDeliveryRouter), engine.registerSink("discord", DiscordAppReplySink), engine.registerReplyTargetResolver("discord", DiscordReplyTargetResolver)); keeps action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId; getGatewayForChannel returns OutboundGateway or null when lifecycle bot has no gateway; getSelfUserIdForBot(botId) returns that bot's gateway getSelfUserId. DiscordAppReplySink with lifecycle operations; ack/defer adapter-owned; fallback to text when intent not supported.
     status: active
     priority: medium
     type: functional
@@ -153,9 +228,11 @@ requirements:
         - ReplySender generic contract (send(channelId, messageId, content)); DiscordReplySender extends ReplySender; Discord implementations used wherever core expects ReplySender
         - Replies from the engine are delivered to Discord via sink or legacy reply path when source is Discord
         - Gateway createTextChannel(guildId, channelName) creates a text channel in the guild for lifecycle room; returns channel id or null on failure
+        - SpaceOperations.createRoom(CreateRoomRequest) returns CreateRoomResult, createThread(CreateThreadRequest) returns CreateThreadResult; no default connector when source prefix is null or blank — callers fail closed
+        - DiscordSpaceOperations returns typed CreateRoomResult and CreateThreadResult (success with id or failure with CreateRoomFailureReason/CreateThreadFailureReason)
       examples: []
     traceability:
-      assets: [ASSET-REPLY-SENDER, ASSET-OUTBOUND-GATEWAY, ASSET-CONNECTOR-CONTEXT, ASSET-CONNECTOR-ADAPTER, ASSET-CONNECTOR-REGISTRY, ASSET-DISCORD-CONNECTOR-CONFIG, ASSET-DISCORD-CONNECTOR-ADAPTER, ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER]
+      assets: [ASSET-REPLY-SENDER, ASSET-OUTBOUND-GATEWAY, ASSET-CONNECTOR-CONTEXT, ASSET-CONNECTOR-ADAPTER, ASSET-CONNECTOR-REGISTRY, ASSET-DISCORD-CONNECTOR-CONFIG, ASSET-DISCORD-CONNECTOR-ADAPTER, ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER, ASSET-CREATE-ROOM-RESULT, ASSET-CREATE-THREAD-RESULT, ASSET-CREATE-ROOM-FAILURE-REASON, ASSET-CREATE-THREAD-FAILURE-REASON, ASSET-SPACE-OPERATIONS, ASSET-SPACE-OPERATIONS-REGISTRY, ASSET-DISCORD-SPACE-OPERATIONS, ASSET-CREATE-ROOM-REQUEST, ASSET-CREATE-THREAD-REQUEST, ASSET-REPLY-TARGET-RESOLVER, ASSET-DISCORD-REPLY-TARGET-RESOLVER]
       symbols: []
     validation:
       tests:
@@ -169,6 +246,11 @@ requirements:
           title: DiscordAppReplySinkTest
           intent: Verify DiscordAppReplySink implements AppReplySink lifecycle, capabilities, ChannelTarget send with components, and intent rendering with fallback to text
           testClass: com.vinekeepers.connectors.DiscordAppReplySinkTest
+          preconditions: []
+        - id: UNIT-DISCORD-REPLY-TARGET-RESOLVER
+          title: DiscordReplyTargetResolverTest
+          intent: Verify DiscordReplyTargetResolver resolves Event to ChannelTarget or InteractionTarget from payload (channelId, messageId, interactionId, token, deferred); message vs interaction kind; sourceId passed through
+          testClass: com.vinekeepers.connectors.DiscordReplyTargetResolverTest
           preconditions: []
         - id: UNIT-DISCORD-EVENT-SOURCE
           title: DiscordEventSourceTest
@@ -192,10 +274,33 @@ requirements:
           testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
           testMethod: runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate
           preconditions: []
+        - id: UNIT-DISCORD-SPACE-OPERATIONS
+          title: DiscordSpaceOperationsTest
+          intent: Verify DiscordSpaceOperations createRoom (guildId, name building, permission override) and createThread (channelId, threadName, contextId, setDeliveryTargetId), normalizeChannelName
+          testClass: com.vinekeepers.connectors.DiscordSpaceOperationsTest
+          preconditions: []
         - id: UNIT-OUTBOUND-DELIVERY-ROUTER
           title: OutboundDeliveryRouterTest
           intent: Verify lifecycle context to configuredBotId sender resolution, default sender when no context, and no fallback when lifecycle channel has no sender for that bot
           testClass: com.vinekeepers.connectors.OutboundDeliveryRouterTest
+          preconditions: []
+        - id: UNIT-OUTBOUND-DELIVERY-ROUTER-SEND-AS-ROLE
+          title: OutboundDeliveryRouterTest
+          intent: Verify sendAsRole resolves role to bot and sends via that bot's sender
+          testClass: com.vinekeepers.connectors.OutboundDeliveryRouterTest
+          testMethod: sendAsRole_resolvesRoleToBotAndSendsViaThatBot
+          preconditions: []
+        - id: UNIT-OUTBOUND-DELIVERY-ROUTER-SEND-AS-ROLE-THREAD
+          title: OutboundDeliveryRouterTest
+          intent: Verify sendAsRole when target is thread resolves by deliveryTargetId
+          testClass: com.vinekeepers.connectors.OutboundDeliveryRouterTest
+          testMethod: sendAsRole_whenTargetIsThread_resolvesByDeliveryTargetId
+          preconditions: []
+        - id: UNIT-OUTBOUND-DELIVERY-ROUTER-SEND-AS-ROLE-FALLBACK
+          title: OutboundDeliveryRouterTest
+          intent: Verify sendAsRole when no feature room or null role falls back to standard send
+          testClass: com.vinekeepers.connectors.OutboundDeliveryRouterTest
+          testMethod: sendAsRole_whenNoFeatureRoomOrNullRole_fallsBackToStandardSend
           preconditions: []
         - id: UNIT-CONNECTOR-REGISTRY
           title: ConnectorRegistryTest
@@ -253,7 +358,7 @@ features:
     doc_path: features/domain/connectors/discord.md
     summary: Discord event source and reply; a JDA-backed gateway receives live messages, preserves mention metadata for routing, and delivers workflow replies back to Discord.
     requirement_ids: [REQ-CONNECTORS-DISCORD-001]
-    asset_ids: [ASSET-REPLY-SENDER, ASSET-OUTBOUND-GATEWAY, ASSET-CONNECTOR-CONTEXT, ASSET-CONNECTOR-ADAPTER, ASSET-CONNECTOR-REGISTRY, ASSET-DISCORD-CONNECTOR-CONFIG, ASSET-DISCORD-CONNECTOR-ADAPTER, ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER]
+    asset_ids: [ASSET-REPLY-SENDER, ASSET-OUTBOUND-GATEWAY, ASSET-CONNECTOR-CONTEXT, ASSET-CONNECTOR-ADAPTER, ASSET-CONNECTOR-REGISTRY, ASSET-DISCORD-CONNECTOR-CONFIG, ASSET-DISCORD-CONNECTOR-ADAPTER, ASSET-DISCORD-SOURCE, ASSET-DISCORD-REPLY, ASSET-DISCORD-GATEWAY, ASSET-DISCORD-GATEWAY-CONTRACT, ASSET-DISCORD-REPLY-SINK, ASSET-OUTBOUND-DELIVERY-ROUTER, ASSET-CREATE-ROOM-RESULT, ASSET-CREATE-THREAD-RESULT, ASSET-CREATE-ROOM-FAILURE-REASON, ASSET-CREATE-THREAD-FAILURE-REASON, ASSET-SPACE-OPERATIONS, ASSET-SPACE-OPERATIONS-REGISTRY, ASSET-DISCORD-SPACE-OPERATIONS, ASSET-CREATE-ROOM-REQUEST, ASSET-CREATE-THREAD-REQUEST, ASSET-REPLY-TARGET-RESOLVER, ASSET-DISCORD-REPLY-TARGET-RESOLVER]
     status: active
   - id: FEAT-CONNECTORS-GITHUB
     slug: github

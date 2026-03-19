@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-03-18T19:00:00Z"
 
 project:
   id: vinekeepers
@@ -39,6 +39,84 @@ assets:
     role: Persist and load bot workflow state
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-ROLE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningRole.java
+    role: Enum for feature room planning roles (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-ROOM-PARTICIPANT
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/RoomParticipant.java
+    role: Model for a participant in a feature room (role, configuredBotId, runtimeBotInstanceId, displayName, primaryCoordinator)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-FEATURE-ROOM-STATE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/FeatureRoomState.java
+    role: State model for a feature room (contextId, featureId, roomChannelId, intakeThreadId, participants, status)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-FEATURE-ROOM-STATE-STORE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/FeatureRoomStateStore.java
+    role: Store and resolve feature room state by contextId, roomChannelId, or deliveryTargetId; getParticipantBotIds returns participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-FEATURE-PLAN-STATE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/FeaturePlanState.java
+    role: Canonical structured planning state for a feature room; legacy section lists, sectionStatuses, repo workspace linkage fields, profileId, and generic artifacts map (ArtifactState per artifact id from work profile)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-WORK-PROFILE-REGISTRY
+    kind: source
+    path: src/main/java/com/vinekeepers/profile/WorkProfileRegistry.java
+    role: Resolve WorkProfileDefinition by id; used when initializing plan state and profile-scoped workflow actions
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-ARTIFACT-STATE-FACTORY
+    kind: source
+    path: src/main/java/com/vinekeepers/profile/ArtifactStateFactory.java
+    role: Build empty ArtifactState map from a WorkProfileDefinition for new FeaturePlanState rows
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-BIND-PLACEHOLDER-RESOLVER
+    kind: source
+    path: src/main/java/com/vinekeepers/profile/BindPlaceholderResolver.java
+    role: Resolve nested {{key}} placeholders in string maps using bind/state merged map for artifact upsert data
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-FEATURE-PLAN-STATE-STORE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/FeaturePlanStateStore.java
+    role: In-memory store for FeaturePlanState; indexed by contextId, featureId, roomChannelId, intakeThreadId
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-REPO-WORKSPACE-STATE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceState.java
+    role: Repo workspace resolution/materialization record (contextId, repo ref, workspace id, local path, branch, commit, status)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-REPO-WORKSPACE-STATE-STORE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceStateStore.java
+    role: In-memory store for RepoWorkspaceState; indexed by contextId, workspaceId, repoRef
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-DEFAULT-REPO-REF-RESOLVER
+    kind: source
+    path: src/main/java/com/vinekeepers/state/repo/DefaultRepoRefResolver.java
+    role: Normalizes https/git URLs, owner/repo shorthand, and absolute local directory paths to canonical repo refs
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-REPO-WORKSPACE-SERVICE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceService.java
+    role: Ensures local git workspace from repo input (existing checkout or optional shallow clone via VINEKEEPERS_ALLOW_GIT_CLONE)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
   - id: ASSET-LUNA-STATE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/GatheringState.java
@@ -63,9 +141,13 @@ requirements:
       criteria:
         - StateStore.load(botId, conversationKey) returns state or empty
         - StateStore.save persists state for bot and conversation
+        - FeatureRoomStateStore.getParticipantBotIds returns participant configured bot ids in stable order by PlanningRole (Orchestrator, Architect, Auditor, Scribe)
+        - FeaturePlanStateStore stores FeaturePlanState by contextId and secondary indexes (featureId, roomChannelId, intakeThreadId)
+        - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows
+        - FeaturePlanState carries optional profileId and artifacts map (per-artifact section/field values) alongside legacy planning fields; with* methods preserve profileId and artifacts
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
       symbols: []
     validation:
       tests:
@@ -73,6 +155,42 @@ requirements:
           title: StateStoreTest
           intent: Verify state load/save and key scoping
           testClass: com.vinekeepers.state.StateStoreTest
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE
+          title: FeatureRoomStateStoreTest
+          intent: Verify FeatureRoomStateStore put, getByContextId, getByRoomChannelId, getByDeliveryTargetId
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-PARTICIPANT-ORDER
+          title: FeatureRoomStateStoreTest
+          intent: Verify getParticipantBotIds returns participant bot ids in stable role order (Orchestrator, Architect, Auditor, Scribe)
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: getParticipantBotIds_returnsStableOrderFromParticipantList
+          preconditions: []
+        - id: UNIT-FEATURE-PLAN-STATE-STORE
+          title: FeaturePlanStateStoreTest
+          intent: Verify FeaturePlanStateStore put, getByContextId, reindex on update
+          testClass: com.vinekeepers.state.planning.FeaturePlanStateStoreTest
+          preconditions: []
+        - id: UNIT-DEFAULT-REPO-REF-RESOLVER
+          title: DefaultRepoRefResolverTest
+          intent: Verify repo ref normalization for https, owner/repo, and local directories
+          testClass: com.vinekeepers.state.repo.DefaultRepoRefResolverTest
+          preconditions: []
+        - id: UNIT-REPO-WORKSPACE-SERVICE
+          title: RepoWorkspaceServiceTest
+          intent: Verify local git repo resolution and UNAVAILABLE when clone disabled for remote URLs
+          testClass: com.vinekeepers.state.repo.RepoWorkspaceServiceTest
+          preconditions: []
+        - id: UNIT-ARTIFACT-STATE-FACTORY
+          title: ArtifactStateFactoryTest
+          intent: Verify ArtifactStateFactory builds empty artifact trees from profile definitions
+          testClass: com.vinekeepers.profile.ArtifactStateFactoryTest
+          preconditions: []
+        - id: UNIT-BIND-PLACEHOLDER-RESOLVER
+          title: BindPlaceholderResolverTest
+          intent: Verify nested placeholder resolution in string maps from bind/state
+          testClass: com.vinekeepers.profile.BindPlaceholderResolverTest
           preconditions: []
 
 features:
@@ -83,5 +201,5 @@ features:
     doc_path: features/domain/state/state.md
     summary: StateStore persists and loads per-bot, per-conversation workflow state.
     requirement_ids: [REQ-STATE-001]
-    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
     status: active

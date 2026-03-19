@@ -1,72 +1,56 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.connectors.OutboundDeliveryRouter;
-import com.vinekeepers.connectors.OutboundGateway;
+import com.vinekeepers.connectors.CreateThreadRequest;
+import com.vinekeepers.connectors.CreateThreadResult;
+import com.vinekeepers.connectors.SpaceOperations;
+import com.vinekeepers.connectors.SpaceOperationsRegistry;
 import com.vinekeepers.events.Event;
-import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.workflow.WorkflowCapabilitySupport;
 
 import java.util.Map;
 
 /**
- * Workflow action: create a Discord thread under a parent text channel (e.g. lifecycle room).
- * Bind/state: channelId (parent), threadName, optional contextId. When channelId is set and that channel has a
- * lifecycle context, uses that context's bot gateway (e.g. Arrietty); otherwise uses default gateway.
- * After successful creation, updates the lifecycle context's delivery target via the store when contextId is in state.
- * Returns thread id or THREAD_CREATE_FAILED on failure.
+ * Workflow action: create a thread via the SpaceOperations capability for the event's source.
+ * Resolves capability by source prefix (e.g. "discord"). Returns thread id or THREAD_CREATE_FAILED
+ * on failure or unknown source. Fail-closed: null/blank prefix or unregistered prefix returns
+ * THREAD_CREATE_FAILED (no implicit default).
  */
 public final class CreateThreadAction implements com.vinekeepers.workflow.WorkflowAction {
 
     /** Sentinel returned when thread creation fails (e.g. for workflow branch or fallback to channel). */
     public static final String THREAD_CREATE_FAILED = "THREAD_CREATE_FAILED";
 
-    private final OutboundDeliveryRouter router;
-    private final LifecycleContextStore lifecycleContextStore;
+    private final SpaceOperationsRegistry registry;
+    private final SpaceOperations testOverride;
 
-    public CreateThreadAction(OutboundDeliveryRouter router, LifecycleContextStore lifecycleContextStore) {
-        this.router = router;
-        this.lifecycleContextStore = lifecycleContextStore;
+    /** Production: resolve capability by source prefix from registry. */
+    public CreateThreadAction(SpaceOperationsRegistry registry) {
+        this.registry = registry;
+        this.testOverride = null;
+    }
+
+    /** Test: use the given ops instead of registry lookup when non-null. */
+    public CreateThreadAction(SpaceOperationsRegistry registry, SpaceOperations testOverride) {
+        this.registry = registry;
+        this.testOverride = testOverride;
     }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        if (router == null) {
+        CreateThreadRequest request = CreateThreadRequest.from(event, state, bind);
+        if (testOverride != null) {
+            CreateThreadResult result = testOverride.createThread(request);
+            return result.isSuccess() ? result.getThreadId() : THREAD_CREATE_FAILED;
+        }
+        String prefix = WorkflowCapabilitySupport.sourcePrefix(event);
+        if (prefix == null || prefix.isBlank()) {
             return THREAD_CREATE_FAILED;
         }
-        String channelId = firstNonBlank(getString(bind, "channelId"), state != null ? getString(state, "channelId") : null);
-        if (channelId == null || channelId.isBlank()) {
+        SpaceOperations ops = registry != null ? registry.get(prefix) : null;
+        if (ops == null) {
             return THREAD_CREATE_FAILED;
         }
-        OutboundGateway gateway = (channelId != null && !channelId.isBlank())
-                ? router.getGatewayForChannel(channelId)
-                : null;
-        if (gateway == null) {
-            gateway = router.getDefaultGateway();
-        }
-        if (gateway == null || !gateway.isConnected()) {
-            return THREAD_CREATE_FAILED;
-        }
-        String threadName = firstNonBlank(getString(bind, "threadName"), state != null ? getString(state, "threadName") : null);
-        if (threadName == null || threadName.isBlank()) {
-            threadName = "Room updates";
-        }
-        String threadId = gateway.createThreadChannel(channelId, threadName);
-        Object result = threadId != null ? threadId : THREAD_CREATE_FAILED;
-        if (threadId != null && !threadId.isBlank() && lifecycleContextStore != null) {
-            String contextId = firstNonBlank(getString(bind, "contextId"), state != null ? getString(state, "contextId") : null);
-            if (contextId != null && !contextId.isBlank()) {
-                lifecycleContextStore.setDeliveryTargetId(contextId, threadId);
-            }
-        }
-        return result;
-    }
-
-    private static String getString(Map<String, Object> map, String key) {
-        if (map == null) return null;
-        Object v = map.get(key);
-        return v != null ? v.toString() : null;
-    }
-
-    private static String firstNonBlank(String a, String b) {
-        return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+        CreateThreadResult result = ops.createThread(request);
+        return result.isSuccess() ? result.getThreadId() : THREAD_CREATE_FAILED;
     }
 }

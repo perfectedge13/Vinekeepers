@@ -2,46 +2,61 @@
 
 ## Scope
 
-**Request-derived:** Discord interaction routing fix. Change `Router.matches()` so `discordTrigger` and `discordMention` apply only when event kind is `"message"`; for `"interaction"` events skip those checks so author/channel alone determine routing. Add RouterTest: interaction from allowed author routes to bot; interaction from other user does not.
+**Request:** Implement outbound delivery refactor — connector-keyed reply sender in VinekeepersEngine (Map by connector id, setReplySender(connectorId, sender)), remove hard-coded "discord" from engine fallback path, Bootstrap registers engine.setReplySender("discord", outboundDeliveryRouter). Preserve all Discord and lifecycle-thread behavior.
 
-**Impacted registry slice:** core-registry.yml (feature FEAT-ROUTING, requirement REQ-BOT-001, assets ASSET-ROUTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT).
+**Impacted registry slice:** core (engine, bootstrap), connectors (reply sender, outbound delivery).
 
-**Impacted code:** `src/main/java/com/vinekeepers/bot/Router.java`, `src/test/java/com/vinekeepers/bot/RouterTest.java`. Config and connectors/engine unchanged per request.
+**Features:** FEAT-ENGINE, FEAT-CORE, FEAT-CONNECTORS-DISCORD.
 
----
+**Requirements:** REQ-CORE-002, REQ-CORE-003, REQ-CONNECTORS-DISCORD-001.
 
-## Per feature: Event routing and normalized context (FEAT-ROUTING)
-
-**Feature:** Event routing and normalized context. Status: active. Doc path: features/domain/bot/routing.md. Summary: Router matches events to bots through routing filters over a normalized event view.
-
-**Requirements (REQ-BOT-001):**
-- **id:** REQ-BOT-001  
-- **title:** Route events to bots by routing rules  
-- **statement:** Router matches incoming events to bots using Routing and EventFilter/RoutingFilter over a normalized event view; events are dispatched only to bots whose filters accept the event, including Discord mention-based routing from either payload metadata or @mention text when configured, and optional Discord author filtering (discordAuthors) by actor id or normalized actor username.  
-- **Acceptance criteria:** Router.match(event) returns list of matching BotDefinitions; Filters apply Discord/GitHub and other criteria from routing config; Event routing can normalize actor, channel, text, mentions, repo, and label fields from incoming payloads; Normalized event context exposes actorId and actorUsername for routing; discordMention filters match case-insensitively against normalized mentions from payload metadata or message text; discordAuthors filters match when event author is in the configured list.  
-- **Traceability assets:** ASSET-ROUTER, ASSET-ROUTING, ASSET-EVENT-FILTER, ASSET-ROUTING-FILTER, ASSET-NORMALIZED-EVENT-CONTEXT.  
-- **Validation tests:** UNIT-ROUTER (RouterTest, verify event routing and filter matching); UNIT-ROUTER-DISCORD-MENTION-TEXT (routeMatchesDiscordMentionFromTextCaseInsensitively); UNIT-ROUTER-DISCORD-MENTION-METADATA (routeMatchesDiscordMentionFromMetadataListCaseInsensitively); UNIT-ROUTER-DISCORD-MENTION-MISSING (routeDoesNotMatchWhenDiscordMentionIsMissing); UNIT-ROUTER-DISCORD-AUTHORS (ConfigLoaderTest.buildRouterParsesDiscordAuthorsRouting).  
-- **Anti-patterns (requirement):** none listed. Luna feature anti_pattern: "Do not rely on discordTrigger alone for Luna activation because @mentions in Discord channels would be missed."
-
-**Assets:**
-- **ASSET-ROUTER** — path: src/main/java/com/vinekeepers/bot/Router.java. Role: Match events to bots by routing rules, including Discord mention and discordAuthors filters. Requires: REQ-BOT-001.  
-- **ASSET-ROUTING-FILTER** — path: src/main/java/com/vinekeepers/bot/RoutingFilter.java. Role: Apply routing filters to events, including discordTrigger, discordMention, and discordAuthors matching. Requires: REQ-BOT-001.  
-- **ASSET-NORMALIZED-EVENT-CONTEXT** — path: src/main/java/com/vinekeepers/bot/NormalizedEventContext.java. Role: Normalize event payloads for routing and session decisions; exposes actorId, actorUsername, and for kind interaction optional interaction payload (interactionId, token, customId, values). Requires: REQ-BOT-001.
-
-**Doc excerpts:**  
-- **Decisions (routing/decisions.md):** Discord filter by user (discordAuthors) — Add optional discordAuthors; NormalizedEventContext exposes actorId and actorUsername; RoutingFilter matches when event author is in list. Routing evaluated over normalized view; Discord mention activation from payload metadata or @mention text.  
-- **Contracts (routing/contracts.md):** NormalizedEventContext exposes connector-neutral fields including for events with kind: interaction (interactionId, token, customId, values). Router returns bot ids whose routing rules match the event. RoutingFilter is built-in filter for configured predicates.  
-- **Known issues (routing/known-issues.md):** Available routing fields depend on connector payloads; adding new predicates requires code in filter layer.
+**Assets:** ASSET-ENGINE, ASSET-BOOTSTRAP, ASSET-REPLY-SENDER, ASSET-OUTBOUND-DELIVERY-ROUTER, ASSET-DISCORD-REPLY-SINK.
 
 ---
 
-## Implementation summary for implement step
+## Per feature
 
-- **Router.matches() (Discord branch):** When `kind` is `"interaction"`, do not evaluate `discordTrigger` or `discordMention`; only discordAuthors and discordChannels apply. When `kind` is `"message"` (or any other), keep current behavior (e.g. trigger and mention checks). Use `context.getEventType()` (already available as `kind`) to branch.  
-- **RouterTest:** Add (1) test that an event with kind `"interaction"`, source discord, and author in discordAuthors (and optional channel in discordChannels) routes to the bot. Add (2) test that an event with kind `"interaction"`, same filter with discordAuthors set, but different author (not in list) does not route. Do not add or change config/bots.yaml or connector/engine code.
+### FEAT-ENGINE (engine)
+
+- **Feature:** Event-driven engine orchestration; doc_path: features/domain/core/engine.md; status: active.
+- **Summary:** VinekeepersEngine routes events to bots, runs workflow and reasoner, applies tool/state side effects, delivers replies via connector sink registry (lifecycle: respondImmediately, sendFollowUp, updateMessage); no defer in engine.
+- **REQ-CORE-003:** Event-driven engine routes events to bots. Reply delivery uses ReplySender (e.g. OutboundDeliveryRouter) and connector contract (AppReplySink) with lifecycle operations; for Discord, OutboundDeliveryRouter resolves sender from ReplyTarget and lifecycle configuredBotId—no silent fallback when lifecycle channel's bot has no registered sender. Engine builds OutboundResponse, resolves ReplyTarget, calls sink registered for event source.
+- **Criteria (short):** Engine subscribes to bus, dispatches to bots; Discord message events add bots with WAITING_INPUT for session key; uses registered runners and reasoner; delivers via sink registry and lifecycle methods; for Discord, OutboundDeliveryRouter resolves sender by target and configuredBotId, no silent fallback for lifecycle; no bot registered logs warning only.
+- **Traceability assets:** ASSET-ENGINE, ASSET-WORKFLOW-RUNNER, ASSET-TOOL-RUNNER, ASSET-REASONER-INPUT, ASSET-REASONER-OUTPUT, ASSET-OUTBOUND-RESPONSE, ASSET-APP-REPLY-SINK, ASSET-REPLY-TARGET, ASSET-CAPABILITIES, ASSET-RESPONSE-INTENT, ASSET-REPLY-SENDER.
+- **Validation tests:** UNIT-ENGINE (VinekeepersEngineTest).
+- **ASSET-ENGINE:** path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java; role: Route events to bots; run workflow and reasoner; deliver replies via ReplySender and connector sink registry; build OutboundResponse; resolve ReplyTarget; no defer in engine.
+- **Doc excerpts — decisions:** Waiting-session routing for Discord; workflow before reasoner; ToolRunner for proposed tool calls; engine orchestration separate from bootstrap.
+- **Doc excerpts — contracts:** Engine internal; ReasonerInput/ReasonerOutput/WorkflowRunResult schemas; VinekeepersEngine, WorkflowRunner, ToolRunner, Reasoner interfaces.
+- **Doc excerpts — known-issues:** Missing bot logged and skipped; reply delivery connector-specific; built-in reply path documented for Discord.
+
+### FEAT-CORE (bootstrap)
+
+- **Feature:** Specs governance and bootstrap; doc_path: features/domain/core/core.md; status: active.
+- **REQ-CORE-002:** Application bootstrap. VinekeepersApp loads .env and bootstraps engine, config, connectors. Bootstrap wires engine, config loader, ConnectorRegistry; creates Discord adapter; calls adapter.registerBots(bots, context); engine/sink/cursor/action registration remain in Bootstrap.
+- **Criteria (short):** Main runs Bootstrap; Bootstrap wires engine, config, ConnectorRegistry; creates WorkflowRunner per bot and registerRunner(botId, runner); registers shared tools and ToolRunner in workflows.
+- **ASSET-BOOTSTRAP:** path: src/main/java/com/vinekeepers/core/Bootstrap.java; role: Wire engine, config, ConnectorRegistry; build Discord adapter; call adapter.registerBots(bots, ConnectorContext); build handlesMap from getConnectorIdentity("discord"); action and sink registration stay in Bootstrap.
+
+### FEAT-CONNECTORS-DISCORD (discord)
+
+- **Feature:** Discord event source and reply; doc_path: features/domain/connectors/discord.md; status: active.
+- **REQ-CONNECTORS-DISCORD-001:** Discord event source and reply; ReplySender and OutboundGateway; per-bot identity via getConnectorIdentity("discord"); ConnectorContext generic (EventBus, OutboundDeliveryRouter); adapter registerBots() per-bot only; Bootstrap keeps sink and action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId.
+- **Criteria (short):** DiscordEventSource exists, emits events with mention metadata; per-bot identity via getConnectorIdentity("discord"); OutboundDeliveryRouter resolves sender from delivery target (LifecycleContextStore) or channelId; lifecycle: use configured bot's sender only, no silent fallback; getGatewayForChannel null when lifecycle bot has no gateway; getSelfUserIdForBot from gateway; DiscordAppReplySink lifecycle operations; ReplySender contract; engine delivers via sink or legacy reply when source is Discord.
+- **ASSET-REPLY-SENDER:** path: src/main/java/com/vinekeepers/connectors/ReplySender.java; role: Generic contract send(channelId, messageId, content); connector senders implement for engine and workflow actions.
+- **ASSET-OUTBOUND-DELIVERY-ROUTER:** path: src/main/java/com/vinekeepers/connectors/OutboundDeliveryRouter.java; role: Implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle context; getGatewayForChannel; getSelfUserIdForBot; no silent fallback for lifecycle.
+- **ASSET-DISCORD-REPLY-SINK:** path: src/main/java/com/vinekeepers/connectors/DiscordAppReplySink.java; role: Implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; lifecycle operations; adapter owns timing/defer.
+- **Doc excerpts — decisions:** Generic ReplySender and OutboundGateway; core and engine use ReplySender; OutboundDeliveryRouter implements it; Discord implements both; DiscordAppReplySink casts to DiscordGateway for interaction methods. Preserve Discord mentions in payload.
+- **Doc excerpts — contracts:** ConnectorRegistry by connectorId; ConnectorAdapter registerBots(bots, context); ConnectorContext EventBus, OutboundDeliveryRouter only; ReplySender send(channelId, messageId, content); OutboundDeliveryRouter resolves sender by target and lifecycle; getGatewayForChannel returns null when lifecycle bot has no gateway; no silent fallback for lifecycle.
+
+---
+
+## Implementation constraints (from discovery)
+
+- **Current state:** Engine has single `ReplySender replySender` and `setReplySender(ReplySender)`. In `deliverReply`, when no sink is found, fallback uses `event.getSourceId().startsWith("discord:")` and `replySender.send(...)`.
+- **Target state:** Engine holds `Map<String, ReplySender> replySenders` keyed by connector id; `setReplySender(String connectorId, ReplySender sender)`; fallback path uses connector id derived from event source (e.g. prefix before ":") to look up sender from map—no "discord" literal. Bootstrap calls `engine.setReplySender("discord", outboundDeliveryRouter)` (and keeps `engine.registerSink("discord", new DiscordAppReplySink(outboundDeliveryRouter))`).
+- **Preserve:** All Discord behavior (sink path unchanged); lifecycle-thread behavior (OutboundDeliveryRouter resolution unchanged); CursorCloudRunMonitor and other consumers that need a ReplySender continue to receive the same router (Bootstrap already passes outboundDeliveryRouter to engine and monitor).
 
 ---
 
 ## Schema constraints
 
-Requirement and asset keys in core-registry follow req-registry schema (id, title, statement, acceptance.criteria, traceability.assets, validation.tests). No new spec keys; no removal of requirements.
+- req-registry: requirement keys id, title, statement, status, priority, type, behavior, acceptance, traceability, validation; asset keys id, kind, path, role, requires, feature_ids. Do not add new spec keys or delete active requirements.

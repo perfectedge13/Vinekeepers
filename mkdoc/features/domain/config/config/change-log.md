@@ -2,6 +2,12 @@
 
 # Entries
 
+## 2026-03-18
+
+- **Work profiles YAML:** **config/work-profiles.yaml** (profiles map, default `software_feature_planning`); **WorkProfileLoader** at bootstrap. Specs: config-registry ASSET-WORK-PROFILES-YAML, ASSET-WORK-PROFILE-LOADER; test WorkProfileLoaderTest.
+- **Step 1 follow-up (sessionKeyStrategy: thread):** Config and runbook document **sessionKeyStrategy: thread** for multi-bot feature room bots (arrietty, architect, auditor, scribe) so conversation keys use thread id. Docs: config summary, runbooks/configuring-bots.
+- **Multi-bot feature room in bots.yaml:** Optional workflow steps **provision_room_participants** (storeIn: featureRoomParticipants) and **initialize_feature_room_state** documented; config/bots.yaml may include these in workflow definitions for multi-bot feature room (arrietty_room or similar). ASSET-BOTS-YAML role updated in config-registry.
+
 ## 2026-03-13
 
 - **Bot-identity config generalization and ConnectorRegistry:** Connector-scoped bot identities via `identities.discord` (tokenEnvKey, handlesOwnedSpaces) in YAML; ConfigLoader dual-reads `identities.discord` and legacy top-level `discordTokenEnvKey`/`handlesOwnedSpaces`, normalizes to **ConnectorIdentity** per connector (new shape preferred; new wins if both present). **ConnectorRegistry**, **ConnectorAdapter**, **ConnectorContext** introduced; **DiscordConnectorConfig** and **DiscordConnectorAdapter** hold Discord-specific options; adapter `registerBots(bots, context)` does per-bot gateway/sender registration only; action/sink registration stays in Bootstrap. **defaultDiscordTokenEnvKey** at root retained as transitional when a bot has no `identities.discord.tokenEnvKey`. See REQ-CONFIG-001, REQ-BOT-003, REQ-CONNECTORS-DISCORD-001.

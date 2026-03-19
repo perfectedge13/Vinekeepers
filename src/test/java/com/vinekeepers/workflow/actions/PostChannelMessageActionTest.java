@@ -1,7 +1,8 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.connectors.ReplySender;
-import com.vinekeepers.workflow.actions.CreateThreadAction;
+import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -89,5 +90,143 @@ class PostChannelMessageActionTest {
         Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", CreateThreadAction.THREAD_CREATE_FAILED, "content", "Fallback to channel");
         action.run(null, state, Map.of());
         assertEquals("ch-room|Fallback to channel", sent.toString());
+    }
+
+    @Test
+    void runWithAsBotId_usesOutboundDeliveryRouterSendAs() {
+        LifecycleContextStore lifecycleStore = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(lifecycleStore);
+        StringBuilder sent = new StringBuilder();
+        ReplySender architectSender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        router.registerSender("architect", architectSender, null);
+        router.setDefaultSender((ch, msg, content) -> sent.append("default"));
+        PostChannelMessageAction action = new PostChannelMessageAction(router);
+
+        Object result = action.run(null,
+                Map.of("channelId", "ch-1", "content", "From architect", "asBotId", "architect"),
+                Map.of());
+
+        assertEquals("OK", result);
+        assertEquals("ch-1|From architect", sent.toString());
+    }
+
+    @Test
+    void runWithAsRole_usesOutboundDeliveryRouterSendAsRole() {
+        com.vinekeepers.state.planning.FeatureRoomStateStore featureStore = new com.vinekeepers.state.planning.FeatureRoomStateStore();
+        java.util.List<com.vinekeepers.state.planning.RoomParticipant> participants = java.util.List.of(
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        com.vinekeepers.state.planning.FeatureRoomState roomState = new com.vinekeepers.state.planning.FeatureRoomState(
+                "ctx-1", null, null, "room-ch-1", null, null, null, "INTAKE_READY",
+                participants, null, null);
+        featureStore.put(roomState);
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), featureStore);
+        StringBuilder sent = new StringBuilder();
+        router.registerSender("scribe", (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content), null);
+        router.setDefaultSender((ch, msg, content) -> sent.append("default"));
+        PostChannelMessageAction action = new PostChannelMessageAction(router);
+
+        Object result = action.run(null,
+                Map.of("channelId", "room-ch-1", "content", "Scribe summary", "asRole", "SCRIBE"),
+                Map.of());
+
+        assertEquals("OK", result);
+        assertEquals("room-ch-1|Scribe summary", sent.toString());
+    }
+
+    @Test
+    void runWithAsRoleFromBind_overridesState() {
+        com.vinekeepers.state.planning.FeatureRoomStateStore featureStore = new com.vinekeepers.state.planning.FeatureRoomStateStore();
+        java.util.List<com.vinekeepers.state.planning.RoomParticipant> participants = java.util.List.of(
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        com.vinekeepers.state.planning.FeatureRoomState roomState = new com.vinekeepers.state.planning.FeatureRoomState(
+                "ctx-1", null, null, "room-ch-1", null, null, null, "INTAKE_READY",
+                participants, null, null);
+        featureStore.put(roomState);
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), featureStore);
+        StringBuilder sent = new StringBuilder();
+        router.registerSender("auditor", (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content), null);
+        router.setDefaultSender((ch, msg, content) -> sent.append("default"));
+        PostChannelMessageAction action = new PostChannelMessageAction(router);
+
+        action.run(null,
+                Map.of("channelId", "room-ch-1", "content", "Audit", "asRole", "ORCHESTRATOR"),
+                Map.of("asRole", "AUDITOR"));
+
+        assertEquals("room-ch-1|Audit", sent.toString());
+    }
+
+    @Test
+    void runTargetRoom_sendsToChannelId() {
+        StringBuilder sent = new StringBuilder();
+        ReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", "thread-123", "target", "room", "content", "msg");
+        action.run(null, state, Map.of());
+        assertEquals("ch-room|msg", sent.toString());
+    }
+
+    @Test
+    void runTargetThread_sendsToDeliveryChannelId() {
+        StringBuilder sent = new StringBuilder();
+        ReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", "thread-456", "target", "thread", "content", "msg");
+        action.run(null, state, Map.of());
+        assertEquals("thread-456|msg", sent.toString());
+    }
+
+    @Test
+    void runTargetThread_whenDeliveryChannelIdIsThreadCreateFailed_fallsBackToChannelId() {
+        StringBuilder sent = new StringBuilder();
+        ReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", CreateThreadAction.THREAD_CREATE_FAILED, "target", "thread", "content", "msg");
+        action.run(null, state, Map.of());
+        assertEquals("ch-room|msg", sent.toString());
+    }
+
+    @Test
+    void runTargetChannelId_set_usesTargetChannelId() {
+        StringBuilder sent = new StringBuilder();
+        ReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", "thread-789", "targetChannelId", "explicit-ch", "content", "msg");
+        action.run(null, state, Map.of());
+        assertEquals("explicit-ch|msg", sent.toString());
+    }
+
+    @Test
+    void runLegacyFallback_noTargetOrTargetChannelId_usesFirstNonBlankDeliveryChannelIdThenChannelId() {
+        StringBuilder sent = new StringBuilder();
+        ReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-room", "deliveryChannelId", "thread-legacy", "content", "msg");
+        action.run(null, state, Map.of());
+        assertEquals("thread-legacy|msg", sent.toString());
+    }
+
+    @Test
+    void runLegacyFallback_noDeliveryChannelId_usesChannelId() {
+        StringBuilder sent = new StringBuilder();
+        ReplySender sender = (channelId, messageId, content) ->
+                sent.append(channelId).append("|").append(content);
+        PostChannelMessageAction action = new PostChannelMessageAction(sender);
+        Map<String, Object> state = Map.of("channelId", "ch-only", "content", "msg");
+        action.run(null, state, Map.of());
+        assertEquals("ch-only|msg", sent.toString());
     }
 }

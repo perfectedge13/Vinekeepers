@@ -10,7 +10,7 @@ None. Routing is an internal runtime capability consumed by the engine.
 
 # Interfaces
 
-- **`Router`:** returns the bot ids whose routing rules match the event. Depends on `LifecycleContextStore` and a per-bot `handlesOwnedSpaces` map (from config). When a Discord channel has a lifecycle context and the context's owner bot has `handlesOwnedSpaces`, only that bot is returned (single-owner precedence); otherwise filter-based matching applies.
+- **`Router`:** returns the bot ids whose routing rules match the event. Depends on **LifecycleContextStore**, **FeatureRoomStateStore**, and a per-bot `handlesOwnedSpaces` map (from config). When a channel or delivery target has **FeatureRoomState** (getByChannelId or getByDeliveryTargetId), the Router returns all four participant **configuredBotIds** (arrietty, architect, auditor, scribe) in stable order; when a Discord channel has a lifecycle context but no FeatureRoomState and the context's owner bot has `handlesOwnedSpaces`, only that bot is returned (single-owner precedence); otherwise filter-based matching applies.
 - **`EventFilter`:** contract for evaluating an event against routing criteria.
 - **`RoutingFilter`:** built-in filter implementation for configured predicates.
 - **`NormalizedEventContext`:** normalized view of connector payload fields used for routing and session decisions.

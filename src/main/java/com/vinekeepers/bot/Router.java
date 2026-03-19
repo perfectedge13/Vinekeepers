@@ -3,6 +3,8 @@ package com.vinekeepers.bot;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeatureRoomState;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,12 +14,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * Routes events to bot ids using event filters (from RoutingRule).
  * When lifecycle context exists for a Discord channel and the owner bot has handlesOwnedSpaces,
  * single-owner precedence applies: only the owner bot is returned for that channel.
+ * When FeatureRoomState exists for the room (by channel or delivery target), returns all four
+ * participant configuredBotIds in stable order (feature room response policy: only Orchestrator
+ * replies by default; other participants reply when invoked via action e.g. post_channel_message asRole).
  */
 public final class Router {
 
@@ -25,6 +31,7 @@ public final class Router {
 
     private final List<RoutingRule> routings = new ArrayList<>();
     private final LifecycleContextStore lifecycleContextStore;
+    private final FeatureRoomStateStore featureRoomStateStore;
     private volatile Map<String, Boolean> handlesOwnedSpacesByBotId = Map.of();
 
     private static boolean isNumeric(String s) {
@@ -37,10 +44,17 @@ public final class Router {
 
     public Router() {
         this.lifecycleContextStore = null;
+        this.featureRoomStateStore = null;
     }
 
     public Router(LifecycleContextStore lifecycleContextStore) {
         this.lifecycleContextStore = lifecycleContextStore;
+        this.featureRoomStateStore = null;
+    }
+
+    public Router(LifecycleContextStore lifecycleContextStore, FeatureRoomStateStore featureRoomStateStore) {
+        this.lifecycleContextStore = lifecycleContextStore;
+        this.featureRoomStateStore = featureRoomStateStore;
     }
 
     /**
@@ -72,18 +86,35 @@ public final class Router {
             }
         }
 
-        if (lifecycleContextStore != null && context != null && "discord".equals(context.getSourceType())) {
+        if (context != null && "discord".equals(context.getSourceType())) {
             String channelId = context.getChannelId();
             if (channelId != null && !channelId.isBlank()) {
-                var ctxOpt = lifecycleContextStore.getByChannelId(channelId);
-                if (ctxOpt.isPresent()) {
-                    LifecycleContext lc = ctxOpt.get();
-                    String ownerBotId = lc.getConfiguredBotId();
-                    if (ownerBotId != null && !ownerBotId.isBlank()) {
-                        if (Boolean.TRUE.equals(handlesOwnedSpacesByBotId.get(ownerBotId))) {
-                            return List.of(ownerBotId);
+                if (featureRoomStateStore != null) {
+                    Optional<FeatureRoomState> featureRoom = featureRoomStateStore.getByRoomChannelId(channelId);
+                    if (featureRoom.isEmpty()) {
+                        featureRoom = featureRoomStateStore.getByDeliveryTargetId(channelId);
+                    }
+                    if (featureRoom.isPresent()) {
+                        List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(featureRoom.get());
+                        if (!participantBotIds.isEmpty()) {
+                            return List.copyOf(participantBotIds);
                         }
-                        log.warn("Channel has lifecycle owner bot {} but that bot does not have handlesOwnedSpaces; using filter-based routing", ownerBotId);
+                    }
+                }
+                if (lifecycleContextStore != null) {
+                    var ctxOpt = lifecycleContextStore.getByChannelId(channelId);
+                    if (ctxOpt.isEmpty()) {
+                        ctxOpt = lifecycleContextStore.getByDeliveryTargetId(channelId);
+                    }
+                    if (ctxOpt.isPresent()) {
+                        LifecycleContext lc = ctxOpt.get();
+                        String ownerBotId = lc.getConfiguredBotId();
+                        if (ownerBotId != null && !ownerBotId.isBlank()) {
+                            if (Boolean.TRUE.equals(handlesOwnedSpacesByBotId.get(ownerBotId))) {
+                                return List.of(ownerBotId);
+                            }
+                            log.warn("Channel has lifecycle owner bot {} but that bot does not have handlesOwnedSpaces; using filter-based routing", ownerBotId);
+                        }
                     }
                 }
             }

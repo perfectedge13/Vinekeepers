@@ -13,5 +13,10 @@ Unit coverage verifies connector lifecycle behavior through the gateway seam, me
 | UNIT-DISCORD-EVENT-SOURCE | DiscordEventSourceTest | com.vinekeepers.connectors.DiscordEventSourceTest | — | Verify Discord event source and reply sender behavior |
 | UNIT-DISCORD-EVENT-SOURCE-MENTIONS | DiscordEventSourceTest | com.vinekeepers.connectors.DiscordEventSourceTest | startPublishesStubMessageWithMentionsMetadata | Verify `DiscordEventSource` publishes mention metadata for downstream routing |
 | UNIT-OUTBOUND-DELIVERY-ROUTER | OutboundDeliveryRouterTest | com.vinekeepers.connectors.OutboundDeliveryRouterTest | — | Verify lifecycle context to configuredBotId sender resolution, default sender when no context, and no fallback when lifecycle channel has no sender for that bot |
+| UNIT-DISCORD-REPLY-TARGET-RESOLVER | DiscordReplyTargetResolverTest | com.vinekeepers.connectors.DiscordReplyTargetResolverTest | — | Verify DiscordReplyTargetResolver resolves Event to ChannelTarget or InteractionTarget from payload (channelId, messageId, interactionId, token, deferred); message vs interaction kind; sourceId passed through |
+| UNIT-DISCORD-SPACE-OPERATIONS | DiscordSpaceOperationsTest | com.vinekeepers.connectors.DiscordSpaceOperationsTest | — | Verify DiscordSpaceOperations createRoom (guildId, name building, permission override) and createThread (channelId, threadName, contextId, setDeliveryTargetId), normalizeChannelName |
+| — | CreateRoomRequestTest | com.vinekeepers.connectors.CreateRoomRequestTest | — | Verify CreateRoomRequest.from(Event, state, bind) bind-then-state resolution and record fields |
+| — | CreateThreadRequestTest | com.vinekeepers.connectors.CreateThreadRequestTest | — | Verify CreateThreadRequest.from(Event, state, bind) bind-then-state resolution and record fields |
+| UNIT-SPACE-OPERATIONS-REGISTRY | SpaceOperationsRegistryTest | com.vinekeepers.connectors.SpaceOperationsRegistryTest | — | Verify SpaceOperationsRegistry register(connectorId, ops) and get(connectorId) |
 | MANUAL-CONNECTORS-DISCORD | Discord connector compiles and implements interface | — | — | Verify DiscordEventSource and DiscordReplySender exist and compile |
 

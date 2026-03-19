@@ -7,6 +7,10 @@ import ch.qos.logback.core.read.ListAppender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeatureRoomState;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningRole;
+import com.vinekeepers.state.planning.RoomParticipant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -358,5 +362,60 @@ class RouterTest {
         r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "owner-bot"));
         Event event = new Event("discord:g:ch-owned", "message", Map.of("channelId", "ch-owned", "content", "hi"));
         assertEquals(List.of("owner-bot"), r.route(event));
+    }
+
+    // --- Feature room: returns four participant bot ids; thread resolution; legacy single-owner unchanged ---
+
+    @Test
+    void routeWithFeatureRoomStore_roomChannelId_returnsFourParticipantBotIds() {
+        FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
+        List<RoomParticipant> participants = List.of(
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        FeatureRoomState roomState = new FeatureRoomState(
+                "ctx-1", "feat-1", null, "room-ch-1", "thread-intake", null, null, "INTAKE_READY",
+                participants, null, Instant.now());
+        featureStore.put(roomState);
+        Router r = new Router(new LifecycleContextStore(), featureStore);
+        r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:room-ch-1", "message", Map.of("channelId", "room-ch-1", "content", "hi"));
+        List<String> botIds = r.route(event);
+        assertEquals(List.of("arrietty", "architect", "auditor", "scribe"), botIds);
+    }
+
+    @Test
+    void routeWithFeatureRoomStore_threadResolutionByDeliveryTargetId_returnsFourParticipantBotIds() {
+        FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
+        List<RoomParticipant> participants = List.of(
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        FeatureRoomState roomState = new FeatureRoomState(
+                "ctx-1", "feat-1", null, "room-ch-parent", "thread-456", null, null, "INTAKE_READY",
+                participants, null, Instant.now());
+        featureStore.put(roomState);
+        Router r = new Router(new LifecycleContextStore(), featureStore);
+
+        Event event = new Event("discord:g:room-ch-parent", "message", Map.of("channelId", "thread-456", "content", "reply in thread"));
+        List<String> botIds = r.route(event);
+        assertEquals(List.of("arrietty", "architect", "auditor", "scribe"), botIds);
+    }
+
+    @Test
+    void routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable() {
+        LifecycleContextStore lifecycleStore = new LifecycleContextStore();
+        lifecycleStore.put(new LifecycleContext("ctx-1", "owned-ch", Instant.now(), null, "arrietty", null, null, null));
+        FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
+        Router r = new Router(lifecycleStore, featureStore);
+        r.setHandlesOwnedSpacesByBotId(Map.of("arrietty", true));
+        r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+        r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "arrietty"));
+
+        Event event = new Event("discord:g:owned-ch", "message", Map.of("channelId", "owned-ch", "content", "hi"));
+        assertEquals(List.of("arrietty"), r.route(event));
     }
 }

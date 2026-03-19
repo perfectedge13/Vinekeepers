@@ -15,7 +15,7 @@ Spec metadata anchors traceability, and VinekeepersApp plus Bootstrap wire the r
 | ASSET-SPEC-INDEX | Spec index and validation entrypoint | specs/specs.yml |
 | ASSET-REGISTRY | Core requirements registry | specs/core-registry.yml |
 | ASSET-APP | Application entrypoint; loads .env and bootstraps engine | src/main/java/com/vinekeepers/VinekeepersApp.java |
-| ASSET-BOOTSTRAP | Wire engine, config, ConnectorRegistry; build Discord adapter; registerBots; action and sink registration | src/main/java/com/vinekeepers/core/Bootstrap.java |
+| ASSET-BOOTSTRAP | Wire engine, config, ConnectorRegistry; build Discord adapter; registerBots; create FeatureRoomStateStore and pass to Router and OutboundDeliveryRouter; register engine reply sender, sink, ReplyTargetResolver, and Discord SpaceOperations by connector id; register workflow actions provision_room_participants (ProvisionRoomParticipantsAction) and initialize_feature_room_state (InitializeFeatureRoomStateAction); action and sink registration | src/main/java/com/vinekeepers/core/Bootstrap.java |
 | ASSET-PACKAGE-MARKER | Package marker utility | src/main/java/com/vinekeepers/util/PackageMarker.java |
 
 # Sub-pages

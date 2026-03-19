@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-03-18T19:00:00Z"
 
 project:
   id: vinekeepers
@@ -55,7 +55,9 @@ assets:
       preferred identity shape identities.discord.tokenEnvKey and identities.discord.handlesOwnedSpaces;
       legacy top-level discordTokenEnvKey/handlesOwnedSpaces deprecated but still accepted; defaultDiscordTokenEnvKey at root is
       retained transitional; lifecycleBotName in step bind; Arrietty template workflowRef arrietty_room;
-      create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.")
+      create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.";
+      optional workflow steps provision_room_participants and initialize_feature_room_state for multi-bot feature room;
+      four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys)
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -70,6 +72,18 @@ assets:
     role: Bot composition (persona, model, workflow, tools, runtime conversation settings); connector identity via getConnectorIdentity(connectorId)
     requires: [REQ-BOT-003]
     feature_ids: [FEAT-BOT]
+  - id: ASSET-WORK-PROFILES-YAML
+    kind: config
+    path: config/work-profiles.yaml
+    role: Declarative work profiles (profiles map) defining artifacts, sections, and required fields for structured planning; default profile software_feature_planning
+    requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
+  - id: ASSET-WORK-PROFILE-LOADER
+    kind: source
+    path: src/main/java/com/vinekeepers/profile/WorkProfileLoader.java
+    role: Load work-profiles.yaml into WorkProfileRegistry; Bootstrap uses at startup with config/work-profiles.yaml
+    requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
 
 requirements:
   - id: REQ-CONFIG-001
@@ -93,10 +107,12 @@ requirements:
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
         - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
         - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
-        - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
+        - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId, target, targetChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
+        - Four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread workflow session keys
+        - Optional config/work-profiles.yaml defines work profiles (SnakeYAML); WorkProfileLoader loads profiles into WorkProfileRegistry for Bootstrap and planning actions
       examples: []
     traceability:
-      assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
+      assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION, ASSET-WORK-PROFILES-YAML, ASSET-WORK-PROFILE-LOADER]
       symbols: []
     validation:
       tests:
@@ -138,5 +154,5 @@ features:
     doc_path: features/domain/config/config.md
     summary: ConfigLoader loads bot definitions from YAML; BotConfig models the structure.
     requirement_ids: [REQ-CONFIG-001]
-    asset_ids: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
+    asset_ids: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION, ASSET-WORK-PROFILES-YAML, ASSET-WORK-PROFILE-LOADER]
     status: active

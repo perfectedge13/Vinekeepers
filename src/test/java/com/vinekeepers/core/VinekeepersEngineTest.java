@@ -13,10 +13,11 @@ import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.reasoner.StubReasoner;
 import com.vinekeepers.state.StateStore;
+import com.vinekeepers.connectors.DiscordReplyTargetResolver;
 import com.vinekeepers.connectors.ReplySender;
+import com.vinekeepers.connectors.ReplyTargetResolver;
 import com.vinekeepers.interactions.AppReplySink;
 import com.vinekeepers.interactions.ChannelTarget;
-import com.vinekeepers.interactions.InteractionTarget;
 import com.vinekeepers.interactions.OutboundResponse;
 import com.vinekeepers.interactions.ReplyTarget;
 import com.vinekeepers.workflow.StubWorkflowRunner;
@@ -119,6 +120,7 @@ class VinekeepersEngineTest {
             capturedContent.set(content);
         };
         engine.setReplySender(mockSender);
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
         router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "luna"));
 
         Event event = new Event("discord:default", "message",
@@ -199,6 +201,7 @@ class VinekeepersEngineTest {
                 List.of(new ProposedToolCall("echo", Map.of("message", input.getLastUserMessage())))));
         AtomicReference<String> capturedReply = new AtomicReference<>();
         engine.setReplySender((channelId, messageId, content) -> capturedReply.set(content));
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
         router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "reasoner-bot"));
 
         Event event = new Event("discord:default", "message",
@@ -247,6 +250,7 @@ class VinekeepersEngineTest {
             }
         };
         engine.registerSink("discord", mockSink);
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
         engine.registerRunner("sink-bot", (event, store, botId) ->
                 com.vinekeepers.workflow.WorkflowRunResult.completed(OutboundResponse.ofText("Via sink")));
         engine.registerReasoner("sink-bot", new StubReasoner());
@@ -292,6 +296,7 @@ class VinekeepersEngineTest {
             }
         };
         engine.registerSink("discord", mockSink);
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
         engine.registerRunner("sink-bot", (event, store, botId) ->
                 com.vinekeepers.workflow.WorkflowRunResult.completed(OutboundResponse.ofText("OK")));
         engine.registerReasoner("sink-bot", new StubReasoner());
@@ -333,6 +338,7 @@ class VinekeepersEngineTest {
             }
         };
         engine.registerSink("discord", mockSink);
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
         OutboundResponse rich = OutboundResponse.ofIntent(
                 new com.vinekeepers.interactions.PresentChoices("Choose one", java.util.List.of()));
         engine.registerRunner("sink-bot", (event, store, botId) ->
@@ -449,5 +455,186 @@ class VinekeepersEngineTest {
 
         assertTrue(auditLogs.stream().noneMatch(log -> "luna".equals(log.getBotId())),
                 "Messages from different user or channel must not continue the waiting session");
+    }
+
+    // --- Connector-keyed reply sender (fallback when no sink) ---
+
+    @Test
+    void fallbackUsesReplySenderRegisteredByConnectorId() {
+        BotDefinition bot = new BotDefinition(
+                "bot",
+                new Persona("Bot", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("bot", (event, store, botId) ->
+                WorkflowRunResult.completed(OutboundResponse.ofText("reply text")));
+        engine.registerReasoner("bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "bot"));
+
+        AtomicReference<String> sentChannel = new AtomicReference<>();
+        AtomicReference<String> sentContent = new AtomicReference<>();
+        ReplySender discordSender = (channelId, messageId, content) -> {
+            sentChannel.set(channelId);
+            sentContent.set(content);
+        };
+        engine.setReplySender("discord", discordSender);
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+        // No sink registered — fallback to reply sender by source prefix "discord"
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "messageId", "msg-1", "content", "hi"));
+        engine.onEvent(event);
+
+        assertEquals("ch-1", sentChannel.get());
+        assertEquals("reply text", sentContent.get());
+    }
+
+    @Test
+    void setReplySenderWithoutConnectorIdUsesDiscordFallback() {
+        BotDefinition bot = new BotDefinition(
+                "bot",
+                new Persona("Bot", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("bot", (event, store, botId) ->
+                WorkflowRunResult.completed(OutboundResponse.ofText("legacy reply")));
+        engine.registerReasoner("bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "bot"));
+
+        AtomicReference<String> sentContent = new AtomicReference<>();
+        ReplySender sender = (channelId, messageId, content) -> sentContent.set(content);
+        engine.setReplySender(sender); // backward compat: registers under "discord"
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-2", "content", "hi"));
+        engine.onEvent(event);
+
+        assertEquals("legacy reply", sentContent.get());
+    }
+
+    @Test
+    void resolverRegisteredForConnectorIdIsUsedForTarget() {
+        BotDefinition bot = new BotDefinition(
+                "bot",
+                new Persona("Bot", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("bot", (event, store, botId) ->
+                WorkflowRunResult.completed(OutboundResponse.ofText("reply")));
+        engine.registerReasoner("bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "bot"));
+
+        ReplyTarget resolvedTarget = new ChannelTarget("discord:g:ch", "resolved-ch", "resolved-msg");
+        ReplyTargetResolver mockResolver = event -> java.util.Optional.of(resolvedTarget);
+        engine.registerReplyTargetResolver("discord", mockResolver);
+
+        AtomicReference<String> sentChannel = new AtomicReference<>();
+        AtomicReference<String> sentMessageId = new AtomicReference<>();
+        ReplySender sender = (channelId, messageId, content) -> {
+            sentChannel.set(channelId);
+            sentMessageId.set(messageId);
+        };
+        engine.setReplySender("discord", sender);
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "payload-ch", "content", "hi"));
+        engine.onEvent(event);
+
+        assertEquals("resolved-ch", sentChannel.get());
+        assertEquals("resolved-msg", sentMessageId.get());
+    }
+
+    @Test
+    void whenNoResolverRegistered_doesNotDeliverReply() {
+        BotDefinition bot = new BotDefinition(
+                "bot",
+                new Persona("Bot", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("bot", (event, store, botId) ->
+                WorkflowRunResult.completed(OutboundResponse.ofText("reply")));
+        engine.registerReasoner("bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "bot"));
+        AtomicReference<String> sentChannel = new AtomicReference<>();
+        AtomicReference<String> sentMessageId = new AtomicReference<>();
+        engine.setReplySender("discord", (channelId, messageId, content) -> {
+            sentChannel.set(channelId);
+            sentMessageId.set(messageId);
+        });
+        // No resolver registered for "discord" — engine must not deliver (fail closed)
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "messageId", "msg-1", "content", "hi"));
+        engine.onEvent(event);
+
+        assertEquals(null, sentChannel.get());
+        assertEquals(null, sentMessageId.get());
+    }
+
+    @Test
+    void whenResolverReturnsEmpty_doesNotDeliverReply() {
+        BotDefinition bot = new BotDefinition(
+                "bot",
+                new Persona("Bot", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("bot", (event, store, botId) ->
+                WorkflowRunResult.completed(OutboundResponse.ofText("reply")));
+        engine.registerReasoner("bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "bot"));
+        ReplyTargetResolver emptyResolver = event -> java.util.Optional.empty();
+        engine.registerReplyTargetResolver("discord", emptyResolver);
+        AtomicReference<String> sentChannel = new AtomicReference<>();
+        AtomicReference<String> sentMessageId = new AtomicReference<>();
+        engine.setReplySender("discord", (channelId, messageId, content) -> {
+            sentChannel.set(channelId);
+            sentMessageId.set(messageId);
+        });
+
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("channelId", "ch-1", "messageId", "msg-1", "content", "hi"));
+        engine.onEvent(event);
+
+        assertEquals(null, sentChannel.get());
+        assertEquals(null, sentMessageId.get());
+    }
+
+    @Test
+    void whenNoSenderForSourcePrefixSendIsNotCalled() {
+        BotDefinition bot = new BotDefinition(
+                "bot",
+                new Persona("Bot", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        engine.registerRunner("bot", (event, store, botId) ->
+                WorkflowRunResult.completed(OutboundResponse.ofText("reply")));
+        engine.registerReasoner("bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "bot"));
+
+        ReplySender discordOnlySender = (channelId, messageId, content) -> {
+            throw new AssertionError("Sender must not be called for unknown connector");
+        };
+        engine.setReplySender("discord", discordOnlySender);
+        // Event from "other" connector — no sender registered for "other"
+
+        Event event = new Event("other:g:ch", "message",
+                Map.of("channelId", "ch-1", "content", "hi"));
+        engine.onEvent(event);
+
+        // No exception and audit shows bot was handled (reply simply not delivered)
+        assertTrue(auditLogs.stream().anyMatch(log -> "bot".equals(log.getBotId())));
     }
 }

@@ -2,10 +2,15 @@ package com.vinekeepers.connectors;
 
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeatureRoomState;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningRole;
+import com.vinekeepers.state.planning.RoomParticipant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -172,6 +177,96 @@ class OutboundDeliveryRouterTest {
         assertEquals(0, lunaSender.sendCalls.get());
         assertEquals(1, defaultSender.sendCalls.get());
         assertEquals("THREAD_CREATE_FAILED", defaultSender.lastChannelId);
+    }
+
+    @Test
+    void sendAs_usesSpecifiedBotSender() {
+        RecordingSender architectSender = new RecordingSender();
+        router.registerSender("luna", lunaSender, null);
+        router.registerSender("architect", architectSender, null);
+
+        router.sendAs("ch-1", "msg-1", "From architect", "architect");
+
+        assertEquals(1, architectSender.sendCalls.get());
+        assertEquals("ch-1", architectSender.lastChannelId);
+        assertEquals("From architect", architectSender.lastContent);
+        assertEquals(0, lunaSender.sendCalls.get());
+        assertEquals(0, defaultSender.sendCalls.get());
+    }
+
+    @Test
+    void sendAs_whenAsBotIdNullOrBlank_fallsBackToStandardSend() {
+        lifecycleContextStore.put(new LifecycleContext("ctx-1", "ch-1", NOW, null, "luna", null, null, null));
+        router.registerSender("luna", lunaSender, null);
+
+        router.sendAs("ch-1", null, "content", null);
+        assertEquals(1, lunaSender.sendCalls.get());
+        lunaSender.sendCalls.set(0);
+        router.sendAs("ch-1", null, "content", "");
+        assertEquals(1, lunaSender.sendCalls.get());
+    }
+
+    @Test
+    void sendAs_whenNoSenderForBot_doesNotSend() {
+        router.registerSender("luna", lunaSender, null);
+        router.sendAs("ch-1", null, "content", "unknown-bot");
+        assertEquals(0, lunaSender.sendCalls.get());
+        assertEquals(0, defaultSender.sendCalls.get());
+    }
+
+    @Test
+    void sendAsRole_resolvesRoleToBotAndSendsViaThatBot() {
+        FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
+        List<RoomParticipant> participants = List.of(
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        FeatureRoomState roomState = new FeatureRoomState(
+                "ctx-1", null, null, "room-ch-1", "thread-1", null, null, "INTAKE_READY",
+                participants, null, null);
+        featureStore.put(roomState);
+        OutboundDeliveryRouter routerWithFeature = new OutboundDeliveryRouter(lifecycleContextStore, featureStore);
+        routerWithFeature.setDefaultSender(defaultSender);
+        RecordingSender scribeSender = new RecordingSender();
+        routerWithFeature.registerSender("scribe", scribeSender, null);
+
+        routerWithFeature.sendAsRole("room-ch-1", null, "Scribe report", PlanningRole.SCRIBE);
+
+        assertEquals(1, scribeSender.sendCalls.get());
+        assertEquals("room-ch-1", scribeSender.lastChannelId);
+        assertEquals("Scribe report", scribeSender.lastContent);
+    }
+
+    @Test
+    void sendAsRole_whenTargetIsThread_resolvesByDeliveryTargetId() {
+        FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
+        List<RoomParticipant> participants = List.of(
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        FeatureRoomState roomState = new FeatureRoomState(
+                "ctx-1", null, null, "room-ch", "intake-thread-99", null, null, "INTAKE_READY",
+                participants, null, null);
+        featureStore.put(roomState);
+        OutboundDeliveryRouter routerWithFeature = new OutboundDeliveryRouter(lifecycleContextStore, featureStore);
+        routerWithFeature.setDefaultSender(defaultSender);
+        RecordingSender architectSender = new RecordingSender();
+        routerWithFeature.registerSender("architect", architectSender, null);
+
+        routerWithFeature.sendAsRole("intake-thread-99", null, "Architect reply", PlanningRole.ARCHITECT);
+
+        assertEquals(1, architectSender.sendCalls.get());
+        assertEquals("Architect reply", architectSender.lastContent);
+    }
+
+    @Test
+    void sendAsRole_whenNoFeatureRoomOrNullRole_fallsBackToStandardSend() {
+        OutboundDeliveryRouter routerWithFeature = new OutboundDeliveryRouter(lifecycleContextStore, null);
+        routerWithFeature.setDefaultSender(defaultSender);
+        routerWithFeature.sendAsRole("ch-1", null, "content", PlanningRole.SCRIBE);
+        assertEquals(1, defaultSender.sendCalls.get());
     }
 
     private static final class RecordingSender implements ReplySender {

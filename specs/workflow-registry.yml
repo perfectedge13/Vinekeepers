@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T18:00:00Z"
+  updated_utc: "2026-03-18T19:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -80,7 +80,9 @@ assets:
     path: src/main/java/com/vinekeepers/core/Bootstrap.java
     role: >-
       Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and
-      handlesOwnedSpaces map from loaded bots to Router
+      handlesOwnedSpaces map from loaded bots to Router; construct FeaturePlanStateStore, RepoWorkspaceStateStore,
+      RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
+      ensure_repo_workspace, upsert_artifact_section_data, get_profile_missing_fields, append/set plan actions
     requires:
       - REQ-CORE-002
       - REQ-TOOLS-001
@@ -97,7 +99,7 @@ assets:
       session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink
       registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage);
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
-      fallback; build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
+      fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine
     requires:
       - REQ-CORE-003
       - REQ-REASONER-001
@@ -271,6 +273,16 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowActionRegistry.java
     role: Register and resolve workflow actions by name
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-WORKFLOW-CAPABILITY-SUPPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/WorkflowCapabilitySupport.java
+    role: >-
+      Utility to resolve source prefix from event for capability lookups (e.g. SpaceOperationsRegistry); null/blank
+      prefix yields fail-closed behavior in actions (no Discord default)
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -558,10 +570,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/CreateChannelAction.java
     role: >-
-      Workflow action to create a Discord text channel via OutboundGateway for lifecycle room; optional bind
-      lifecycleOwnerBotId; after create calls addPermissionOverride for that bot's Discord user (OutboundDeliveryRouter
-      getSelfUserIdForBot) when gateway supports it; returns channel id or sentinel CHANNEL_CREATE_FAILED on gateway
-      failure; room naming from state (project + codeChange) or fallback; normalizeChannelName for Discord-safe lowercase
+      Workflow action that builds CreateRoomRequest from event/state/bind, resolves SpaceOperations by
+      WorkflowCapabilitySupport.sourcePrefix(event); null/blank prefix or unregistered prefix returns
+      CHANNEL_CREATE_FAILED (fail-closed, no Discord default)
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -572,14 +583,137 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostChannelMessageAction.java
     role: >-
-      Workflow action to post a message to a Discord channel via ReplySender; send target = deliveryChannelId or
-      channelId (bind then state); treat THREAD_CREATE_FAILED sentinel as fallback to channelId; interpolation from
-      merged map (state then bind); lifecycleBotName from bind for content
+      Workflow action to post a message to a Discord channel via ReplySender; send target from optional target (room |
+      thread) or targetChannelId (bind then state): targetChannelId takes precedence; target=room uses channelId;
+      target=thread uses deliveryChannelId with THREAD_CREATE_FAILED fallback to channelId; else legacy
+      firstNonBlank(deliveryChannelId, channelId); interpolation from merged map (state then bind); lifecycleBotName
+      from bind for content; optional asRole (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) or asBotId uses
+      OutboundDeliveryRouter.sendAsRole or sendAs to send as that participant
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ProvisionRoomParticipantsAction.java
+    role: >-
+      Workflow action to provision four feature-room participants (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) into
+      StateStore under a configurable prefix; returns list of participant maps for downstream initialize_feature_room_state
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/InitializeFeatureRoomStateAction.java
+    role: >-
+      Workflow action to build FeatureRoomState from bind/state (featureRoomParticipants list, contextId, channelId)
+      and put it in FeatureRoomStateStore; validates four participants with role, configuredBotId, runtimeBotInstanceId;
+      when featureId or featureSlug missing from bind/state, generates featureId (feat- + 12 hex) and featureSlug
+      (derived from initialRequest/repo or fallback feature)
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/InitializeFeaturePlanStateAction.java
+    role: >-
+      Workflow action to create FeaturePlanState from FeatureRoomState (by contextId) or bind/state fallbacks; stores in
+      FeaturePlanStateStore
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-ENSURE-REPO-WORKSPACE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/EnsureRepoWorkspaceAction.java
+    role: >-
+      Workflow action to resolve/materialize repo workspace via RepoWorkspaceService, persist RepoWorkspaceState, and
+      update FeaturePlanState workspace linkage when plan exists
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/UpsertArtifactSectionDataAction.java
+    role: >-
+      Workflow action upsert_artifact_section_data — merge string map data into FeaturePlanState artifacts for a section;
+      resolves nested {{key}} via bind/state
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/GetProfileMissingFieldsAction.java
+    role: >-
+      Workflow action get_profile_missing_fields — compares plan artifacts to profile required fields; writes summary
+      string to storeIn state key (e.g. profileMissingSummary)
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-APPEND-PLAN-REQUIREMENT-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/AppendRequirementAction.java
+    role: Workflow action append_plan_requirement — append RequirementEntry to FeaturePlanState by contextId
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-APPEND-PLAN-ASSUMPTION-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/AppendAssumptionAction.java
+    role: Workflow action append_plan_assumption
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-APPEND-PLAN-ISSUE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/AppendIssueAction.java
+    role: Workflow action append_plan_issue
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-APPEND-PLAN-VALIDATION-NOTE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/AppendValidationNoteAction.java
+    role: Workflow action append_plan_validation_note
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-SET-PLAN-SECTION-STATUS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/SetPlanSectionStatusAction.java
+    role: Workflow action set_plan_section_status
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-SET-SOLUTION-OUTLINE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/SetSolutionOutlineAction.java
+    role: Workflow action set_solution_outline
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
       - FEAT-WORKFLOW-STEPS
   - id: ASSET-PROVISION-BOT-INSTANCE-ACTION
     kind: source
@@ -609,12 +743,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/CreateThreadAction.java
     role: >-
-      Workflow action to create a Discord thread under parent channel; bind channelId, threadName, optional contextId.
-      When channelId has a lifecycle context, uses that context's bot gateway (owner gateway, e.g. Arrietty); else
-      default gateway. Blank or missing channelId returns THREAD_CREATE_FAILED; no LifecycleContextStore update on
-      failure. After success, when contextId in bind/state, updates LifecycleContextStore via setDeliveryTargetId
-      (contextId, threadId). Returns thread id or THREAD_CREATE_FAILED; storeIn (e.g. deliveryChannelId) stores
-      result in state
+      Workflow action that builds CreateThreadRequest from event/state/bind, resolves SpaceOperations by
+      WorkflowCapabilitySupport.sourcePrefix(event); null/blank prefix or unregistered prefix returns
+      THREAD_CREATE_FAILED (fail-closed, no Discord default)
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -682,11 +813,22 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
+        - >-
+          post_channel_message supports optional bind/state target (room | thread) and targetChannelId;
+          targetChannelId takes precedence; target=room uses channelId; target=thread uses deliveryChannelId with
+          THREAD_CREATE_FAILED fallback to channelId; else legacy firstNonBlank(deliveryChannelId, channelId)
         - create_thread action creates a Discord thread under parent channel via OutboundGateway; bind channelId,
           threadName, optional contextId; when channelId has a lifecycle context uses that context's bot gateway (owner
           gateway), else default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when
           contextId in bind/state updates LifecycleContextStore via setDeliveryTargetId(contextId, threadId); no store
           update on failure; storeIn (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
+        - create_channel and create_thread use request types (CreateRoomRequest, CreateThreadRequest) and resolve
+          SpaceOperations by WorkflowCapabilitySupport.sourcePrefix(event); null or blank prefix returns sentinel
+          (CHANNEL_CREATE_FAILED / THREAD_CREATE_FAILED) — fail-closed, no Discord default
+        - >-
+          Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, append_plan_requirement,
+          append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
+          set_solution_outline on WorkflowActionRegistry
       examples: []
     traceability:
       assets:
@@ -721,10 +863,26 @@ requirements:
         - ASSET-EXTRACT-EVENT-FIELDS-STEP
         - ASSET-CREATE-CHANNEL-ACTION
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
+        - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
+        - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
+        - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
+        - ASSET-ENSURE-REPO-WORKSPACE-ACTION
+        - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
+        - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
+        - ASSET-APPEND-PLAN-REQUIREMENT-ACTION
+        - ASSET-APPEND-PLAN-ASSUMPTION-ACTION
+        - ASSET-APPEND-PLAN-ISSUE-ACTION
+        - ASSET-APPEND-PLAN-VALIDATION-NOTE-ACTION
+        - ASSET-SET-PLAN-SECTION-STATUS-ACTION
+        - ASSET-SET-SOLUTION-OUTLINE-ACTION
         - ASSET-PROVISION-BOT-INSTANCE-ACTION
         - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
         - ASSET-CREATE-THREAD-ACTION
         - ASSET-LAUNCH-CURSOR-RUN-ACTION
+        - ASSET-WORKFLOW-CAPABILITY-SUPPORT
+        - ASSET-SPACE-OPERATIONS
+        - ASSET-SPACE-OPERATIONS-REGISTRY
+        - ASSET-DISCORD-SPACE-OPERATIONS
       symbols: []
     validation:
       tests:
@@ -800,6 +958,48 @@ requirements:
           intent: Verify post_channel_message interpolates content from merged map (state then bind, bind overrides)
           testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
           testMethod: runInterpolatesContentFromBindState
+          preconditions: []
+        - id: UNIT-POST-CHANNEL-MESSAGE-AS-ROLE
+          title: PostChannelMessageActionTest
+          intent: Verify post_channel_message with asRole uses OutboundDeliveryRouter.sendAsRole
+          testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
+          testMethod: runWithAsRole_usesOutboundDeliveryRouterSendAsRole
+          preconditions: []
+        - id: UNIT-POST-CHANNEL-MESSAGE-AS-ROLE-BIND-OVERRIDES
+          title: PostChannelMessageActionTest
+          intent: Verify post_channel_message asRole from bind overrides state
+          testClass: com.vinekeepers.workflow.actions.PostChannelMessageActionTest
+          testMethod: runWithAsRoleFromBind_overridesState
+          preconditions: []
+        - id: UNIT-PROVISION-ROOM-PARTICIPANTS-ACTION
+          title: ProvisionRoomParticipantsActionTest
+          intent: Verify provision_room_participants provisions four participants into state
+          testClass: com.vinekeepers.workflow.actions.ProvisionRoomParticipantsActionTest
+          preconditions: []
+        - id: UNIT-INITIALIZE-FEATURE-ROOM-STATE-ACTION
+          title: InitializeFeatureRoomStateActionTest
+          intent: Verify initialize_feature_room_state builds and stores FeatureRoomState from bind/state
+          testClass: com.vinekeepers.workflow.actions.InitializeFeatureRoomStateActionTest
+          preconditions: []
+        - id: UNIT-INITIALIZE-FEATURE-PLAN-STATE-ACTION-WORKFLOW
+          title: InitializeFeaturePlanStateActionTest
+          intent: Verify initialize_feature_plan_state creates FeaturePlanState from FeatureRoomStateStore
+          testClass: com.vinekeepers.workflow.actions.InitializeFeaturePlanStateActionTest
+          preconditions: []
+        - id: UNIT-ENSURE-REPO-WORKSPACE-ACTION-WORKFLOW
+          title: EnsureRepoWorkspaceActionTest
+          intent: Verify ensure_repo_workspace links plan state after workspace resolution
+          testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          preconditions: []
+        - id: UNIT-UPSERT-ARTIFACT-SECTION-DATA-ACTION
+          title: UpsertArtifactSectionDataActionTest
+          intent: Verify upsert_artifact_section_data merges section field data into plan artifacts with placeholder resolution
+          testClass: com.vinekeepers.workflow.actions.UpsertArtifactSectionDataActionTest
+          preconditions: []
+        - id: UNIT-GET-PROFILE-MISSING-FIELDS-ACTION
+          title: GetProfileMissingFieldsActionTest
+          intent: Verify get_profile_missing_fields writes missing-required summary to storeIn
+          testClass: com.vinekeepers.workflow.actions.GetProfileMissingFieldsActionTest
           preconditions: []
         - id: UNIT-CREATE-THREAD-ACTION
           title: CreateThreadActionTest
@@ -932,9 +1132,10 @@ requirements:
           create_channel bind may include lifecycleOwnerBotId; after create, addPermissionOverride is called for that
           bot's Discord user id (resolved via OutboundDeliveryRouter getSelfUserIdForBot) when OutboundGateway supports it
         - >-
-          post_channel_message send target = deliveryChannelId or channelId (bind then state); when deliveryChannelId is
-          THREAD_CREATE_FAILED sentinel, fallback to channelId; interpolates content from merged map (state then bind,
-          bind overrides); lifecycleBotName from bind for content
+          post_channel_message send target from optional target (room | thread) or targetChannelId (bind then state):
+          targetChannelId takes precedence; target=room uses channelId; target=thread uses deliveryChannelId with
+          THREAD_CREATE_FAILED fallback to channelId; else legacy firstNonBlank(deliveryChannelId, channelId);
+          interpolates content from merged map (state then bind, bind overrides); lifecycleBotName from bind for content
         - >-
           create_lifecycle_context uses bind precedence (bind overrides state for configuredBotId, repo, requestText,
           runtimeBotInstanceId, deliveryChannelId); excludes THREAD_CREATE_FAILED from context deliveryChannelId
@@ -951,6 +1152,9 @@ requirements:
         - ASSET-LUNA-RUN-STATE
         - ASSET-CURSOR-RUN-MONITOR
         - ASSET-CREATE-THREAD-ACTION
+        - ASSET-SPACE-OPERATIONS
+        - ASSET-SPACE-OPERATIONS-REGISTRY
+        - ASSET-DISCORD-SPACE-OPERATIONS
         - ASSET-CURSOR-AGENT-LAUNCH-REQUEST
         - ASSET-CURSOR-AGENT-CONVERSATION
         - ASSET-CURSOR-AGENT-DETAILS
@@ -977,6 +1181,10 @@ requirements:
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
         - ASSET-PROVISION-BOT-INSTANCE-ACTION
         - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
+        - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
+        - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
+        - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
+        - ASSET-ENSURE-REPO-WORKSPACE-ACTION
         - ASSET-LAUNCH-CURSOR-RUN-ACTION
         - ASSET-GITHUB-REPOS-CHOICE-PROVIDER
         - ASSET-REPLY-SENDER
@@ -1156,6 +1364,26 @@ requirements:
           intent: Verify provision_bot_instance action provisions runtime bot instance
           testClass: com.vinekeepers.workflow.actions.ProvisionBotInstanceActionTest
           preconditions: []
+        - id: UNIT-PROVISION-ROOM-PARTICIPANTS-ACTION
+          title: ProvisionRoomParticipantsActionTest
+          intent: Verify provision_room_participants provisions four participants into state
+          testClass: com.vinekeepers.workflow.actions.ProvisionRoomParticipantsActionTest
+          preconditions: []
+        - id: UNIT-INITIALIZE-FEATURE-ROOM-STATE-ACTION
+          title: InitializeFeatureRoomStateActionTest
+          intent: Verify initialize_feature_room_state builds and stores FeatureRoomState
+          testClass: com.vinekeepers.workflow.actions.InitializeFeatureRoomStateActionTest
+          preconditions: []
+        - id: UNIT-INITIALIZE-FEATURE-PLAN-STATE-ACTION
+          title: InitializeFeaturePlanStateActionTest
+          intent: Verify initialize_feature_plan_state loads from FeatureRoomStateStore by contextId
+          testClass: com.vinekeepers.workflow.actions.InitializeFeaturePlanStateActionTest
+          preconditions: []
+        - id: UNIT-ENSURE-REPO-WORKSPACE-ACTION
+          title: EnsureRepoWorkspaceActionTest
+          intent: Verify ensure_repo_workspace persists workspace state and links FeaturePlanState
+          testClass: com.vinekeepers.workflow.actions.EnsureRepoWorkspaceActionTest
+          preconditions: []
         - id: UNIT-CREATE-LIFECYCLE-CONTEXT-ACTION
           title: CreateLifecycleContextActionTest
           intent: Verify create_lifecycle_context action creates and stores lifecycle context
@@ -1237,6 +1465,7 @@ features:
       - ASSET-WORKFLOW-TRANSFORMS
       - ASSET-WORKFLOW-CONDITION-EVALUATOR
       - ASSET-EXTRACT-EVENT-FIELDS-STEP
+      - ASSET-WORKFLOW-CAPABILITY-SUPPORT
     status: active
   - id: FEAT-CURSOR-GATHERING
     slug: cursor-gathering
@@ -1275,10 +1504,19 @@ features:
       - ASSET-RUNTIME-BOT-INSTANCE
       - ASSET-CREATE-CHANNEL-ACTION
       - ASSET-POST-CHANNEL-MESSAGE-ACTION
+      - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
+      - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
+      - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
+      - ASSET-ENSURE-REPO-WORKSPACE-ACTION
+      - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
+      - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
       - ASSET-PROVISION-BOT-INSTANCE-ACTION
       - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
       - ASSET-CREATE-THREAD-ACTION
       - ASSET-LAUNCH-CURSOR-RUN-ACTION
+      - ASSET-SPACE-OPERATIONS
+      - ASSET-SPACE-OPERATIONS-REGISTRY
+      - ASSET-DISCORD-SPACE-OPERATIONS
       - ASSET-REPLY-SENDER
       - ASSET-OUTBOUND-GATEWAY
     status: active

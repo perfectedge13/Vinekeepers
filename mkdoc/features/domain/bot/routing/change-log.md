@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-18
+
+- **Multi-bot feature room routing:** Router depends on optional **FeatureRoomStateStore**. When **FeatureRoomState** exists for the event's room (resolved by room channel id or delivery target id), Router returns **all four participant configuredBotIds** in stable order (arrietty, architect, auditor, scribe). When no feature room state for the channel, legacy single-owner or filter-based routing applies. Tests: RouterTest routeWithFeatureRoomStore_roomChannelId_returnsFourParticipantBotIds, routeWithFeatureRoomStore_threadResolutionByDeliveryTargetId_returnsFourParticipantBotIds, routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable.
+
 ## 2026-03-13
 
 - **Routing policy (RoutingRule, ordered list):** Routing is now an **ordered policy list** of **RoutingRule** instances (filter + botId). The former `Routing` type was removed; **RoutingRule** is the single rule model. Router matches events by evaluating rules in order; lifecycle owner precedence (handlesOwnedSpaces) still applies when a channel has a lifecycle context. ConfigLoader builds the ordered list from YAML routing entries.

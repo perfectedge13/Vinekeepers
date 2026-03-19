@@ -5,6 +5,7 @@ import com.vinekeepers.audit.AuditRecorder;
 import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.NormalizedEventContext;
 import com.vinekeepers.bot.Router;
+import com.vinekeepers.connectors.ReplyTargetResolver;
 import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.events.EventSubscriber;
@@ -49,7 +50,10 @@ public final class VinekeepersEngine implements EventSubscriber {
     private final ToolRunner toolRunner;
     /** Transitional: sink per sourceId prefix (e.g. "discord"). */
     private final Map<String, AppReplySink> sinks = new ConcurrentHashMap<>();
-    private volatile ReplySender replySender;
+    /** Reply senders keyed by connector id (sourceId prefix). */
+    private final Map<String, ReplySender> replySendersByConnectorId = new ConcurrentHashMap<>();
+    /** Reply target resolvers keyed by connector id (sourceId prefix). */
+    private final Map<String, ReplyTargetResolver> resolversByConnectorId = new ConcurrentHashMap<>();
 
     public VinekeepersEngine(Router router, StateStore stateStore, AuditRecorder auditRecorder) {
         this(router, stateStore, auditRecorder, new ToolRunner(new ToolRegistry()));
@@ -85,10 +89,30 @@ public final class VinekeepersEngine implements EventSubscriber {
     }
 
     /**
+     * Register a reply sender for the given connector id (used when no sink is registered for that source).
+     */
+    public void setReplySender(String connectorId, ReplySender sender) {
+        if (connectorId != null && !connectorId.isBlank() && sender != null) {
+            replySendersByConnectorId.put(connectorId, sender);
+        }
+    }
+
+    /**
      * Set the reply sender for legacy text-only delivery when no sink is registered.
+     * Backward compatibility: registers the sender under connector id "discord".
      */
     public void setReplySender(ReplySender replySender) {
-        this.replySender = replySender;
+        setReplySender("discord", replySender);
+    }
+
+    /**
+     * Register a reply target resolver for the given connector id.
+     * The engine uses the resolver as the single source of truth for ReplyTarget; when no resolver is registered or the resolver returns empty, the engine does not deliver the reply (fail closed). Delivery uses target.channelId()/messageId() when sending via reply sender.
+     */
+    public void registerReplyTargetResolver(String connectorId, ReplyTargetResolver resolver) {
+        if (connectorId != null && !connectorId.isBlank() && resolver != null) {
+            resolversByConnectorId.put(connectorId, resolver);
+        }
     }
 
     @Override
@@ -152,8 +176,23 @@ public final class VinekeepersEngine implements EventSubscriber {
 
         ReasonerOutput reasonerOutput = runReasoner(bot, event, workflowResult);
         OutboundResponse outbound = buildOutboundResponse(workflowResult, reasonerOutput);
-        ReplyTarget target = resolveReplyTarget(event);
-        deliverReply(event, outbound, target);
+        String sourceId = event.getSourceId();
+        if (sourceId == null) {
+            log.warn("No reply target resolver for null sourceId; skipping reply delivery");
+            return;
+        }
+        String sourcePrefix = sourceId.contains(":") ? sourceId.substring(0, sourceId.indexOf(':')) : sourceId;
+        ReplyTargetResolver resolver = resolversByConnectorId.get(sourcePrefix);
+        if (resolver == null) {
+            log.warn("No reply target resolver for source prefix {}; skipping reply delivery", sourcePrefix);
+            return;
+        }
+        Optional<ReplyTarget> targetOpt = resolver.resolve(event);
+        if (targetOpt.isEmpty()) {
+            log.warn("Reply target resolver returned empty; skipping reply delivery");
+            return;
+        }
+        deliverReply(event, outbound, targetOpt.get());
     }
 
     private ReasonerOutput runReasoner(BotDefinition bot, Event event, WorkflowRunResult workflowResult) {
@@ -228,32 +267,6 @@ public final class VinekeepersEngine implements EventSubscriber {
         return OutboundResponse.ofText(text);
     }
 
-    private static ReplyTarget resolveReplyTarget(Event event) {
-        String sourceId = event.getSourceId();
-        String channelId = event.getPayload("channelId", String.class);
-        if (channelId == null) {
-            channelId = event.getPayload("channel", String.class);
-        }
-        if (channelId == null) {
-            channelId = "";
-        }
-        String messageId = event.getPayload("messageId", String.class);
-        if (messageId == null) {
-            messageId = event.getPayload("message_id", String.class);
-        }
-        if (messageId == null) {
-            messageId = "";
-        }
-        Boolean deferred = event.getPayload("deferred", Boolean.class);
-        String interactionId = event.getPayload("interactionId", String.class);
-        String token = event.getPayload("token", String.class);
-        if ("interaction".equals(event.getKind()) && interactionId != null && token != null) {
-            return new com.vinekeepers.interactions.InteractionTarget(
-                    sourceId, channelId, messageId, interactionId, token, Boolean.TRUE.equals(deferred));
-        }
-        return new com.vinekeepers.interactions.ChannelTarget(sourceId, channelId, messageId);
-    }
-
     private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target) {
         if (outbound == null) {
             return;
@@ -270,15 +283,14 @@ public final class VinekeepersEngine implements EventSubscriber {
             }
             return;
         }
-        if (replySender != null && event.getSourceId().startsWith("discord:")) {
+        ReplySender sender = replySendersByConnectorId.get(sourcePrefix);
+        if (sender != null) {
             String text = outbound.getText().orElse("");
             if (!text.isEmpty()) {
-                String channelId = event.getPayload("channelId", String.class);
-                if (channelId == null) channelId = event.getPayload("channel", String.class);
-                String messageId = event.getPayload("messageId", String.class);
-                if (messageId == null) messageId = event.getPayload("message_id", String.class);
+                String channelId = target.channelId();
+                String messageId = target.messageId();
                 if (channelId != null) {
-                    replySender.send(channelId, messageId, text);
+                    sender.send(channelId, messageId, text);
                 }
             }
         }

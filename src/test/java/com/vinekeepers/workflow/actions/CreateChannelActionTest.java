@@ -1,23 +1,32 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.connectors.CreateRoomRequest;
 import com.vinekeepers.connectors.DiscordGateway;
+import com.vinekeepers.connectors.DiscordSpaceOperations;
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
+import com.vinekeepers.connectors.SpaceOperations;
+import com.vinekeepers.connectors.SpaceOperationsRegistry;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CreateChannelActionTest {
+
+    private static SpaceOperationsRegistry registryWithDiscord(OutboundDeliveryRouter router, LifecycleContextStore store) {
+        SpaceOperationsRegistry registry = new SpaceOperationsRegistry();
+        registry.register("discord", new DiscordSpaceOperations(router, store));
+        return registry;
+    }
 
     @Test
     void runReturnsChannelCreateFailedWhenGatewayNotConnected() {
@@ -31,23 +40,30 @@ class CreateChannelActionTest {
             @Override
             public boolean isConnected() { return false; }
         };
-        CreateChannelAction action = new CreateChannelAction(gateway);
-        Object result = action.run(null, Map.of(), Map.of("guildId", "guild-1"));
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
+        Object result = action.run(new Event("discord:guild-1", "message", Map.of()), Map.of(), Map.of("guildId", "guild-1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
 
     @Test
     void runReturnsChannelCreateFailedWhenGatewayIsNull() {
-        CreateChannelAction action = new CreateChannelAction((DiscordGateway) null);
-        Object result = action.run(null, Map.of(), Map.of("guildId", "guild-1"));
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
+        Object result = action.run(new Event("discord:x", "m", Map.of()), Map.of(), Map.of("guildId", "guild-1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
 
     @Test
     void runReturnsChannelCreateFailedWhenGuildIdMissing() {
-        DiscordGateway gateway = connectedGateway();
-        CreateChannelAction action = new CreateChannelAction(gateway);
-        Object result = action.run(null, Map.of(), Map.of());
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(connectedGateway());
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
+        Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of());
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
 
@@ -56,7 +72,10 @@ class CreateChannelActionTest {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
         gateway.createdChannelId = "new-chan-1";
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
 
         Object result = action.run(null, Map.of(), Map.of());
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
@@ -64,7 +83,6 @@ class CreateChannelActionTest {
         result = action.run(new Event("discord:my-guild", "message", Map.of()), Map.of(), Map.of());
         assertEquals("new-chan-1", result);
         assertEquals("my-guild", gateway.lastGuildId);
-        // Channel name from state when bind/state have no channelName: built from state (repo-change-<suffix> for empty state)
         assertTrue(gateway.lastChannelName != null && gateway.lastChannelName.startsWith("repo-change-"),
                 "expected channel name built from state, got: " + gateway.lastChannelName);
     }
@@ -74,7 +92,10 @@ class CreateChannelActionTest {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
         gateway.createdChannelId = "chan-1";
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
 
         action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1", "channelName", "luna-room"));
         assertEquals("luna-room", gateway.lastChannelName);
@@ -96,7 +117,10 @@ class CreateChannelActionTest {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
         gateway.createdChannelId = "chan-1";
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         action.run(new Event("discord:g1", "m", Map.of()),
                 Map.of("project", "https://github.com/Owner/Repo", "codeChange", "Phase One"),
                 Map.of("guildId", "g1"));
@@ -111,7 +135,10 @@ class CreateChannelActionTest {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
         gateway.createdChannelId = null;
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
@@ -132,7 +159,10 @@ class CreateChannelActionTest {
                 throw new RuntimeException("Discord API error");
             }
         };
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
@@ -153,7 +183,10 @@ class CreateChannelActionTest {
                 throw new RuntimeException(new TimeoutException("submit().get() timeout"));
             }
         };
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
@@ -174,7 +207,10 @@ class CreateChannelActionTest {
                 throw new RuntimeException(new ExecutionException(new IllegalStateException("JDA rest action failed")));
             }
         };
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         Object result = action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
         assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
@@ -184,7 +220,10 @@ class CreateChannelActionTest {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
         gateway.createdChannelId = "chan-1";
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         action.run(new Event("discord:g1", "m", Map.of()),
                 Map.of("project", "owner/repo", "codeChange", "add-feature"),
                 Map.of("guildId", "g1"));
@@ -192,35 +231,59 @@ class CreateChannelActionTest {
                 "channel name must use repo name only (no owner), got: " + gateway.lastChannelName);
         assertFalse(gateway.lastChannelName.startsWith("owner-"), "channel name must not start with owner");
     }
+
     @Test
     void runNormalizesChannelNameFromBindToLowercaseDiscordSafe() {
         FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
         gateway.connected = true;
         gateway.createdChannelId = "chan-1";
-        CreateChannelAction action = new CreateChannelAction(gateway);
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         action.run(new Event("discord:g1", "m", Map.of()), Map.of(), Map.of("guildId", "g1", "channelName", "Luna Room #1"));
         assertEquals("luna-room-1", gateway.lastChannelName);
     }
 
     @Test
-    void normalizeChannelNameReturnsFallbackForNullOrBlank() {
-        assertEquals("lifecycle-room", CreateChannelAction.normalizeChannelName(null));
-        assertEquals("lifecycle-room", CreateChannelAction.normalizeChannelName(""));
-        assertEquals("lifecycle-room", CreateChannelAction.normalizeChannelName("   "));
+    void runReturnsChannelCreateFailedWhenUnknownSourcePrefix() {
+        SpaceOperationsRegistry registry = new SpaceOperationsRegistry();
+        CreateChannelAction action = new CreateChannelAction(registry);
+        Object result = action.run(new Event("unknown:xyz", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
     }
 
     @Test
-    void normalizeChannelNameNormalizesSpecialCharsAndTruncatesToMaxLength() {
-        assertEquals("luna-room-1", CreateChannelAction.normalizeChannelName("Luna Room #1"));
-        assertEquals("lifecycle-room", CreateChannelAction.normalizeChannelName("!@#$%"));
-        StringBuilder longName = new StringBuilder();
-        for (int i = 0; i < 150; i++) longName.append("a");
-        String result = CreateChannelAction.normalizeChannelName(longName.toString());
-        assertEquals(100, result.length());
-        assertTrue(result.matches("[a-z0-9_-]+"));
+    void whenEventIsNull_returnsChannelCreateFailed() {
+        final boolean[] createRoomCalled = { false };
+        SpaceOperations stub = new SpaceOperations() {
+            @Override
+            public com.vinekeepers.connectors.CreateRoomResult createRoom(CreateRoomRequest request) {
+                createRoomCalled[0] = true;
+                return new com.vinekeepers.connectors.CreateRoomResult.Success("stub-channel");
+            }
+            @Override
+            public com.vinekeepers.connectors.CreateThreadResult createThread(com.vinekeepers.connectors.CreateThreadRequest request) {
+                return new com.vinekeepers.connectors.CreateThreadResult.Failure(com.vinekeepers.connectors.CreateThreadFailureReason.CHANNEL_ID_MISSING);
+            }
+        };
+        SpaceOperationsRegistry registry = new SpaceOperationsRegistry();
+        registry.register("discord", stub);
+        CreateChannelAction action = new CreateChannelAction(registry);
+        Object result = action.run(null, Map.of(), Map.of("guildId", "g1"));
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
+        assertFalse(createRoomCalled[0], "capability should not be invoked when event is null");
     }
 
-    /** CreateChannelAction(router) with lifecycleOwnerBotId adds permission overwrite after create (mock gateway). */
+    @Test
+    void whenSourcePrefixUnknown_returnsChannelCreateFailed() {
+        SpaceOperationsRegistry registry = new SpaceOperationsRegistry();
+        CreateChannelAction action = new CreateChannelAction(registry);
+        Object result = action.run(new Event("other:x", "m", Map.of()), Map.of(), Map.of("guildId", "g1"));
+        assertEquals(CreateChannelAction.CHANNEL_CREATE_FAILED, result);
+    }
+
+    /** CreateChannelAction with registry: lifecycleOwnerBotId adds permission overwrite after create (via DiscordSpaceOperations). */
     @Test
     void runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate() {
         long lifecycleOwnerAllow = (1L << 10) | (1L << 11); // VIEW_CHANNEL | SEND_MESSAGES
@@ -232,7 +295,7 @@ class CreateChannelActionTest {
         router.setDefaultGateway(gateway);
         router.registerSender("luna", (ch, msg, content) -> {}, gateway);
 
-        CreateChannelAction action = new CreateChannelAction(router);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
         Map<String, Object> bind = Map.of(
                 "guildId", "guild-1",
                 "channelName", "lifecycle-room",
@@ -248,7 +311,6 @@ class CreateChannelActionTest {
         assertEquals(0L, gateway.lastPermissionOverride.deny);
     }
 
-    /** When addPermissionOverride returns false, create_channel fails with CHANNEL_CREATE_FAILED. */
     @Test
     void runWithRouterAndLifecycleOwnerBotId_whenAddPermissionOverrideReturnsFalse_returnsChannelCreateFailed() {
         FakeGatewayWithPermissionOverride gateway = new FakeGatewayWithPermissionOverride("owner-id");
@@ -259,7 +321,7 @@ class CreateChannelActionTest {
         router.setDefaultGateway(gateway);
         router.registerSender("luna", (ch, msg, content) -> {}, gateway);
 
-        CreateChannelAction action = new CreateChannelAction(router);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, new LifecycleContextStore()));
         Map<String, Object> bind = Map.of(
                 "guildId", "g1",
                 "channelName", "room",
@@ -270,7 +332,6 @@ class CreateChannelActionTest {
         assertNotNull(gateway.lastPermissionOverride);
     }
 
-    /** When lifecycleOwnerBotId is set but that bot has no Discord user id, create_channel fails. */
     @Test
     void runWithRouterAndLifecycleOwnerBotId_whenOwnerBotHasNoUserId_returnsChannelCreateFailed() {
         FakeGatewayWithPermissionOverride gateway = new FakeGatewayWithPermissionOverride("luna-user-id");
@@ -279,9 +340,8 @@ class CreateChannelActionTest {
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
         router.setDefaultGateway(gateway);
         router.registerSender("luna", (ch, msg, content) -> {}, gateway);
-        // Do not register any gateway for "arrietty" so getSelfUserIdForBot("arrietty") returns null
 
-        CreateChannelAction action = new CreateChannelAction(router);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, new LifecycleContextStore()));
         Map<String, Object> bind = Map.of(
                 "guildId", "g1",
                 "channelName", "room",

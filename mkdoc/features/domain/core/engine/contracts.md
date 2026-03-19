@@ -10,7 +10,7 @@ None. The engine is an internal orchestration component.
 
 # Interfaces
 
-- **`VinekeepersEngine`:** subscribes to events and coordinates bot execution.
+- **`VinekeepersEngine`:** subscribes to events and coordinates bot execution. Obtains **ReplyTarget** via **ReplyTargetResolver** registered by connector id (`registerReplyTargetResolver(connectorId, resolver)`); when no resolver is registered or resolver returns empty, does not deliver reply (fail closed); reply-sender delivery uses **target.channelId()** and **target.messageId()**. Bootstrap registers resolvers per connector (e.g. Discord: `registerReplyTargetResolver("discord", new DiscordReplyTargetResolver())`).
 - **`WorkflowRunner`:** engine-facing workflow execution contract.
 - **`ToolRunner`:** executes approved proposed tool calls.
 - **`Reasoner`:** supplies reply text, state patches, and proposed tool calls.

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-03-18T18:00:00Z"
 
 project:
   id: vinekeepers
@@ -69,6 +69,9 @@ requirements:
       criteria:
         - EnvLoader.load(".env") is called before bootstrap
         - Env.get(key, default) returns value from system properties or default
+        - >-
+          Optional repo workspace keys (VINEKEEPERS_REPO_WORKSPACE_ROOT, VINEKEEPERS_ALLOW_GIT_CLONE, GIT_EXECUTABLE) are
+          read via Env when RepoWorkspaceService is constructed
       examples: []
     traceability:
       assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]

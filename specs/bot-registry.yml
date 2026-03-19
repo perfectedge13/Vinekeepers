@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-03-18T14:30:00Z"
 
 project:
   id: vinekeepers
@@ -36,8 +36,14 @@ assets:
   - id: ASSET-ROUTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/Router.java
-    role: Match events to bots by routing rules and ownership; when lifecycle context exists for a Discord channel and the owner bot has handlesOwnedSpaces, single-owner precedence (only that bot is returned); Router depends on LifecycleContextStore and setHandlesOwnedSpacesByBotId(map); discordAuthors match by actorId or actorUsername; Discord mention and trigger apply only to message events; interaction events use author/channel only
-    requires: [REQ-BOT-001]
+    role: >-
+      Match events to bots by routing rules and ownership; depends on LifecycleContextStore and optional
+      FeatureRoomStateStore;       when FeatureRoomState exists for room (by channel or delivery target), returns all four
+      participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE); when lifecycle context exists and owner
+      has handlesOwnedSpaces, single-owner precedence; setHandlesOwnedSpacesByBotId(map); discordAuthors match by
+      actorId or actorUsername; Discord mention and trigger apply only to message events; interaction events use
+      author/channel only
+    requires: [REQ-BOT-001, REQ-CORE-003]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
     kind: source
@@ -122,6 +128,7 @@ requirements:
     acceptance:
       criteria:
         - Router.match(event) returns list of matching bot ids; Router depends on LifecycleContextStore and handlesOwnedSpaces map (setHandlesOwnedSpacesByBotId); handlesMap built from bot.getConnectorIdentity("discord").getAttribute("handlesOwnedSpaces") per bot
+        - When FeatureRoomState exists for event channel or delivery target, Router returns four participant configuredBotIds in deterministic role order (Orchestrator, Architect, Auditor, Scribe) via FeatureRoomStateStore.getParticipantBotIds
         - When event has channelId and LifecycleContextStore has a context for that channel whose owner bot has handlesOwnedSpaces, only that owner bot is returned (single-owner precedence)
         - When channel has lifecycle context but owner bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing
         - When channel has no lifecycle context or owner does not have handlesOwnedSpaces, filter-based routing applies
@@ -219,6 +226,24 @@ requirements:
           intent: Verify setHandlesOwnedSpacesByBotId(null) does not throw and routing proceeds
           testClass: com.vinekeepers.bot.RouterTest
           testMethod: setHandlesOwnedSpacesByBotIdWithNullDoesNotThrow
+          preconditions: []
+        - id: UNIT-ROUTER-FEATURE-ROOM-ROOM-CHANNEL
+          title: RouterTest
+          intent: Verify when feature room state exists for room channel, returns four participant bot ids in deterministic role order
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithFeatureRoomStore_roomChannelId_returnsFourParticipantBotIds
+          preconditions: []
+        - id: UNIT-ROUTER-FEATURE-ROOM-THREAD
+          title: RouterTest
+          intent: Verify when feature room state exists for thread (delivery target), returns four participant bot ids in deterministic role order
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithFeatureRoomStore_threadResolutionByDeliveryTargetId_returnsFourParticipantBotIds
+          preconditions: []
+        - id: UNIT-ROUTER-FEATURE-ROOM-LEGACY-SINGLE-OWNER
+          title: RouterTest
+          intent: Verify when no feature room for channel, legacy single-owner routing applies when applicable
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable
           preconditions: []
     anti_patterns:
       - Do not hardcode bot ids (e.g. Arrietty) in Router or engine; use config-driven handlesOwnedSpaces and lifecycle context for ownership routing.

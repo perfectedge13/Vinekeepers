@@ -66,7 +66,7 @@ assets:
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent fallback; build OutboundResponse from workflow/reasoner; resolve ReplyTarget from event; no defer in engine
+    role: Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage); for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine
     requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
     feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
 
