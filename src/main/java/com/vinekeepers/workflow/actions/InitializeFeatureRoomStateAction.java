@@ -7,20 +7,23 @@ import com.vinekeepers.state.planning.PlanningRole;
 import com.vinekeepers.state.planning.RoomParticipant;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Workflow action: read featureRoomParticipants from state, validate shape and size (4 entries, five keys each),
- * build FeatureRoomState and put in FeatureRoomStateStore. Bind/state: contextId, roomChannelId (channelId),
- * intakeThreadId (deliveryChannelId), repo, initialRequest (codeChange), featureId, featureSlug, createdBy.
+ * Workflow action: read featureRoomParticipants from state (transient list of maps), validate role contract
+ * (exactly one ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE; non-blank configuredBotId/runtimeBotInstanceId),
+ * convert to typed {@link RoomParticipant}, build {@link FeatureRoomState} and put in store.
+ * Bind/state: contextId, roomChannelId (channelId), intakeThreadId (deliveryChannelId), repo, initialRequest
+ * (codeChange), featureId, featureSlug, createdBy.
  */
 public final class InitializeFeatureRoomStateAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final String KEY_PARTICIPANTS = "featureRoomParticipants";
-    private static final int EXPECTED_SIZE = 4;
-    private static final List<String> REQUIRED_KEYS = List.of("role", "configuredBotId", "runtimeBotInstanceId", "displayName", "primaryCoordinator");
+    private static final List<String> REQUIRED_KEYS = List.of("role", "configuredBotId", "runtimeBotInstanceId", "primaryCoordinator");
 
     private final FeatureRoomStateStore featureRoomStateStore;
 
@@ -40,10 +43,13 @@ public final class InitializeFeatureRoomStateAction implements com.vinekeepers.w
         if (!(raw instanceof List<?> list)) {
             return "Missing or invalid featureRoomParticipants (must be a list).";
         }
-        if (list.size() != EXPECTED_SIZE) {
-            return "Missing or invalid featureRoomParticipants (expected size 4, got " + list.size() + ").";
-        }
         List<RoomParticipant> participants = new ArrayList<>();
+        EnumMap<PlanningRole, Integer> roleCounts = new EnumMap<>(PlanningRole.class);
+        for (PlanningRole r : PlanningRole.values()) {
+            roleCounts.put(r, 0);
+        }
+        int primaryTrueCount = 0;
+
         for (Object item : list) {
             if (!(item instanceof Map<?, ?> map)) {
                 return "Missing or invalid featureRoomParticipants (each entry must be a map).";
@@ -60,15 +66,47 @@ public final class InitializeFeatureRoomStateAction implements com.vinekeepers.w
             if (role == null) {
                 return "Missing or invalid featureRoomParticipants (invalid role: " + roleStr + ").";
             }
+            roleCounts.merge(role, 1, Integer::sum);
+            if (roleCounts.get(role) > 1) {
+                return "Missing or invalid featureRoomParticipants (duplicate role: " + role.name() + ").";
+            }
+
             String configuredBotId = nullToBlank(entry.get("configuredBotId"));
             String runtimeBotInstanceId = nullToBlank(entry.get("runtimeBotInstanceId"));
             if (configuredBotId.isBlank() || runtimeBotInstanceId.isBlank()) {
                 return "Missing or invalid featureRoomParticipants (configuredBotId and runtimeBotInstanceId must be non-blank).";
             }
-            String displayName = entry.get("displayName") != null ? entry.get("displayName").toString() : configuredBotId;
+            String displayName = entry.containsKey("displayName") && entry.get("displayName") != null
+                    ? entry.get("displayName").toString().trim()
+                    : "";
+            if (displayName.isBlank()) {
+                displayName = configuredBotId;
+            }
             boolean primaryCoordinator = Boolean.TRUE.equals(entry.get("primaryCoordinator"));
+            if (primaryCoordinator) {
+                primaryTrueCount++;
+                if (role != PlanningRole.ORCHESTRATOR) {
+                    return "Missing or invalid featureRoomParticipants (only ORCHESTRATOR may be primaryCoordinator).";
+                }
+            }
             participants.add(new RoomParticipant(role, configuredBotId, runtimeBotInstanceId, displayName, primaryCoordinator));
         }
+
+        for (PlanningRole required : PlanningRole.values()) {
+            if (roleCounts.get(required) != 1) {
+                return "Missing or invalid featureRoomParticipants (role contract requires exactly one "
+                        + required.name() + ").";
+            }
+        }
+        if (primaryTrueCount != 1) {
+            return "Missing or invalid featureRoomParticipants (exactly one primaryCoordinator required on ORCHESTRATOR).";
+        }
+        if (list.size() != PlanningRole.values().length) {
+            return "Missing or invalid featureRoomParticipants (expected " + PlanningRole.values().length
+                    + " entries, got " + list.size() + ").";
+        }
+
+        participants.sort(Comparator.comparingInt(p -> p.getRole().ordinal()));
 
         String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
         String roomChannelId = firstNonBlank(getString(bind, "roomChannelId"), getString(state, "channelId"));
@@ -86,11 +124,9 @@ public final class InitializeFeatureRoomStateAction implements com.vinekeepers.w
             return "Missing roomChannelId/channelId for initialize_feature_room_state.";
         }
 
-        // When featureId is null/blank, generate "feat-" + 12 hex for a stable unique id.
         if (featureId == null || featureId.isBlank()) {
             featureId = "feat-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         }
-        // When featureSlug is null/blank, derive from initialRequest (sanitized, short) or repo or fallback "feature". Preserve when supplied.
         if (featureSlug == null || featureSlug.isBlank()) {
             featureSlug = deriveFeatureSlug(initialRequest, repo);
         }
@@ -125,15 +161,11 @@ public final class InitializeFeatureRoomStateAction implements com.vinekeepers.w
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
     }
 
-    /**
-     * Derives a short slug from initialRequest (sanitized) or repo, or returns "feature" as fallback.
-     */
     private static String deriveFeatureSlug(String initialRequest, String repo) {
         String src = (initialRequest != null && !initialRequest.isBlank()) ? initialRequest : (repo != null ? repo : "");
         if (src.isBlank()) return "feature";
         String sanitized = src.replaceAll("[^a-zA-Z0-9_-]", "-").replaceAll("-+", "-").trim();
         if (sanitized.isBlank()) return "feature";
-        // Keep short: first 32 chars; strip leading/trailing dashes
         String segment = sanitized.length() > 32 ? sanitized.substring(0, 32) : sanitized;
         int start = 0, end = segment.length();
         while (start < end && segment.charAt(start) == '-') start++;

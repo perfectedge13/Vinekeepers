@@ -73,4 +73,31 @@ public final class FeatureRoomStateStore {
         }
         return List.copyOf(ids);
     }
+
+    /**
+     * Primary coordinator bot id for feature-room routing (room channel): first participant with
+     * {@code primaryCoordinator}, else the ORCHESTRATOR participant's configuredBotId.
+     */
+    public static Optional<String> resolveCoordinatorConfiguredBotId(FeatureRoomState state) {
+        if (state == null || state.getParticipants().isEmpty()) {
+            return Optional.empty();
+        }
+        for (RoomParticipant p : state.getParticipants()) {
+            if (p.isPrimaryCoordinator()) {
+                String id = p.getConfiguredBotId();
+                if (id != null && !id.isBlank()) {
+                    return Optional.of(id);
+                }
+            }
+        }
+        for (RoomParticipant p : state.getParticipants()) {
+            if (p.getRole() == PlanningRole.ORCHESTRATOR) {
+                String id = p.getConfiguredBotId();
+                if (id != null && !id.isBlank()) {
+                    return Optional.of(id);
+                }
+            }
+        }
+        return Optional.empty();
+    }
 }

@@ -2,6 +2,11 @@
 
 # Entries
 
+## 2026-03-19
+
+- **Feature room response policy (room vs thread):** Router returns the primary coordinator bot id only for the feature **room** channel; for the **intake/spec thread** id it returns all four participant configuredBotIds in role order. Tests: `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder`.
+- **Documentation:** **how-it-works** / **contracts** / feature **summary** now describe the real evaluation order (filter pass, then feature-room overrides, then lifecycle, then deduped filters).
+
 ## 2026-03-18
 
 - **Multi-bot feature room routing:** Router depends on optional **FeatureRoomStateStore**. When **FeatureRoomState** exists for the event's room (resolved by room channel id or delivery target id), Router returns **all four participant configuredBotIds** in stable order (arrietty, architect, auditor, scribe). When no feature room state for the channel, legacy single-owner or filter-based routing applies. Tests: RouterTest routeWithFeatureRoomStore_roomChannelId_returnsFourParticipantBotIds, routeWithFeatureRoomStore_threadResolutionByDeliveryTargetId_returnsFourParticipantBotIds, routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable.

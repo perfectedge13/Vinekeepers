@@ -8,9 +8,11 @@
 
 1. A connector publishes an internal `Event`.
 2. `NormalizedEventContext` derives normalized routing fields from the payload.
-3. **Ownership check:** If the event is from a Discord channel and `LifecycleContextStore` has a context for that channel: if the owner bot has `handlesOwnedSpaces`, the Router returns only that owner bot (single-owner precedence); if the owner bot does *not* have `handlesOwnedSpaces`, the Router logs a warning (channel has lifecycle owner but that bot does not have handlesOwnedSpaces; using filter-based routing) and continues with filter-based routing. Otherwise (no context) continue.
-4. `RoutingFilter` evaluates configured criteria; for Discord message events: repositories, labels, channels, `discordTrigger`, `discordMention`, `discordAuthors`; for Discord interaction events: author, channel, and other non-trigger/mention criteria only.
-5. `Router` returns the bot ids whose filters accept the event.
+3. **Filter pass:** For each configured `RoutingRule`, if `RoutingFilter` accepts the event, append that rule’s `botId` to `filterBotIds` (order preserved). For Discord **message** events, filters include trigger, mention, authors, channels, etc.; for Discord **interaction** events, `discordTrigger` / `discordMention` are skipped (author, channel, and other criteria still apply).
+4. **Discord channel overrides** (only when `sourceType` is `discord` and `channelId` is non-blank), evaluated **after** the filter pass and **before** returning `filterBotIds`:
+   - If `FeatureRoomStateStore` is non-null: **intake/spec thread** first — `getByIntakeThreadId(channelId)`; if present, return that room’s participant **configuredBotIds** in stable **PlanningRole** order (non-blank ids only). Else **room channel** — `getByRoomChannelId(channelId)`; if present, return a singleton list with the primary **coordinator** bot id (`FeatureRoomStateStore.resolveCoordinatorConfiguredBotId`). These paths **replace** the filter list for that event.
+   - Else if `LifecycleContextStore` is non-null: resolve context by `channelId` or `deliveryTargetId`. If the owner’s `configuredBotId` has `handlesOwnedSpaces` in config, return only that owner. If context exists but the owner does **not** have `handlesOwnedSpaces`, log a warning and **fall through** to step 5.
+5. **Default:** Return **dedupe**(`filterBotIds`) preserving first-seen order.
 
 # Inputs and outputs
 

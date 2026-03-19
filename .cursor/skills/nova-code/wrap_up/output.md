@@ -1,5 +1,7 @@
 # Nova-output
 
+**Runner:** The **main orchestrator** (not a sub-agent) performs this step per **nova-code** `SKILL.md`.
+
 **Inputs**: All step results (change summary, files changed, specs changed, schema/drift results, test results, static analysis, reconcile results, issues).  
 **Outputs**: Formatted final response per rule.
 

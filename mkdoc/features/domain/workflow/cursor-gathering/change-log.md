@@ -2,6 +2,11 @@
 
 # Entries
 
+## 2026-03-19
+
+- **Phase B (mk sync):** **cursor-gathering** summary, **key assets**, **contracts**, **tests**, and **decisions** aligned with structured discovery loop, Luna workflow actions, and REQ-LUNA-001 / REQ-STATE-001 discovery models.
+- **Mk / docs sync:** Routing dossier **how-it-works** and **contracts** aligned with `Router.route()` evaluation order (filter collection, then feature-room overrides, then lifecycle). **architecture** runtime flow and **state** feature pages updated for **FeatureRoomStateStore** lookup keys and coordinator resolution.
+
 ## 2026-03-18
 
 - **Work-profile bridge in luna_cursor:** After **ensure_repo_workspace**, workflow may run **upsert_artifact_section_data** and **get_profile_missing_fields** (see `config/work-profiles.yaml`, **`profileMissingSummary`** in thread content). Registry assets: ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION, ASSET-GET-PROFILE-MISSING-FIELDS-ACTION.

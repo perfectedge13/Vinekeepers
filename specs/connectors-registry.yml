@@ -110,8 +110,9 @@ assets:
     path: src/main/java/com/vinekeepers/connectors/OutboundDeliveryRouter.java
     role: >-
       Routing (sender resolution by target and lifecycle context) plus gateway resolution; implements ReplySender and
-      delegates to resolved sender; optional FeatureRoomStateStore for sendAsRole(channelId, messageId, content, role)
-      and sendAs(channelId, messageId, content, botId); registerSender(botId, ReplySender, OutboundGateway);
+      delegates to resolved sender; optional FeatureRoomStateStore for sendAsRole (fallback send) and sendAs;
+      sendAsExplicit and sendAsRoleExplicit return errors when explicit workflow sender cannot resolve (no silent fallback);
+      registerSender(botId, ReplySender, OutboundGateway);
       getGatewayForChannel returns gateway for channel; getSelfUserIdForBot(botId); used by DiscordSpaceOperations and
       DiscordAppReplySink; no silent fallback for lifecycle when bot has no sender
     requires: [REQ-CONNECTORS-DISCORD-001]

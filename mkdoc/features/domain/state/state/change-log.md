@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-19
+
+- **Structured discovery models (mk sync):** Summary, **key assets**, **contracts**, and **how-it-works** updated for **DiscoveryGap**, **DiscoveryQuestion**, **DiscoveryAgenda**, **DiscoveryFinding** (REQ-STATE-001).
+
 ## 2026-03-18
 
 - **Work profiles on FeaturePlanState:** **profileId** and **artifacts** map (`ArtifactState` per artifact id); **WorkProfileRegistry**, **ArtifactStateFactory**, **BindPlaceholderResolver** under `com.vinekeepers.profile`. **InitializeFeaturePlanStateAction** sets default profile and empty artifacts from registry. Specs: state-registry; tests: ArtifactStateFactoryTest, BindPlaceholderResolverTest, FeaturePlanStateStoreTest updates.

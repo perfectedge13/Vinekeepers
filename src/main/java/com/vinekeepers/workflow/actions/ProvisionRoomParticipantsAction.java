@@ -4,17 +4,19 @@ import com.vinekeepers.bot.RuntimeBotInstance;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.state.planning.PlanningRole;
-import com.vinekeepers.state.planning.RoomParticipant;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Workflow action: provision the four feature-room participants (Orchestrator reuses state.instanceId
- * from prior provision_bot_instance; provisions architect, auditor, scribe). Returns List&lt;Map&lt;String,Object&gt;&gt;
+ * from prior provision_bot_instance when valid, or the sole existing Arrietty runtime instance for the channel;
+ * provisions architect, auditor, scribe). Returns List&lt;Map&lt;String,Object&gt;&gt;
  * for storeIn: featureRoomParticipants. Each entry has role, configuredBotId, runtimeBotInstanceId, displayName,
  * primaryCoordinator. Also stores RuntimeBotInstance in StateStore under bot_instance:{runtimeBotInstanceId}.
  */
@@ -49,29 +51,71 @@ public final class ProvisionRoomParticipantsAction implements com.vinekeepers.wo
         if (orchestratorInstanceId == null || orchestratorInstanceId.isBlank()) {
             orchestratorInstanceId = getString(state, "instanceId");
         }
-        if (orchestratorInstanceId == null || orchestratorInstanceId.isBlank()) {
-            return "Missing instanceId for provision_room_participants (provision_bot_instance for arrietty must run first).";
+
+        List<RuntimeBotInstance> arriettyOnChannel = listArriettyInstancesForChannel(channelId);
+        Optional<String> resolvedOrch = resolveOrchestratorRuntimeInstanceId(channelId, orchestratorInstanceId, arriettyOnChannel);
+        if (resolvedOrch.isEmpty()) {
+            if (arriettyOnChannel.size() > 1) {
+                return "Multiple Arrietty runtime instances for this channel; cannot select ORCHESTRATOR instance.";
+            }
+            return "Missing valid Arrietty runtime instance for provision_room_participants "
+                    + "(run provision_bot_instance for arrietty first, or resolve a single Arrietty instance for this channel).";
         }
+        orchestratorInstanceId = resolvedOrch.get();
 
         List<Map<String, Object>> participants = new ArrayList<>();
 
-        // Orchestrator (Arrietty): reuse existing instance from state
         Map<String, Object> orch = entry(PlanningRole.ORCHESTRATOR.name(), ORCHESTRATOR_BOT_ID, orchestratorInstanceId, "Arrietty", true);
         participants.add(orch);
-        // No new instance to store for orchestrator; already stored by provision_bot_instance
 
-        // Architect, Auditor, Scribe: provision new instances
         for (String botId : new String[]{ARCHITECT_BOT_ID, AUDITOR_BOT_ID, SCRIBE_BOT_ID}) {
             String displayName = displayNameFor(botId);
             String instanceId = botId + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             RuntimeBotInstance instance = new RuntimeBotInstance(instanceId, botId, displayName, channelId);
             stateStore.put(PREFIX + instanceId, instance);
-            boolean primary = false;
             PlanningRole role = roleFor(botId);
-            participants.add(entry(role.name(), botId, instanceId, displayName, primary));
+            participants.add(entry(role.name(), botId, instanceId, displayName, false));
         }
 
         return participants;
+    }
+
+    /**
+     * Reuses {@code instanceIdFromState} when it references a stored Arrietty instance for {@code channelId};
+     * otherwise uses the unique Arrietty runtime instance for that channel when exactly one exists.
+     */
+    private Optional<String> resolveOrchestratorRuntimeInstanceId(String channelId, String instanceIdFromState,
+                                                                  List<RuntimeBotInstance> arriettyOnChannel) {
+        if (instanceIdFromState != null && !instanceIdFromState.isBlank()) {
+            Optional<RuntimeBotInstance> stored = stateStore.get(PREFIX + instanceIdFromState, RuntimeBotInstance.class);
+            if (stored.isPresent()
+                    && ORCHESTRATOR_BOT_ID.equalsIgnoreCase(stored.get().getTemplateBotId())
+                    && channelMatches(stored.get(), channelId)) {
+                return Optional.of(instanceIdFromState);
+            }
+        }
+        if (arriettyOnChannel.size() == 1) {
+            return Optional.of(arriettyOnChannel.get(0).getInstanceId());
+        }
+        return Optional.empty();
+    }
+
+    private List<RuntimeBotInstance> listArriettyInstancesForChannel(String channelId) {
+        return stateStore.keys().stream()
+                .filter(k -> k != null && k.startsWith(PREFIX))
+                .map(k -> stateStore.get(k, RuntimeBotInstance.class))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(inst -> ORCHESTRATOR_BOT_ID.equalsIgnoreCase(inst.getTemplateBotId()))
+                .filter(inst -> channelMatches(inst, channelId))
+                .collect(Collectors.toList());
+    }
+
+    private static boolean channelMatches(RuntimeBotInstance inst, String channelId) {
+        if (inst.getChannelId() == null || inst.getChannelId().isBlank()) {
+            return true;
+        }
+        return channelId.equals(inst.getChannelId());
     }
 
     private static String displayNameFor(String botId) {

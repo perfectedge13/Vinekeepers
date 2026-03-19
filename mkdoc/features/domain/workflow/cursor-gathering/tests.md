@@ -2,7 +2,7 @@
 
 # Coverage
 
-Unit tests cover Luna gathering state, YAML-configured mention routing, the legacy workflow test harness, the Cursor adapter implementation (including error parsing, auth, and transport), the launch tool, and the cloud-run monitor.
+Unit tests cover Luna gathering state, YAML-configured mention routing, the legacy workflow test harness, the Cursor adapter implementation (including error parsing, auth, and transport), the launch tool, the cloud-run monitor, structured discovery support, Phase B discovery workflow actions, and assumption/issue classification.
 
 # Test list
 
@@ -41,4 +41,7 @@ Unit tests cover Luna gathering state, YAML-configured mention routing, the lega
 | UNIT-LAUNCH-CURSOR-RUN-ACTION | LaunchCursorRunActionTest | com.vinekeepers.workflow.actions.LaunchCursorRunActionTest | runLaunchesAndStoresRecordAndBindsContext | Verify launch_cursor_run action launches run, registers run record, and acknowledges to Discord with status (e.g. launching) and lifecycle room |
 | UNIT-DISCORD-SPACE-OPERATIONS | DiscordSpaceOperationsTest | com.vinekeepers.connectors.DiscordSpaceOperationsTest | — | Verify DiscordSpaceOperations createRoom and createThread (normalizeChannelName, setDeliveryTargetId) |
 | UNIT-SPACE-OPERATIONS-REGISTRY | SpaceOperationsRegistryTest | com.vinekeepers.connectors.SpaceOperationsRegistryTest | — | Verify SpaceOperationsRegistry register and get by connector id |
+| UNIT-STRUCTURED-DISCOVERY-SUPPORT | StructuredDiscoverySupportTest | com.vinekeepers.workflow.discovery.StructuredDiscoverySupportTest | — | Verify structured gaps, agenda spread, and empty state when required profile fields filled |
+| UNIT-DISCOVERY-WORKFLOW-ACTIONS | DiscoveryWorkflowActionsTest | com.vinekeepers.workflow.actions.DiscoveryWorkflowActionsTest | — | Verify Phase B discovery actions: gaps scan errors and open gaps after init, agenda errors and prompt from gaps, capture_and_apply skip vs REQUIRED_FIELD upsert, recompute errors and section status projection |
+| UNIT-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION | ClassifyAssumptionOrIssueActionTest | com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueActionTest | — | Verify rule-based append_plan_issue vs append_plan_assumption from discovery answer text |
 

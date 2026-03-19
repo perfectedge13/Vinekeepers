@@ -190,4 +190,61 @@ public final class OutboundDeliveryRouter implements ReplySender {
         }
         sendAs(channelId, messageId, content, botId);
     }
+
+    /**
+     * Explicit send as {@code asBotId}: no fallback to default sender. Used by workflow actions when
+     * {@code asBotId} is set.
+     *
+     * @return empty if the message was sent; otherwise a short error message
+     */
+    public Optional<String> sendAsExplicit(String channelId, String messageId, String content, String asBotId) {
+        if (channelId == null || content == null) {
+            return Optional.of("Cannot send: channel or content is null.");
+        }
+        if (asBotId == null || asBotId.isBlank()) {
+            return Optional.of("asBotId must be non-blank for explicit sender.");
+        }
+        ReplySender sender = botIdToSender.get(asBotId);
+        if (sender == null) {
+            return Optional.of("No sender registered for bot: " + asBotId);
+        }
+        sender.send(channelId, messageId, content);
+        return Optional.empty();
+    }
+
+    /**
+     * Explicit send as planning role: resolves participant from {@link FeatureRoomStateStore}; no fallback
+     * to default sender. Precedence for workflow binding is handled by the caller ({@code asBotId} wins over {@code asRole}).
+     *
+     * @return empty if the message was sent; otherwise a short error message
+     */
+    public Optional<String> sendAsRoleExplicit(String channelId, String messageId, String content, PlanningRole role) {
+        if (channelId == null || content == null) {
+            return Optional.of("Cannot send: channel or content is null.");
+        }
+        if (role == null) {
+            return Optional.of("asRole must be a valid planning role.");
+        }
+        if (featureRoomStateStore == null) {
+            return Optional.of("Feature room state store not available; cannot resolve asRole.");
+        }
+        Optional<FeatureRoomState> roomOpt = featureRoomStateStore.getByRoomChannelId(channelId);
+        if (roomOpt.isEmpty()) {
+            roomOpt = featureRoomStateStore.getByDeliveryTargetId(channelId);
+        }
+        if (roomOpt.isEmpty()) {
+            return Optional.of("No feature room state for send target; cannot resolve asRole " + role.name() + ".");
+        }
+        String botId = null;
+        for (RoomParticipant p : roomOpt.get().getParticipants()) {
+            if (role.equals(p.getRole())) {
+                botId = p.getConfiguredBotId();
+                break;
+            }
+        }
+        if (botId == null || botId.isBlank()) {
+            return Optional.of("No participant for role " + role.name() + " in feature room state.");
+        }
+        return sendAsExplicit(channelId, messageId, content, botId);
+    }
 }

@@ -39,7 +39,7 @@ bots:
   - id: architect
     persona:
       name: Architect
-      systemPrompt: You are Architect, a feature room participant. Minimal workflow; you reply only when invoked via action (e.g. post_channel_message asRole architect).
+      systemPrompt: You are Architect, a feature room participant. In the intake/spec thread, you contribute visible design and structure proposals when the workflow drives role turns; the main room stays coordinator-led so you do not auto-reply to generic room traffic.
     sessionKeyStrategy: thread
     workflow:
       type: configured
@@ -63,7 +63,7 @@ bots:
   - id: scribe
     persona:
       name: Scribe
-      systemPrompt: You are Scribe, a feature room participant. Minimal workflow; you reply only when invoked via action (e.g. post_channel_message asRole scribe).
+      systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread, you post consolidation and status when the workflow drives role turns; the room channel defaults to the orchestrator for summaries.
     sessionKeyStrategy: thread
     workflow:
       type: configured
@@ -175,8 +175,10 @@ workflows:
           - when: { key: confirmAction, value: edit_request }
             next: 5
             clear: [codeChange, confirmAction]
+          - when: { key: confirmAction, value: cancel }
+            next: 39
           - when: else
-            next: 26
+            next: 39
       - type: call_action
         action: create_channel
         bind:
@@ -186,7 +188,7 @@ workflows:
       - type: branch
         branches:
           - when: { key: channelId, value: CHANNEL_CREATE_FAILED }
-            next: 25
+            next: 38
           - when: else
             next: 12
       - type: call_action
@@ -222,17 +224,74 @@ workflows:
         action: get_profile_missing_fields
         storeIn: profileMissingSummary
       - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Feature room ready. Repo: {{project}}. Request: {{codeChange}}. Four bots active: Orchestrator, Architect, Auditor, Scribe."
-          asRole: orchestrator
-          target: room
+        action: get_structured_discovery_gaps
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: discoveryHasOpenGaps, value: "true" }
+            next: 23
+          - when: else
+            next: 31
+      - type: call_action
+        action: build_discovery_agenda
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: discoveryCurrentQuestionPrompt, operator: nonblank }
+            next: 25
+          - when: else
+            next: 31
+      - type: prompt_for_field
+        prompt: "{{discoveryCurrentQuestionPrompt}}"
+        storeIn: discoveryAnswerRaw
+      - type: capture_field
+        storeIn: discoveryAnswerRaw
+      - type: call_action
+        action: capture_and_apply_discovery_answer
+      - type: call_action
+        action: classify_assumption_or_issue
+      - type: call_action
+        action: recompute_plan_progress
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: discoveryBlockingIssueMode, value: "true" }
+            next: 31
+          - when: { key: discoveryHasOpenGaps, value: "true" }
+            next: 23
+            clear: [discoveryAnswerRaw]
+          - when: else
+            next: 31
       - type: call_action
         action: post_channel_message
         bind:
-          content: "Intake/spec thread ready. Profile gaps: {{profileMissingSummary}}"
+          content: "Intake/spec thread — orchestrator kickoff. Repo: {{project}}. Request: {{codeChange}}. We'll gather structured input from each role next."
+          asRole: orchestrator
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Architect: proposed structure — align implementation with repo conventions; capture boundaries and main components for this change."
+          asRole: architect
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Auditor: validation focus — risks, test strategy, and spec/drift checks before implementation proceeds."
+          asRole: auditor
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Scribe: intake/spec consolidation — profile gaps to address: {{profileMissingSummary}}"
           asRole: scribe
           target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Feature room ready. Thread above has role contributions. Launching next."
+          asRole: orchestrator
+          target: room
       - type: call_action
         action: launch_cursor_run
         bind: {}

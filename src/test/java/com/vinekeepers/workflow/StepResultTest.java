@@ -3,6 +3,7 @@ package com.vinekeepers.workflow;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -83,5 +84,13 @@ class StepResultTest {
     void goToWithoutClearKeysHasEmptyClearKeys() {
         StepResult r = StepResult.goTo(1);
         assertTrue(r.getClearKeys().isEmpty());
+    }
+
+    @Test
+    void advanceSpreadWritesMap() {
+        StepResult r = StepResult.advanceSpread(Map.of("a", 1, "b", "two"));
+        assertTrue(r.getSpreadWrites().containsKey("a"));
+        assertEquals(1, r.getSpreadWrites().get("a"));
+        assertEquals("two", r.getSpreadWrites().get("b"));
     }
 }

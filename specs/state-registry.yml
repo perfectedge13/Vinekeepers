@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-18T19:00:00Z"
+  updated_utc: "2026-03-19T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -60,13 +60,37 @@ assets:
   - id: ASSET-FEATURE-ROOM-STATE-STORE
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/FeatureRoomStateStore.java
-    role: Store and resolve feature room state by contextId, roomChannelId, or deliveryTargetId; getParticipantBotIds returns participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE)
+    role: Store and resolve feature room state by contextId, roomChannelId, intakeThreadId, featureId, or deliveryTargetId (thread then channel); null/blank keys no-op on lookup; put(null) no-op; getParticipantBotIds returns participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE); static resolveCoordinatorConfiguredBotId prefers primaryCoordinator flag then ORCHESTRATOR fallback
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-FEATURE-PLAN-STATE
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/FeaturePlanState.java
     role: Canonical structured planning state for a feature room; legacy section lists, sectionStatuses, repo workspace linkage fields, profileId, and generic artifacts map (ArtifactState per artifact id from work profile)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-DISCOVERY-GAP
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/DiscoveryGap.java
+    role: Typed planning gap (id, kind, artifact/section/field, reason, severity) for structured discovery JSON
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-DISCOVERY-QUESTION
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/DiscoveryQuestion.java
+    role: Discovery prompt with optional REQUIRED_FIELD apply target for guided loop
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-DISCOVERY-AGENDA
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/DiscoveryAgenda.java
+    role: Ordered discovery questions and open-gap summary for workflow snapshots
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-DISCOVERY-FINDING
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/DiscoveryFinding.java
+    role: Captured answer metadata for discovery logs (optional future persistence)
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-WORK-PROFILE-REGISTRY
@@ -127,7 +151,7 @@ assets:
 requirements:
   - id: REQ-STATE-001
     title: State store for bot workflow state
-    statement: StateStore persists and loads per-bot, per-conversation workflow state (structured state objects).
+    statement: StateStore persists and loads per-bot, per-conversation workflow state (structured state objects). FeatureRoomStateStore indexes feature room rows for routing and delivery; lookups by context, room channel, intake thread, feature id, and delivery target are null-safe and skip blank keys; coordinator resolution for room-channel routing uses participant primaryCoordinator when set, otherwise falls back to the ORCHESTRATOR participant.
     status: active
     priority: high
     type: functional
@@ -141,13 +165,16 @@ requirements:
       criteria:
         - StateStore.load(botId, conversationKey) returns state or empty
         - StateStore.save persists state for bot and conversation
-        - FeatureRoomStateStore.getParticipantBotIds returns participant configured bot ids in stable order by PlanningRole (Orchestrator, Architect, Auditor, Scribe)
+        - FeatureRoomStateStore.getParticipantBotIds returns participant configured bot ids in stable order by PlanningRole (Orchestrator, Architect, Auditor, Scribe) regardless of list order in state
+        - FeatureRoomStateStore.getByContextId and getByRoomChannelId return empty for null or blank keys; put(null) does not store; put skips secondary indexes when optional keys are null or blank
+        - FeatureRoomStateStore.resolveCoordinatorConfiguredBotId returns the participant marked primaryCoordinator when present, else the ORCHESTRATOR participant when present, else empty for null state or empty participants
         - FeaturePlanStateStore stores FeaturePlanState by contextId and secondary indexes (featureId, roomChannelId, intakeThreadId)
         - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows
         - FeaturePlanState carries optional profileId and artifacts map (per-artifact section/field values) alongside legacy planning fields; with* methods preserve profileId and artifacts
+        - Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, and DiscoveryFinding models for structured discovery (JSON-serializable; used by Luna guided discovery loop)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
       symbols: []
     validation:
       tests:
@@ -166,6 +193,66 @@ requirements:
           intent: Verify getParticipantBotIds returns participant bot ids in stable role order (Orchestrator, Architect, Auditor, Scribe)
           testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
           testMethod: getParticipantBotIds_returnsStableOrderFromParticipantList
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-PARTICIPANT-ORDER-WRONG-LIST
+          title: FeatureRoomStateStoreTest
+          intent: Verify getParticipantBotIds sorts by role when participants list is not in role order
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: getParticipantBotIds_whenParticipantsInWrongOrder_returnsRoleOrderOrchestratorArchitectAuditorScribe
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-PARTICIPANT-EMPTY
+          title: FeatureRoomStateStoreTest
+          intent: Verify getParticipantBotIds returns empty for null state or empty participant list
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: getParticipantBotIds_emptyOrNullState_returnsEmptyList
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-CONTEXT-BLANK
+          title: FeatureRoomStateStoreTest
+          intent: Verify getByContextId returns empty for null or blank context id
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: getByContextId_returnsEmptyForNullOrBlank
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-ROOM-BLANK
+          title: FeatureRoomStateStoreTest
+          intent: Verify getByRoomChannelId returns empty for null or blank room channel id
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: getByRoomChannelId_returnsEmptyForNullOrBlank
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-PUT-NULL
+          title: FeatureRoomStateStoreTest
+          intent: Verify put(null) does not throw and does not index state
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: put_nullState_doesNothing
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-SKIP-BLANK-INDEX
+          title: FeatureRoomStateStoreTest
+          intent: Verify put skips blank optional index keys without failing lookups for present keys
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: put_skipsBlankOptionalIndexKeys
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-COORD-PRIMARY
+          title: FeatureRoomStateStoreTest
+          intent: Verify resolveCoordinatorConfiguredBotId returns participant marked primaryCoordinator
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: resolveCoordinatorConfiguredBotId_returnsPrimaryCoordinatorWhenSet
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-COORD-PRIMARY-VS-ORCH
+          title: FeatureRoomStateStoreTest
+          intent: Verify resolveCoordinatorConfiguredBotId prefers explicit primary over default orchestrator primary
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: resolveCoordinatorConfiguredBotId_prefersExplicitPrimaryOverOrchestratorOrder
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-COORD-FALLBACK-ORCH
+          title: FeatureRoomStateStoreTest
+          intent: Verify resolveCoordinatorConfiguredBotId falls back to ORCHESTRATOR when no primary flag
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: resolveCoordinatorConfiguredBotId_whenNoPrimary_fallsBackToOrchestrator
+          preconditions: []
+        - id: UNIT-FEATURE-ROOM-STATE-STORE-COORD-EMPTY
+          title: FeatureRoomStateStoreTest
+          intent: Verify resolveCoordinatorConfiguredBotId empty for null state or empty participants
+          testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
+          testMethod: resolveCoordinatorConfiguredBotId_emptyOrNull_returnsEmpty
           preconditions: []
         - id: UNIT-FEATURE-PLAN-STATE-STORE
           title: FeaturePlanStateStoreTest

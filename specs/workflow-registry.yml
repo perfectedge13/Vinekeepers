@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-18T19:00:00Z"
+  updated_utc: "2026-03-19T12:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -587,8 +587,9 @@ assets:
       thread) or targetChannelId (bind then state): targetChannelId takes precedence; target=room uses channelId;
       target=thread uses deliveryChannelId with THREAD_CREATE_FAILED fallback to channelId; else legacy
       firstNonBlank(deliveryChannelId, channelId); interpolation from merged map (state then bind); lifecycleBotName
-      from bind for content; optional asRole (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) or asBotId uses
-      OutboundDeliveryRouter.sendAsRole or sendAs to send as that participant
+      from bind for content; optional asBotId or asRole (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) with precedence
+      asBotId over asRole over default send; explicit send uses OutboundDeliveryRouter.sendAsExplicit and
+      sendAsRoleExplicit (strict errors, no fallback)
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -600,7 +601,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/ProvisionRoomParticipantsAction.java
     role: >-
       Workflow action to provision four feature-room participants (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) into
-      StateStore under a configurable prefix; returns list of participant maps for downstream initialize_feature_room_state
+      StateStore; ORCHESTRATOR reuses valid instanceId from state or the sole existing Arrietty runtime for the channel;
+      returns list of participant maps for downstream initialize_feature_room_state
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -611,8 +613,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/InitializeFeatureRoomStateAction.java
     role: >-
-      Workflow action to build FeatureRoomState from bind/state (featureRoomParticipants list, contextId, channelId)
-      and put it in FeatureRoomStateStore; validates four participants with role, configuredBotId, runtimeBotInstanceId;
+      Workflow action to build FeatureRoomState from bind/state (featureRoomParticipants transient list of maps, contextId, channelId)
+      and put it in FeatureRoomStateStore; validates role contract (exactly one of each PlanningRole, no duplicates,
+      non-blank configuredBotId/runtimeBotInstanceId, exactly one primaryCoordinator on ORCHESTRATOR);
       when featureId or featureSlug missing from bind/state, generates featureId (feat- + 12 hex) and featureSlug
       (derived from initialRequest/repo or fallback feature)
     requires:
@@ -664,6 +667,68 @@ assets:
       string to storeIn state key (e.g. profileMissingSummary)
     requires:
       - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-STRUCTURED-DISCOVERY-SUPPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/discovery/StructuredDiscoverySupport.java
+    role: >-
+      Collects structured DiscoveryGap list from FeaturePlanState and work profile, builds DiscoveryAgenda/questions,
+      serializes branch flags for workflow state, projects PlanSectionKey statuses from artifact completeness
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/GetStructuredDiscoveryGapsAction.java
+    role: Workflow action get_structured_discovery_gaps — returns map for storeSpread (gaps JSON, discoveryHasOpenGaps, discoveryBlockingIssueMode)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-BUILD-DISCOVERY-AGENDA-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/BuildDiscoveryAgendaAction.java
+    role: Workflow action build_discovery_agenda — first prioritized question and apply-target keys into workflow state (storeSpread)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/CaptureAndApplyDiscoveryAnswerAction.java
+    role: Workflow action capture_and_apply_discovery_answer — applies discoveryAnswerRaw to artifact section when discoveryApplyKind is REQUIRED_FIELD
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ClassifyAssumptionOrIssueAction.java
+    role: Workflow action classify_assumption_or_issue — rule-based append_plan_issue vs append_plan_assumption from discovery answer text
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RecomputePlanProgressAction.java
+    role: Workflow action recompute_plan_progress — refresh section statuses from artifacts, recompute gaps spread for loop exit
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
@@ -826,9 +891,29 @@ requirements:
           SpaceOperations by WorkflowCapabilitySupport.sourcePrefix(event); null or blank prefix returns sentinel
           (CHANNEL_CREATE_FAILED / THREAD_CREATE_FAILED) — fail-closed, no Discord default
         - >-
-          Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, append_plan_requirement,
+          call_action step may set storeSpread true; when the invoked action returns a Map, ConfigurableWorkflowRunner
+          merges entries into workflow state before advancing (StepResult.advanceSpread)
+        - >-
+          Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, upsert_artifact_section_data,
+          get_profile_missing_fields, get_structured_discovery_gaps, build_discovery_agenda, capture_and_apply_discovery_answer,
+          classify_assumption_or_issue, recompute_plan_progress, append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry
+        - >-
+          get_structured_discovery_gaps spreads discoveryHasOpenGaps false and discoveryScanError when contextId is missing;
+          after initialize_feature_plan_state with a new plan, spreads discoveryGapsJson containing REQUIRED_FIELD gaps when
+          required profile fields are still empty
+        - >-
+          build_discovery_agenda spreads discoveryAgendaError when discoveryGapsJson is missing; when state includes gap
+          spread from get_structured_discovery_gaps, spreads discoveryCurrentQuestionPrompt and discoveryApplyKind (e.g.
+          REQUIRED_FIELD)
+        - >-
+          capture_and_apply_discovery_answer returns OK_SKIP_APPLY when discoveryApplyKind is not REQUIRED_FIELD; when kind
+          is REQUIRED_FIELD with discoveryApplyArtifactId, discoveryApplySectionId, discoveryApplyFieldId, and
+          discoveryApplyMode, applies discoveryAnswerRaw into plan artifacts (upsert semantics)
+        - >-
+          recompute_plan_progress spreads discoveryHasOpenGaps false and discoveryRecomputeError when contextId is missing;
+          when plan has artifacts, persists projected section statuses and returns a refreshed gap spread map
       examples: []
     traceability:
       assets:
@@ -869,6 +954,12 @@ requirements:
         - ASSET-ENSURE-REPO-WORKSPACE-ACTION
         - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
+        - ASSET-STRUCTURED-DISCOVERY-SUPPORT
+        - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
+        - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
+        - ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
+        - ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
+        - ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION
         - ASSET-APPEND-PLAN-REQUIREMENT-ACTION
         - ASSET-APPEND-PLAN-ASSUMPTION-ACTION
         - ASSET-APPEND-PLAN-ISSUE-ACTION
@@ -947,6 +1038,30 @@ requirements:
           title: CallActionStepTest
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CALL-ACTION-STEP-STORE-SPREAD
+          title: CallActionStepTest
+          intent: Verify CallActionStep with storeSpread merges Map action result via StepResult spreadWrites
+          testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          testMethod: executeStoreSpreadMergesMapIntoStepResult
+          preconditions: []
+        - id: UNIT-STEP-RESULT-ADVANCE-SPREAD
+          title: StepResultTest
+          intent: Verify StepResult.advanceSpread exposes spreadWrites map
+          testClass: com.vinekeepers.workflow.StepResultTest
+          testMethod: advanceSpreadWritesMap
+          preconditions: []
+        - id: UNIT-STRUCTURED-DISCOVERY-SUPPORT
+          title: StructuredDiscoverySupportTest
+          intent: Verify structured gaps, agenda spread, and empty state when required profile fields filled
+          testClass: com.vinekeepers.workflow.discovery.StructuredDiscoverySupportTest
+          preconditions: []
+        - id: UNIT-DISCOVERY-WORKFLOW-ACTIONS
+          title: DiscoveryWorkflowActionsTest
+          intent: >-
+            Verify Phase B discovery actions: gaps scan errors and open gaps after init, agenda errors and prompt from gaps,
+            capture_and_apply skip vs REQUIRED_FIELD upsert, recompute errors and persisted section status projection
+          testClass: com.vinekeepers.workflow.actions.DiscoveryWorkflowActionsTest
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
@@ -1142,6 +1257,14 @@ requirements:
         - >-
           launch_cursor_run acknowledgement to Discord includes optional status (e.g. launching) and directs user to
           lifecycle room; passes optional deliveryChannelId from bind/state into LifecycleRunRecord
+        - >-
+          luna_cursor after get_profile_missing_fields may run Phase B guided discovery: get_structured_discovery_gaps
+          (storeSpread), branch on discoveryHasOpenGaps, build_discovery_agenda (storeSpread), prompt_for_field /
+          capture_field for discoveryAnswerRaw, capture_and_apply_discovery_answer, classify_assumption_or_issue,
+          recompute_plan_progress (storeSpread), then branch (exit loop on discoveryBlockingIssueMode or no open gaps,
+          else clear discoveryAnswerRaw and rebuild agenda); when no gaps, flow continues to intake/spec role posts and
+          launch_cursor_run; confirm cancel branches to cancelled done step; channel create failure branches to
+          could-not-create-room done step
       examples: []
     traceability:
       assets:
@@ -1185,6 +1308,14 @@ requirements:
         - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
         - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
         - ASSET-ENSURE-REPO-WORKSPACE-ACTION
+        - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
+        - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
+        - ASSET-STRUCTURED-DISCOVERY-SUPPORT
+        - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
+        - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
+        - ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
+        - ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
+        - ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION
         - ASSET-LAUNCH-CURSOR-RUN-ACTION
         - ASSET-GITHUB-REPOS-CHOICE-PROVIDER
         - ASSET-REPLY-SENDER
@@ -1201,6 +1332,11 @@ requirements:
           title: GatheringStateTest
           intent: Verify Luna conversation state (project, code change, step)
           testClass: com.vinekeepers.workflow.GatheringStateTest
+          preconditions: []
+        - id: UNIT-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
+          title: ClassifyAssumptionOrIssueActionTest
+          intent: Verify rule-based append_plan_issue vs append_plan_assumption from discovery answer text
+          testClass: com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueActionTest
           preconditions: []
         - id: UNIT-LUNA-MENTION-ROUTING
           title: ConfigLoaderTest

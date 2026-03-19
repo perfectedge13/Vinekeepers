@@ -130,6 +130,42 @@ class FeatureRoomStateStoreTest {
         assertEquals(List.of(), store.getParticipantBotIds(emptyParticipants));
     }
 
+    @Test
+    void resolveCoordinatorConfiguredBotId_returnsPrimaryCoordinatorWhenSet() {
+        List<RoomParticipant> participants = List.of(
+                participant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", true),
+                participant(PlanningRole.ARCHITECT, "architect", "i-a", false));
+        FeatureRoomState state = roomState("ctx-1", "ch-1", "t-1", "f1", participants);
+        assertEquals("arrietty", FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(state).orElse(null));
+    }
+
+    @Test
+    void resolveCoordinatorConfiguredBotId_prefersExplicitPrimaryOverOrchestratorOrder() {
+        List<RoomParticipant> participants = List.of(
+                participant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", false),
+                participant(PlanningRole.ARCHITECT, "architect", "i-a", true));
+        FeatureRoomState state = roomState("ctx-1", "ch-1", "t-1", "f1", participants);
+        assertEquals("architect", FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(state).orElse(null));
+    }
+
+    @Test
+    void resolveCoordinatorConfiguredBotId_whenNoPrimary_fallsBackToOrchestrator() {
+        List<RoomParticipant> participants = List.of(
+                participant(PlanningRole.ARCHITECT, "architect", "i-a", false),
+                participant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", false));
+        FeatureRoomState state = roomState("ctx-1", "ch-1", "t-1", "f1", participants);
+        assertEquals("arrietty", FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(state).orElse(null));
+    }
+
+    @Test
+    void resolveCoordinatorConfiguredBotId_emptyOrNull_returnsEmpty() {
+        assertTrue(FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(null).isEmpty());
+        FeatureRoomState emptyParticipants = new FeatureRoomState(
+                "ctx-1", null, null, "ch-1", null, null, null, "INTAKE_READY",
+                List.of(), null, null);
+        assertTrue(FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(emptyParticipants).isEmpty());
+    }
+
     private static FeatureRoomState roomState(String contextId, String roomChannelId,
                                               String intakeThreadId, String featureId,
                                               List<RoomParticipant> participants) {
@@ -138,6 +174,11 @@ class FeatureRoomStateStoreTest {
     }
 
     private static RoomParticipant participant(PlanningRole role, String configuredBotId, String runtimeBotInstanceId) {
-        return new RoomParticipant(role, configuredBotId, runtimeBotInstanceId, configuredBotId, role == PlanningRole.ORCHESTRATOR);
+        return participant(role, configuredBotId, runtimeBotInstanceId, role == PlanningRole.ORCHESTRATOR);
+    }
+
+    private static RoomParticipant participant(PlanningRole role, String configuredBotId, String runtimeBotInstanceId,
+                                            boolean primaryCoordinator) {
+        return new RoomParticipant(role, configuredBotId, runtimeBotInstanceId, configuredBotId, primaryCoordinator);
     }
 }

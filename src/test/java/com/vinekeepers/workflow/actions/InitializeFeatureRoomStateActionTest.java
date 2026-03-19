@@ -1,6 +1,5 @@
 package com.vinekeepers.workflow.actions;
 
-import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import com.vinekeepers.state.planning.PlanningRole;
@@ -45,12 +44,12 @@ class InitializeFeatureRoomStateActionTest {
     }
 
     @Test
-    void runReturnsErrorWhenFeatureRoomParticipantsSizeNotFour() {
+    void runReturnsErrorWhenFeatureRoomParticipantsMissingRoles() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         List<Map<String, Object>> twoOnly = List.of(validEntry(PlanningRole.ORCHESTRATOR, "arrietty", "i1"),
                 validEntry(PlanningRole.ARCHITECT, "architect", "i2"));
         Object result = action.run(null, Map.of("featureRoomParticipants", twoOnly, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
-        assertEquals("Missing or invalid featureRoomParticipants (expected size 4, got 2).", result);
+        assertEquals("Missing or invalid featureRoomParticipants (role contract requires exactly one AUDITOR).", result);
     }
 
     @Test
@@ -69,6 +68,46 @@ class InitializeFeatureRoomStateActionTest {
         four.get(0).remove("role");
         Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (missing key: role).", result);
+    }
+
+    @Test
+    void runReturnsErrorWhenEntryMissingPrimaryCoordinatorKey() {
+        InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
+        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        four.get(0).remove("primaryCoordinator");
+        Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
+        assertEquals("Missing or invalid featureRoomParticipants (missing key: primaryCoordinator).", result);
+    }
+
+    @Test
+    void runReturnsErrorWhenDuplicateRole() {
+        InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
+        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        Map<String, Object> secondOrch = validEntry(PlanningRole.ORCHESTRATOR, "dup", "i2");
+        secondOrch.put("primaryCoordinator", false);
+        four.set(1, secondOrch);
+        Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
+        assertEquals("Missing or invalid featureRoomParticipants (duplicate role: ORCHESTRATOR).", result);
+    }
+
+    @Test
+    void runReturnsErrorWhenNonOrchestratorMarkedPrimaryCoordinator() {
+        InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
+        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        four.get(0).put("primaryCoordinator", false);
+        four.get(1).put("primaryCoordinator", true);
+        Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
+        assertEquals("Missing or invalid featureRoomParticipants (only ORCHESTRATOR may be primaryCoordinator).", result);
+    }
+
+    @Test
+    void runReturnsErrorWhenOrchestratorNotPrimaryCoordinator() {
+        InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
+        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        four.get(0).put("primaryCoordinator", false);
+        four.get(1).put("primaryCoordinator", false);
+        Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
+        assertEquals("Missing or invalid featureRoomParticipants (exactly one primaryCoordinator required on ORCHESTRATOR).", result);
     }
 
     @Test

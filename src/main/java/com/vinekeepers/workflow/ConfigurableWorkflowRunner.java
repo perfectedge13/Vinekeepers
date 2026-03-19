@@ -82,6 +82,11 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 return WorkflowRunResult.error(e.getMessage());
             }
 
+            if (!result.getSpreadWrites().isEmpty()) {
+                for (Map.Entry<String, Object> e : result.getSpreadWrites().entrySet()) {
+                    state.put(e.getKey(), e.getValue());
+                }
+            }
             if (result.getStoreIn() != null && result.getStoreValue() != null) {
                 state.put(result.getStoreIn(), result.getStoreValue());
             }
@@ -169,13 +174,18 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 }
                 case "extract_event" -> out.add(new com.vinekeepers.workflow.steps.ExtractEventFieldsStep(
                         (List<Map<String, Object>>) stepMap.get("fromEvent")));
-                case "call_action" -> out.add(new com.vinekeepers.workflow.steps.CallActionStep(
-                        registry,
-                        toolRunner,
-                        toolPolicy,
-                        (String) stepMap.get("action"),
-                        (Map<String, Object>) stepMap.get("bind"),
-                        (String) stepMap.get("storeIn")));
+                case "call_action" -> {
+                    boolean storeSpread = Boolean.TRUE.equals(stepMap.get("storeSpread"))
+                            || "true".equalsIgnoreCase(String.valueOf(stepMap.get("storeSpread")));
+                    out.add(new com.vinekeepers.workflow.steps.CallActionStep(
+                            registry,
+                            toolRunner,
+                            toolPolicy,
+                            (String) stepMap.get("action"),
+                            (Map<String, Object>) stepMap.get("bind"),
+                            (String) stepMap.get("storeIn"),
+                            storeSpread));
+                }
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(

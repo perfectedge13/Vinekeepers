@@ -148,4 +148,4 @@ steps:
   output:
     skill: nova-output
     location: .cursor/skills/nova-code/wrap_up/output.md
-    description: Return change summary, files/specs changed, schema/drift results, test results, build-check results, reconcile results, issues raised.
+    description: Main orchestrator (not a sub-agent) returns change summary, files/specs changed, schema/drift results, test results, build-check results, reconcile results, issues raised; see nova-code SKILL.md and output-format.md.

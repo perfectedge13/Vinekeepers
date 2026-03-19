@@ -31,14 +31,17 @@ class ProvisionRoomParticipantsActionTest {
     void runReturnsErrorWhenInstanceIdMissing() {
         ProvisionRoomParticipantsAction action = new ProvisionRoomParticipantsAction(new StateStore());
         Object result = action.run(null, Map.of("channelId", "ch-1"), Map.of());
-        assertEquals("Missing instanceId for provision_room_participants (provision_bot_instance for arrietty must run first).", result);
+        assertEquals("Missing valid Arrietty runtime instance for provision_room_participants "
+                + "(run provision_bot_instance for arrietty first, or resolve a single Arrietty instance for this channel).", result);
     }
 
     @Test
     void runReturnsFourParticipantsWithExpectedShape() {
         StateStore stateStore = new StateStore();
-        ProvisionRoomParticipantsAction action = new ProvisionRoomParticipantsAction(stateStore);
         String orchestratorInstanceId = "arrietty-reuse123";
+        stateStore.put("bot_instance:" + orchestratorInstanceId,
+                new RuntimeBotInstance(orchestratorInstanceId, "arrietty", "Arrietty", "ch-room"));
+        ProvisionRoomParticipantsAction action = new ProvisionRoomParticipantsAction(stateStore);
         Object result = action.run(null,
                 Map.of("channelId", "ch-room", "instanceId", orchestratorInstanceId),
                 Map.of("channelId", "ch-room", "instanceId", orchestratorInstanceId));
@@ -96,17 +99,46 @@ class ProvisionRoomParticipantsActionTest {
     @Test
     void runStoresNewInstancesForArchitectAuditorScribeInStateStore() {
         StateStore stateStore = new StateStore();
+        String orchId = "arrietty-xxxxxxxx";
+        stateStore.put("bot_instance:" + orchId,
+                new RuntimeBotInstance(orchId, "arrietty", "Arrietty", "ch-1"));
         ProvisionRoomParticipantsAction action = new ProvisionRoomParticipantsAction(stateStore);
         action.run(null,
-                Map.of("channelId", "ch-1", "instanceId", "arrietty-xxxxxxxx"),
+                Map.of("channelId", "ch-1", "instanceId", orchId),
                 Map.of());
 
         List<String> botInstanceKeys = stateStore.keys().stream()
                 .filter(k -> k.startsWith("bot_instance:"))
                 .toList();
-        assertEquals(3, botInstanceKeys.size(), "architect, auditor, scribe get new instances stored");
+        assertEquals(4, botInstanceKeys.size(), "pre-seeded arrietty plus architect, auditor, scribe instances");
         assertTrue(botInstanceKeys.stream().anyMatch(k -> k.contains("architect-")));
         assertTrue(botInstanceKeys.stream().anyMatch(k -> k.contains("auditor-")));
         assertTrue(botInstanceKeys.stream().anyMatch(k -> k.contains("scribe-")));
+    }
+
+    @Test
+    void runReturnsErrorWhenMultipleArriettyInstancesOnChannelAndInstanceIdUnresolved() {
+        StateStore stateStore = new StateStore();
+        stateStore.put("bot_instance:" + "arrietty-11111111",
+                new RuntimeBotInstance("arrietty-11111111", "arrietty", "Arrietty", "ch-dup"));
+        stateStore.put("bot_instance:" + "arrietty-22222222",
+                new RuntimeBotInstance("arrietty-22222222", "arrietty", "Arrietty", "ch-dup"));
+        ProvisionRoomParticipantsAction action = new ProvisionRoomParticipantsAction(stateStore);
+        Object result = action.run(null, Map.of("channelId", "ch-dup"), Map.of());
+        assertEquals("Multiple Arrietty runtime instances for this channel; cannot select ORCHESTRATOR instance.", result);
+    }
+
+    @Test
+    void runPicksSoleArriettyOnChannelWhenInstanceIdOmitted() {
+        StateStore stateStore = new StateStore();
+        String soleId = "arrietty-only1234";
+        stateStore.put("bot_instance:" + soleId,
+                new RuntimeBotInstance(soleId, "arrietty", "Arrietty", "ch-solo"));
+        ProvisionRoomParticipantsAction action = new ProvisionRoomParticipantsAction(stateStore);
+        Object result = action.run(null, Map.of("channelId", "ch-solo"), Map.of());
+        assertTrue(result instanceof List);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> participants = (List<Map<String, Object>>) result;
+        assertEquals(soleId, participants.get(0).get("runtimeBotInstanceId"));
     }
 }

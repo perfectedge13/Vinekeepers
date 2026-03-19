@@ -21,9 +21,10 @@ import java.util.Set;
  * Routes events to bot ids using event filters (from RoutingRule).
  * When lifecycle context exists for a Discord channel and the owner bot has handlesOwnedSpaces,
  * single-owner precedence applies: only the owner bot is returned for that channel.
- * When FeatureRoomState exists for the room (by channel or delivery target), returns all four
- * participant configuredBotIds in stable order (feature room response policy: only Orchestrator
- * replies by default; other participants reply when invoked via action e.g. post_channel_message asRole).
+ * When FeatureRoomState exists: room-channel events route to the primary coordinator only (low-noise);
+ * intake/spec thread events route to all participant configuredBotIds
+ * in stable role order (visible multi-role collaboration). Legacy single-owner channels unchanged when
+ * no feature room applies.
  */
 public final class Router {
 
@@ -90,14 +91,18 @@ public final class Router {
             String channelId = context.getChannelId();
             if (channelId != null && !channelId.isBlank()) {
                 if (featureRoomStateStore != null) {
-                    Optional<FeatureRoomState> featureRoom = featureRoomStateStore.getByRoomChannelId(channelId);
-                    if (featureRoom.isEmpty()) {
-                        featureRoom = featureRoomStateStore.getByDeliveryTargetId(channelId);
-                    }
-                    if (featureRoom.isPresent()) {
-                        List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(featureRoom.get());
+                    Optional<FeatureRoomState> byThread = featureRoomStateStore.getByIntakeThreadId(channelId);
+                    Optional<FeatureRoomState> byRoom = featureRoomStateStore.getByRoomChannelId(channelId);
+                    if (byThread.isPresent()) {
+                        List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(byThread.get());
                         if (!participantBotIds.isEmpty()) {
                             return List.copyOf(participantBotIds);
+                        }
+                    }
+                    if (byRoom.isPresent()) {
+                        Optional<String> coordinator = FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(byRoom.get());
+                        if (coordinator.isPresent()) {
+                            return List.of(coordinator.get());
                         }
                     }
                 }

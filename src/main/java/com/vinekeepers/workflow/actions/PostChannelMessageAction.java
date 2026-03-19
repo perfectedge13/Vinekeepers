@@ -7,12 +7,14 @@ import com.vinekeepers.state.planning.PlanningRole;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Workflow action: state-driven post to a channel (e.g. lifecycle room). Bind/state: channelId, content.
  * Interpolation uses a merged map (state then bind); bind overrides state, so {{lifecycleBotName}} from bind wins.
- * Optional bind: asRole (orchestrator, architect, auditor, scribe) or asBotId — when set, uses
- * OutboundDeliveryRouter.sendAsRole or sendAs so the message is sent as that participant.
+ * Optional bind/state: asBotId or asRole (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE). Sender precedence:
+ * asBotId over asRole over default ReplySender path. Explicit asBotId/asRole requires OutboundDeliveryRouter
+ * and strict resolution (errors returned when sender or role cannot be resolved; no silent fallback).
  * Optional bind/state: target (room | thread) or targetChannelId for explicit send target:
  * - If targetChannelId present and non-blank, use as send target.
  * - If target is "room", use channelId.
@@ -70,18 +72,24 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
         }
         String asBotId = firstNonBlank(getString(bind, "asBotId"), state != null ? getString(state, "asBotId") : null);
         String asRoleStr = firstNonBlank(getString(bind, "asRole"), state != null ? getString(state, "asRole") : null);
-        if (outboundDeliveryRouter != null && asBotId != null && !asBotId.isBlank()) {
-            outboundDeliveryRouter.sendAs(sendTarget, null, content, asBotId);
-        } else if (outboundDeliveryRouter != null && asRoleStr != null && !asRoleStr.isBlank()) {
-            PlanningRole role = parseRole(asRoleStr);
-            if (role != null) {
-                outboundDeliveryRouter.sendAsRole(sendTarget, null, content, role);
-            } else {
-                replySender.send(sendTarget, null, content);
+        boolean explicitBot = asBotId != null && !asBotId.isBlank();
+        boolean explicitRole = asRoleStr != null && !asRoleStr.isBlank();
+        if (explicitBot || explicitRole) {
+            if (outboundDeliveryRouter == null) {
+                return "post_channel_message with asBotId/asRole requires OutboundDeliveryRouter as reply sender.";
             }
-        } else {
-            replySender.send(sendTarget, null, content);
+            if (explicitBot) {
+                Optional<String> err = outboundDeliveryRouter.sendAsExplicit(sendTarget, null, content, asBotId);
+                return err.orElse("OK");
+            }
+            PlanningRole role = parseRole(asRoleStr);
+            if (role == null) {
+                return "Invalid asRole for post_channel_message: " + asRoleStr;
+            }
+            Optional<String> err = outboundDeliveryRouter.sendAsRoleExplicit(sendTarget, null, content, role);
+            return err.orElse("OK");
         }
+        replySender.send(sendTarget, null, content);
         return "OK";
     }
 

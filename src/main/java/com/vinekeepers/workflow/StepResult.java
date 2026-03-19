@@ -3,7 +3,9 @@ package com.vinekeepers.workflow;
 import com.vinekeepers.interactions.OutboundResponse;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -21,25 +23,33 @@ public final class StepResult {
     private final String waitingForField;
     private final OutboundResponse richReply;
     private final List<String> clearKeys;
+    /** When non-null, merge into workflow state (used by {@code call_action} with {@code storeSpread: true}). */
+    private final Map<String, Object> spreadWrites;
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, boolean done, String message) {
         this(nextStepIndex, storeIn, storeValue, done ? StepOutcome.COMPLETE : StepOutcome.CONTINUE,
-                message, "", null, null, null);
+                message, "", null, null, null, null);
     }
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
                       String message, String promptMessage, String waitingForField) {
-        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, null, null);
+        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, null, null, null);
     }
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
                       String message, String promptMessage, String waitingForField, OutboundResponse richReply) {
-        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, richReply, null);
+        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, richReply, null, null);
     }
 
     public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
                       String message, String promptMessage, String waitingForField, OutboundResponse richReply,
                       List<String> clearKeys) {
+        this(nextStepIndex, storeIn, storeValue, outcome, message, promptMessage, waitingForField, richReply, clearKeys, null);
+    }
+
+    public StepResult(Integer nextStepIndex, String storeIn, Object storeValue, StepOutcome outcome,
+                      String message, String promptMessage, String waitingForField, OutboundResponse richReply,
+                      List<String> clearKeys, Map<String, Object> spreadWrites) {
         this.nextStepIndex = nextStepIndex;
         this.storeIn = storeIn;
         this.storeValue = storeValue;
@@ -50,6 +60,9 @@ public final class StepResult {
         this.richReply = richReply;
         this.clearKeys = clearKeys != null && !clearKeys.isEmpty()
                 ? List.copyOf(clearKeys) : null;
+        this.spreadWrites = spreadWrites != null && !spreadWrites.isEmpty()
+                ? Map.copyOf(new LinkedHashMap<>(spreadWrites))
+                : null;
     }
 
     public Integer getNextStepIndex() {
@@ -95,37 +108,46 @@ public final class StepResult {
         return clearKeys != null ? clearKeys : Collections.emptyList();
     }
 
+    public Map<String, Object> getSpreadWrites() {
+        return spreadWrites != null ? spreadWrites : Collections.emptyMap();
+    }
+
     public static StepResult advance(String storeIn, Object storeValue) {
-        return new StepResult(null, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null);
+        return new StepResult(null, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null, null, null, null);
+    }
+
+    public static StepResult advanceSpread(Map<String, Object> spreadWrites) {
+        return new StepResult(null, null, null, StepOutcome.CONTINUE, "", "", null, null, null,
+                Objects.requireNonNull(spreadWrites));
     }
 
     public static StepResult goTo(int nextStepIndex) {
-        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null, null, null);
+        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null, null, null, null);
     }
 
     public static StepResult goTo(int nextStepIndex, List<String> clearKeys) {
-        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null, null, clearKeys);
+        return new StepResult(nextStepIndex, null, null, StepOutcome.CONTINUE, "", "", null, null, clearKeys, null);
     }
 
     public static StepResult goTo(int nextStepIndex, String storeIn, Object storeValue) {
-        return new StepResult(nextStepIndex, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null, null, null);
+        return new StepResult(nextStepIndex, storeIn, storeValue, StepOutcome.CONTINUE, "", "", null, null, null, null);
     }
 
     public static StepResult done(String message) {
-        return new StepResult(null, null, null, StepOutcome.COMPLETE, Objects.requireNonNull(message), "", null);
+        return new StepResult(null, null, null, StepOutcome.COMPLETE, Objects.requireNonNull(message), "", null, null, null, null);
     }
 
     public static StepResult waiting(String promptMessage, String waitingForField) {
         return new StepResult(null, null, null, StepOutcome.WAITING, "",
-                Objects.requireNonNull(promptMessage), waitingForField, null);
+                Objects.requireNonNull(promptMessage), waitingForField, null, null, null);
     }
 
     public static StepResult waiting(String promptMessage, String waitingForField, OutboundResponse richReply) {
         return new StepResult(null, null, null, StepOutcome.WAITING, "",
-                Objects.requireNonNull(promptMessage), waitingForField, richReply);
+                Objects.requireNonNull(promptMessage), waitingForField, richReply, null, null);
     }
 
     public static StepResult error(String message) {
-        return new StepResult(null, null, null, StepOutcome.ERROR, Objects.requireNonNull(message), "", null);
+        return new StepResult(null, null, null, StepOutcome.ERROR, Objects.requireNonNull(message), "", null, null, null, null);
     }
 }

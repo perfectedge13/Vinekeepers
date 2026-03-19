@@ -10,6 +10,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CallActionStepTest {
 
@@ -40,5 +41,16 @@ class CallActionStepTest {
         CallActionStep step = new CallActionStep(null, "any", Map.of(), "x");
         StepResult result = step.execute(new Event("t", "k", Map.of()), new ConfigurableWorkflowState(), 0);
         assertEquals(null, result.getStoreValue());
+    }
+
+    @Test
+    void executeStoreSpreadMergesMapIntoStepResult() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("multi", (e, s, b) -> Map.of("k1", "a", "k2", 2));
+        CallActionStep step = new CallActionStep(registry, null, null, "multi", Map.of(), null, true);
+        StepResult result = step.execute(new Event("t", "k", Map.of()), new ConfigurableWorkflowState(), 0);
+        assertTrue(result.getSpreadWrites().containsKey("k1"));
+        assertEquals("a", result.getSpreadWrites().get("k1"));
+        assertEquals(2, result.getSpreadWrites().get("k2"));
     }
 }
