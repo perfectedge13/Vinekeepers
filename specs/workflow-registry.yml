@@ -82,7 +82,8 @@ assets:
       Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and
       handlesOwnedSpaces map from loaded bots to Router; construct FeaturePlanStateStore, RepoWorkspaceStateStore,
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
-      hydrate_planning_session, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
+      hydrate_planning_session, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
+      resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, run_plan_critique_and_readiness,
       persist_plan_approval, append/set plan actions
     requires:
@@ -712,11 +713,80 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/SynthesizePlanDraftsAction.java
     role: >-
       Workflow action synthesize_plan_drafts — deterministic draft upserts for empty overall_plan, validation_plan, and
-      project_context sections when plan workspace path is MATERIALIZED or RESOLVED_LOCAL
+      project_context sections when plan workspace path is MATERIALIZED or RESOLVED_LOCAL; legacy path when proposal actions are not used
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
       - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-DRAFT-SUPPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningDraftSupport.java
+    role: Shared deterministic draft builders (README, sample paths, plan body, validation, context) for synthesis and proposal actions
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-PROPOSAL-JSON
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningProposalJson.java
+    role: JSON serialize/parse helpers for PlanningProposal lists and confirm-queue id lists in workflow state
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-GENERATE-PLANNING-PROPOSALS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/GeneratePlanningProposalsAction.java
+    role: >-
+      Workflow action generate_planning_proposals — builds PlanningProposal list from plan + workspace readiness; AUTO_APPLY when
+      workspace ready, else CONFIRM queue for request-only drafts; storeSpread planningProposalsJson, planningConfirmQueueJson, flags
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-APPLY-AUTO-PLANNING-PROPOSALS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ApplyAutoPlanningProposalsAction.java
+    role: >-
+      Workflow action apply_auto_planning_proposals — upserts AUTO_APPLY proposals via upsert_artifact_section_data; rewrites
+      planningProposalsJson to drop applied entries
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-BUILD-PROPOSAL-CONFIRM-PROMPT-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/BuildProposalConfirmPromptAction.java
+    role: >-
+      Workflow action build_proposal_confirm_prompt — head of planningConfirmQueueJson; plain-English prompt with fenced draft;
+      storeSpread proposalConfirm* keys and planningHasConfirmPending; drops stale queue ids missing from proposals json
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RESOLVE-PROPOSAL-CONFIRMATION-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ResolveProposalConfirmationAction.java
+    role: >-
+      Workflow action resolve_proposal_confirmation — OK/yes/accept uses proposed value; else user text; pops queue and removes
+      proposal from planningProposalsJson; upserts canonical artifact field
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
@@ -989,11 +1059,17 @@ requirements:
           merges entries into workflow state before advancing (StepResult.advanceSpread)
         - >-
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, upsert_artifact_section_data,
-          get_profile_missing_fields, get_structured_discovery_gaps, build_discovery_agenda, capture_and_apply_discovery_answer,
+          get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
+          resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
+          capture_and_apply_discovery_answer,
           classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness, persist_plan_approval,
           append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry
+        - >-
+          generate_planning_proposals spreads planningProposalsJson and planningConfirmQueueJson; apply_auto_planning_proposals
+          applies AUTO_APPLY targets and shrinks planningProposalsJson; build_proposal_confirm_prompt / resolve_proposal_confirmation
+          drive confirm-before-record for CONFIRM proposals using discoveryAnswerRaw
         - >-
           get_structured_discovery_gaps spreads discoveryHasOpenGaps false and discoveryScanError when contextId is missing;
           after initialize_feature_plan_state with a new plan, spreads discoveryGapsJson containing REQUIRED_FIELD gaps when
@@ -1053,6 +1129,12 @@ requirements:
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
+        - ASSET-PLANNING-DRAFT-SUPPORT
+        - ASSET-PLANNING-PROPOSAL-JSON
+        - ASSET-GENERATE-PLANNING-PROPOSALS-ACTION
+        - ASSET-APPLY-AUTO-PLANNING-PROPOSALS-ACTION
+        - ASSET-BUILD-PROPOSAL-CONFIRM-PROMPT-ACTION
+        - ASSET-RESOLVE-PROPOSAL-CONFIRMATION-ACTION
         - ASSET-STRUCTURED-DISCOVERY-SUPPORT
         - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
         - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
@@ -1165,6 +1247,13 @@ requirements:
             Verify Phase B discovery actions: gaps scan errors and open gaps after init, agenda errors and prompt from gaps,
             capture_and_apply skip vs REQUIRED_FIELD upsert, recompute errors and persisted section status projection
           testClass: com.vinekeepers.workflow.actions.DiscoveryWorkflowActionsTest
+          preconditions: []
+        - id: UNIT-PLANNING-PROPOSAL-ACTIONS
+          title: PlanningProposalActionsTest
+          intent: >-
+            Verify proposal-driven planning: generate spreads CONFIRM when workspace not ready, apply_auto upserts AUTO_APPLY and
+            strips json, resolve accepts OK and persists plan_body
+          testClass: com.vinekeepers.workflow.actions.PlanningProposalActionsTest
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
@@ -1375,8 +1464,9 @@ requirements:
         - >-
           luna_cursor provisions the feature room and intake/spec thread, initializes plan state, ensures repo workspace,
           seeds requirements narrative, posts a handoff line to the thread, and completes in the main channel; Phase B/C
-          (synthesize_plan_drafts optional, guided discovery, critique/readiness, approval choices, role posts,
-          launch_cursor_run) run in arrietty_room when the user messages the intake thread: hydrate_planning_session
+          (generate_planning_proposals, apply_auto_planning_proposals, confirm loop via build_proposal_confirm_prompt and
+          resolve_proposal_confirmation, guided discovery, critique/readiness, approval choices, role posts,
+          launch_cursor_run; synthesize_plan_drafts remains for legacy YAML) run in arrietty_room when the user messages the intake thread: hydrate_planning_session
           (storeSpread) branches on planningIntakeThread; thread path uses session key bot:arrietty:conv:threadId with
           conversationMode conversational so the workflow does not reset after terminal launch; room channel path keeps
           the legacy capture_field room command branch
@@ -1436,6 +1526,12 @@ requirements:
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
+        - ASSET-PLANNING-DRAFT-SUPPORT
+        - ASSET-PLANNING-PROPOSAL-JSON
+        - ASSET-GENERATE-PLANNING-PROPOSALS-ACTION
+        - ASSET-APPLY-AUTO-PLANNING-PROPOSALS-ACTION
+        - ASSET-BUILD-PROPOSAL-CONFIRM-PROMPT-ACTION
+        - ASSET-RESOLVE-PROPOSAL-CONFIRMATION-ACTION
         - ASSET-STRUCTURED-DISCOVERY-SUPPORT
         - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
         - ASSET-BUILD-DISCOVERY-AGENDA-ACTION

@@ -98,6 +98,14 @@ assets:
     role: Captured answer metadata for discovery logs (optional future persistence)
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-PROPOSAL
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningProposal.java
+    role: >-
+      JSON-serializable draft for an artifact field (proposalId, target ids, proposedValue, confidence, interaction AUTO_APPLY|CONFIRM,
+      sources, reasoningSummary); carried in workflow state until confirm or auto-apply
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
   - id: ASSET-PLAN-CRITIQUE-FINDING
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/PlanCritiqueFinding.java
@@ -216,10 +224,12 @@ requirements:
         - FeaturePlanStateStore stores FeaturePlanState by contextId and secondary indexes (featureId, roomChannelId, intakeThreadId)
         - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows; creates VINEKEEPERS_REPO_WORKSPACE_ROOT when missing; deletes existing per-context workspace directory before shallow clone when present; fails closed if stale directory cannot be removed; logs milestones and supports optional progress callback; surfaces git output snippet on clone failure
         - FeaturePlanState carries optional profileId and artifacts map (per-artifact section/field values) alongside legacy planning fields; with* methods preserve profileId and artifacts
-        - Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, and DiscoveryFinding models for structured discovery (JSON-serializable; used by Luna guided discovery loop)
+        - >-
+          Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, DiscoveryFinding, and PlanningProposal models
+          for structured discovery and proposal-driven planning (JSON-serializable; workflow state for proposals until confirm or auto-apply)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
       symbols: []
     validation:
       tests:

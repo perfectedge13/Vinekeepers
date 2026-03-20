@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-20
+
+- **Proposal-driven planning (Arrietty intake):** **`generate_planning_proposals`**, **`apply_auto_planning_proposals`**, **`build_proposal_confirm_prompt`**, **`resolve_proposal_confirmation`**; **`PlanningProposal`** model and **`PlanningDraftSupport`** shared with **`synthesize_plan_drafts`**. **`arrietty_room`** runs confirm loop (OK vs edited text) before structured discovery when workspace is not ready. Specs: workflow-registry, state-registry; tests: PlanningProposalActionsTest.
+
 ## 2026-03-19
 
 - **Repo workspace hardening + Arrietty progress:** **RepoWorkspaceService** ensures **VINEKEEPERS_REPO_WORKSPACE_ROOT** exists, removes an existing per-context clone directory before **git clone --depth 1** (retry once on delete failure; fails closed if removal incomplete), captures git output on clone failure, logs milestones, and accepts **RepoWorkspaceProgressCallback**. **EnsureRepoWorkspaceAction** wires **OutboundDeliveryRouter** and posts short **arrietty** lines to the intake thread (**deliveryChannelId**, **THREAD_CREATE_FAILED** → **channelId**) during **ensure_repo_workspace**. Types: **RepoWorkspaceProgressPhase**, **RepoWorkspaceProgressCallback**, **ExplicitBotSender**. Specs: state-registry, workflow-registry; tests: RepoWorkspaceServiceTest, EnsureRepoWorkspaceActionTest.

@@ -107,31 +107,69 @@ workflows:
           - when: { key: planningIntakeThread, value: "true" }
             next: 2
           - when: else
-            next: 32
+            next: 42
       - type: call_action
         action: get_profile_missing_fields
         storeIn: profileMissingSummary
       - type: call_action
-        action: synthesize_plan_drafts
+        action: generate_planning_proposals
         storeSpread: true
+      - type: call_action
+        action: apply_auto_planning_proposals
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: planningHasConfirmPending, value: "true" }
+            next: 6
+          - when: else
+            next: 14
+      - type: call_action
+        action: build_proposal_confirm_prompt
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: proposalConfirmPrompt, operator: nonblank }
+            next: 8
+          - when: else
+            next: 14
+      - type: prompt_for_field
+        prompt: "{{proposalConfirmPrompt}}"
+        storeIn: discoveryAnswerRaw
+      - type: capture_field
+        storeIn: discoveryAnswerRaw
+      - type: call_action
+        action: resolve_proposal_confirmation
+        storeSpread: true
+      - type: call_action
+        action: classify_assumption_or_issue
+      - type: call_action
+        action: recompute_plan_progress
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: planningHasConfirmPending, value: "true" }
+            next: 6
+            clear: [discoveryAnswerRaw]
+          - when: else
+            next: 14
       - type: call_action
         action: get_structured_discovery_gaps
         storeSpread: true
       - type: branch
         branches:
           - when: { key: discoveryHasOpenGaps, value: "true" }
-            next: 6
+            next: 16
           - when: else
-            next: 14
+            next: 24
       - type: call_action
         action: build_discovery_agenda
         storeSpread: true
       - type: branch
         branches:
           - when: { key: discoveryCurrentQuestionPrompt, operator: nonblank }
-            next: 8
+            next: 18
           - when: else
-            next: 14
+            next: 24
       - type: prompt_for_field
         prompt: "{{discoveryCurrentQuestionPrompt}}"
         storeIn: discoveryAnswerRaw
@@ -147,24 +185,35 @@ workflows:
       - type: branch
         branches:
           - when: { key: discoveryBlockingIssueMode, value: "true" }
-            next: 14
+            next: 24
           - when: { key: discoveryHasOpenGaps, value: "true" }
-            next: 6
+            next: 16
             clear: [discoveryAnswerRaw]
           - when: else
-            next: 14
+            next: 24
       - type: call_action
         action: run_plan_critique_and_readiness
         storeSpread: true
       - type: branch
         branches:
           - when: { key: planReadinessStatus, value: BLOCKED }
-            next: 28
+            next: 38
           - when: { key: planReadinessStatus, value: NEEDS_REVISION }
             next: 2
-            clear: [discoveryAnswerRaw, planApprovalDecision]
+            clear:
+              - discoveryAnswerRaw
+              - planApprovalDecision
+              - planningProposalsJson
+              - planningConfirmQueueJson
+              - proposalConfirmPrompt
+              - proposalConfirmProposalId
+              - proposalConfirmArtifactId
+              - proposalConfirmSectionId
+              - proposalConfirmFieldId
+              - proposalConfirmProposedValue
+              - planningHasConfirmPending
           - when: else
-            next: 16
+            next: 26
       - type: call_action
         action: post_channel_message
         bind:
@@ -185,16 +234,27 @@ workflows:
       - type: branch
         branches:
           - when: { key: planApprovalDecision, value: approve }
-            next: 20
+            next: 30
           - when: { key: planApprovalDecision, value: approve_with_risks }
-            next: 20
+            next: 30
           - when: { key: planApprovalDecision, value: revise }
             next: 2
-            clear: [discoveryAnswerRaw, planApprovalDecision]
+            clear:
+              - discoveryAnswerRaw
+              - planApprovalDecision
+              - planningProposalsJson
+              - planningConfirmQueueJson
+              - proposalConfirmPrompt
+              - proposalConfirmProposalId
+              - proposalConfirmArtifactId
+              - proposalConfirmSectionId
+              - proposalConfirmFieldId
+              - proposalConfirmProposedValue
+              - planningHasConfirmPending
           - when: { key: planApprovalDecision, value: reject }
-            next: 31
+            next: 41
           - when: else
-            next: 31
+            next: 41
       - type: call_action
         action: persist_plan_approval
       - type: call_action
@@ -255,15 +315,15 @@ workflows:
       - type: branch
         branches:
           - when: { key: roomAction, value: status }
-            next: 34
+            next: 44
           - when: { key: roomAction, value: retry }
-            next: 35
+            next: 45
           - when: { key: roomAction, value: close }
-            next: 36
+            next: 46
           - when: { key: roomAction, value: "" }
-            next: 37
+            next: 47
           - when: else
-            next: 38
+            next: 48
       - type: done
         message: "Room status: active. Repo and request are in context."
       - type: done
