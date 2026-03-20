@@ -316,9 +316,16 @@ public final class VinekeepersEngine implements EventSubscriber {
         return OutboundResponse.ofText(text);
     }
 
+    /** Discord deferred interactions must receive a follow-up; use when workflow/reasoner produce no outbound. */
+    private static final OutboundResponse DEFERRED_INTERACTION_ACK = OutboundResponse.ofText("Recorded.");
+
     private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target) {
         if (outbound == null) {
-            return;
+            if (target instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
+                outbound = DEFERRED_INTERACTION_ACK;
+            } else {
+                return;
+            }
         }
         String sourcePrefix = event.getSourceId().contains(":") ? event.getSourceId().substring(0, event.getSourceId().indexOf(':')) : event.getSourceId();
         AppReplySink sink = sinks.get(sourcePrefix);

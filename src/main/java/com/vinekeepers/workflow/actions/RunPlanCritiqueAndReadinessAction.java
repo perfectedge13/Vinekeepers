@@ -23,6 +23,8 @@ import java.util.stream.Collectors;
 
 /**
  * Phase C: run rule-based critique, compute readiness, persist on {@link FeaturePlanState}, spread keys for workflow.
+ * Also merges {@link BuildPlanningThreadReviewBodyAction} output ({@code planningThreadReviewBody},
+ * {@code planningThreadReviewBuildError}) for pre-approval thread copy without a separate workflow step.
  */
 public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.workflow.WorkflowAction {
 
@@ -81,6 +83,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             spread.put("planReadinessSummary", confidence.getNotes() != null ? confidence.getNotes() : "");
             spread.put("planCritiqueFindingsJson", JSON.writeValueAsString(findings));
             spread.put("planCritiqueSummary", formatCritiqueSummary(findings));
+            mergePlanningThreadReview(spread, event, state, bind);
             return spread;
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "critique failed";
@@ -91,7 +94,24 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             } catch (JsonProcessingException ignored) {
                 m.put("planCritiqueFindingsJson", "[]");
             }
+            mergePlanningThreadReview(m, event, state, bind);
             return m;
+        }
+    }
+
+    private void mergePlanningThreadReview(Map<String, Object> spread, Event event, Map<String, Object> state, Map<String, Object> bind) {
+        if (planStateStore == null) {
+            spread.putIfAbsent("planningThreadReviewBody", "");
+            spread.putIfAbsent("planningThreadReviewBuildError", "");
+            return;
+        }
+        Object review = new BuildPlanningThreadReviewBodyAction(planStateStore).run(event, state, bind);
+        if (review instanceof Map<?, ?> raw) {
+            for (Map.Entry<?, ?> e : raw.entrySet()) {
+                if (e.getKey() != null) {
+                    spread.put(e.getKey().toString(), e.getValue());
+                }
+            }
         }
     }
 
@@ -103,6 +123,8 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         m.put("planReadinessSummary", "");
         m.put("planCritiqueFindingsJson", "[]");
         m.put("planCritiqueSummary", "");
+        m.put("planningThreadReviewBody", "");
+        m.put("planningThreadReviewBuildError", "");
         return m;
     }
 

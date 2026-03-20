@@ -217,7 +217,19 @@ workflows:
       - type: call_action
         action: post_channel_message
         bind:
-          content: "Pre-launch review (orchestrator). Readiness: {{planReadinessStatus}}. {{planReadinessSummary}}\n{{planCritiqueSummary}}\nChoose an action below."
+          content: |
+            **Drafted plan (orchestrator)**
+            {{planningThreadReviewBody}}
+            {{planningThreadReviewBuildError}}
+            ---
+            **Pre-launch review**
+            **Status:** {{planReadinessStatus}}
+            {{planReadinessSummary}}
+
+            **Critique**
+            {{planCritiqueSummary}}
+
+            _Approval choices follow in the next message._
           asRole: orchestrator
           target: thread
       - type: prompt_for_field

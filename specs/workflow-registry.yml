@@ -103,7 +103,8 @@ assets:
       dispatchCoordinatorPlanningKickoff runs a single coordinator bot for a synthetic thread message after Luna handoff with idempotent skip when thread session is already waiting, in progress, or completed
       registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage);
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
-      fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine
+      fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine;
+      when ReplyTarget is deferred InteractionTarget and outbound is null, send minimal text follow-up so Discord interaction completes
     requires:
       - REQ-CORE-003
       - REQ-REASONER-001

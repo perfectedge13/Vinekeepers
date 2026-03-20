@@ -1,9 +1,12 @@
 package com.vinekeepers.connectors;
 
 import com.vinekeepers.interactions.*;
+import com.vinekeepers.state.LifecycleContext;
+import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -137,6 +140,31 @@ class DiscordAppReplySinkTest {
         assertEquals("ch-1|msg-1|Choose one", gateway.lastSend);
         assertNotNull(gateway.lastSendComponents);
         assertFalse(gateway.lastSendComponents.isEmpty());
+    }
+
+    @Test
+    void routerUsesDefaultGatewayWhenLifecycleBotHasNoRegisteredGateway() {
+        LifecycleContextStore lc = new LifecycleContextStore();
+        Instant now = Instant.now();
+        lc.put(new LifecycleContext(
+                "ctx-1",
+                "parent-ch",
+                now,
+                null,
+                "bot-without-gateway",
+                null,
+                null,
+                null,
+                "ok",
+                "thread-target"));
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(lc);
+        RecordingDiscordGateway defaultGw = new RecordingDiscordGateway();
+        router.setDefaultGateway(defaultGw);
+        DiscordAppReplySink routerSink = new DiscordAppReplySink(router);
+        InteractionTarget target = new InteractionTarget("discord:g", "thread-target", "m1", "i1", "tok", false);
+        routerSink.respondImmediately(OutboundResponse.ofText("Hi"), target);
+        assertEquals(1, defaultGw.sendFollowUpCalls.get());
+        assertEquals("tok|Hi", defaultGw.lastSendFollowUp);
     }
 
     private static final class RecordingDiscordGateway implements DiscordGateway {

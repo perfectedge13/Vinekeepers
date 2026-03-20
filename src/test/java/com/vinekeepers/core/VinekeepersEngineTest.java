@@ -318,6 +318,48 @@ class VinekeepersEngineTest {
     }
 
     @Test
+    void deferredInteractionWithNullOutbound_sendsMinimalFollowUpAck() {
+        BotDefinition bot = new BotDefinition(
+                "sink-bot",
+                new Persona("Sink", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        AtomicReference<OutboundResponse> followUpPayload = new AtomicReference<>();
+        AppReplySink mockSink = new AppReplySink() {
+            @Override
+            public void respondImmediately(OutboundResponse response, ReplyTarget target) {
+            }
+            @Override
+            public void sendFollowUp(OutboundResponse response, ReplyTarget target) {
+                followUpPayload.set(response);
+            }
+            @Override
+            public void updateMessage(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public void openModal(OutboundResponse response, ReplyTarget target) {}
+            @Override
+            public com.vinekeepers.interactions.Capabilities getCapabilities() {
+                return new com.vinekeepers.interactions.Capabilities(
+                        java.util.Set.of(), true, true, true, false, 3000, 25, 5, 5);
+            }
+        };
+        engine.registerSink("discord", mockSink);
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+        engine.registerRunner("sink-bot", (event, store, botId) -> WorkflowRunResult.continueWithoutReply());
+        engine.registerReasoner("sink-bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "sink-bot"));
+
+        Event event = new Event("discord:g:ch", "interaction",
+                Map.of("channelId", "ch-1", "interactionId", "int-1", "token", "tok-1", "deferred", true));
+        engine.onEvent(event);
+
+        assertNotNull(followUpPayload.get());
+        assertEquals("Recorded.", followUpPayload.get().getText().orElse(""));
+    }
+
+    @Test
     void whenSinkRegisteredRichReplyFromWorkflowIsDeliveredViaSink() {
         BotDefinition bot = new BotDefinition(
                 "sink-bot",

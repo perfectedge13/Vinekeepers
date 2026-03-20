@@ -53,7 +53,11 @@ public final class DiscordAppReplySink implements AppReplySink {
      */
     private DiscordGateway gatewayFor(ReplyTarget target) {
         if (router != null && target != null) {
-            return (DiscordGateway) router.getGatewayForChannel(target.channelId());
+            DiscordGateway gw = (DiscordGateway) router.getGatewayForChannel(target.channelId());
+            if (gw == null) {
+                gw = (DiscordGateway) router.getDefaultGateway();
+            }
+            return gw;
         }
         return gateway;
     }

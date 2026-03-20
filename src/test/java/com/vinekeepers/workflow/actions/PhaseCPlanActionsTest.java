@@ -31,6 +31,40 @@ class PhaseCPlanActionsTest {
         FeaturePlanState p = store.getByContextId("c1").orElseThrow();
         assertTrue(p.getPlanCritiqueSnapshot() != null);
         assertTrue(p.getPlanConfidence() != null);
+        assertTrue(spread.containsKey("planningThreadReviewBody"));
+        assertEquals("", spread.get("planningThreadReviewBuildError"));
+    }
+
+    @Test
+    void runPlanCritique_mergesPlanningThreadReviewBodyFromArtifacts() {
+        WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
+        assertEquals("OK", init.run(null, Map.of("contextId", "c-review", "channelId", "roomR"), Map.of()));
+        var upsert = new UpsertArtifactSectionDataAction(store, reg);
+        assertEquals("OK", upsert.run(null,
+                Map.of("contextId", "c-review"),
+                Map.of(
+                        "artifactId", "overall_plan",
+                        "sectionId", "outline",
+                        "mode", "replace",
+                        "data", Map.of("plan_body", "Outline A → B."))));
+        assertEquals("OK", upsert.run(null,
+                Map.of("contextId", "c-review"),
+                Map.of(
+                        "artifactId", "validation_plan",
+                        "sectionId", "checks",
+                        "mode", "replace",
+                        "data", Map.of("validation_notes", "mvn verify"))));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
+                .run(null, Map.of("contextId", "c-review"), Map.of());
+        assertEquals("", spread.get("planCritiqueError"));
+        String body = (String) spread.get("planningThreadReviewBody");
+        assertTrue(body.contains("Outline A → B."));
+        assertTrue(body.contains("mvn verify"));
+        assertEquals("", spread.get("planningThreadReviewBuildError"));
     }
 
     @Test

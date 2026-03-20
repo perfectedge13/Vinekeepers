@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-18T12:00:00Z"
+  updated_utc: "2026-03-20T20:00:00Z"
 
 project:
   id: vinekeepers
@@ -106,7 +106,7 @@ assets:
   - id: ASSET-DISCORD-REPLY-SINK
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordAppReplySink.java
-    role: Implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; lifecycle operations; channel send and follow-up/update with optional components; render intents to Discord; fallback to text; adapter owns timing and may auto-defer on interaction receive
+    role: Implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; lifecycle operations; channel send and follow-up/update with optional components; render intents to Discord; fallback to text; when router getGatewayForChannel returns null, falls back to router defaultGateway for interaction follow-up; adapter owns timing and may auto-defer on interaction receive
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-OUTBOUND-DELIVERY-ROUTER
