@@ -84,7 +84,8 @@ assets:
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
-      get_profile_missing_fields, structured discovery and plan actions, run_plan_critique_and_readiness,
+      get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
+      acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, persist_plan_approval, append/set plan actions
     requires:
       - REQ-CORE-002
@@ -437,7 +438,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudAdapterImpl.java
     role: >-
-      Cursor Cloud Agents API HTTP client implementation (env-based config); robust non-2xx error parsing
+      Cursor Cloud Agents API HTTP client implementation (env-based config); HttpClient connectTimeout and per-request
+      timeout from CURSOR_HTTP_CONNECT_TIMEOUT_MS and CURSOR_HTTP_REQUEST_TIMEOUT_MS; robust non-2xx error parsing
       (extractErrorMessageAndCode for error string, nested error.message/code, top-level message, plain text, empty);
       safe request diagnostics (debug URI, key masked, model, repo, branch); NON_NULL payload serialization; Bearer
       auth; logs transport exceptions and config without leaking key or body
@@ -460,7 +462,8 @@ assets:
     path: src/main/java/com/vinekeepers/core/cursor/CursorCloudRunMonitor.java
     role: >-
       Poll Cursor cloud runs and relay status, feedback, and PR updates back to Discord; when run record has
-      deliveryChannelId set, send to that target (thread); use messageId null when sending to thread
+      deliveryChannelId set, send to that target (thread); use messageId null when sending to thread; per-run try/catch
+      around poll so one failing run does not stop the monitor loop
     requires:
       - REQ-LUNA-001
     feature_ids:
@@ -702,7 +705,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/HydratePlanningSessionAction.java
     role: >-
       Workflow action hydrate_planning_session — when event channel is a feature-room intake thread id, storeSpread
-      planningIntakeThread, contextId, channelId, deliveryChannelId, project, codeChange from FeatureRoomState and FeaturePlanState
+      planningIntakeThread, contextId, channelId, deliveryChannelId, project, codeChange from FeatureRoomState and FeaturePlanState;
+      spreads coordinatorKickoff from synthetic kickoff payload when present
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -715,8 +719,48 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/StartCoordinatorPlanningAction.java
     role: >-
       Workflow action start_coordinator_planning — after Luna handoff, builds in-process synthetic Discord thread message
-      (channelId and threadId = intake thread id) and calls VinekeepersEngine.dispatchCoordinatorPlanningKickoff for the
-      coordinator configuredBotId (from FeatureRoomState or default arrietty); idempotent with engine guard
+      (channelId and threadId = intake thread id, payload coordinatorKickoff=true for hydrate_planning_session) and calls
+      VinekeepersEngine.dispatchCoordinatorPlanningKickoff for the coordinator configuredBotId (from FeatureRoomState or
+      default arrietty); idempotent with engine guard
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-MARK-INTAKE-DISCOVERY-COMPLETE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/MarkIntakeDiscoveryCompleteAction.java
+    role: >-
+      Workflow action mark_intake_discovery_complete — spreads humanDiscoveryCompleted=true after coordinator discovery
+      kickoff reply; gates run_plan_critique_and_readiness until set
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-ACKNOWLEDGE-READINESS-HUMAN-DECISION-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/AcknowledgeReadinessHumanDecisionAction.java
+    role: >-
+      Workflow action acknowledge_readiness_human_decision — re-runs Phase C with bind humanReadinessProceedAck to persist
+      READY after NEEDS_HUMAN_DECISION proceed path
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/BuildRolePlanningThreadMessagesAction.java
+    role: >-
+      Workflow action build_role_planning_thread_messages — spreads architectThreadMessage, auditorThreadMessage,
+      scribeThreadMessage from FeaturePlanState artifacts for post_channel_message asRole steps
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -895,7 +939,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/RunPlanCritiqueAndReadinessAction.java
     role: >-
       Workflow action run_plan_critique_and_readiness — persists PlanCritiqueSnapshot and PlanConfidence; storeSpread
-      keys planReadinessStatus, planConfidenceLevel, planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary
+      keys planReadinessStatus, planConfidenceLevel, planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary;
+      adds MUST_FIX when workflow state humanDiscoveryCompleted is not true; bind humanReadinessProceedAck forces READY
+      spread and persistence for NEEDS_HUMAN_DECISION proceed path
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1002,9 +1048,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java
     role: >-
       Workflow action to launch a Cursor cloud run and register run record; passes optional deliveryChannelId into
-      LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room; when
-      FeaturePlanStateStore is wired and contextId is non-blank, requires PlanApproval APPROVE or APPROVE_WITH_RISKS unless
-      env CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true
+      LifecycleRunRecord; returns spread keys launchMessage, launchSucceeded, launchAgentId for YAML branching and thread
+      posts; logs start/success/failure at INFO/WARN; when FeaturePlanStateStore is wired and contextId is non-blank,
+      requires PlanApproval APPROVE or APPROVE_WITH_RISKS unless env CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001

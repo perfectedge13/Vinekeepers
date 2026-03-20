@@ -40,7 +40,9 @@ class GetProfileMissingFieldsActionTest {
                         "sectionId",
                         "narrative",
                         "data",
-                        Map.of("feature_summary", "done")));
+                        Map.of(
+                                "feature_summary", "done",
+                                "acceptance_criteria", "- It works end-to-end.")));
 
         upsert.run(
                 null,

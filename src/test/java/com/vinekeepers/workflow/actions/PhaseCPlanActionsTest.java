@@ -26,9 +26,17 @@ class PhaseCPlanActionsTest {
                 "contextId", "c1",
                 "channelId", "room1",
                 "codeChange", "Ship dark-mode toggle with accessibility review and QA sign-off."), Map.of()));
+        var upsertCrit = new UpsertArtifactSectionDataAction(store, reg);
+        assertEquals("OK", upsertCrit.run(null,
+                Map.of("contextId", "c1"),
+                Map.of(
+                        "artifactId", "requirements_spec",
+                        "sectionId", "narrative",
+                        "mode", "merge",
+                        "data", Map.of("acceptance_criteria", "- Toggle persists; - WCAG AA contrast; - QA sign-off in staging."))));
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
-                .run(null, Map.of("contextId", "c1"), Map.of());
+                .run(null, Map.of("contextId", "c1", "humanDiscoveryCompleted", "true"), Map.of());
         assertTrue(spread.containsKey("planReadinessStatus"));
         assertEquals("", spread.get("planCritiqueError"));
         FeaturePlanState p = store.getByContextId("c1").orElseThrow();
@@ -64,10 +72,17 @@ class PhaseCPlanActionsTest {
                         "sectionId", "checks",
                         "mode", "replace",
                         "data", Map.of("validation_notes", "mvn verify; contract tests; manual PDF spot-checks in staging."))));
+        assertEquals("OK", upsert.run(null,
+                Map.of("contextId", "c-review"),
+                Map.of(
+                        "artifactId", "requirements_spec",
+                        "sectionId", "narrative",
+                        "mode", "merge",
+                        "data", Map.of("acceptance_criteria", "- PDF renders; - metadata present; - audit log export works."))));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
-                .run(null, Map.of("contextId", "c-review"), Map.of());
+                .run(null, Map.of("contextId", "c-review", "humanDiscoveryCompleted", "true"), Map.of());
         assertEquals("", spread.get("planCritiqueError"));
         String body = (String) spread.get("planningThreadReviewBody");
         assertTrue(body.contains("Phase 1: data model"));

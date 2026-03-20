@@ -49,7 +49,8 @@ class StructuredDiscoverySupportTest {
         init.run(null, Map.of("contextId", "cy", "channelId", "ch"), Map.of());
         var upsert = new UpsertArtifactSectionDataAction(store, reg);
         upsert.run(null, Map.of("contextId", "cy"),
-                Map.of("artifactId", "requirements_spec", "sectionId", "narrative", "data", Map.of("feature_summary", "x")));
+                Map.of("artifactId", "requirements_spec", "sectionId", "narrative", "data",
+                        Map.of("feature_summary", "x", "acceptance_criteria", "- Done when it works.")));
         upsert.run(null, Map.of("contextId", "cy"),
                 Map.of("artifactId", "overall_plan", "sectionId", "outline", "data", Map.of("plan_body", "p")));
         upsert.run(null, Map.of("contextId", "cy"),

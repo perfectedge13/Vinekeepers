@@ -18,6 +18,7 @@ import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
 import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,10 +72,27 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
 
         try {
             List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
-            List<PlanCritiqueFinding> findings = PlanCritiqueSupport.buildFindings(plan, profile, gaps);
+            List<PlanCritiqueFinding> findings = new ArrayList<>(PlanCritiqueSupport.buildFindings(plan, profile, gaps));
+            if (!"true".equalsIgnoreCase(String.valueOf(state != null ? state.get("humanDiscoveryCompleted") : null))) {
+                findings.add(0, new PlanCritiqueFinding(
+                        "crit-intake-disc-1",
+                        "PROCESS",
+                        "MUST_FIX",
+                        "INTAKE_DISCOVERY_INCOMPLETE",
+                        "Complete the coordinator discovery kickoff in this thread (reply to the first planning prompt) before the plan can advance to approval.",
+                        ""));
+            }
             Instant now = Instant.now();
             PlanCritiqueSnapshot snapshot = new PlanCritiqueSnapshot(now, PlanCritiqueSupport.SOURCE_RULES_V1, findings);
             PlanConfidence confidence = PlanReadinessEvaluator.evaluate(plan, gaps, findings, now);
+            if ("true".equalsIgnoreCase(String.valueOf(bind != null ? bind.get("humanReadinessProceedAck") : null))) {
+                confidence = new PlanConfidence(
+                        confidence.getLevel(),
+                        "Human acknowledged warnings; proceeding to approval. "
+                                + (confidence.getNotes() != null ? confidence.getNotes() : ""),
+                        com.vinekeepers.state.planning.PlanReadinessStatus.READY,
+                        now);
+            }
             FeaturePlanState next = plan.withPlanCritiqueSnapshot(snapshot).withPlanConfidence(confidence);
             planStateStore.update(next);
 

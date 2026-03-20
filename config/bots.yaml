@@ -112,6 +112,8 @@ workflows:
         storeSpread: true
       - type: branch
         branches:
+          - when: { key: coordinatorKickoff, value: "true" }
+            next: 50
           - when: { key: planningIntakeThread, value: "true" }
             next: 2
           - when: else
@@ -220,6 +222,9 @@ workflows:
               - proposalConfirmFieldId
               - proposalConfirmProposedValue
               - planningHasConfirmPending
+              - readinessProceedRaw
+          - when: { key: planReadinessStatus, value: NEEDS_HUMAN_DECISION }
+            next: 57
           - when: else
             next: 26
       - type: call_action
@@ -277,6 +282,7 @@ workflows:
               - proposalConfirmFieldId
               - proposalConfirmProposedValue
               - planningHasConfirmPending
+              - readinessProceedRaw
           - when: { key: planApprovalDecision, value: reject }
             next: 42
           - when: else
@@ -290,21 +296,24 @@ workflows:
           asRole: orchestrator
           target: thread
       - type: call_action
+        action: build_role_planning_thread_messages
+        storeSpread: true
+      - type: call_action
         action: post_channel_message
         bind:
-          content: "Architect: proposed structure — align implementation with repo conventions; capture boundaries and main components for this change."
+          content: "{{architectThreadMessage}}"
           asRole: architect
           target: thread
       - type: call_action
         action: post_channel_message
         bind:
-          content: "Auditor: validation focus — risks, test strategy, and spec/drift checks before implementation proceeds."
+          content: "{{auditorThreadMessage}}"
           asRole: auditor
           target: thread
       - type: call_action
         action: post_channel_message
         bind:
-          content: "Scribe: intake/spec consolidation — profile gaps to address: {{profileMissingSummary}}"
+          content: "{{scribeThreadMessage}}"
           asRole: scribe
           target: thread
       - type: call_action
@@ -316,9 +325,13 @@ workflows:
       - type: call_action
         action: launch_cursor_run
         bind: {}
-        storeIn: launchMessage
-      - type: done
-        message: "Launching now. See <#{{channelId}}>."
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: launchSucceeded, value: "false" }
+            next: 64
+          - when: else
+            next: 66
       - type: call_action
         action: post_channel_message
         bind:
@@ -349,7 +362,7 @@ workflows:
           - when: { key: roomAction, value: "" }
             next: 48
           - when: else
-            next: 49
+            next: 48
       - type: done
         message: "Room status: active. Repo and request are in context."
       - type: done
@@ -360,6 +373,103 @@ workflows:
         message: "What would you like? (status, retry, close, or ask anything)"
       - type: done
         message: "{{roomAction}}"
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: |
+            **Discovery kickoff (coordinator)**
+
+            Repo: `{{project}}`
+            **Request:** {{codeChange}}
+
+            Before we draft a full plan, add **scope**, **acceptance criteria**, **constraints**, and any **risks** you care about. Reply in this thread (one message is fine). After that we’ll synthesize drafts and run structured discovery if anything is still missing.
+          asRole: orchestrator
+          target: thread
+      - type: prompt_for_field
+        prompt: "What scope, acceptance criteria, constraints, or risks should we capture before drafting?"
+        storeIn: discoveryAnswerRaw
+      - type: capture_field
+        storeIn: discoveryAnswerRaw
+      - type: call_action
+        action: capture_and_apply_discovery_answer
+      - type: call_action
+        action: classify_assumption_or_issue
+      - type: call_action
+        action: recompute_plan_progress
+        storeSpread: true
+      - type: call_action
+        action: mark_intake_discovery_complete
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: else
+            next: 2
+            clear:
+              - coordinatorKickoff
+              - discoveryAnswerRaw
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: |
+            **Human review requested**
+
+            Readiness: **{{planReadinessStatus}}**
+            {{planReadinessSummary}}
+
+            **Critique (summary)**
+            {{planCritiqueSummary}}
+          asRole: orchestrator
+          target: thread
+      - type: prompt_for_field
+        prompt: "Reply **proceed** to continue to approval (you accept remaining warnings) or **revise** to refine the plan first."
+        storeIn: readinessProceedRaw
+      - type: capture_field
+        storeIn: readinessProceedRaw
+        trimAndLower: true
+      - type: branch
+        branches:
+          - when: { key: readinessProceedRaw, value: proceed }
+            next: 62
+          - when: { key: readinessProceedRaw, value: revise }
+            next: 2
+            clear:
+              - readinessProceedRaw
+              - discoveryAnswerRaw
+              - planApprovalDecision
+              - planningProposalsJson
+              - planningConfirmQueueJson
+              - proposalConfirmPrompt
+              - proposalConfirmProposalId
+              - proposalConfirmArtifactId
+              - proposalConfirmSectionId
+              - proposalConfirmFieldId
+              - proposalConfirmProposedValue
+              - planningHasConfirmPending
+          - when: else
+            next: 59
+      - type: call_action
+        action: acknowledge_readiness_human_decision
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: else
+            next: 26
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "{{launchMessage}}"
+          asRole: orchestrator
+          target: thread
+      - type: done
+        message: "{{launchMessage}}"
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "{{launchMessage}}"
+          asRole: orchestrator
+          target: thread
+      - type: done
+        message: "{{launchMessage}}"
   simple_echo:
     steps:
       - type: ask_input

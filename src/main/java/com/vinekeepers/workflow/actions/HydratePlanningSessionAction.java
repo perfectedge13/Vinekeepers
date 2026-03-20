@@ -71,6 +71,12 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
         if (codeChange != null && !codeChange.isBlank()) {
             out.put("codeChange", codeChange);
         }
+        Object kick = event != null && event.getPayload() != null ? event.getPayload().get("coordinatorKickoff") : null;
+        if (kick != null && ("true".equalsIgnoreCase(String.valueOf(kick).trim()) || Boolean.TRUE.equals(kick))) {
+            out.put("coordinatorKickoff", "true");
+        } else {
+            out.put("coordinatorKickoff", "false");
+        }
         return out;
     }
 

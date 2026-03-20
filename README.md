@@ -96,6 +96,7 @@ Optional:
 - `CURSOR_MODEL`: explicit model id for cloud launches
 - `CURSOR_BASE_BRANCH`: default base branch when Luna launches a run
 - `CURSOR_POLL_INTERVAL_MS`: how often Vinekeepers polls Cursor for feedback updates
+- `CURSOR_HTTP_CONNECT_TIMEOUT_MS` / `CURSOR_HTTP_REQUEST_TIMEOUT_MS`: optional HTTP client connect and per-request timeouts for Cursor Cloud API calls (omit for library defaults)
 - `VINEKEEPERS_REPO_WORKSPACE_ROOT`: directory for shallow git clones (default on host: Java temp dir; **Dockerfile default: `/app/checkouts`**)
 - `VINEKEEPERS_ALLOW_GIT_CLONE`: `true` to allow **ensure_repo_workspace** to clone remote repos (default: false; local checkouts still resolve when the repo path is an existing git directory)
 - `GIT_EXECUTABLE`: git binary name/path for workspace resolution (default: `git`)

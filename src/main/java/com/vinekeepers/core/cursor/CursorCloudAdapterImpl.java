@@ -14,6 +14,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,12 +36,33 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
 
     public CursorCloudAdapterImpl() {
         this(
-                new HttpCursorCloudTransport(HttpClient.newHttpClient()),
+                defaultHttpTransport(),
                 new ObjectMapper(),
                 Env.get("CURSOR_API_KEY", ""),
                 Env.get("CURSOR_API_BASE_URL", "https://api.cursor.com"),
                 Env.get("CURSOR_MODEL", "")
         );
+    }
+
+    private static CursorCloudTransport defaultHttpTransport() {
+        long connectMs = parseTimeoutMs(Env.get("CURSOR_HTTP_CONNECT_TIMEOUT_MS", "15000"), 15_000L);
+        long requestMs = parseTimeoutMs(Env.get("CURSOR_HTTP_REQUEST_TIMEOUT_MS", "120000"), 120_000L);
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connectMs))
+                .build();
+        return new HttpCursorCloudTransport(client, Duration.ofMillis(requestMs));
+    }
+
+    private static long parseTimeoutMs(String raw, long fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            long v = Long.parseLong(raw.trim());
+            return v > 0 ? v : fallback;
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     CursorCloudAdapterImpl(CursorCloudTransport transport, ObjectMapper objectMapper,
@@ -308,9 +330,11 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
     private static final class HttpCursorCloudTransport implements CursorCloudTransport {
 
         private final HttpClient httpClient;
+        private final Duration requestTimeout;
 
-        private HttpCursorCloudTransport(HttpClient httpClient) {
+        private HttpCursorCloudTransport(HttpClient httpClient, Duration requestTimeout) {
             this.httpClient = httpClient;
+            this.requestTimeout = requestTimeout != null && !requestTimeout.isNegative() ? requestTimeout : Duration.ofSeconds(120);
         }
 
         @Override
@@ -318,6 +342,7 @@ public final class CursorCloudAdapterImpl implements CursorCloudAdapter {
             try {
                 // Bearer token per standard; no doc says otherwise.
                 HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                        .timeout(requestTimeout)
                         .header("Authorization", "Bearer " + bearerToken)
                         .header("Accept", "application/json");
                 if ("POST".equalsIgnoreCase(method)) {

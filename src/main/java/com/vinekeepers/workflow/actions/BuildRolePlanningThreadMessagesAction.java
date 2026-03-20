@@ -1,0 +1,106 @@
+package com.vinekeepers.workflow.actions;
+
+import com.vinekeepers.events.Event;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Builds thread copy for architect / auditor / scribe from canonical planning artifacts.
+ */
+public final class BuildRolePlanningThreadMessagesAction implements com.vinekeepers.workflow.WorkflowAction {
+
+    private final FeaturePlanStateStore planStateStore;
+
+    public BuildRolePlanningThreadMessagesAction(FeaturePlanStateStore planStateStore) {
+        this.planStateStore = planStateStore;
+    }
+
+    @Override
+    public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("architectThreadMessage", "");
+        out.put("auditorThreadMessage", "");
+        out.put("scribeThreadMessage", "");
+        if (planStateStore == null) {
+            return out;
+        }
+        String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
+        if (contextId == null || contextId.isBlank()) {
+            return out;
+        }
+        FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
+        if (plan == null) {
+            return out;
+        }
+        String outline = PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body");
+        String decisions = PlanningArtifactTexts.artifactField(plan, "decision_log", "decisions", "decision_text");
+        String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
+        String featureSummary = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
+        String acceptance = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria");
+        String scope = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary");
+        String contextSummary = PlanningArtifactTexts.artifactField(plan, "project_context", "context", "context_summary");
+        int issueCount = plan.getIssues() != null ? plan.getIssues().size() : 0;
+
+        out.put("architectThreadMessage", buildArchitect(outline, decisions));
+        out.put("auditorThreadMessage", buildAuditor(validation, issueCount));
+        out.put("scribeThreadMessage", buildScribe(featureSummary, acceptance, scope, contextSummary));
+        return out;
+    }
+
+    private static String buildArchitect(String outline, String decisions) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("**Architect — structure & boundaries**\n");
+        if (outline != null && !outline.isBlank()) {
+            sb.append(outline.trim());
+        } else {
+            sb.append("_No plan outline recorded yet._");
+        }
+        if (decisions != null && !decisions.isBlank()) {
+            sb.append("\n\n**Decisions**\n").append(decisions.trim());
+        }
+        return sb.toString();
+    }
+
+    private static String buildAuditor(String validation, int issueCount) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("**Auditor — validation & risks**\n");
+        if (validation != null && !validation.isBlank()) {
+            sb.append(validation.trim());
+        } else {
+            sb.append("_No validation approach recorded yet._");
+        }
+        sb.append("\n\n**Open issues recorded:** ").append(issueCount);
+        return sb.toString();
+    }
+
+    private static String buildScribe(String featureSummary, String acceptance, String scope, String contextSummary) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("**Scribe — requirements & context**\n");
+        sb.append("**Summary:** ");
+        sb.append(featureSummary != null && !featureSummary.isBlank() ? featureSummary.trim() : "_None._");
+        sb.append("\n\n**Scope:** ");
+        sb.append(scope != null && !scope.isBlank() ? scope.trim() : "_Not specified._");
+        sb.append("\n\n**Acceptance criteria:** ");
+        sb.append(acceptance != null && !acceptance.isBlank() ? acceptance.trim() : "_Not specified._");
+        if (contextSummary != null && !contextSummary.isBlank()) {
+            sb.append("\n\n**Context:**\n").append(contextSummary.trim());
+        }
+        return sb.toString();
+    }
+
+    private static String getString(Map<String, Object> map, String key) {
+        if (map == null) {
+            return null;
+        }
+        Object v = map.get(key);
+        return v != null ? v.toString() : null;
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+}

@@ -64,7 +64,11 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
             if (runState.isTerminal() && runState.isTerminalNotificationSent()) {
                 continue;
             }
-            pollRun(runState);
+            try {
+                pollRun(runState);
+            } catch (RuntimeException e) {
+                log.warn("Cursor poll failed for agent {}: {}", runState.getAgentId(), e.getMessage());
+            }
         }
     }
 

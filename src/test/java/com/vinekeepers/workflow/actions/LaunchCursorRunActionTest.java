@@ -33,8 +33,10 @@ class LaunchCursorRunActionTest {
         StateStore stateStore = new StateStore();
         LifecycleContextStore contextStore = new LifecycleContextStore();
         LaunchCursorRunAction action = new LaunchCursorRunAction(null, stateStore, contextStore);
-        Object result = action.run(null, Map.of(), Map.of("project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
-        assertEquals("Launch cursor run dependencies not available.", result);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of("project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertTrue(result.get("launchMessage").toString().contains("dependencies not available"));
     }
 
     @Test
@@ -43,8 +45,10 @@ class LaunchCursorRunActionTest {
         StateStore stateStore = new StateStore();
         LifecycleContextStore contextStore = new LifecycleContextStore();
         LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
-        Object result = action.run(null, Map.of(), Map.of("codeChange", "Add feature", "__sessionKey", "s1"));
-        assertEquals("Missing project in state.", result);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of("codeChange", "Add feature", "__sessionKey", "s1"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertEquals("Missing project in state.", result.get("launchMessage"));
     }
 
     @Test
@@ -53,8 +57,10 @@ class LaunchCursorRunActionTest {
         StateStore stateStore = new StateStore();
         LifecycleContextStore contextStore = new LifecycleContextStore();
         LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
-        Object result = action.run(null, Map.of(), Map.of("project", "acme/repo", "__sessionKey", "s1"));
-        assertEquals("Missing feature request in state.", result);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of("project", "acme/repo", "__sessionKey", "s1"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertEquals("Missing feature request in state.", result.get("launchMessage"));
     }
 
     @Test
@@ -63,8 +69,10 @@ class LaunchCursorRunActionTest {
         StateStore stateStore = new StateStore();
         LifecycleContextStore contextStore = new LifecycleContextStore();
         LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
-        Object result = action.run(null, Map.of(), Map.of("project", "acme/repo", "codeChange", "Add feature"));
-        assertEquals("Missing workflow session key.", result);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of("project", "acme/repo", "codeChange", "Add feature"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertEquals("Missing workflow session key.", result.get("launchMessage"));
     }
 
     @Test
@@ -73,8 +81,10 @@ class LaunchCursorRunActionTest {
         StateStore stateStore = new StateStore();
         LifecycleContextStore contextStore = new LifecycleContextStore();
         LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
-        Object result = action.run(null, Map.of(), Map.of("project", "local-path", "codeChange", "Add feature", "__sessionKey", "s1"));
-        assertEquals("Could not resolve project.", result);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of("project", "local-path", "codeChange", "Add feature", "__sessionKey", "s1"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertEquals("Could not resolve project.", result.get("launchMessage"));
     }
 
     @Test
@@ -111,8 +121,10 @@ class LaunchCursorRunActionTest {
                 "contextId", "ctx-1",
                 "__sessionKey", "bot:luna:conv:chan-1:user-1",
                 "__event", Map.of("messageId", "msg-1", "authorId", "user-1"));
-        Object result = action.run(null, Map.of(), bind);
-        String msg = result.toString();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), bind);
+        assertEquals("true", result.get("launchSucceeded"));
+        String msg = result.get("launchMessage").toString();
         assertTrue(msg.contains("Launching Cursor Cloud run"));
         assertTrue(msg.contains("agent-123"));
         assertTrue(msg.contains("Status: launching"), "ack must include status");
@@ -137,12 +149,14 @@ class LaunchCursorRunActionTest {
         FeaturePlanStateStore planStore = new FeaturePlanStateStore();
         planStore.put(minPlanWithApproval("ctx-1", "chan-1").withPlanApproval(null));
         LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore, planStore);
-        Object result = action.run(null, Map.of(), Map.of(
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of(
                 "project", "acme/repo",
                 "codeChange", "Add feature",
                 "contextId", "ctx-1",
                 "__sessionKey", "s1"));
-        assertTrue(result.toString().contains("Plan approval required"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertTrue(result.get("launchMessage").toString().contains("Plan approval required"));
     }
 
     @Test
@@ -195,9 +209,11 @@ class LaunchCursorRunActionTest {
         StateStore stateStore = new StateStore();
         LifecycleContextStore contextStore = new LifecycleContextStore();
         LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
-        Object result = action.run(null, Map.of(), Map.of(
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) action.run(null, Map.of(), Map.of(
                 "project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
-        assertTrue(result.toString().startsWith("Cursor launch failed:"));
+        assertEquals("false", result.get("launchSucceeded"));
+        assertTrue(result.get("launchMessage").toString().startsWith("Cursor launch failed:"));
     }
 
     private static FeaturePlanState minPlanWithApproval(String contextId, String roomChannelId) {

@@ -56,6 +56,7 @@ public final class StartCoordinatorPlanningAction implements com.vinekeepers.wor
         Map<String, Object> payload = new HashMap<>();
         payload.put("channelId", intakeThreadId);
         payload.put("threadId", intakeThreadId);
+        payload.put("coordinatorKickoff", "true");
         if (!authorId.isBlank()) {
             payload.put("authorId", authorId);
         }

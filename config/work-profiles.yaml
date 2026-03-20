@@ -21,11 +21,16 @@ profiles:
                 type: text
                 required: true
                 promptHint: One paragraph describing the change or feature goal.
+              - fieldId: scope_summary
+                label: Scope
+                type: text
+                required: false
+                promptHint: In/out of scope, boundaries, and major components touched.
               - fieldId: acceptance_criteria
                 label: Acceptance criteria
                 type: text
-                required: false
-                promptHint: Bullet-style criteria; optional for early draft.
+                required: true
+                promptHint: Bullet-style criteria; required before approval.
       - artifactId: decision_log
         title: Decision log
         ownerRoles: [ARCHITECT, ORCHESTRATOR]
