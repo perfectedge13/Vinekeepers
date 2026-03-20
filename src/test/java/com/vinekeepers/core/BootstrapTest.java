@@ -1,9 +1,13 @@
 package com.vinekeepers.core;
 
 import com.vinekeepers.events.Event;
+import com.vinekeepers.workflow.WorkflowAction;
+import com.vinekeepers.workflow.WorkflowActionRegistry;
+import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -16,6 +20,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * HandlesMap from getConnectorIdentity is applied in loadConfig (covered by ConfigLoader + Router tests).
  */
 class BootstrapTest {
+
+    @Test
+    void bootstrapConstructor_wiresStartCoordinatorPlanningWithNonNullEngine() throws Exception {
+        Bootstrap bootstrap = new Bootstrap();
+        Field regField = Bootstrap.class.getDeclaredField("actionRegistry");
+        regField.setAccessible(true);
+        WorkflowActionRegistry registry = (WorkflowActionRegistry) regField.get(bootstrap);
+        Field actionsField = WorkflowActionRegistry.class.getDeclaredField("actions");
+        actionsField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, WorkflowAction> actions = (Map<String, WorkflowAction>) actionsField.get(registry);
+        WorkflowAction action = actions.get("start_coordinator_planning");
+        assertNotNull(action);
+        assertInstanceOf(StartCoordinatorPlanningAction.class, action);
+        Field engineField = StartCoordinatorPlanningAction.class.getDeclaredField("engine");
+        engineField.setAccessible(true);
+        assertNotNull(engineField.get(action));
+    }
 
     @Test
     void loadConfig_fromFileWithBotsAndRouting_buildsRouterAndEngine(@TempDir Path dir) throws Exception {

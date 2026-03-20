@@ -139,6 +139,7 @@ public final class Bootstrap {
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
         this.router = new Router(lifecycleContextStore, featureRoomStateStore);
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
+        actionRegistry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
         eventBus.subscribe(engine);
         registerTools(toolRegistry);
         cursorCloudRunMonitor.start();
