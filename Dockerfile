@@ -18,6 +18,11 @@ RUN mvn -B package -Dmaven.test.skip=true && \
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# ensure_repo_workspace: git on PATH; openssh for git@ clones; stable clone root (mount a volume here to persist)
+RUN apk add --no-cache git openssh-client \
+    && mkdir -p /app/checkouts
+ENV VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts
+
 # Config and optional .env (can override by mount)
 COPY --from=builder /build/target/vinekeepers-*.jar ./app.jar
 COPY --from=builder /build/target/lib ./lib

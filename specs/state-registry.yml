@@ -191,7 +191,8 @@ assets:
       Ensures local git workspace from repo input (existing checkout or optional shallow clone via
       VINEKEEPERS_ALLOW_GIT_CLONE); creates workspace root dirs; removes stale per-context clone dir before re-clone when
       removal succeeds; SLF4J milestones and optional RepoWorkspaceProgressCallback; git stderr/stdout tail on clone failure;
-      retry once on directory delete before failing closed
+      retry once on directory delete before failing closed; official Docker image installs git (and openssh-client for git@)
+      and sets VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts by default
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-LUNA-STATE

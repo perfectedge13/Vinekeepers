@@ -15,7 +15,7 @@ Requirements: Java 21, Maven, Node 18+ for the spec gates.
 
 ### Docker
 
-Build and run in a container (Java 21 runtime, Alpine-based):
+Build and run in a container (Java 21 runtime, Alpine-based). The image includes **`git`** and **`openssh-client`** so **ensure_repo_workspace** can shallow-clone when **`VINEKEEPERS_ALLOW_GIT_CLONE=true`**. The image sets **`VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts`** by default; clones live there and are **ephemeral** unless you mount a volume (e.g. `-v vinekeepers-clones:/app/checkouts`).
 
 ```bash
 docker build -t vinekeepers .
@@ -96,7 +96,7 @@ Optional:
 - `CURSOR_MODEL`: explicit model id for cloud launches
 - `CURSOR_BASE_BRANCH`: default base branch when Luna launches a run
 - `CURSOR_POLL_INTERVAL_MS`: how often Vinekeepers polls Cursor for feedback updates
-- `VINEKEEPERS_REPO_WORKSPACE_ROOT`: directory for shallow git clones (default: Java temp dir)
+- `VINEKEEPERS_REPO_WORKSPACE_ROOT`: directory for shallow git clones (default on host: Java temp dir; **Dockerfile default: `/app/checkouts`**)
 - `VINEKEEPERS_ALLOW_GIT_CLONE`: `true` to allow **ensure_repo_workspace** to clone remote repos (default: false; local checkouts still resolve when the repo path is an existing git directory)
 - `GIT_EXECUTABLE`: git binary name/path for workspace resolution (default: `git`)
 
