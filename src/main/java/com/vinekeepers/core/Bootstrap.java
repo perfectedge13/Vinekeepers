@@ -70,6 +70,7 @@ import com.vinekeepers.workflow.actions.RecomputePlanProgressAction;
 import com.vinekeepers.workflow.actions.ResolveProposalConfirmationAction;
 import com.vinekeepers.workflow.actions.SetPlanSectionStatusAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
+import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
 import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
 import com.vinekeepers.workflow.actions.UpsertArtifactSectionDataAction;
 import org.slf4j.Logger;
@@ -286,6 +287,7 @@ public final class Bootstrap {
                 repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore,
                 outboundDeliveryRouter));
         registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore, featurePlanStateStore));
+        registry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
     }
 
     private void registerTools(ToolRegistry registry) {

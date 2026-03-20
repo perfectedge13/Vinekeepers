@@ -434,9 +434,13 @@ workflows:
       - type: call_action
         action: post_channel_message
         bind:
-          content: "Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here — reply in-thread when the coordinator prompts you."
+          content: "Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here — the coordinator will post next; reply in-thread when prompted."
           asRole: orchestrator
           target: thread
+      - type: call_action
+        action: start_coordinator_planning
+        bind:
+          intakeThreadId: "{{deliveryChannelId}}"
       - type: done
         message: "Feature room is ready. Continue in the intake/spec thread above to complete the plan, approval, and launch."
       - type: done

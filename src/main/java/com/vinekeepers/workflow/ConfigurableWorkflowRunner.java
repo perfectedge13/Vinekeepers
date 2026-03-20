@@ -227,7 +227,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
      * Thread-only Discord sessions use {@code bot:{id}:conv:{threadId}} (no {@code :user} suffix);
      * room traffic uses {@code bot:{id}:conv:{channelId}:{userId}}.
      */
-    static boolean isThreadScopedSessionKey(String stateKey, String botId) {
+    public static boolean isThreadScopedSessionKey(String stateKey, String botId) {
         if (stateKey == null || botId == null) {
             return false;
         }

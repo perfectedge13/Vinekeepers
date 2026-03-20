@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-19T12:00:00Z"
+  updated_utc: "2026-03-20T04:45:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -82,7 +82,7 @@ assets:
       Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and
       handlesOwnedSpaces map from loaded bots to Router; construct FeaturePlanStateStore, RepoWorkspaceStateStore,
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
-      hydrate_planning_session, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
+      hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, run_plan_critique_and_readiness,
       persist_plan_approval, append/set plan actions
@@ -99,7 +99,8 @@ assets:
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
     role: >-
       Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event
-      session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink
+      session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink;
+      dispatchCoordinatorPlanningKickoff runs a single coordinator bot for a synthetic thread message after Luna handoff with idempotent skip when thread session is already waiting, in progress, or completed
       registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage);
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
       fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine
@@ -708,6 +709,20 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-START-COORDINATOR-PLANNING-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/StartCoordinatorPlanningAction.java
+    role: >-
+      Workflow action start_coordinator_planning — after Luna handoff, builds in-process synthetic Discord thread message
+      (channelId and threadId = intake thread id) and calls VinekeepersEngine.dispatchCoordinatorPlanningKickoff for the
+      coordinator configuredBotId (from FeatureRoomState or default arrietty); idempotent with engine guard
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/SynthesizePlanDraftsAction.java
@@ -1128,6 +1143,7 @@ requirements:
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
+        - ASSET-START-COORDINATOR-PLANNING-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
         - ASSET-PLANNING-PROPOSAL-JSON
@@ -1463,10 +1479,11 @@ requirements:
           lifecycle room; passes optional deliveryChannelId from bind/state into LifecycleRunRecord
         - >-
           luna_cursor provisions the feature room and intake/spec thread, initializes plan state, ensures repo workspace,
-          seeds requirements narrative, posts a handoff line to the thread, and completes in the main channel; Phase B/C
+          seeds requirements narrative, posts a handoff line to the thread, invokes start_coordinator_planning so the
+          coordinator workflow runs once in the thread without a user wake-up message, and completes in the main channel; Phase B/C
           (generate_planning_proposals, apply_auto_planning_proposals, confirm loop via build_proposal_confirm_prompt and
           resolve_proposal_confirmation, guided discovery, critique/readiness, approval choices, role posts,
-          launch_cursor_run; synthesize_plan_drafts remains for legacy YAML) run in arrietty_room when the user messages the intake thread: hydrate_planning_session
+          launch_cursor_run; synthesize_plan_drafts remains for legacy YAML) run in arrietty_room from that kickoff and when the user messages the intake thread: hydrate_planning_session
           (storeSpread) branches on planningIntakeThread; thread path uses session key bot:arrietty:conv:threadId with
           conversationMode conversational so the workflow does not reset after terminal launch; room channel path keeps
           the legacy capture_field room command branch
@@ -1525,6 +1542,7 @@ requirements:
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
+        - ASSET-START-COORDINATOR-PLANNING-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
         - ASSET-PLANNING-PROPOSAL-JSON

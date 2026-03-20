@@ -19,6 +19,7 @@ import com.vinekeepers.reasoner.ReasonerOutput;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.ToolRegistry;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.workflow.ConfigurableWorkflowRunner;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.SessionKeyStrategies;
 import com.vinekeepers.workflow.WorkflowRunResult;
@@ -115,6 +116,51 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
     }
 
+    /**
+     * Runs the coordinator bot workflow once for a synthetic Discord message in the intake/spec thread
+     * (e.g. immediately after Luna handoff). Does not use the router — only {@code coordinatorBotId} runs.
+     * Idempotent: no-ops when the thread session already has planning in progress, is waiting for input, or
+     * completed (conversational thread terminal).
+     *
+     * @return {@code RAN}, {@code SKIPPED_WAITING}, {@code SKIPPED_IN_PROGRESS}, {@code SKIPPED_COMPLETED},
+     *         {@code NO_BOT}, or {@code NO_RUNNER}
+     */
+    public String dispatchCoordinatorPlanningKickoff(Event syntheticThreadMessage, String coordinatorBotId) {
+        if (coordinatorBotId == null || coordinatorBotId.isBlank()) {
+            return "NO_BOT";
+        }
+        BotDefinition bot = bots.get(coordinatorBotId);
+        if (bot == null) {
+            log.warn("No bot registered for coordinator id: {}", coordinatorBotId);
+            return "NO_BOT";
+        }
+        if (runners.get(coordinatorBotId) == null) {
+            log.warn("No workflow runner for coordinator id: {}", coordinatorBotId);
+            return "NO_RUNNER";
+        }
+        String stateKey = SessionKeyStrategies.resolve(bot.getSessionKeyStrategy(), syntheticThreadMessage)
+                .resolveSessionKey(coordinatorBotId, syntheticThreadMessage);
+        Optional<ConfigurableWorkflowState> existing = stateStore.get(stateKey, ConfigurableWorkflowState.class);
+        if (existing.isPresent()) {
+            ConfigurableWorkflowState s = existing.get();
+            if (s.getStatus() == ConfigurableWorkflowState.Status.WAITING_INPUT) {
+                return "SKIPPED_WAITING";
+            }
+            if (s.getStatus() == ConfigurableWorkflowState.Status.COMPLETED
+                    && ConfigurableWorkflowRunner.isThreadScopedSessionKey(stateKey, coordinatorBotId)) {
+                return "SKIPPED_COMPLETED";
+            }
+            if ((s.getStatus() == ConfigurableWorkflowState.Status.ACTIVE
+                    || s.getStatus() == ConfigurableWorkflowState.Status.ERROR)
+                    && s.getStepIndex() > 0) {
+                return "SKIPPED_IN_PROGRESS";
+            }
+        }
+        auditRecorder.record(AuditLog.fromEvent(syntheticThreadMessage, coordinatorBotId, "received", ""));
+        runWorkflowReasonerAndDeliver(syntheticThreadMessage, bot, coordinatorBotId);
+        return "RAN";
+    }
+
     @Override
     public void onEvent(Event event) {
         log.debug("Engine received event: {} {}", event.getSourceId(), event.getKind());
@@ -162,7 +208,10 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
 
         auditRecorder.record(AuditLog.fromEvent(event, botId, "received", ""));
+        runWorkflowReasonerAndDeliver(event, bot, botId);
+    }
 
+    private void runWorkflowReasonerAndDeliver(Event event, BotDefinition bot, String botId) {
         WorkflowRunResult workflowResult = WorkflowRunResult.continueWithoutReply();
         WorkflowRunner runner = runners.get(botId);
         if (runner != null) {

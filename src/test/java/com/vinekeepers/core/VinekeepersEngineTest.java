@@ -3,6 +3,7 @@ package com.vinekeepers.core;
 import com.vinekeepers.audit.AuditLog;
 import com.vinekeepers.audit.AuditRecorder;
 import com.vinekeepers.bot.BotDefinition;
+import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.MemoryPolicy;
 import com.vinekeepers.bot.ModelProfile;
 import com.vinekeepers.bot.Persona;
@@ -636,5 +637,82 @@ class VinekeepersEngineTest {
 
         // No exception and audit shows bot was handled (reply simply not delivered)
         assertTrue(auditLogs.stream().anyMatch(log -> "bot".equals(log.getBotId())));
+    }
+
+    @Test
+    void dispatchCoordinatorPlanningKickoff_returnsNoBotWhenMissing() {
+        Event syn = new Event("discord:t", "message", Map.of("channelId", "th1", "threadId", "th1"));
+        assertEquals("NO_BOT", engine.dispatchCoordinatorPlanningKickoff(syn, ""));
+        assertEquals("NO_BOT", engine.dispatchCoordinatorPlanningKickoff(syn, "nope"));
+    }
+
+    @Test
+    void dispatchCoordinatorPlanningKickoff_secondInvokeSkippedWhenWaiting() {
+        WorkflowActionRegistry actionRegistry = new WorkflowActionRegistry();
+        Map<String, Object> wf = Map.of("steps", List.of(
+                Map.of("type", "prompt_for_field", "prompt", "Wait here", "storeIn", "fld"),
+                Map.of("type", "capture_field", "storeIn", "fld"),
+                Map.of("type", "done", "message", "ok")));
+        Map<String, Object> workflows = Map.of("kick_wait", wf);
+        BotDefinition arrietty = new BotDefinition(
+                "arrietty",
+                new Persona("A", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096),
+                "configured",
+                Map.of("workflowRef", "kick_wait"),
+                ConversationMode.CONVERSATIONAL,
+                "thread",
+                null);
+        engine.registerBot(arrietty);
+        engine.registerReasoner("arrietty", new StubReasoner());
+        engine.registerRunner("arrietty", WorkflowRunnerFactory.create(arrietty, workflows, actionRegistry,
+                new ToolRunner(new ToolRegistry())));
+        engine.setReplySender("discord", (c, m, t) -> { });
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+
+        Event syn = new Event("discord:g:1", "message", Map.of("channelId", "thread-xyz", "threadId", "thread-xyz"));
+        assertEquals("RAN", engine.dispatchCoordinatorPlanningKickoff(syn, "arrietty"));
+        assertEquals("SKIPPED_WAITING", engine.dispatchCoordinatorPlanningKickoff(syn, "arrietty"));
+    }
+
+    @Test
+    void dispatchCoordinatorPlanningKickoff_thenThreadUserMessageContinuesSession() {
+        WorkflowActionRegistry actionRegistry = new WorkflowActionRegistry();
+        Map<String, Object> wf = Map.of("steps", List.of(
+                Map.of("type", "prompt_for_field", "prompt", "prompt", "storeIn", "answerField"),
+                Map.of("type", "capture_field", "storeIn", "answerField"),
+                Map.of("type", "done", "message", "done-{{answerField}}")));
+        Map<String, Object> workflows = Map.of("kick_continue", wf);
+        BotDefinition arrietty = new BotDefinition(
+                "arrietty",
+                new Persona("A", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096),
+                "configured",
+                Map.of("workflowRef", "kick_continue"),
+                ConversationMode.CONVERSATIONAL,
+                "thread",
+                null);
+        engine.registerBot(arrietty);
+        engine.registerReasoner("arrietty", new StubReasoner());
+        engine.registerRunner("arrietty", WorkflowRunnerFactory.create(arrietty, workflows, actionRegistry,
+                new ToolRunner(new ToolRegistry())));
+        AtomicReference<String> lastSend = new AtomicReference<>();
+        engine.setReplySender("discord", (c, m, t) -> lastSend.set(t));
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "arrietty"));
+
+        String tid = "thread-same";
+        Event syn = new Event("discord:g:1", "message", Map.of("channelId", tid, "threadId", tid));
+        assertEquals("RAN", engine.dispatchCoordinatorPlanningKickoff(syn, "arrietty"));
+
+        Event user = new Event("discord:g:1", "message",
+                Map.of("channelId", tid, "threadId", tid, "authorId", "u1", "content", "my answer"));
+        engine.onEvent(user);
+
+        assertEquals("done-my answer", lastSend.get());
     }
 }
