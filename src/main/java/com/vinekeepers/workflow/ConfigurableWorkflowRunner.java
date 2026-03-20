@@ -19,7 +19,13 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurableWorkflowRunner.class);
 
+    /** When planning finished in an intake thread, avoid restarting the full workflow on every later message. */
+    private static final String THREAD_PLANNING_IDLE_MESSAGE =
+            "This intake/spec thread already completed the planning launch. "
+                    + "For a new change, start again from the main channel with @Luna.";
+
     private final String sessionKeyStrategyName;
+    private final ConversationMode conversationMode;
     private final List<WorkflowStep> steps;
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry) {
@@ -39,6 +45,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         WorkflowDefinition resolvedDefinition = definition != null ? definition : new WorkflowDefinition("", List.of());
         WorkflowActionRegistry resolvedRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.sessionKeyStrategyName = sessionKeyStrategyName;
+        this.conversationMode = conversationMode != null ? conversationMode : ConversationMode.SINGLE_EVENT;
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
                 toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
     }
@@ -53,7 +60,15 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         ConfigurableWorkflowState state = stateStore.get(stateKey, ConfigurableWorkflowState.class)
                 .orElseGet(ConfigurableWorkflowState::new);
         state.put("__sessionKey", stateKey);
-        if (state.getStatus() == ConfigurableWorkflowState.Status.COMPLETED || state.getStepIndex() >= steps.size()) {
+        boolean terminal = state.getStatus() == ConfigurableWorkflowState.Status.COMPLETED
+                || state.getStepIndex() >= steps.size();
+        if (terminal
+                && conversationMode == ConversationMode.CONVERSATIONAL
+                && isThreadScopedSessionKey(stateKey, botId)) {
+            stateStore.put(stateKey, state);
+            return WorkflowRunResult.completed(THREAD_PLANNING_IDLE_MESSAGE);
+        }
+        if (terminal) {
             state.resetForNewRun();
             state.put("__sessionKey", stateKey);
         }
@@ -206,5 +221,21 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             return out;
         }
         return List.of(transformObj.toString().trim());
+    }
+
+    /**
+     * Thread-only Discord sessions use {@code bot:{id}:conv:{threadId}} (no {@code :user} suffix);
+     * room traffic uses {@code bot:{id}:conv:{channelId}:{userId}}.
+     */
+    static boolean isThreadScopedSessionKey(String stateKey, String botId) {
+        if (stateKey == null || botId == null) {
+            return false;
+        }
+        String prefix = "bot:" + botId + ":conv:";
+        if (!stateKey.startsWith(prefix)) {
+            return false;
+        }
+        String rest = stateKey.substring(prefix.length());
+        return !rest.contains(":");
     }
 }

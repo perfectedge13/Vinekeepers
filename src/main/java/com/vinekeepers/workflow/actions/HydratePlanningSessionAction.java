@@ -1,0 +1,109 @@
+package com.vinekeepers.workflow.actions;
+
+import com.vinekeepers.events.Event;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.FeatureRoomState;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * When the Discord event channel is a feature-room intake/spec thread, spreads workflow keys from
+ * {@link FeatureRoomState} / {@link FeaturePlanState} so thread-scoped planning can run without Luna session state.
+ */
+public final class HydratePlanningSessionAction implements com.vinekeepers.workflow.WorkflowAction {
+
+    private final FeatureRoomStateStore roomStore;
+    private final FeaturePlanStateStore planStore;
+
+    public HydratePlanningSessionAction(FeatureRoomStateStore roomStore, FeaturePlanStateStore planStore) {
+        this.roomStore = roomStore;
+        this.planStore = planStore;
+    }
+
+    @Override
+    public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (roomStore == null) {
+            out.put("planningIntakeThread", "false");
+            out.put("planningHydrateError", "FeatureRoomStateStore not available.");
+            return out;
+        }
+        String channelId = firstNonBlank(
+                eventChannelId(event),
+                getString(bind, "channelId"),
+                getString(state, "channelId"));
+        if (channelId == null || channelId.isBlank()) {
+            out.put("planningIntakeThread", "false");
+            out.put("planningHydrateError", "Missing channel id for hydrate_planning_session.");
+            return out;
+        }
+        Optional<FeatureRoomState> roomOpt = roomStore.getByIntakeThreadId(channelId);
+        if (roomOpt.isEmpty()) {
+            out.put("planningIntakeThread", "false");
+            return out;
+        }
+        FeatureRoomState room = roomOpt.get();
+        out.put("planningIntakeThread", "true");
+        out.put("contextId", room.getContextId());
+        out.put("channelId", room.getRoomChannelId());
+        out.put("deliveryChannelId", room.getIntakeThreadId());
+        String project = room.getRepo();
+        String codeChange = room.getInitialRequest();
+        if (planStore != null) {
+            Optional<FeaturePlanState> planOpt = planStore.getByContextId(room.getContextId());
+            if (planOpt.isPresent()) {
+                FeaturePlanState plan = planOpt.get();
+                if (plan.getRepoRef() != null && !plan.getRepoRef().isBlank()) {
+                    project = plan.getRepoRef();
+                }
+                if (plan.getInitialRequest() != null && !plan.getInitialRequest().isBlank()) {
+                    codeChange = plan.getInitialRequest();
+                }
+            }
+        }
+        if (project != null && !project.isBlank()) {
+            out.put("project", project);
+        }
+        if (codeChange != null && !codeChange.isBlank()) {
+            out.put("codeChange", codeChange);
+        }
+        return out;
+    }
+
+    private static String eventChannelId(Event event) {
+        if (event == null || event.getPayload() == null) {
+            return null;
+        }
+        Map<String, Object> p = event.getPayload();
+        Object c = p.get("channelId");
+        if (c == null) {
+            c = p.get("channel");
+        }
+        return c != null ? c.toString() : null;
+    }
+
+    private static String getString(Map<String, Object> map, String key) {
+        if (map == null) {
+            return null;
+        }
+        Object v = map.get(key);
+        return v != null ? v.toString() : null;
+    }
+
+    private static String firstNonBlank(String a, String b, String c) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        if (b != null && !b.isBlank()) {
+            return b;
+        }
+        if (c != null && !c.isBlank()) {
+            return c;
+        }
+        return null;
+    }
+}

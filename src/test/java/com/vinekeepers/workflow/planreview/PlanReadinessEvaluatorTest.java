@@ -21,7 +21,7 @@ class PlanReadinessEvaluatorTest {
     @Test
     void blockedWhenBlockerGap() {
         List<DiscoveryGap> gaps = List.of(new DiscoveryGap(
-                "g1", "WORKSPACE", "", "", "", "bad", "BLOCKER", "OPEN", ""));
+                "g1", "WORKSPACE", "", "", "", "bad", "BLOCKER", "OPEN", "", ""));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(minPlan(), gaps, List.of(), T);
         assertEquals(PlanReadinessStatus.BLOCKED, c.getReadinessStatus());
     }
@@ -29,7 +29,7 @@ class PlanReadinessEvaluatorTest {
     @Test
     void needsRevisionWhenOpenGap() {
         List<DiscoveryGap> gaps = List.of(new DiscoveryGap(
-                "g1", "REQUIRED_FIELD", "a", "s", "f", "missing", "HIGH", "OPEN", ""));
+                "g1", "REQUIRED_FIELD", "a", "s", "f", "missing", "HIGH", "OPEN", "", ""));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(minPlan(), gaps, List.of(), T);
         assertEquals(PlanReadinessStatus.NEEDS_REVISION, c.getReadinessStatus());
     }

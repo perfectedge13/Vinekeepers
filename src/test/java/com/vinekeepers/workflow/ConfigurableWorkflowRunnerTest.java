@@ -1,5 +1,7 @@
 package com.vinekeepers.workflow;
 
+import com.vinekeepers.bot.ConversationMode;
+import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
 import org.junit.jupiter.api.Test;
@@ -406,5 +408,42 @@ class ConfigurableWorkflowRunnerTest {
         assertEquals("Room: arrietty room", result.getReplyMessage());
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
+    }
+
+    @Test
+    void isThreadScopedSessionKey_trueWhenNoUserSuffix() {
+        assertTrue(ConfigurableWorkflowRunner.isThreadScopedSessionKey("bot:arrietty:conv:123456789012345678", "arrietty"));
+        assertFalse(ConfigurableWorkflowRunner.isThreadScopedSessionKey("bot:arrietty:conv:chan-1:user-1", "arrietty"));
+    }
+
+    @Test
+    void conversationalThreadSession_returnsIdleMessageAfterTerminalDone() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "done", "message", "Terminal."));
+        WorkflowDefinition def = new WorkflowDefinition("conv-thread", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(
+                def,
+                new WorkflowActionRegistry(),
+                null,
+                ToolPolicy.allowAll(),
+                ConversationMode.CONVERSATIONAL,
+                "thread",
+                null);
+        StateStore store = new StateStore();
+        Event e1 = new Event("discord:t", "message", Map.of(
+                "channelId", "thread-abc",
+                "threadId", "thread-abc",
+                "content", "hi"));
+        WorkflowRunResult r1 = runner.runResult(e1, store, "arrietty");
+        assertTrue(r1.isCompleted());
+        assertEquals("Terminal.", r1.getReplyMessage());
+
+        Event e2 = new Event("discord:t", "message", Map.of(
+                "channelId", "thread-abc",
+                "threadId", "thread-abc",
+                "content", "again"));
+        WorkflowRunResult r2 = runner.runResult(e2, store, "arrietty");
+        assertTrue(r2.isCompleted());
+        assertTrue(r2.getReplyMessage().contains("already completed"));
     }
 }

@@ -73,10 +73,12 @@ assets:
     role: >-
       Wire engine, config, ConnectorRegistry; build DiscordConnectorConfig and DiscordConnectorAdapter; call
       adapter.registerBots(bots, ConnectorContext); build handlesMap from getConnectorIdentity("discord"); create
-      FeatureRoomStateStore and pass to Router and OutboundDeliveryRouter; register engine reply sender, sink, and
-      ReplyTargetResolver by connector id; register workflow actions provision_room_participants
-      (ProvisionRoomParticipantsAction) and initialize_feature_room_state (InitializeFeatureRoomStateAction); action
-      and sink registration stay in Bootstrap
+      FeatureRoomStateStore, FeaturePlanStateStore, RepoWorkspaceStateStore, RepoWorkspaceService and pass room store to
+      Router and OutboundDeliveryRouter; register engine reply sender, sink, and ReplyTargetResolver by connector id;
+      register workflow actions provision_room_participants, initialize_feature_room_state, initialize_feature_plan_state,
+      hydrate_planning_session, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
+      get_profile_missing_fields, structured discovery and plan critique/approval actions; action and sink registration
+      stay in Bootstrap
     requires: [REQ-CORE-002, REQ-TOOLS-001, REQ-LUNA-001]
     feature_ids: [FEAT-CORE, FEAT-TOOLS, FEAT-CURSOR-GATHERING]
   - id: ASSET-ENGINE

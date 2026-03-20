@@ -54,6 +54,7 @@ import com.vinekeepers.workflow.actions.CreateThreadAction;
 import com.vinekeepers.workflow.actions.EnsureRepoWorkspaceAction;
 import com.vinekeepers.workflow.actions.GetProfileMissingFieldsAction;
 import com.vinekeepers.workflow.actions.GetStructuredDiscoveryGapsAction;
+import com.vinekeepers.workflow.actions.HydratePlanningSessionAction;
 import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import com.vinekeepers.workflow.actions.InitializeFeatureRoomStateAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
@@ -65,6 +66,7 @@ import com.vinekeepers.workflow.actions.ProvisionRoomParticipantsAction;
 import com.vinekeepers.workflow.actions.RecomputePlanProgressAction;
 import com.vinekeepers.workflow.actions.SetPlanSectionStatusAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
+import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
 import com.vinekeepers.workflow.actions.UpsertArtifactSectionDataAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -255,6 +257,8 @@ public final class Bootstrap {
         registry.register("initialize_feature_room_state", new InitializeFeatureRoomStateAction(featureRoomStateStore));
         registry.register("initialize_feature_plan_state", new InitializeFeaturePlanStateAction(
                 featurePlanStateStore, featureRoomStateStore, workProfileRegistry));
+        registry.register("hydrate_planning_session", new HydratePlanningSessionAction(featureRoomStateStore, featurePlanStateStore));
+        registry.register("synthesize_plan_drafts", new SynthesizePlanDraftsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("upsert_artifact_section_data", new UpsertArtifactSectionDataAction(featurePlanStateStore, workProfileRegistry));
         registry.register("get_profile_missing_fields", new GetProfileMissingFieldsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("get_structured_discovery_gaps", new GetStructuredDiscoveryGapsAction(featurePlanStateStore, workProfileRegistry));
@@ -262,6 +266,8 @@ public final class Bootstrap {
         registry.register("capture_and_apply_discovery_answer", new CaptureAndApplyDiscoveryAnswerAction(featurePlanStateStore, workProfileRegistry));
         registry.register("classify_assumption_or_issue", new ClassifyAssumptionOrIssueAction(featurePlanStateStore));
         registry.register("recompute_plan_progress", new RecomputePlanProgressAction(featurePlanStateStore, workProfileRegistry));
+        registry.register("run_plan_critique_and_readiness", new RunPlanCritiqueAndReadinessAction(featurePlanStateStore, workProfileRegistry));
+        registry.register("persist_plan_approval", new PersistPlanApprovalAction(featurePlanStateStore));
         registry.register("append_plan_requirement", new AppendRequirementAction(featurePlanStateStore));
         registry.register("append_plan_assumption", new AppendAssumptionAction(featurePlanStateStore));
         registry.register("append_plan_issue", new AppendIssueAction(featurePlanStateStore));

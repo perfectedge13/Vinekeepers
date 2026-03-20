@@ -9,6 +9,7 @@ import com.vinekeepers.profile.FieldDefinition;
 import com.vinekeepers.profile.SectionDefinition;
 import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.profile.WorkProfileDefinition;
+import com.vinekeepers.workflow.planning.PlanningPromptFormatter;
 import com.vinekeepers.state.planning.DiscoveryAgenda;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.DiscoveryQuestion;
@@ -66,7 +67,8 @@ public final class StructuredDiscoverySupport {
                                 sec.getSectionId(),
                                 "",
                                 "Repeatable section empty: " + art.getArtifactId() + "." + sec.getSectionId(),
-                                sec.isRequired() ? "HIGH" : "LOW"));
+                                sec.isRequired() ? "HIGH" : "LOW",
+                                PlanningPromptFormatter.repeatableSectionEmptyPrompt(art, sec)));
                     }
                     if (secState != null) {
                         for (int i = 0; i < secState.getEntries().size(); i++) {
@@ -86,7 +88,8 @@ public final class StructuredDiscoverySupport {
                                                     + i
                                                     + "]."
                                                     + f.getFieldId(),
-                                            "HIGH"));
+                                            "HIGH",
+                                            PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, i)));
                                 }
                             }
                         }
@@ -99,7 +102,8 @@ public final class StructuredDiscoverySupport {
                                 sec.getSectionId(),
                                 "",
                                 "Required section missing: " + art.getArtifactId() + "." + sec.getSectionId(),
-                                "HIGH"));
+                                "HIGH",
+                                PlanningPromptFormatter.requiredSectionMissingPrompt(art, sec)));
                     }
                     Map<String, Object> values = secState != null ? secState.getValues() : Map.of();
                     for (FieldDefinition f : sec.getFields()) {
@@ -115,7 +119,8 @@ public final class StructuredDiscoverySupport {
                                             + sec.getSectionId()
                                             + "."
                                             + f.getFieldId(),
-                                    severityForArtifact(art)));
+                                    severityForArtifact(art),
+                                    PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, -1)));
                         }
                     }
                 }
@@ -136,7 +141,8 @@ public final class StructuredDiscoverySupport {
             String sectionId,
             String fieldId,
             String reason,
-            String severity) {
+            String severity,
+            String userFacingDetail) {
         return new DiscoveryGap(
                 "gap-req-" + seq.getAndIncrement(),
                 "REQUIRED_FIELD",
@@ -146,7 +152,8 @@ public final class StructuredDiscoverySupport {
                 reason,
                 severity,
                 "OPEN",
-                "profile");
+                "profile",
+                userFacingDetail != null ? userFacingDetail : "");
     }
 
     private static void collectWorkspaceGap(FeaturePlanState plan, List<DiscoveryGap> gaps, AtomicInteger seq) {
@@ -157,20 +164,26 @@ public final class StructuredDiscoverySupport {
         try {
             RepoWorkspaceStatus s = RepoWorkspaceStatus.valueOf(raw.trim());
             if (s == RepoWorkspaceStatus.FAILED || s == RepoWorkspaceStatus.UNAVAILABLE) {
+                String wsReason = "Repo workspace status is "
+                        + s
+                        + (plan.getRepoAccessNotes() != null && !plan.getRepoAccessNotes().isBlank()
+                                ? ": " + plan.getRepoAccessNotes()
+                                : "");
                 gaps.add(new DiscoveryGap(
                         "gap-ws-" + seq.getAndIncrement(),
                         "WORKSPACE",
                         "",
                         "",
                         "",
-                        "Repo workspace status is "
-                                + s
-                                + (plan.getRepoAccessNotes() != null && !plan.getRepoAccessNotes().isBlank()
-                                        ? ": " + plan.getRepoAccessNotes()
-                                        : ""),
+                        wsReason,
                         "BLOCKER",
                         "OPEN",
-                        "repo.workspace"));
+                        "repo.workspace",
+                        "We could not prepare a local workspace for this repository (" + s + "). "
+                                + (plan.getRepoAccessNotes() != null && !plan.getRepoAccessNotes().isBlank()
+                                        ? plan.getRepoAccessNotes() + " "
+                                        : "")
+                                + "Reply with access notes, a local checkout path, or how you want to proceed."));
             }
         } catch (IllegalArgumentException ignored) {
             // unknown status string — ignore
@@ -256,13 +269,7 @@ public final class StructuredDiscoverySupport {
                     g.getGapId(),
                     "orchestrator",
                     g.getSeverity(),
-                    "Discovery — please provide **"
-                            + g.getArtifactId()
-                            + "."
-                            + g.getSectionId()
-                            + (g.getFieldId().isEmpty() ? "" : "." + g.getFieldId())
-                            + "**: "
-                            + g.getReason(),
+                    discoveryPromptBody(g),
                     "REQUIRED_FIELD",
                     g.getArtifactId(),
                     g.getSectionId(),
@@ -273,8 +280,7 @@ public final class StructuredDiscoverySupport {
                     g.getGapId(),
                     "orchestrator",
                     g.getSeverity(),
-                    "Discovery — workspace/materialization issue: " + g.getReason()
-                            + " Reply with access notes, a local path, or how you want to proceed.",
+                    discoveryPromptBody(g),
                     "NONE",
                     "",
                     "",
@@ -307,13 +313,21 @@ public final class StructuredDiscoverySupport {
                     g.getGapId(),
                     "orchestrator",
                     "MEDIUM",
-                    "Discovery — " + g.getReason(),
+                    discoveryPromptBody(g),
                     "NONE",
                     "",
                     "",
                     "",
                     "replace");
         };
+    }
+
+    private static String discoveryPromptBody(DiscoveryGap g) {
+        String detail = g.getUserFacingDetail();
+        if (detail != null && !detail.isBlank()) {
+            return detail;
+        }
+        return "Discovery — " + g.getReason();
     }
 
     public static FeaturePlanState projectSectionStatuses(FeaturePlanState plan, WorkProfileDefinition profile) {

@@ -28,6 +28,7 @@ bots:
       name: Arrietty
       systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature rooms. You help users in this channel with follow-up and context for Cursor runs.
     sessionKeyStrategy: thread  # Session key per thread for feature-room bots
+    conversationMode: conversational  # Intake thread: do not restart full planning after launch completes
     workflow:
       type: configured
       params:
@@ -98,21 +99,171 @@ workflows:
         message: ""
   arrietty_room:
     steps:
+      - type: call_action
+        action: hydrate_planning_session
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: planningIntakeThread, value: "true" }
+            next: 2
+          - when: else
+            next: 32
+      - type: call_action
+        action: get_profile_missing_fields
+        storeIn: profileMissingSummary
+      - type: call_action
+        action: synthesize_plan_drafts
+        storeSpread: true
+      - type: call_action
+        action: get_structured_discovery_gaps
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: discoveryHasOpenGaps, value: "true" }
+            next: 6
+          - when: else
+            next: 14
+      - type: call_action
+        action: build_discovery_agenda
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: discoveryCurrentQuestionPrompt, operator: nonblank }
+            next: 8
+          - when: else
+            next: 14
+      - type: prompt_for_field
+        prompt: "{{discoveryCurrentQuestionPrompt}}"
+        storeIn: discoveryAnswerRaw
+      - type: capture_field
+        storeIn: discoveryAnswerRaw
+      - type: call_action
+        action: capture_and_apply_discovery_answer
+      - type: call_action
+        action: classify_assumption_or_issue
+      - type: call_action
+        action: recompute_plan_progress
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: discoveryBlockingIssueMode, value: "true" }
+            next: 14
+          - when: { key: discoveryHasOpenGaps, value: "true" }
+            next: 6
+            clear: [discoveryAnswerRaw]
+          - when: else
+            next: 14
+      - type: call_action
+        action: run_plan_critique_and_readiness
+        storeSpread: true
+      - type: branch
+        branches:
+          - when: { key: planReadinessStatus, value: BLOCKED }
+            next: 28
+          - when: { key: planReadinessStatus, value: NEEDS_REVISION }
+            next: 2
+            clear: [discoveryAnswerRaw, planApprovalDecision]
+          - when: else
+            next: 16
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Pre-launch review (orchestrator). Readiness: {{planReadinessStatus}}. {{planReadinessSummary}}\n{{planCritiqueSummary}}\nChoose an action below."
+          asRole: orchestrator
+          target: thread
+      - type: prompt_for_field
+        prompt: "Approve implementation launch?"
+        storeIn: planApprovalDecision
+        intent: present_choices
+        choices:
+          - { id: approve, label: Approve }
+          - { id: approve_with_risks, label: Approve with risks }
+          - { id: revise, label: Revise plan }
+          - { id: reject, label: Reject }
+      - type: capture_field
+        storeIn: planApprovalDecision
+      - type: branch
+        branches:
+          - when: { key: planApprovalDecision, value: approve }
+            next: 20
+          - when: { key: planApprovalDecision, value: approve_with_risks }
+            next: 20
+          - when: { key: planApprovalDecision, value: revise }
+            next: 2
+            clear: [discoveryAnswerRaw, planApprovalDecision]
+          - when: { key: planApprovalDecision, value: reject }
+            next: 31
+          - when: else
+            next: 31
+      - type: call_action
+        action: persist_plan_approval
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Intake/spec thread — orchestrator kickoff. Repo: {{project}}. Request: {{codeChange}}. Plan approved; proceeding with role handoff."
+          asRole: orchestrator
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Architect: proposed structure — align implementation with repo conventions; capture boundaries and main components for this change."
+          asRole: architect
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Auditor: validation focus — risks, test strategy, and spec/drift checks before implementation proceeds."
+          asRole: auditor
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Scribe: intake/spec consolidation — profile gaps to address: {{profileMissingSummary}}"
+          asRole: scribe
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Feature room ready. Thread above has role contributions. Launching next."
+          asRole: orchestrator
+          target: room
+      - type: call_action
+        action: launch_cursor_run
+        bind: {}
+        storeIn: launchMessage
+      - type: done
+        message: "Launching now. See <#{{channelId}}>."
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Planning blocked: readiness is BLOCKED ({{planCritiqueError}}). {{planReadinessSummary}}"
+          asRole: orchestrator
+          target: thread
+      - type: call_action
+        action: post_channel_message
+        bind:
+          content: "Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread."
+          asRole: orchestrator
+          target: room
+      - type: done
+        message: "Planning blocked; not launching."
+      - type: done
+        message: "Planning rejected; not launching."
       - type: capture_field
         storeIn: roomAction
         trimAndLower: true
       - type: branch
         branches:
           - when: { key: roomAction, value: status }
-            next: 2
+            next: 34
           - when: { key: roomAction, value: retry }
-            next: 3
+            next: 35
           - when: { key: roomAction, value: close }
-            next: 4
+            next: 36
           - when: { key: roomAction, value: "" }
-            next: 5
+            next: 37
           - when: else
-            next: 6
+            next: 38
       - type: done
         message: "Room status: active. Repo and request are in context."
       - type: done
@@ -176,9 +327,9 @@ workflows:
             next: 5
             clear: [codeChange, confirmAction]
           - when: { key: confirmAction, value: cancel }
-            next: 39
+            next: 23
           - when: else
-            next: 39
+            next: 23
       - type: call_action
         action: create_channel
         bind:
@@ -188,7 +339,7 @@ workflows:
       - type: branch
         branches:
           - when: { key: channelId, value: CHANNEL_CREATE_FAILED }
-            next: 45
+            next: 22
           - when: else
             next: 12
       - type: call_action
@@ -221,144 +372,14 @@ workflows:
           data:
             feature_summary: "{{codeChange}}"
       - type: call_action
-        action: get_profile_missing_fields
-        storeIn: profileMissingSummary
-      - type: call_action
-        action: get_structured_discovery_gaps
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: discoveryHasOpenGaps, value: "true" }
-            next: 23
-          - when: else
-            next: 31
-      - type: call_action
-        action: build_discovery_agenda
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: discoveryCurrentQuestionPrompt, operator: nonblank }
-            next: 25
-          - when: else
-            next: 31
-      - type: prompt_for_field
-        prompt: "{{discoveryCurrentQuestionPrompt}}"
-        storeIn: discoveryAnswerRaw
-      - type: capture_field
-        storeIn: discoveryAnswerRaw
-      - type: call_action
-        action: capture_and_apply_discovery_answer
-      - type: call_action
-        action: classify_assumption_or_issue
-      - type: call_action
-        action: recompute_plan_progress
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: discoveryBlockingIssueMode, value: "true" }
-            next: 31
-          - when: { key: discoveryHasOpenGaps, value: "true" }
-            next: 23
-            clear: [discoveryAnswerRaw]
-          - when: else
-            next: 31
-      - type: call_action
-        action: run_plan_critique_and_readiness
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: planReadinessStatus, value: BLOCKED }
-            next: 47
-          - when: { key: planReadinessStatus, value: NEEDS_REVISION }
-            next: 22
-            clear: [discoveryAnswerRaw, planApprovalDecision]
-          - when: else
-            next: 33
-      - type: call_action
         action: post_channel_message
         bind:
-          content: "Pre-launch review (orchestrator). Readiness: {{planReadinessStatus}}. {{planReadinessSummary}}\n{{planCritiqueSummary}}\nChoose an action below."
+          content: "Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here — reply in-thread when the coordinator prompts you."
           asRole: orchestrator
           target: thread
-      - type: prompt_for_field
-        prompt: "Approve implementation launch?"
-        storeIn: planApprovalDecision
-        intent: present_choices
-        choices:
-          - { id: approve, label: Approve }
-          - { id: approve_with_risks, label: Approve with risks }
-          - { id: revise, label: Revise plan }
-          - { id: reject, label: Reject }
-      - type: capture_field
-        storeIn: planApprovalDecision
-      - type: branch
-        branches:
-          - when: { key: planApprovalDecision, value: approve }
-            next: 37
-          - when: { key: planApprovalDecision, value: approve_with_risks }
-            next: 37
-          - when: { key: planApprovalDecision, value: revise }
-            next: 22
-            clear: [discoveryAnswerRaw, planApprovalDecision]
-          - when: { key: planApprovalDecision, value: reject }
-            next: 50
-          - when: else
-            next: 50
-      - type: call_action
-        action: persist_plan_approval
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Intake/spec thread — orchestrator kickoff. Repo: {{project}}. Request: {{codeChange}}. Plan approved; proceeding with role handoff."
-          asRole: orchestrator
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Architect: proposed structure — align implementation with repo conventions; capture boundaries and main components for this change."
-          asRole: architect
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Auditor: validation focus — risks, test strategy, and spec/drift checks before implementation proceeds."
-          asRole: auditor
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Scribe: intake/spec consolidation — profile gaps to address: {{profileMissingSummary}}"
-          asRole: scribe
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Feature room ready. Thread above has role contributions. Launching next."
-          asRole: orchestrator
-          target: room
-      - type: call_action
-        action: launch_cursor_run
-        bind: {}
-        storeIn: launchMessage
       - type: done
-        message: "Launching now. See <#{{channelId}}>."
+        message: "Feature room is ready. Continue in the intake/spec thread above to complete the plan, approval, and launch."
       - type: done
         message: "Could not create room."
       - type: done
         message: "Cancelled."
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Planning blocked: readiness is BLOCKED ({{planCritiqueError}}). {{planReadinessSummary}}"
-          asRole: orchestrator
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread."
-          asRole: orchestrator
-          target: room
-      - type: done
-        message: "Planning blocked; not launching."
-      - type: done
-        message: "Planning rejected; not launching."

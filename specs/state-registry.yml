@@ -75,7 +75,9 @@ assets:
   - id: ASSET-DISCOVERY-GAP
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/DiscoveryGap.java
-    role: Typed planning gap (id, kind, artifact/section/field, reason, severity) for structured discovery JSON
+    role: >-
+      Typed planning gap (id, kind, artifact/section/field, reason, severity, optional userFacingDetail) for structured
+      discovery JSON; userFacingDetail carries plain-language prompt text without exposing internal ids
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-DISCOVERY-QUESTION

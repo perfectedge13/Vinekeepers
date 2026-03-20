@@ -10,6 +10,7 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planning.PlanningPromptFormatter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -88,7 +89,7 @@ public final class GetProfileMissingFieldsAction implements com.vinekeepers.work
         if (missing.isEmpty()) {
             return "All required profile fields present.";
         }
-        return "Missing: " + String.join("; ", missing);
+        return PlanningPromptFormatter.formatMissingRequiredSummary(profile, missing);
     }
 
     private static boolean isMissing(Object v) {

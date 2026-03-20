@@ -34,7 +34,11 @@ class StructuredDiscoverySupportTest {
         assertTrue(json.contains("REQUIRED_FIELD"));
 
         var agenda = StructuredDiscoverySupport.buildAgendaSpread(json);
-        assertTrue(((String) agenda.get("discoveryCurrentQuestionPrompt")).length() > 5);
+        String prompt = (String) agenda.get("discoveryCurrentQuestionPrompt");
+        assertTrue(prompt.length() > 5);
+        assertFalse(prompt.contains("overall_plan.outline.plan_body"));
+        assertFalse(prompt.contains("validation_plan.checks.validation_notes"));
+        assertTrue(gaps.stream().anyMatch(g -> g.getUserFacingDetail() != null && !g.getUserFacingDetail().isBlank()));
     }
 
     @Test

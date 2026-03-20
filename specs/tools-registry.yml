@@ -72,7 +72,10 @@ assets:
   - id: ASSET-BOOTSTRAP
     kind: source
     path: src/main/java/com/vinekeepers/core/Bootstrap.java
-    role: Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and handlesOwnedSpaces map from loaded bots to Router
+    role: >-
+      Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and
+      handlesOwnedSpaces map from loaded bots to Router; register plan/discovery workflow actions including
+      hydrate_planning_session and synthesize_plan_drafts
     requires: [REQ-CORE-002, REQ-TOOLS-001, REQ-LUNA-001]
     feature_ids: [FEAT-CORE, FEAT-TOOLS, FEAT-CURSOR-GATHERING]
 

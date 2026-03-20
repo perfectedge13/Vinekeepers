@@ -21,7 +21,7 @@ class GetProfileMissingFieldsActionTest {
         Object summary = get.run(null, Map.of("contextId", "cx"), Map.of());
         assertInstanceOf(String.class, summary);
         String s = (String) summary;
-        assertTrue(s.contains("Missing") || s.contains("required"));
+        assertTrue(s.contains("Still needed") || s.contains("required") || s.contains("Plan") || s.contains("Validation"));
     }
 
     @Test

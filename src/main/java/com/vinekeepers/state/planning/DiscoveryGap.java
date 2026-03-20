@@ -19,6 +19,8 @@ public final class DiscoveryGap {
     private final String severity;
     private final String status;
     private final String source;
+    /** Plain-language detail for user prompts (no internal artifact paths). */
+    private final String userFacingDetail;
 
     @JsonCreator
     public DiscoveryGap(
@@ -30,7 +32,8 @@ public final class DiscoveryGap {
             @JsonProperty("reason") String reason,
             @JsonProperty("severity") String severity,
             @JsonProperty("status") String status,
-            @JsonProperty("source") String source) {
+            @JsonProperty("source") String source,
+            @JsonProperty("userFacingDetail") String userFacingDetail) {
         this.gapId = Objects.requireNonNull(gapId, "gapId");
         this.kind = kind != null ? kind : "";
         this.artifactId = artifactId != null ? artifactId : "";
@@ -40,6 +43,7 @@ public final class DiscoveryGap {
         this.severity = severity != null ? severity : "MEDIUM";
         this.status = status != null ? status : "OPEN";
         this.source = source != null ? source : "";
+        this.userFacingDetail = userFacingDetail != null ? userFacingDetail : "";
     }
 
     public String getGapId() {
@@ -76,5 +80,9 @@ public final class DiscoveryGap {
 
     public String getSource() {
         return source;
+    }
+
+    public String getUserFacingDetail() {
+        return userFacingDetail;
     }
 }
