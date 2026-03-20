@@ -1,10 +1,9 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
-import com.vinekeepers.profile.ArtifactState;
-import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,9 +48,9 @@ public final class BuildPlanningThreadReviewBodyAction implements com.vinekeeper
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
         String repo = firstNonBlank(plan.getRepoRef(), getString(state, "project"));
 
-        String planBody = truncate(artifactField(plan, "overall_plan", "outline", "plan_body"), SECTION_SOFT_MAX);
-        String validation = truncate(artifactField(plan, "validation_plan", "checks", "validation_notes"), SECTION_SOFT_MAX);
-        String context = truncate(artifactField(plan, "project_context", "context", "context_summary"), SECTION_SOFT_MAX);
+        String planBody = truncate(PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"), SECTION_SOFT_MAX);
+        String validation = truncate(PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes"), SECTION_SOFT_MAX);
+        String context = truncate(PlanningArtifactTexts.artifactField(plan, "project_context", "context", "context_summary"), SECTION_SOFT_MAX);
 
         StringBuilder sb = new StringBuilder();
         appendSection(sb, "**Request**", request);
@@ -73,22 +72,6 @@ public final class BuildPlanningThreadReviewBodyAction implements com.vinekeeper
         }
         sb.append(heading).append("\n");
         sb.append(content != null ? content : "");
-    }
-
-    private static String artifactField(FeaturePlanState plan, String artifactId, String sectionId, String fieldId) {
-        if (plan == null) {
-            return "";
-        }
-        ArtifactState art = plan.getArtifacts().get(artifactId);
-        if (art == null) {
-            return "";
-        }
-        SectionState sec = art.getSectionsById().get(sectionId);
-        if (sec == null) {
-            return "";
-        }
-        Object v = sec.getValues().get(fieldId);
-        return v != null ? v.toString().trim() : "";
     }
 
     private static String truncate(String s, int max) {

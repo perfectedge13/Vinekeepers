@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Tests for DiscordConnectorAdapter: registerBots no-op for null inputs,
@@ -105,5 +107,27 @@ class DiscordConnectorAdapterTest {
         ConnectorIdentity discord = new ConnectorIdentity(Map.of("tokenEnvKey", tokenEnvKey, "handlesOwnedSpaces", false));
         return new BotDefinition("bot-1", PERSONA, MODEL, ToolPolicy.allowAll(), new MemoryPolicy(4096),
                 "stub", null, null, null, Map.of("discord", discord));
+    }
+
+    @Test
+    void discordInboundListenersEnabled_trueWhenHandlesOwnedSpacesEvenIfNotRouted() {
+        ConnectorIdentity discord = new ConnectorIdentity(Map.of(
+                "tokenEnvKey", "K",
+                "handlesOwnedSpaces", true));
+        BotDefinition arrietty = new BotDefinition("arrietty", PERSONA, MODEL, ToolPolicy.allowAll(), new MemoryPolicy(4096),
+                "stub", null, null, null, Map.of("discord", discord));
+        assertTrue(DiscordConnectorAdapter.discordInboundListenersEnabled(arrietty, Set.of("luna")));
+    }
+
+    @Test
+    void discordInboundListenersEnabled_falseWhenNotRoutedAndNotLifecycleOwner() {
+        BotDefinition bot = botWithDiscordIdentity("K");
+        assertFalse(DiscordConnectorAdapter.discordInboundListenersEnabled(bot, Set.of("luna")));
+    }
+
+    @Test
+    void discordInboundListenersEnabled_trueWhenInRoutedSet() {
+        BotDefinition bot = botWithDiscordIdentity("K");
+        assertTrue(DiscordConnectorAdapter.discordInboundListenersEnabled(bot, Set.of("bot-1", "luna")));
     }
 }

@@ -49,7 +49,7 @@ public final class DiscordConnectorAdapter implements ConnectorAdapter {
                     log.warn("Bot {} has discord tokenEnvKey {} but token is blank; skipping Discord connector for this bot.", bot.getId(), envKey);
                     continue;
                 }
-                boolean outboundOnly = !routedBotIds.contains(bot.getId());
+                boolean outboundOnly = !discordInboundListenersEnabled(bot, routedBotIds);
                 JdaDiscordGateway gateway = new JdaDiscordGateway(token, outboundOnly);
                 DiscordEventSource source = new DiscordEventSource(gateway);
                 router.registerSender(bot.getId(), source, gateway);
@@ -75,6 +75,24 @@ public final class DiscordConnectorAdapter implements ConnectorAdapter {
                 discordSources.add(source);
             }
         }
+    }
+
+    /**
+     * When true, the bot's JDA gateway registers message and interaction listeners (inbound).
+     * Routed bots and Discord lifecycle space owners ({@code handlesOwnedSpaces}) must be inbound so
+     * component interactions on that bot's messages are handled.
+     */
+    public static boolean discordInboundListenersEnabled(BotDefinition bot, Set<String> routedBotIds) {
+        if (bot == null) {
+            return false;
+        }
+        Set<String> routed = routedBotIds != null ? routedBotIds : Set.of();
+        if (routed.contains(bot.getId())) {
+            return true;
+        }
+        return bot.getConnectorIdentity("discord")
+                .map(d -> Boolean.TRUE.equals(d.getBoolean("handlesOwnedSpaces")))
+                .orElse(false);
     }
 
     private static String tokenEnvKey(BotDefinition bot) {

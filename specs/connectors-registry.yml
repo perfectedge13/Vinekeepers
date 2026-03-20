@@ -206,7 +206,7 @@ assets:
 requirements:
   - id: REQ-CONNECTORS-DISCORD-001
     title: Discord event source and reply
-    statement: Discord event source and reply; generic outbound abstraction ReplySender (send) and OutboundGateway (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride). DiscordReplySender extends ReplySender; DiscordGateway extends OutboundGateway. Per-bot identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces). ConnectorContext is generic (EventBus, OutboundDeliveryRouter only). Adapter registerBots() does per-bot gateway/sender/default registration only. Bootstrap registers engine reply sender, sink, and Discord ReplyTargetResolver by connector id (engine.setReplySender("discord", outboundDeliveryRouter), engine.registerSink("discord", DiscordAppReplySink), engine.registerReplyTargetResolver("discord", DiscordReplyTargetResolver)); keeps action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId; getGatewayForChannel returns OutboundGateway or null when lifecycle bot has no gateway; getSelfUserIdForBot(botId) returns that bot's gateway getSelfUserId. DiscordAppReplySink with lifecycle operations; ack/defer adapter-owned; fallback to text when intent not supported.
+    statement: Discord event source and reply; generic outbound abstraction ReplySender (send) and OutboundGateway (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride). DiscordReplySender extends ReplySender; DiscordGateway extends OutboundGateway. Per-bot identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces). DiscordConnectorAdapter registers inbound JDA listeners when the bot is in YAML routing or handlesOwnedSpaces is true; otherwise the gateway is outbound-only (no listeners). ConnectorContext is generic (EventBus, OutboundDeliveryRouter only). Adapter registerBots() does per-bot gateway/sender/default registration only. Bootstrap registers engine reply sender, sink, and Discord ReplyTargetResolver by connector id (engine.setReplySender("discord", outboundDeliveryRouter), engine.registerSink("discord", DiscordAppReplySink), engine.registerReplyTargetResolver("discord", DiscordReplyTargetResolver)); keeps action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId; getGatewayForChannel returns OutboundGateway or null when lifecycle bot has no gateway; getSelfUserIdForBot(botId) returns that bot's gateway getSelfUserId. DiscordAppReplySink with lifecycle operations; ack/defer adapter-owned; fallback to text when intent not supported.
     status: active
     priority: medium
     type: functional
@@ -226,7 +226,7 @@ requirements:
         - getGatewayForChannel(channelIdOrDeliveryTargetId) returns null when lifecycle context exists for that channel or delivery target (e.g. thread) but the configured bot has no registered gateway (do not return default gateway)
         - getSelfUserIdForBot(botId) returns the bot's Discord user id from that bot's gateway getSelfUserId, or null if the bot has no gateway or getSelfUserId returns null
         - OutboundGateway exposes getSelfUserId(), createTextChannel, createThreadChannel, addPermissionOverride; DiscordGateway extends OutboundGateway; JDA gateway implements DiscordGateway
-        - "Optional outbound-only gateway: Bootstrap may register a gateway for a bot that is not in routing (e.g. lifecycle room bot); that gateway is outbound-only (no event listeners)"
+        - "Outbound-only gateway when a bot is neither in YAML routing nor a Discord lifecycle space owner: DiscordConnectorAdapter registers JDA without event listeners (outbound-only). Bots with identities.discord.handlesOwnedSpaces true must register inbound listeners so component interactions on that bot's messages are received (e.g. coordinator approval buttons)"
         - Discord gateway handles Interaction Create; on receive, adapter acks or defers within platform window and publishes Event with kind interaction and token
         - DiscordAppReplySink implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; all lifecycle operations; render intents; channel send and follow-up/update with optional components; fallback to text
         - Discord connector can send replies back to the originating channel or message (including with components) through the Discord API
@@ -316,6 +316,12 @@ requirements:
           title: DiscordConnectorAdapterTest
           intent: Verify DiscordConnectorAdapter registerBots and per-bot gateway/sender registration
           testClass: com.vinekeepers.connectors.DiscordConnectorAdapterTest
+          preconditions: []
+        - id: UNIT-DISCORD-INBOUND-LIFECYCLE-OWNER
+          title: DiscordConnectorAdapterTest
+          intent: Verify discordInboundListenersEnabled true for handlesOwnedSpaces when not in routing
+          testClass: com.vinekeepers.connectors.DiscordConnectorAdapterTest
+          testMethod: discordInboundListenersEnabled_trueWhenHandlesOwnedSpacesEvenIfNotRouted
           preconditions: []
         - id: MANUAL-CONNECTORS-DISCORD
           title: Discord connector compiles and implements interface

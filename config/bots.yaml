@@ -226,6 +226,12 @@ workflows:
             **Status:** {{planReadinessStatus}}
             {{planReadinessSummary}}
 
+            **Assumptions**
+            {{planAssumptionsSummary}}
+
+            **Issues / risks**
+            {{planIssuesSummary}}
+
             **Critique**
             {{planCritiqueSummary}}
 

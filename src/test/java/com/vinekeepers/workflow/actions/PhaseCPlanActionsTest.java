@@ -22,7 +22,10 @@ class PhaseCPlanActionsTest {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
-        assertEquals("OK", init.run(null, Map.of("contextId", "c1", "channelId", "room1"), Map.of()));
+        assertEquals("OK", init.run(null, Map.of(
+                "contextId", "c1",
+                "channelId", "room1",
+                "codeChange", "Ship dark-mode toggle with accessibility review and QA sign-off."), Map.of()));
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
                 .run(null, Map.of("contextId", "c1"), Map.of());
@@ -33,6 +36,8 @@ class PhaseCPlanActionsTest {
         assertTrue(p.getPlanConfidence() != null);
         assertTrue(spread.containsKey("planningThreadReviewBody"));
         assertEquals("", spread.get("planningThreadReviewBuildError"));
+        assertTrue(spread.containsKey("planAssumptionsSummary"));
+        assertTrue(spread.containsKey("planIssuesSummary"));
     }
 
     @Test
@@ -40,7 +45,10 @@ class PhaseCPlanActionsTest {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
-        assertEquals("OK", init.run(null, Map.of("contextId", "c-review", "channelId", "roomR"), Map.of()));
+        assertEquals("OK", init.run(null, Map.of(
+                "contextId", "c-review",
+                "channelId", "roomR",
+                "codeChange", "Add export-to-PDF with pagination and embedded metadata for audit trails."), Map.of()));
         var upsert = new UpsertArtifactSectionDataAction(store, reg);
         assertEquals("OK", upsert.run(null,
                 Map.of("contextId", "c-review"),
@@ -48,21 +56,21 @@ class PhaseCPlanActionsTest {
                         "artifactId", "overall_plan",
                         "sectionId", "outline",
                         "mode", "replace",
-                        "data", Map.of("plan_body", "Outline A → B."))));
+                        "data", Map.of("plan_body", "Phase 1: data model and API. Phase 2: UI export flow. Phase 3: QA and docs."))));
         assertEquals("OK", upsert.run(null,
                 Map.of("contextId", "c-review"),
                 Map.of(
                         "artifactId", "validation_plan",
                         "sectionId", "checks",
                         "mode", "replace",
-                        "data", Map.of("validation_notes", "mvn verify"))));
+                        "data", Map.of("validation_notes", "mvn verify; contract tests; manual PDF spot-checks in staging."))));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
                 .run(null, Map.of("contextId", "c-review"), Map.of());
         assertEquals("", spread.get("planCritiqueError"));
         String body = (String) spread.get("planningThreadReviewBody");
-        assertTrue(body.contains("Outline A → B."));
+        assertTrue(body.contains("Phase 1: data model"));
         assertTrue(body.contains("mvn verify"));
         assertEquals("", spread.get("planningThreadReviewBuildError"));
     }

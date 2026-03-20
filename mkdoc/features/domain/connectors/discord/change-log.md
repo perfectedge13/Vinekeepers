@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-20
+
+- **Lifecycle owner inbound Discord:** `DiscordConnectorAdapter` enables JDA message/interaction listeners when `identities.discord.handlesOwnedSpaces` is true, even if the bot is not listed under YAML `routing`, so coordinator-authored buttons (e.g. Arrietty approval in the intake thread) receive interactions. Bots without routing and without `handlesOwnedSpaces` remain outbound-only. `discordInboundListenersEnabled` and tests: DiscordConnectorAdapterTest; REQ-CONNECTORS-DISCORD-001 acceptance updated.
+
 ## 2026-03-18
 
 - **Multi-bot feature room (Discord):** **CreateRoomRequest** supports optional **participantBotIds** (list of configured bot ids); **DiscordSpaceOperations.createRoom** calls addPermissionOverride for each bot in participantBotIds (multi-bot feature room permissions). **OutboundDeliveryRouter** accepts optional **FeatureRoomStateStore** for **sendAsRole**(channelId, messageId, content, role) and **sendAs**(channelId, messageId, content, botId); role resolved from feature room participants. Tests: DiscordSpaceOperationsTest (participantBotIds), CreateRoomRequestTest, OutboundDeliveryRouterTest (sendAsRole).

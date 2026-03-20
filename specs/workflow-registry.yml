@@ -1815,6 +1815,11 @@ requirements:
           intent: Verify readiness classification from gaps, findings, and plan issues
           testClass: com.vinekeepers.workflow.planreview.PlanReadinessEvaluatorTest
           preconditions: []
+        - id: UNIT-PLAN-CRITIQUE-SUBSTANCE
+          title: PlanCritiqueSupportTest
+          intent: Verify MUST_FIX substance findings block readiness until request/outline/validation meet minimums
+          testClass: com.vinekeepers.workflow.planreview.PlanCritiqueSupportTest
+          preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
       - Storing secrets in state

@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.IssueEntry;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
@@ -83,6 +85,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             spread.put("planReadinessSummary", confidence.getNotes() != null ? confidence.getNotes() : "");
             spread.put("planCritiqueFindingsJson", JSON.writeValueAsString(findings));
             spread.put("planCritiqueSummary", formatCritiqueSummary(findings));
+            putAssumptionIssueSummaries(spread, next);
             mergePlanningThreadReview(spread, event, state, bind);
             return spread;
         } catch (Exception e) {
@@ -94,9 +97,40 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             } catch (JsonProcessingException ignored) {
                 m.put("planCritiqueFindingsJson", "[]");
             }
+            putAssumptionIssueSummaries(m, plan);
             mergePlanningThreadReview(m, event, state, bind);
             return m;
         }
+    }
+
+    private static void putAssumptionIssueSummaries(Map<String, Object> spread, FeaturePlanState plan) {
+        if (plan == null) {
+            spread.put("planAssumptionsSummary", "");
+            spread.put("planIssuesSummary", "");
+            return;
+        }
+        spread.put("planAssumptionsSummary", formatEntryBullets(plan.getAssumptions()));
+        spread.put("planIssuesSummary", formatEntryBullets(plan.getIssues()));
+    }
+
+    private static String formatEntryBullets(List<?> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return "_None recorded._";
+        }
+        String joined = entries.stream()
+                .map(e -> {
+                    if (e instanceof AssumptionEntry a) {
+                        return a.getText();
+                    }
+                    if (e instanceof IssueEntry i) {
+                        return i.getText();
+                    }
+                    return e != null ? e.toString() : "";
+                })
+                .filter(s -> s != null && !s.isBlank())
+                .map(s -> "• " + s.trim())
+                .collect(Collectors.joining("\n"));
+        return joined.isBlank() ? "_None recorded._" : joined;
     }
 
     private void mergePlanningThreadReview(Map<String, Object> spread, Event event, Map<String, Object> state, Map<String, Object> bind) {
@@ -125,6 +159,8 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         m.put("planCritiqueSummary", "");
         m.put("planningThreadReviewBody", "");
         m.put("planningThreadReviewBuildError", "");
+        m.put("planAssumptionsSummary", "");
+        m.put("planIssuesSummary", "");
         return m;
     }
 

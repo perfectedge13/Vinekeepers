@@ -16,6 +16,13 @@ public final class PlanCritiqueSupport {
 
     public static final String SOURCE_RULES_V1 = "RULES_V1";
 
+    /** Minimum trimmed length for initial request text before approval is allowed. */
+    public static final int MIN_INITIAL_REQUEST_CHARS = 20;
+    /** Minimum trimmed length for implementation outline artifact text. */
+    public static final int MIN_OUTLINE_CHARS = 40;
+    /** Minimum trimmed length for validation approach artifact text. */
+    public static final int MIN_VALIDATION_CHARS = 30;
+
     private PlanCritiqueSupport() {}
 
     public static List<PlanCritiqueFinding> buildFindings(
@@ -30,6 +37,7 @@ public final class PlanCritiqueSupport {
             }
         }
         if (plan != null) {
+            addSubstanceFindings(plan, out, seq);
             if (!plan.getIssues().isEmpty()) {
                 out.add(new PlanCritiqueFinding(
                         "crit-iss-" + seq.getAndIncrement(),
@@ -69,6 +77,46 @@ public final class PlanCritiqueSupport {
             }
         }
         return out;
+    }
+
+    /**
+     * Blocks approval when the visible planning packet would be mostly placeholders
+     * (short/missing request, outline, or validation).
+     */
+    private static void addSubstanceFindings(FeaturePlanState plan, List<PlanCritiqueFinding> out, AtomicInteger seq) {
+        String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
+        if (request.length() < MIN_INITIAL_REQUEST_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-sub-req-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_REQUEST_SUMMARY",
+                    "Initial request summary is missing or too short to approve implementation ("
+                            + request.length() + " chars; need at least " + MIN_INITIAL_REQUEST_CHARS + ").",
+                    "initialRequest"));
+        }
+        String outline = PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body");
+        if (outline.length() < MIN_OUTLINE_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-sub-out-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_IMPLEMENTATION_OUTLINE",
+                    "Implementation outline is missing or too thin ("
+                            + outline.length() + " chars; need at least " + MIN_OUTLINE_CHARS + ").",
+                    "overall_plan.outline"));
+        }
+        String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
+        if (validation.length() < MIN_VALIDATION_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-sub-val-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_VALIDATION_APPROACH",
+                    "Validation approach is missing or too thin ("
+                            + validation.length() + " chars; need at least " + MIN_VALIDATION_CHARS + ").",
+                    "validation_plan.checks"));
+        }
     }
 
     private static PlanCritiqueFinding fromGap(DiscoveryGap g, int n) {
