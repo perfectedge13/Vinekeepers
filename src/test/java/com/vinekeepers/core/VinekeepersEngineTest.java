@@ -450,6 +450,36 @@ class VinekeepersEngineTest {
     }
 
     @Test
+    void duplicateDiscordMessageId_withinDedupeWindow_runsWorkflowOnce() {
+        BotDefinition luna = new BotDefinition(
+                "luna",
+                new Persona("Luna", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(luna);
+        AtomicInteger runs = new AtomicInteger();
+        engine.registerRunner("luna", (event, stateStore, botId) -> {
+            runs.incrementAndGet();
+            return WorkflowRunResult.continueWithoutReply();
+        });
+        engine.registerReasoner("luna", new StubReasoner());
+        router.addRouting(new RoutingRule(
+                new RoutingFilter(Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:guildX", "message", Map.of(
+                "channelId", "ch-1",
+                "authorId", "user-1",
+                "messageId", "snowflake-duplicate-test-001",
+                "content", "@Luna hi",
+                "mentions", List.of("luna")));
+        engine.onEvent(event);
+        engine.onEvent(event);
+
+        assertEquals(1, runs.get(), "Duplicate Discord message publication must not advance workflow twice");
+    }
+
+    @Test
     void followUpMessageWithoutMention_sameUserAndChannel_continuesWorkflowWhenLunaHasWaitingInput() {
         BotDefinition luna = new BotDefinition(
                 "luna",

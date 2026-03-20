@@ -1732,6 +1732,12 @@ requirements:
           testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
           testMethod: runWithRouterAndLifecycleOwnerBotId_addsPermissionOverwriteAfterCreate
           preconditions: []
+        - id: UNIT-CREATE-CHANNEL-ACTION-IDEMPOTENT
+          title: CreateChannelActionTest
+          intent: Verify create_channel returns existing reusable channel id from state without calling createRoom again
+          testClass: com.vinekeepers.workflow.actions.CreateChannelActionTest
+          testMethod: runReusesExistingDiscordChannelIdInState_withoutCallingCreate
+          preconditions: []
         - id: UNIT-POST-CHANNEL-MESSAGE-ACTION
           title: PostChannelMessageActionTest
           intent: Verify post_channel_message action posts to Discord channel

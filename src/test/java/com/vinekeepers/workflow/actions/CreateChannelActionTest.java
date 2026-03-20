@@ -144,6 +144,23 @@ class CreateChannelActionTest {
     }
 
     @Test
+    void runReusesExistingDiscordChannelIdInState_withoutCallingCreate() {
+        FakeCreateChannelGateway gateway = new FakeCreateChannelGateway();
+        gateway.connected = true;
+        gateway.createdChannelId = "would-be-new-id";
+        LifecycleContextStore store = new LifecycleContextStore();
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(store);
+        router.setDefaultGateway(gateway);
+        CreateChannelAction action = new CreateChannelAction(registryWithDiscord(router, store));
+        String existing = "1098765432109876543";
+        Object result = action.run(new Event("discord:g1", "m", Map.of()),
+                Map.of("channelId", existing),
+                Map.of("guildId", "g1"));
+        assertEquals(existing, result);
+        assertNull(gateway.lastGuildId, "createTextChannel must not run when state already has a reusable channel id");
+    }
+
+    @Test
     void runReturnsChannelCreateFailedWhenCreateTextChannelThrows() {
         DiscordGateway gateway = new DiscordGateway() {
             @Override

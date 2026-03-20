@@ -4,7 +4,8 @@
 
 ## 2026-03-20
 
-- **Lifecycle owner inbound Discord:** `DiscordConnectorAdapter` enables JDA message/interaction listeners when `identities.discord.handlesOwnedSpaces` is true, even if the bot is not listed under YAML `routing`, so coordinator-authored buttons (e.g. Arrietty approval in the intake thread) receive interactions. Bots without routing and without `handlesOwnedSpaces` remain outbound-only. `discordInboundListenersEnabled` and tests: DiscordConnectorAdapterTest; REQ-CONNECTORS-DISCORD-001 acceptance updated.
+- **Discord ingress policy:** Per-bot **DiscordIngressModes** (message vs interaction) from optional `identities.discord.ingress` or defaults from YAML routing + `handlesOwnedSpaces`. Lifecycle owners without routing use **owned_spaces** messages and **own_messages** interactions so duplicate general-message publication from multiple bot tokens no longer double-runs intake; **JdaDiscordGateway** registers listeners independently; **DiscordOwnedSpacePredicate** uses **FeatureRoomStateStore** / **LifecycleContextStore** from **ConnectorContext**. **VinekeepersEngine** dedupes duplicate Discord message/interaction ids within a short TTL; **create_channel** skips create when state already holds a reusable channel id. Tests: DiscordIngressModesTest, DiscordOwnedSpacePredicateTest, VinekeepersEngineTest, CreateChannelActionTest; specs and README updated.
+- **Lifecycle owner inbound Discord (superseded by ingress policy):** Coordinator bots with `handlesOwnedSpaces` still receive interactions on their posts; message ingress is scoped unless set to `routed`.
 
 ## 2026-03-18
 

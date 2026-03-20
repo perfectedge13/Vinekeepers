@@ -7,7 +7,6 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
@@ -34,7 +33,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -52,7 +50,8 @@ public final class JdaDiscordGateway implements DiscordGateway {
     private static final int CREATE_CHANNEL_TIMEOUT_SECONDS = 15;
 
     private final String token;
-    private final boolean outboundOnly;
+    private final DiscordIngressModes ingressModes;
+    private final DiscordOwnedSpacePredicate ownedSpacePredicate;
     private volatile JDA jda;
     private volatile boolean connected;
     private volatile Consumer<Event> publisher;
@@ -60,15 +59,29 @@ public final class JdaDiscordGateway implements DiscordGateway {
     private final Map<String, net.dv8tion.jda.api.interactions.InteractionHook> tokenToHook = new ConcurrentHashMap<>();
 
     public JdaDiscordGateway(String token) {
-        this(token, false);
+        this(token, DiscordIngressModes.routedFull(), null);
     }
 
     /**
      * @param outboundOnly when true, do not add event listeners (gateway is used for outbound only, e.g. non-routed bots).
      */
     public JdaDiscordGateway(String token, boolean outboundOnly) {
+        this(token, outboundOnly
+                ? new DiscordIngressModes(DiscordMessageIngressMode.NONE, DiscordInteractionIngressMode.NONE)
+                : DiscordIngressModes.routedFull(),
+                null);
+    }
+
+    /**
+     * @param ingressModes which Discord events are published to the engine; {@link DiscordIngressModes#isOutboundOnly()} means no listeners.
+     * @param ownedSpacePredicate required when a mode uses OWNED_SPACES; may be null if unused.
+     */
+    public JdaDiscordGateway(String token, DiscordIngressModes ingressModes, DiscordOwnedSpacePredicate ownedSpacePredicate) {
         this.token = token != null ? token.trim() : "";
-        this.outboundOnly = outboundOnly;
+        this.ingressModes = ingressModes != null
+                ? ingressModes
+                : new DiscordIngressModes(DiscordMessageIngressMode.NONE, DiscordInteractionIngressMode.NONE);
+        this.ownedSpacePredicate = ownedSpacePredicate;
     }
 
     @Override
@@ -82,24 +95,46 @@ public final class JdaDiscordGateway implements DiscordGateway {
             this.publisher = publisher;
             JDABuilder builder = JDABuilder.createDefault(token)
                     .enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.DIRECT_MESSAGES);
-            if (!outboundOnly) {
+            if (!ingressModes.isOutboundOnly()) {
                 builder.addEventListeners(new ListenerAdapter() {
                     @Override
                     public void onMessageReceived(@NotNull MessageReceivedEvent event) {
+                        if (ingressModes.messageMode() == DiscordMessageIngressMode.NONE) {
+                            return;
+                        }
                         if (event.getAuthor().isBot()) {
                             return;
                         }
+                        if (ingressModes.messageMode() == DiscordMessageIngressMode.OWNED_SPACES) {
+                            String ch = event.getChannel().getId();
+                            if (ownedSpacePredicate == null || !ownedSpacePredicate.allowsChannel(ch)) {
+                                return;
+                            }
+                        }
                         JdaDiscordGateway.this.publisher.accept(toEvent(event));
                     }
+
                     @Override
                     public void onGenericInteractionCreate(@NotNull GenericInteractionCreateEvent event) {
+                        if (ingressModes.interactionMode() == DiscordInteractionIngressMode.NONE) {
+                            return;
+                        }
+                        if (ingressModes.interactionMode() == DiscordInteractionIngressMode.OWNED_SPACES) {
+                            var ich = event.getInteraction().getChannel();
+                            String chId = ich != null ? ich.getId() : "";
+                            if (ownedSpacePredicate == null || !ownedSpacePredicate.allowsChannel(chId)) {
+                                return;
+                            }
+                        }
                         handleInteraction(event);
                     }
                 });
             }
             jda = builder.build().awaitReady();
             connected = true;
-            log.info("Discord gateway connected" + (outboundOnly ? " (outbound-only)" : ""));
+            log.info("Discord gateway connected"
+                    + (ingressModes.isOutboundOnly() ? " (outbound-only)" : " (ingress: messages=" + ingressModes.messageMode()
+                    + ", interactions=" + ingressModes.interactionMode() + ")"));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             connected = false;

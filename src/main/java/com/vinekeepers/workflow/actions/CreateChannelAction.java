@@ -37,6 +37,10 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
+        String existing = extractChannelIdFromState(state);
+        if (isReusableDiscordChannelId(existing)) {
+            return existing;
+        }
         CreateRoomRequest request = CreateRoomRequest.from(event, state, bind);
         if (testOverride != null) {
             CreateRoomResult result = testOverride.createRoom(request);
@@ -52,5 +56,29 @@ public final class CreateChannelAction implements com.vinekeepers.workflow.Workf
         }
         CreateRoomResult result = ops.createRoom(request);
         return result.isSuccess() ? result.getChannelId() : CHANNEL_CREATE_FAILED;
+    }
+
+    private static String extractChannelIdFromState(Map<String, Object> state) {
+        if (state == null) {
+            return null;
+        }
+        Object v = state.get("channelId");
+        return v != null ? v.toString().trim() : null;
+    }
+
+    /** Discord snowflake id already stored (e.g. idempotent retry after duplicate engine events). */
+    static boolean isReusableDiscordChannelId(String id) {
+        if (id == null || id.isBlank() || CHANNEL_CREATE_FAILED.equals(id)) {
+            return false;
+        }
+        if (id.length() < 17 || id.length() > 22) {
+            return false;
+        }
+        for (int i = 0; i < id.length(); i++) {
+            if (!Character.isDigit(id.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 }

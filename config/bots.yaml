@@ -6,7 +6,9 @@
 # Discord identity is connector-scoped under identities.discord. Each bot may set
 # identities.discord.tokenEnvKey to the env var name for that bot's Discord token (never put
 # raw tokens here). identities.discord.handlesOwnedSpaces is connector-scoped ownership for
-# Discord lifecycle channels (single-owner precedence). Optional top-level defaultDiscordTokenEnvKey
+# Discord lifecycle channels (single-owner precedence). Optional identities.discord.ingress sets
+# messages (none | routed | owned_spaces) and interactions (none | routed | own_messages | owned_spaces);
+# defaults derive from YAML routing and handlesOwnedSpaces. Optional top-level defaultDiscordTokenEnvKey
 # is a retained transitional setting when a bot has no identities.discord.tokenEnvKey.
 
 defaultDiscordTokenEnvKey: LUNA_DISCORD_TOKEN
@@ -23,6 +25,9 @@ bots:
     identities:
       discord:
         tokenEnvKey: LUNA_DISCORD_TOKEN
+        ingress:
+          messages: routed
+          interactions: routed
   - id: arrietty
     persona:
       name: Arrietty
@@ -37,6 +42,9 @@ bots:
       discord:
         handlesOwnedSpaces: true
         tokenEnvKey: ARRIETTY_DISCORD_TOKEN
+        ingress:
+          messages: owned_spaces
+          interactions: own_messages
   - id: architect
     persona:
       name: Architect

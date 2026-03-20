@@ -52,7 +52,7 @@ assets:
     path: config/bots.yaml
     role: >-
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors;
-      preferred identity shape identities.discord.tokenEnvKey and identities.discord.handlesOwnedSpaces;
+      preferred identity shape identities.discord.tokenEnvKey, handlesOwnedSpaces, and optional identities.discord.ingress (messages, interactions);
       legacy top-level discordTokenEnvKey/handlesOwnedSpaces deprecated but still accepted; defaultDiscordTokenEnvKey at root is
       retained transitional; lifecycleBotName in step bind; Arrietty template workflowRef arrietty_room;
       create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.";
@@ -105,7 +105,7 @@ requirements:
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
-        - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
+        - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces, optional ingress) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
         - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId, target, targetChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
         - Four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread workflow session keys

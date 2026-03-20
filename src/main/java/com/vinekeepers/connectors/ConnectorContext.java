@@ -1,6 +1,8 @@
 package com.vinekeepers.connectors;
 
 import com.vinekeepers.events.EventBus;
+import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
 
 import java.util.Objects;
 
@@ -14,10 +16,22 @@ public final class ConnectorContext {
 
     private final EventBus eventBus;
     private final OutboundDeliveryRouter outboundDeliveryRouter;
+    private final FeatureRoomStateStore featureRoomStateStore;
+    private final LifecycleContextStore lifecycleContextStore;
 
     public ConnectorContext(EventBus eventBus, OutboundDeliveryRouter outboundDeliveryRouter) {
+        this(eventBus, outboundDeliveryRouter, null, null);
+    }
+
+    public ConnectorContext(
+            EventBus eventBus,
+            OutboundDeliveryRouter outboundDeliveryRouter,
+            FeatureRoomStateStore featureRoomStateStore,
+            LifecycleContextStore lifecycleContextStore) {
         this.eventBus = Objects.requireNonNull(eventBus, "eventBus");
         this.outboundDeliveryRouter = Objects.requireNonNull(outboundDeliveryRouter, "outboundDeliveryRouter");
+        this.featureRoomStateStore = featureRoomStateStore;
+        this.lifecycleContextStore = lifecycleContextStore;
     }
 
     public EventBus getEventBus() {
@@ -26,5 +40,13 @@ public final class ConnectorContext {
 
     public OutboundDeliveryRouter getOutboundDeliveryRouter() {
         return outboundDeliveryRouter;
+    }
+
+    public FeatureRoomStateStore getFeatureRoomStateStore() {
+        return featureRoomStateStore;
+    }
+
+    public LifecycleContextStore getLifecycleContextStore() {
+        return lifecycleContextStore;
     }
 }

@@ -55,6 +55,9 @@ public final class VinekeepersEngine implements EventSubscriber {
     private final Map<String, ReplySender> replySendersByConnectorId = new ConcurrentHashMap<>();
     /** Reply target resolvers keyed by connector id (sourceId prefix). */
     private final Map<String, ReplyTargetResolver> resolversByConnectorId = new ConcurrentHashMap<>();
+    /** Short-lived dedupe for duplicate Discord publishes (same message/interaction id). */
+    private final ConcurrentHashMap<String, Long> discordEventDedupe = new ConcurrentHashMap<>();
+    private static final long DISCORD_DEDUPE_TTL_MS = 45_000L;
 
     public VinekeepersEngine(Router router, StateStore stateStore, AuditRecorder auditRecorder) {
         this(router, stateStore, auditRecorder, new ToolRunner(new ToolRegistry()));
@@ -164,6 +167,10 @@ public final class VinekeepersEngine implements EventSubscriber {
     @Override
     public void onEvent(Event event) {
         log.debug("Engine received event: {} {}", event.getSourceId(), event.getKind());
+        if (isDuplicateDiscordPublication(event)) {
+            log.debug("Skipping duplicate Discord event within dedupe window: {} {}", event.getSourceId(), event.getKind());
+            return;
+        }
         List<String> botIds = router.route(event);
         if (isDiscordMessage(event)) {
             addBotsWithWaitingSessionForDiscordMessage(event, botIds);
@@ -175,6 +182,57 @@ public final class VinekeepersEngine implements EventSubscriber {
 
     private static boolean isDiscordMessage(Event event) {
         return "message".equals(event.getKind()) && event.getSourceId() != null && event.getSourceId().startsWith("discord");
+    }
+
+    private static boolean isDiscordInteraction(Event event) {
+        return "interaction".equals(event.getKind()) && event.getSourceId() != null && event.getSourceId().startsWith("discord");
+    }
+
+    /**
+     * Multiple bot tokens may observe the same Discord message; only the first publication within the TTL is processed.
+     */
+    private boolean isDuplicateDiscordPublication(Event event) {
+        if (!isDiscordMessage(event) && !isDiscordInteraction(event)) {
+            return false;
+        }
+        Map<String, Object> p = event.getPayload();
+        if (p == null) {
+            return false;
+        }
+        String dedupeId;
+        if (isDiscordMessage(event)) {
+            Object mid = p.get("messageId");
+            dedupeId = mid != null ? mid.toString() : "";
+        } else {
+            Object iid = p.get("interactionId");
+            dedupeId = iid != null ? iid.toString() : "";
+        }
+        if (dedupeId.isBlank()) {
+            return false;
+        }
+        String key = event.getSourceId() + ":" + event.getKind() + ":" + dedupeId;
+        long now = System.currentTimeMillis();
+        Long prev = discordEventDedupe.putIfAbsent(key, now);
+        if (prev == null) {
+            trimDiscordDedupeIfHuge();
+            return false;
+        }
+        if (now - prev < DISCORD_DEDUPE_TTL_MS) {
+            return true;
+        }
+        discordEventDedupe.put(key, now);
+        return false;
+    }
+
+    private void trimDiscordDedupeIfHuge() {
+        if (discordEventDedupe.size() <= 8_000) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - DISCORD_DEDUPE_TTL_MS;
+        discordEventDedupe.entrySet().removeIf(e -> e.getValue() < cutoff);
+        if (discordEventDedupe.size() > 8_000) {
+            discordEventDedupe.clear();
+        }
     }
 
     /**

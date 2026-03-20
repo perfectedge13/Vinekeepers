@@ -156,6 +156,7 @@ public final class ConfigLoader {
     private Map<String, ConnectorIdentity> buildConnectorIdentities(Map<String, Object> b) {
         String tokenEnvKey = null;
         boolean handlesOwnedSpaces = false;
+        Map<String, Object> discordIngress = null;
         String botId = b.get("id") != null ? b.get("id").toString() : "?";
 
         // Legacy top-level (deprecated but still accepted)
@@ -191,6 +192,23 @@ public final class ConfigLoader {
                         log.warn("Bot config 'identities.discord.handlesOwnedSpaces' is not a boolean or true/false string; ignoring, using false. Bot id: {}", botId);
                     }
                 }
+                Object ingressObj = discord.get("ingress");
+                if (ingressObj != null && !(ingressObj instanceof Map)) {
+                    log.warn("Bot config 'identities.discord.ingress' is not a map; ignoring. Bot id: {}", botId);
+                } else if (ingressObj instanceof Map<?, ?> ingressMap) {
+                    Map<String, Object> ing = new HashMap<>();
+                    Object msg = ingressMap.get("messages");
+                    Object inter = ingressMap.get("interactions");
+                    if (msg != null) {
+                        ing.put("messages", msg.toString().trim());
+                    }
+                    if (inter != null) {
+                        ing.put("interactions", inter.toString().trim());
+                    }
+                    if (!ing.isEmpty()) {
+                        discordIngress = ing;
+                    }
+                }
             }
         }
 
@@ -200,6 +218,9 @@ public final class ConfigLoader {
         Map<String, Object> attrs = new HashMap<>();
         if (tokenEnvKey != null) attrs.put("tokenEnvKey", tokenEnvKey);
         attrs.put("handlesOwnedSpaces", handlesOwnedSpaces);
+        if (discordIngress != null) {
+            attrs.put("ingress", Map.copyOf(discordIngress));
+        }
         return Map.of("discord", new ConnectorIdentity(attrs));
     }
 

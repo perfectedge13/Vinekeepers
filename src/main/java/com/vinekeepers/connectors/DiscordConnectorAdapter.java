@@ -49,8 +49,20 @@ public final class DiscordConnectorAdapter implements ConnectorAdapter {
                     log.warn("Bot {} has discord tokenEnvKey {} but token is blank; skipping Discord connector for this bot.", bot.getId(), envKey);
                     continue;
                 }
-                boolean outboundOnly = !discordInboundListenersEnabled(bot, routedBotIds);
-                JdaDiscordGateway gateway = new JdaDiscordGateway(token, outboundOnly);
+                DiscordIngressModes modes = DiscordIngressModes.resolve(bot, routedBotIds);
+                DiscordOwnedSpacePredicate ownedPredicate = null;
+                if (modes.needsOwnedSpacePredicate()) {
+                    var frs = context.getFeatureRoomStateStore();
+                    var lcs = context.getLifecycleContextStore();
+                    if (frs != null || lcs != null) {
+                        ownedPredicate = new DiscordOwnedSpacePredicate(frs, lcs, bot.getId());
+                    } else {
+                        log.warn("Bot {} uses OWNED_SPACES ingress but no FeatureRoomStateStore/LifecycleContextStore in ConnectorContext; "
+                                + "falling back to scoped policy without channel filter on interactions.", bot.getId());
+                        modes = modes.fallbackWithoutStores();
+                    }
+                }
+                JdaDiscordGateway gateway = new JdaDiscordGateway(token, modes, ownedPredicate);
                 DiscordEventSource source = new DiscordEventSource(gateway);
                 router.registerSender(bot.getId(), source, gateway);
                 if (router.getDefaultGateway() == null) {
@@ -78,21 +90,21 @@ public final class DiscordConnectorAdapter implements ConnectorAdapter {
     }
 
     /**
-     * When true, the bot's JDA gateway registers message and interaction listeners (inbound).
-     * Routed bots and Discord lifecycle space owners ({@code handlesOwnedSpaces}) must be inbound so
-     * component interactions on that bot's messages are handled.
+     * When true, the bot's JDA gateway registers at least one inbound listener (message and/or interaction).
      */
-    public static boolean discordInboundListenersEnabled(BotDefinition bot, Set<String> routedBotIds) {
+    public static boolean discordGatewayRequiresListeners(BotDefinition bot, Set<String> routedBotIds) {
         if (bot == null) {
             return false;
         }
-        Set<String> routed = routedBotIds != null ? routedBotIds : Set.of();
-        if (routed.contains(bot.getId())) {
-            return true;
-        }
-        return bot.getConnectorIdentity("discord")
-                .map(d -> Boolean.TRUE.equals(d.getBoolean("handlesOwnedSpaces")))
-                .orElse(false);
+        return !DiscordIngressModes.resolve(bot, routedBotIds).isOutboundOnly();
+    }
+
+    /**
+     * @deprecated use {@link #discordGatewayRequiresListeners(BotDefinition, Set)}
+     */
+    @Deprecated
+    public static boolean discordInboundListenersEnabled(BotDefinition bot, Set<String> routedBotIds) {
+        return discordGatewayRequiresListeners(bot, routedBotIds);
     }
 
     private static String tokenEnvKey(BotDefinition bot) {

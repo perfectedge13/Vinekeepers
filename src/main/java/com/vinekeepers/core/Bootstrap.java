@@ -212,7 +212,7 @@ public final class Bootstrap {
         DiscordConnectorConfig discordConfig = new DiscordConnectorConfig(defaultDiscordTokenEnvKey);
         DiscordConnectorAdapter discordAdapter = new DiscordConnectorAdapter(discordConfig, routedBotIds);
         connectorRegistry.register("discord", discordAdapter);
-        ConnectorContext context = new ConnectorContext(eventBus, outboundDeliveryRouter);
+        ConnectorContext context = new ConnectorContext(eventBus, outboundDeliveryRouter, featureRoomStateStore, lifecycleContextStore);
         discordAdapter.registerBots(lastLoadedBots, context);
 
         engine.setReplySender("discord", outboundDeliveryRouter);
