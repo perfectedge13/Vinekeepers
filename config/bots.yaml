@@ -197,7 +197,7 @@ workflows:
       - type: branch
         branches:
           - when: { key: planReadinessStatus, value: BLOCKED }
-            next: 38
+            next: 39
           - when: { key: planReadinessStatus, value: NEEDS_REVISION }
             next: 2
             clear:
@@ -234,9 +234,9 @@ workflows:
       - type: branch
         branches:
           - when: { key: planApprovalDecision, value: approve }
-            next: 30
+            next: 31
           - when: { key: planApprovalDecision, value: approve_with_risks }
-            next: 30
+            next: 31
           - when: { key: planApprovalDecision, value: revise }
             next: 2
             clear:
@@ -252,9 +252,9 @@ workflows:
               - proposalConfirmProposedValue
               - planningHasConfirmPending
           - when: { key: planApprovalDecision, value: reject }
-            next: 41
+            next: 42
           - when: else
-            next: 41
+            next: 42
       - type: call_action
         action: persist_plan_approval
       - type: call_action
@@ -315,15 +315,15 @@ workflows:
       - type: branch
         branches:
           - when: { key: roomAction, value: status }
-            next: 44
-          - when: { key: roomAction, value: retry }
             next: 45
-          - when: { key: roomAction, value: close }
+          - when: { key: roomAction, value: retry }
             next: 46
-          - when: { key: roomAction, value: "" }
+          - when: { key: roomAction, value: close }
             next: 47
-          - when: else
+          - when: { key: roomAction, value: "" }
             next: 48
+          - when: else
+            next: 49
       - type: done
         message: "Room status: active. Repo and request are in context."
       - type: done

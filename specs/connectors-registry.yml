@@ -90,7 +90,11 @@ assets:
   - id: ASSET-DISCORD-GATEWAY
     kind: source
     path: src/main/java/com/vinekeepers/connectors/JdaDiscordGateway.java
-    role: JDA-backed Discord gateway implementing DiscordGateway (extends OutboundGateway); receive/send, author in payload, defer, send with components; getSelfUserId and addPermissionOverride for lifecycle room; optional outbound-only mode for non-routed bots
+    role: >-
+      JDA-backed Discord gateway implementing DiscordGateway (extends OutboundGateway); receive/send, author in payload,
+      defer, send with components; interaction events include threadId when the channel is a ThreadChannel (aligns
+      thread session keys with message events); getSelfUserId and addPermissionOverride for lifecycle room; optional
+      outbound-only mode for non-routed bots
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-DISCORD-GATEWAY-CONTRACT

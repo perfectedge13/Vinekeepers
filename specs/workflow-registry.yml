@@ -85,7 +85,7 @@ assets:
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, run_plan_critique_and_readiness,
-      persist_plan_approval, append/set plan actions
+      build_planning_thread_review_body, persist_plan_approval, append/set plan actions
     requires:
       - REQ-CORE-002
       - REQ-TOOLS-001
@@ -880,7 +880,9 @@ assets:
   - id: ASSET-PLAN-READINESS-EVALUATOR
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanReadinessEvaluator.java
-    role: Maps gaps and findings to PlanConfidence readiness (Phase C)
+    role: >-
+      Maps gaps and findings to PlanConfidence readiness (Phase C); PlanConfidence notes omit duplicate readiness label
+      (status is planReadinessStatus separately)
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1077,7 +1079,8 @@ requirements:
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
           resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
           capture_and_apply_discovery_answer,
-          classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness, persist_plan_approval,
+          classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness,
+          build_planning_thread_review_body, persist_plan_approval,
           append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry

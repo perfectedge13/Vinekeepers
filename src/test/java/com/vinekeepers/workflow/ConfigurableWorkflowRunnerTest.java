@@ -446,4 +446,47 @@ class ConfigurableWorkflowRunnerTest {
         assertTrue(r2.isCompleted());
         assertTrue(r2.getReplyMessage().contains("already completed"));
     }
+
+    @Test
+    void threadStrategy_interactionWithThreadIdResumesWaitingSessionFromThreadMessage() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "prompt_for_field",
+                        "prompt", "Proceed?",
+                        "storeIn", "choice",
+                        "intent", "present_choices",
+                        "choices", List.of(Map.of("id", "yes", "label", "Yes"))),
+                Map.of("type", "capture_field", "storeIn", "choice"),
+                Map.of("type", "done", "message", "Choice: {{choice}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("thread-btn", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(
+                def,
+                new WorkflowActionRegistry(),
+                null,
+                ToolPolicy.allowAll(),
+                ConversationMode.SINGLE_EVENT,
+                "thread",
+                null);
+        StateStore store = new StateStore();
+        String threadId = "thread-intake-1";
+        Event start = new Event("discord:g", "message", Map.of(
+                "channelId", threadId,
+                "threadId", threadId,
+                "authorId", "user-7",
+                "content", "kickoff"));
+        WorkflowRunResult w1 = runner.runResult(start, store, "arrietty");
+        assertTrue(w1.isWaiting());
+
+        Event click = new Event("discord:g", "interaction", Map.of(
+                "channelId", threadId,
+                "threadId", threadId,
+                "authorId", "user-7",
+                "customId", "yes",
+                "values", List.of("yes"),
+                "interactionId", "int-1",
+                "token", "tok-1"));
+        WorkflowRunResult w2 = runner.runResult(click, store, "arrietty");
+        assertTrue(w2.isCompleted());
+        assertEquals("Choice: yes", w2.getReplyMessage());
+    }
 }

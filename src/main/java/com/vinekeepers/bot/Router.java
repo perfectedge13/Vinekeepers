@@ -94,7 +94,15 @@ public final class Router {
                     Optional<FeatureRoomState> byThread = featureRoomStateStore.getByIntakeThreadId(channelId);
                     Optional<FeatureRoomState> byRoom = featureRoomStateStore.getByRoomChannelId(channelId);
                     if (byThread.isPresent()) {
-                        List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(byThread.get());
+                        FeatureRoomState threadRoom = byThread.get();
+                        if ("interaction".equals(context.getEventType())) {
+                            Optional<String> coordinator = FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(threadRoom);
+                            if (coordinator.isPresent()) {
+                                return List.of(coordinator.get());
+                            }
+                            log.warn("Intake thread has feature room state but no coordinator; falling back to participant list");
+                        }
+                        List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(threadRoom);
                         if (!participantBotIds.isEmpty()) {
                             return List.copyOf(participantBotIds);
                         }

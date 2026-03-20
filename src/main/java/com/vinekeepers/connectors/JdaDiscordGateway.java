@@ -157,6 +157,10 @@ public final class JdaDiscordGateway implements DiscordGateway {
         Guild guild = interaction.getGuild();
         String sourceId = guild != null ? "discord:" + guild.getId() : "discord:dm";
         String channelId = interaction.getChannel() != null ? interaction.getChannel().getId() : "";
+        String threadId = "";
+        if (interaction.getChannel() instanceof ThreadChannel) {
+            threadId = interaction.getChannel().getId();
+        }
         String messageId = "";
         if (event instanceof net.dv8tion.jda.api.events.interaction.component.GenericComponentInteractionCreateEvent comp) {
             if (comp.getMessage() != null) {
@@ -175,6 +179,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         }
         return new Event(sourceId, "interaction", Map.of(
                 "channelId", channelId,
+                "threadId", threadId,
                 "messageId", messageId,
                 "authorId", authorId,
                 "author", author,

@@ -48,4 +48,38 @@ class PhaseCPlanActionsTest {
         assertEquals(PlanApprovalStatus.APPROVE, store.getByContextId("c2").orElseThrow().getPlanApproval().getStatus());
         assertEquals("u9", store.getByContextId("c2").orElseThrow().getPlanApproval().getActorId());
     }
+
+    @Test
+    void buildPlanningThreadReviewBody_spreadsArtifactSummaries() {
+        WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
+        assertEquals("OK", init.run(null, Map.of("contextId", "c3", "channelId", "room3"), Map.of()));
+
+        var upsert = new UpsertArtifactSectionDataAction(store, reg);
+        assertEquals("OK", upsert.run(null,
+                Map.of("contextId", "c3"),
+                Map.of(
+                        "artifactId", "overall_plan",
+                        "sectionId", "outline",
+                        "mode", "replace",
+                        "data", Map.of("plan_body", "Step one; step two."))));
+        assertEquals("OK", upsert.run(null,
+                Map.of("contextId", "c3"),
+                Map.of(
+                        "artifactId", "validation_plan",
+                        "sectionId", "checks",
+                        "mode", "replace",
+                        "data", Map.of("validation_notes", "Run mvn test."))));
+
+        var build = new BuildPlanningThreadReviewBodyAction(store);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread = (Map<String, Object>) build.run(null, Map.of("contextId", "c3"), Map.of());
+        assertEquals("", spread.get("planningThreadReviewBuildError"));
+        String body = (String) spread.get("planningThreadReviewBody");
+        assertTrue(body.contains("Implementation outline"));
+        assertTrue(body.contains("Step one; step two."));
+        assertTrue(body.contains("Validation approach"));
+        assertTrue(body.contains("Run mvn test."));
+    }
 }

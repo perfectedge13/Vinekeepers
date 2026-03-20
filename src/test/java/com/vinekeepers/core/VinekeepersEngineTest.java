@@ -13,7 +13,12 @@ import com.vinekeepers.bot.RoutingFilter;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.reasoner.StubReasoner;
+import com.vinekeepers.state.LifecycleContextStore;
 import com.vinekeepers.state.StateStore;
+import com.vinekeepers.state.planning.FeatureRoomState;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningRole;
+import com.vinekeepers.state.planning.RoomParticipant;
 import com.vinekeepers.connectors.DiscordReplyTargetResolver;
 import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.connectors.ReplyTargetResolver;
@@ -35,10 +40,12 @@ import com.vinekeepers.reasoner.ReasonerOutput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -714,5 +721,51 @@ class VinekeepersEngineTest {
         engine.onEvent(user);
 
         assertEquals("done-my answer", lastSend.get());
+    }
+
+    @Test
+    void featureRoomIntakeThreadInteraction_invokesCoordinatorWorkflowOnly() {
+        FeatureRoomStateStore frs = new FeatureRoomStateStore();
+        List<RoomParticipant> parts = List.of(
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true),
+                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "r2", "B", false));
+        frs.put(new FeatureRoomState(
+                "c1", "f1", null, "room-ch", "thread-int-eng", null, null, "INTAKE_READY",
+                parts, null, Instant.now()));
+        router = new Router(new LifecycleContextStore(), frs);
+        engine = new VinekeepersEngine(router, stateStore, auditLogs::add);
+
+        AtomicInteger arriettyRuns = new AtomicInteger();
+        AtomicInteger architectRuns = new AtomicInteger();
+        for (String id : List.of("arrietty", "architect")) {
+            BotDefinition b = new BotDefinition(
+                    id,
+                    new Persona(id, ""),
+                    new ModelProfile("stub", "stub"),
+                    ToolPolicy.allowAll(),
+                    new MemoryPolicy(4096));
+            engine.registerBot(b);
+            engine.registerReasoner(id, new StubReasoner());
+        }
+        engine.registerRunner("arrietty", (e, s, bid) -> {
+            arriettyRuns.incrementAndGet();
+            return WorkflowRunResult.continueWithoutReply();
+        });
+        engine.registerRunner("architect", (e, s, bid) -> {
+            architectRuns.incrementAndGet();
+            return WorkflowRunResult.continueWithoutReply();
+        });
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "arrietty"));
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "architect"));
+
+        engine.onEvent(new Event("discord:g:1", "interaction", Map.of(
+                "channelId", "thread-int-eng",
+                "authorId", "u1",
+                "customId", "approve",
+                "interactionId", "i1",
+                "token", "t1")));
+
+        assertEquals(1, arriettyRuns.get());
+        assertEquals(0, architectRuns.get());
     }
 }

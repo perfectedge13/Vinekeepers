@@ -4,7 +4,7 @@
 
 ## 2026-03-19
 
-- **Feature room response policy (room vs thread):** Router returns the primary coordinator bot id only for the feature **room** channel; for the **intake/spec thread** id it returns all four participant configuredBotIds in role order. Tests: `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder`.
+- **Feature room response policy (room vs thread):** Router returns the primary coordinator bot id only for the feature **room** channel; for the **intake/spec thread** id it returns all four participant configuredBotIds in role order for **messages**, and the **coordinator only** for **component interactions**. Tests: `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder`, `routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly`.
 - **Documentation:** **how-it-works** / **contracts** / feature **summary** now describe the real evaluation order (filter pass, then feature-room overrides, then lifecycle, then deduped filters).
 
 ## 2026-03-18

@@ -406,6 +406,29 @@ class RouterTest {
     }
 
     @Test
+    void routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly() {
+        FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
+        List<RoomParticipant> participants = List.of(
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
+                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
+                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
+                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+        featureStore.put(new FeatureRoomState(
+                "ctx-1", "feat-1", null, "room-ch-parent", "thread-456", null, null, "INTAKE_READY",
+                participants, null, Instant.now()));
+        Router r = new Router(new LifecycleContextStore(), featureStore);
+        r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+
+        Event event = new Event("discord:g:x", "interaction", Map.of(
+                "channelId", "thread-456",
+                "authorId", "user-1",
+                "customId", "approve",
+                "interactionId", "i1",
+                "token", "t1"));
+        assertEquals(List.of("arrietty"), r.route(event));
+    }
+
+    @Test
     void routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable() {
         LifecycleContextStore lifecycleStore = new LifecycleContextStore();
         lifecycleStore.put(new LifecycleContext("ctx-1", "owned-ch", Instant.now(), null, "arrietty", null, null, null));

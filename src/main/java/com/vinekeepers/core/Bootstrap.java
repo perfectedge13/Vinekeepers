@@ -47,6 +47,7 @@ import com.vinekeepers.workflow.actions.AppendIssueAction;
 import com.vinekeepers.workflow.actions.AppendRequirementAction;
 import com.vinekeepers.workflow.actions.AppendValidationNoteAction;
 import com.vinekeepers.workflow.actions.BuildDiscoveryAgendaAction;
+import com.vinekeepers.workflow.actions.BuildPlanningThreadReviewBodyAction;
 import com.vinekeepers.workflow.actions.BuildProposalConfirmPromptAction;
 import com.vinekeepers.workflow.actions.CaptureAndApplyDiscoveryAnswerAction;
 import com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueAction;
@@ -277,6 +278,7 @@ public final class Bootstrap {
         registry.register("classify_assumption_or_issue", new ClassifyAssumptionOrIssueAction(featurePlanStateStore));
         registry.register("recompute_plan_progress", new RecomputePlanProgressAction(featurePlanStateStore, workProfileRegistry));
         registry.register("run_plan_critique_and_readiness", new RunPlanCritiqueAndReadinessAction(featurePlanStateStore, workProfileRegistry));
+        registry.register("build_planning_thread_review_body", new BuildPlanningThreadReviewBodyAction(featurePlanStateStore));
         registry.register("persist_plan_approval", new PersistPlanApprovalAction(featurePlanStateStore));
         registry.register("append_plan_requirement", new AppendRequirementAction(featurePlanStateStore));
         registry.register("append_plan_assumption", new AppendAssumptionAction(featurePlanStateStore));

@@ -39,7 +39,8 @@ assets:
     role: >-
       Match events to bots by routing rules and ownership; depends on LifecycleContextStore and optional
       FeatureRoomStateStore; feature room routing runs before lifecycle single-owner; intake thread id returns four
-      participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE); room channel
+      participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) for messages;
+      intake thread component interactions return the primary coordinator configuredBotId only; room channel
       returns coordinator only; lifecycle resolved by channelId then getByDeliveryTargetId(channelId); when lifecycle
       context exists and owner has handlesOwnedSpaces, single-owner precedence; setHandlesOwnedSpacesByBotId(map);
       discordAuthors match by actorId or actorUsername; Discord mention and trigger apply only to message events;

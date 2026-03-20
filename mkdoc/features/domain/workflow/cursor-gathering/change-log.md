@@ -4,6 +4,7 @@
 
 ## 2026-03-20
 
+- **Thread planning UX (Arrietty intake):** **`build_planning_thread_review_body`** before pre-launch **`post_channel_message`** so auto-applied drafts are visible before approval; **`PlanReadinessEvaluator`** notes omit duplicate readiness label (use **`planReadinessStatus`** in copy). **Router:** intake-thread **interaction** events route to the primary coordinator only; **JdaDiscordGateway** sets **`threadId`** on interactions in **ThreadChannel** so **`sessionKeyStrategy: thread`** matches message sessions. Specs: workflow-registry, bot-registry, connectors-registry; tests: SessionKeyStrategiesTest, RouterTest, ConfigurableWorkflowRunnerTest, VinekeepersEngineTest, PhaseCPlanActionsTest.
 - **Proposal-driven planning (Arrietty intake):** **`generate_planning_proposals`**, **`apply_auto_planning_proposals`**, **`build_proposal_confirm_prompt`**, **`resolve_proposal_confirmation`**; **`PlanningProposal`** model and **`PlanningDraftSupport`** shared with **`synthesize_plan_drafts`**. **`arrietty_room`** runs confirm loop (OK vs edited text) before structured discovery when workspace is not ready. Specs: workflow-registry, state-registry; tests: PlanningProposalActionsTest.
 
 ## 2026-03-19

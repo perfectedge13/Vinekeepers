@@ -23,7 +23,7 @@ public final class PlanReadinessEvaluator {
             Instant now) {
         String readiness = computeReadiness(gaps, findings, plan);
         String level = deriveLevel(findings, readiness);
-        String notes = summarize(readiness, gaps, findings, plan);
+        String notes = summarize(gaps, findings, plan);
         return new PlanConfidence(level, notes, readiness, now);
     }
 
@@ -80,12 +80,11 @@ public final class PlanReadinessEvaluator {
     }
 
     private static String summarize(
-            String readiness,
             List<DiscoveryGap> gaps,
             List<PlanCritiqueFinding> findings,
             FeaturePlanState plan) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Readiness: ").append(readiness).append(". ");
+        // Readiness status is exposed separately as planReadinessStatus; keep notes as detail counts only.
         if (gaps != null && !gaps.isEmpty()) {
             sb.append("Open gaps: ").append(gaps.size()).append(". ");
         }
