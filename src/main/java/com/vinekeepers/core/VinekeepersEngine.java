@@ -360,7 +360,7 @@ public final class VinekeepersEngine implements EventSubscriber {
             log.warn("Reply target resolver returned empty; skipping reply delivery");
             return;
         }
-        deliverReply(event, outbound, targetOpt.get());
+        deliverReply(event, outbound, targetOpt.get(), botId);
     }
 
     private ReasonerOutput runReasoner(BotDefinition bot, Event event, WorkflowRunResult workflowResult) {
@@ -438,9 +438,16 @@ public final class VinekeepersEngine implements EventSubscriber {
     /** Discord deferred interactions must receive a follow-up; use when workflow/reasoner produce no outbound. */
     private static final OutboundResponse DEFERRED_INTERACTION_ACK = OutboundResponse.ofText("Recorded.");
 
-    private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target) {
+    private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target, String handlingBotId) {
+        ReplyTarget resolved = target;
+        if (handlingBotId != null && !handlingBotId.isBlank()
+                && target instanceof com.vinekeepers.interactions.ChannelTarget ct
+                && ct.replyAsBotId() == null) {
+            resolved = new com.vinekeepers.interactions.ChannelTarget(
+                    ct.sourceId(), ct.channelId(), ct.messageId(), handlingBotId);
+        }
         if (outbound == null) {
-            if (target instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
+            if (resolved instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
                 outbound = DEFERRED_INTERACTION_ACK;
             } else {
                 return;
@@ -449,12 +456,12 @@ public final class VinekeepersEngine implements EventSubscriber {
         String sourcePrefix = event.getSourceId().contains(":") ? event.getSourceId().substring(0, event.getSourceId().indexOf(':')) : event.getSourceId();
         AppReplySink sink = sinks.get(sourcePrefix);
         if (sink != null) {
-            if (target instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
-                sink.sendFollowUp(outbound, target);
-            } else if (target instanceof com.vinekeepers.interactions.InteractionTarget) {
-                sink.respondImmediately(outbound, target);
+            if (resolved instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
+                sink.sendFollowUp(outbound, resolved);
+            } else if (resolved instanceof com.vinekeepers.interactions.InteractionTarget) {
+                sink.respondImmediately(outbound, resolved);
             } else {
-                sink.respondImmediately(outbound, target);
+                sink.respondImmediately(outbound, resolved);
             }
             return;
         }
@@ -462,8 +469,8 @@ public final class VinekeepersEngine implements EventSubscriber {
         if (sender != null) {
             String text = outbound.getText().orElse("");
             if (!text.isEmpty()) {
-                String channelId = target.channelId();
-                String messageId = target.messageId();
+                String channelId = resolved.channelId();
+                String messageId = resolved.messageId();
                 if (channelId != null) {
                     sender.send(channelId, messageId, text);
                 }

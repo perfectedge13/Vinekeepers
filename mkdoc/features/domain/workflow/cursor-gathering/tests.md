@@ -44,4 +44,7 @@ Unit tests cover Luna gathering state, YAML-configured mention routing, the lega
 | UNIT-STRUCTURED-DISCOVERY-SUPPORT | StructuredDiscoverySupportTest | com.vinekeepers.workflow.discovery.StructuredDiscoverySupportTest | — | Verify structured gaps, agenda spread, and empty state when required profile fields filled |
 | UNIT-DISCOVERY-WORKFLOW-ACTIONS | DiscoveryWorkflowActionsTest | com.vinekeepers.workflow.actions.DiscoveryWorkflowActionsTest | — | Verify Phase B discovery actions: gaps scan errors and open gaps after init, agenda errors and prompt from gaps, capture_and_apply skip vs REQUIRED_FIELD upsert, recompute errors and section status projection |
 | UNIT-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION | ClassifyAssumptionOrIssueActionTest | com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueActionTest | — | Verify rule-based append_plan_issue vs append_plan_assumption from discovery answer text |
+| UNIT-ARRIETTY-ROOM-WORKFLOW-YAML | ArriettyRoomWorkflowYamlTest | com.vinekeepers.config.ArriettyRoomWorkflowYamlTest | — | Verify arrietty_room branch next indices are within the compiled step list |
+| UNIT-PLANNING-PACKET-DEPTH-EVALUATOR | PlanningPacketDepthEvaluatorTest | com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluatorTest | — | Verify depth word counts and evaluate thresholds |
+| UNIT-RUN-LLM-PLANNING-SYNTHESIS-JSON | RunLlmPlanningSynthesisActionJsonTest | com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisActionJsonTest | — | Verify JSON extraction from assistant content for synthesis |
 

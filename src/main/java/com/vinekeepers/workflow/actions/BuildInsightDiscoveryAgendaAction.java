@@ -1,6 +1,8 @@
 package com.vinekeepers.workflow.actions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
@@ -10,12 +12,15 @@ import com.vinekeepers.workflow.discovery.InsightDiscoverySupport;
 import com.vinekeepers.workflow.discovery.StructuredDiscoverySupport;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Builds discovery agenda; for v2+ profiles with multiple required-field gaps, uses one bundled insight prompt.
  */
 public final class BuildInsightDiscoveryAgendaAction implements com.vinekeepers.workflow.WorkflowAction {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final FeaturePlanStateStore planStateStore;
     private final WorkProfileRegistry workProfileRegistry;
@@ -48,6 +53,7 @@ public final class BuildInsightDiscoveryAgendaAction implements com.vinekeepers.
                     }
                 }
             }
+            initialRequest = mergeLlmFollowUps(initialRequest, state, bind);
             if (profile != null && profile.findSection("architecture_notes", "impact").isPresent()) {
                 return InsightDiscoverySupport.buildInsightAgendaSpread(gapsJson, profile, initialRequest);
             }
@@ -83,5 +89,30 @@ public final class BuildInsightDiscoveryAgendaAction implements com.vinekeepers.
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static String mergeLlmFollowUps(String initialRequest, Map<String, Object> state, Map<String, Object> bind) {
+        String raw = firstNonBlank(getString(bind, "planningFollowUpQuestionsJson"), getString(state, "planningFollowUpQuestionsJson"));
+        if (raw == null || raw.isBlank() || "[]".equals(raw.trim())) {
+            return initialRequest;
+        }
+        try {
+            List<String> qs = JSON.readValue(raw, new TypeReference<>() {});
+            if (qs == null || qs.isEmpty()) {
+                return initialRequest;
+            }
+            String base = initialRequest != null ? initialRequest : "";
+            StringBuilder b = new StringBuilder(base);
+            b.append("\n\n---\n**Planning follow-up questions (synthesis):**\n");
+            for (int i = 0; i < qs.size(); i++) {
+                String q = qs.get(i);
+                if (q != null && !q.isBlank()) {
+                    b.append(i + 1).append(". ").append(q.trim()).append("\n");
+                }
+            }
+            return b.toString();
+        } catch (Exception e) {
+            return initialRequest;
+        }
     }
 }

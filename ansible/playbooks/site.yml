@@ -1,18 +1,14 @@
 ---
-# Example playbook invoked by Gadget with -e gadget_project=... -e gadget_branch=...
-# Replace tasks with real git pull, build, and docker compose steps on your host.
-# Mount this tree and the Docker socket into the Vinekeepers container when running in Docker.
-- name: Gadget deploy placeholder
+# Generic example: parameters come from ansible-playbook -e (project_id, branch, gadget_project, gadget_branch,
+# plus manifest extraVars). Implement checkout, build, and service restart in your own play or role — not in Java.
+# Run from the Vinekeepers container with DEPLOY_ANSIBLE_ROOT / GADGET_ANSIBLE_ROOT pointing at this tree.
+- name: Deploy parameters (example)
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Show deploy parameters
-      ansible.builtin.debug:
-        msg: "Deploy gadget_project={{ gadget_project | default('unknown') }} branch={{ gadget_branch | default('main') }}"
-    - name: Reminder
+    - name: Echo deploy context
       ansible.builtin.debug:
         msg: >-
-          Extend this playbook to checkout gadget_branch, build, stop the running container,
-          and start the new image on the host. From inside Docker, mount /var/run/docker.sock
-          and host paths your tasks need.
+          project_id={{ project_id | default('') }} branch={{ branch | default('') }}
+          (legacy gadget_project={{ gadget_project | default('') }} gadget_branch={{ gadget_branch | default('') }})

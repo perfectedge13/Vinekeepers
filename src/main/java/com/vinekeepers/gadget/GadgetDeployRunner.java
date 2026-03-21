@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -81,7 +82,7 @@ public final class GadgetDeployRunner {
             return;
         }
 
-        List<String> cmd = buildCommand(playbook, project.getId(), branch);
+        List<String> cmd = buildCommand(playbook, project, branch);
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(root.toFile());
@@ -100,21 +101,45 @@ public final class GadgetDeployRunner {
         }
     }
 
-    private static List<String> buildCommand(Path playbook, String projectId, String branch) {
-        String binary = firstNonBlank(Env.get("GADGET_ANSIBLE_BINARY", ""), "ansible-playbook");
+    private static List<String> buildCommand(Path playbook, GadgetProjectDefinition project, String branch) {
+        String binary = firstNonBlank(Env.get("DEPLOY_ANSIBLE_BINARY", ""),
+                firstNonBlank(Env.get("GADGET_ANSIBLE_BINARY", ""), "ansible-playbook"));
         List<String> cmd = new ArrayList<>();
         cmd.add(binary);
-        String inventory = Env.get("GADGET_ANSIBLE_INVENTORY", "").trim();
+        String inventory = firstNonBlank(Env.get("DEPLOY_ANSIBLE_INVENTORY", ""),
+                Env.get("GADGET_ANSIBLE_INVENTORY", "")).trim();
         if (!inventory.isBlank()) {
             cmd.add("-i");
             cmd.add(inventory);
         }
         cmd.add(playbook.toString());
-        cmd.add("-e");
-        cmd.add("gadget_project=" + projectId);
-        cmd.add("-e");
-        cmd.add("gadget_branch=" + branch);
+        String projectId = project.getId();
+        appendExtraVar(cmd, "project_id", projectId);
+        appendExtraVar(cmd, "branch", branch);
+        appendExtraVar(cmd, "gadget_project", projectId);
+        appendExtraVar(cmd, "gadget_branch", branch);
+        for (Map.Entry<String, String> e : project.getExtraVars().entrySet()) {
+            appendExtraVar(cmd, e.getKey(), e.getValue());
+        }
         return cmd;
+    }
+
+    private static void appendExtraVar(List<String> cmd, String key, String value) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        String v = value != null ? value : "";
+        cmd.add("-e");
+        cmd.add(key + "=" + escapeExtraVarValue(v));
+    }
+
+    /** Single-line scalar for {@code -e key=value} (no shell). Visible for tests. */
+    public static String escapeExtraVarValue(String v) {
+        String t = v.replace("\r", " ").replace("\n", " ").trim();
+        if (t.contains("\\") || t.contains("\"")) {
+            return "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        }
+        return t;
     }
 
     private static void streamImportantLines(OutboundDeliveryRouter router,

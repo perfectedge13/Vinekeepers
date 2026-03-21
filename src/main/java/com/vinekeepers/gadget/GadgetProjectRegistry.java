@@ -79,7 +79,13 @@ public final class GadgetProjectRegistry {
                     String id = stringVal(map.get("id"));
                     String label = stringVal(map.get("label"));
                     String playbook = stringVal(map.get("playbook"));
-                    out.add(new GadgetProjectDefinition(id, label, playbook));
+                    String gitRemote = stringVal(map.get("gitRemote"));
+                    if (gitRemote.isEmpty()) {
+                        gitRemote = stringVal(map.get("repo"));
+                    }
+                    Map<String, String> extraVars = stringMap(map.get("extraVars"));
+                    out.add(new GadgetProjectDefinition(id, label, playbook,
+                            gitRemote.isEmpty() ? null : gitRemote, extraVars));
                 }
             }
             return new GadgetProjectRegistry(out);
@@ -91,5 +97,19 @@ public final class GadgetProjectRegistry {
 
     private static String stringVal(Object o) {
         return o != null ? o.toString().trim() : "";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> stringMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> m)) {
+            return Map.of();
+        }
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : m.entrySet()) {
+            if (e.getKey() != null && e.getValue() != null) {
+                out.put(e.getKey().toString().trim(), e.getValue().toString());
+            }
+        }
+        return out;
     }
 }

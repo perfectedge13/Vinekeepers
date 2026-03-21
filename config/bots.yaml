@@ -99,6 +99,8 @@ routing:
     discordMention: luna
     discordAuthors:
     - novawilde13_72571
+    discordChannelsExclude:
+    - '1484800775342391378'
 - botId: gadget
   filter:
     discordMention: gadget
@@ -127,13 +129,13 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 51
+        next: 58
       - when:
           key: planningIntakeThread
           value: 'true'
         next: 2
       - when: else
-        next: 43
+        next: 52
     - type: call_action
       action: get_profile_missing_fields
       storeIn: profileMissingSummary
@@ -195,7 +197,7 @@ workflows:
           value: 'true'
         next: 16
       - when: else
-        next: 26
+        next: 24
     - type: call_action
       action: build_insight_discovery_agenda
       storeSpread: true
@@ -206,7 +208,7 @@ workflows:
           operator: nonblank
         next: 18
       - when: else
-        next: 26
+        next: 24
     - type: prompt_for_field
       prompt: '{{discoveryCurrentQuestionPrompt}}'
       storeIn: discoveryAnswerRaw
@@ -224,7 +226,7 @@ workflows:
       - when:
           key: discoveryBlockingIssueMode
           value: 'true'
-        next: 26
+        next: 24
       - when:
           key: discoveryHasOpenGaps
           value: 'true'
@@ -232,13 +234,65 @@ workflows:
         clear:
         - discoveryAnswerRaw
       - when: else
-        next: 26
+        next: 24
+    - type: call_action
+      action: ensure_repo_workspace
+    - type: call_action
+      action: spread_plan_workspace_signals
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: repoWorkspaceReady
+          value: 'true'
+        next: 28
+      - when: else
+        next: 27
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Repo workspace** — {{repoWorkspaceStatusSummary}}
+
+          Planning will continue from your request text; local file snippets may be
+          limited until a workspace is available.'
+        asRole: orchestrator
+        target: thread
     - type: call_action
       action: build_request_exploration
     - type: call_action
       action: expand_planning_drafts
     - type: call_action
+      action: run_llm_planning_synthesis
+      storeSpread: true
+    - type: call_action
       action: synthesize_pre_critique_artifacts
+    - type: call_action
+      action: evaluate_planning_packet_depth
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: planningPacketDepthOk
+          value: 'true'
+        next: 36
+      - when: else
+        next: 34
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Planning packet not posted** — depth check failed.
+
+          {{planningPacketDepthReason}}
+
+          Add more detail in discovery, choose **Continue to planning packet** from
+          the coordinator menu, or answer clarifying questions so we can enrich the
+          plan.'
+        asRole: orchestrator
+        target: thread
+    - type: branch
+      branches:
+      - when: else
+        next: 61
     - type: call_action
       action: post_planning_packet_thread
       storeSpread: true
@@ -250,7 +304,7 @@ workflows:
       - when:
           key: planReadinessStatus
           value: BLOCKED
-        next: 40
+        next: 49
       - when:
           key: planReadinessStatus
           value: NEEDS_REVISION
@@ -273,9 +327,9 @@ workflows:
       - when:
           key: planReadinessStatus
           value: NEEDS_HUMAN_DECISION
-        next: 65
+        next: 72
       - when: else
-        next: 30
+        next: 39
     - type: call_action
       action: post_channel_message
       bind:
@@ -330,11 +384,11 @@ workflows:
       - when:
           key: planApprovalDecision
           value: approve
-        next: 34
+        next: 43
       - when:
           key: planApprovalDecision
           value: approve_with_risks
-        next: 34
+        next: 43
       - when:
           key: planApprovalDecision
           value: revise
@@ -392,9 +446,9 @@ workflows:
       - when:
           key: launchSucceeded
           value: 'false'
-        next: 40
+        next: 49
       - when: else
-        next: 72
+        next: 81
     - type: call_action
       action: post_channel_message
       bind:
@@ -421,21 +475,21 @@ workflows:
       - when:
           key: roomAction
           value: status
-        next: 46
+        next: 55
       - when:
           key: roomAction
           value: retry
-        next: 47
+        next: 56
       - when:
           key: roomAction
           value: close
-        next: 48
+        next: 57
       - when:
           key: roomAction
           value: ''
-        next: 49
+        next: 58
       - when: else
-        next: 49
+        next: 58
     - type: done
       message: 'Room status: active. Repo and request are in context.'
     - type: done
@@ -482,19 +536,19 @@ workflows:
       - when:
           key: intakeChoice
           value: continue_planning
-        next: 55
+        next: 64
         clear:
         - discoveryAnswerRaw
       - when:
           key: intakeChoice
           value: add_details
-        next: 59
+        next: 68
       - when:
           key: intakeChoice
           value: clarify_questions
         next: 16
       - when: else
-        next: 52
+        next: 61
         clear:
         - intakeChoice
     - type: call_action
@@ -529,7 +583,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 52
+        next: 61
         clear:
         - intakeChoice
         - discoveryAnswerRaw
@@ -568,7 +622,7 @@ workflows:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 69
+        next: 78
       - when:
           key: readinessProceedRaw
           value: revise
@@ -596,7 +650,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 30
+        next: 39
     - type: call_action
       action: post_channel_message
       bind:
@@ -771,7 +825,7 @@ workflows:
       - from: context.channelId
         storeIn: channelId
     - type: prompt_for_field
-      prompt: '**Gadget** — choose an action:'
+      prompt: '**Deploy** — choose an action:'
       storeIn: menuChoice
       intent: present_choices
       choices:
@@ -786,13 +840,24 @@ workflows:
       - when:
           key: menuChoice
           value: cancel
-        next: 15
+        next: 17
       - when:
           key: menuChoice
           value: deploy_docker
         next: 4
       - when: else
-        next: 15
+        next: 17
+    - type: call_action
+      action: deploy_resolve_project
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: deployNeedsProjectPick
+          value: 'true'
+        next: 6
+      - when: else
+        next: 8
     - type: prompt_for_field
       prompt: Which project should we deploy?
       storeIn: gadgetProject
@@ -802,14 +867,7 @@ workflows:
     - type: prompt_for_field
       prompt: Which Git branch should we deploy?
       storeIn: branchChoice
-      intent: present_choices
-      choices:
-      - id: main
-        label: main
-      - id: develop
-        label: develop
-      - id: other
-        label: Other (type branch name)
+      choiceProvider: deployGitBranches
     - type: capture_field
       storeIn: branchChoice
     - type: branch
@@ -817,9 +875,9 @@ workflows:
       - when:
           key: branchChoice
           value: other
-        next: 9
-      - when: else
         next: 11
+      - when: else
+        next: 13
     - type: prompt_for_field
       prompt: Enter the branch name to deploy.
       storeIn: branchCustom

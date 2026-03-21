@@ -15,6 +15,7 @@ Operator-driven Docker deploys from Discord (**REQ-GADGET-001**). The **gadget**
 | ASSET-GADGET-PROJECT-REGISTRY | Load deploy targets YAML | src/main/java/com/vinekeepers/gadget/GadgetProjectRegistry.java |
 | ASSET-GADGET-DEPLOY-RUNNER | Async ansible + Discord lines | src/main/java/com/vinekeepers/gadget/GadgetDeployRunner.java |
 | ASSET-GADGET-PROJECTS-CHOICE-PROVIDER | `gadgetProjects` choices | src/main/java/com/vinekeepers/providers/GadgetProjectsChoiceProvider.java |
+| (deploy) | `deployGitBranches` / `deploy_resolve_project` | `GitRemoteBranchesChoiceProvider`, `DeployResolveProjectAction` |
 | ASSET-GADGET-RESOLVE-BRANCH-ACTION | `gadget_resolve_branch` | src/main/java/com/vinekeepers/workflow/actions/GadgetResolveBranchAction.java |
 | ASSET-START-GADGET-DEPLOY-ACTION | `start_gadget_deploy` | src/main/java/com/vinekeepers/workflow/actions/StartGadgetDeployAction.java |
 | ASSET-GADGET-PROJECTS-YAML | Project list | config/gadget-projects.yaml |

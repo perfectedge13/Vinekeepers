@@ -60,6 +60,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         ConfigurableWorkflowState state = stateStore.get(stateKey, ConfigurableWorkflowState.class)
                 .orElseGet(ConfigurableWorkflowState::new);
         state.put("__sessionKey", stateKey);
+        state.put("__botId", botId);
         boolean terminal = state.getStatus() == ConfigurableWorkflowState.Status.COMPLETED
                 || state.getStepIndex() >= steps.size();
         if (terminal
@@ -71,6 +72,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         if (terminal) {
             state.resetForNewRun();
             state.put("__sessionKey", stateKey);
+            state.put("__botId", botId);
         }
 
         int maxSteps = 100;

@@ -71,7 +71,8 @@ public final class ConfigLoader {
             RoutingFilter filter = parseRoutingFilter(r.get("filter") != null ? (Map<String, Object>) r.get("filter") : null);
             String botId = (String) r.get("botId");
             if (botId != null) {
-                router.addRouting(new RoutingRule(filter != null ? filter : new RoutingFilter(null, null, null, null, null, null, null), botId));
+                router.addRouting(new RoutingRule(filter != null ? filter
+                        : new RoutingFilter(null, null, null, null, null, null, null), botId));
             }
         }
     }
@@ -99,6 +100,7 @@ public final class ConfigLoader {
         return new RoutingFilter(
                 toSet((List<String>) f.get("discordAuthors")),
                 toSet((List<String>) f.get("discordChannels")),
+                toSet((List<String>) f.get("discordChannelsExclude")),
                 (String) f.get("discordTrigger"),
                 (String) f.get("discordMention"),
                 toSet((List<String>) f.get("repos")),

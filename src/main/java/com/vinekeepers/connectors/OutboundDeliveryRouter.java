@@ -100,6 +100,16 @@ public final class OutboundDeliveryRouter implements ReplySender {
     }
 
     /**
+     * Gateway registered for the bot id (Discord connector identity), or null.
+     */
+    public OutboundGateway getGatewayForBot(String botId) {
+        if (botId == null || botId.isBlank()) {
+            return null;
+        }
+        return botIdToGateway.get(botId.trim());
+    }
+
+    /**
      * Self user id for the given bot (from that bot's gateway getSelfUserId). Returns null if no gateway for the bot.
      */
     public String getSelfUserIdForBot(String botId) {

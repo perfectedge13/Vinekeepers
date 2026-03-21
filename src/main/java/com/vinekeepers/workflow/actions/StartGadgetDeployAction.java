@@ -84,4 +84,11 @@ public final class StartGadgetDeployAction implements com.vinekeepers.workflow.W
         Object v = map.get(key);
         return v != null ? v.toString() : null;
     }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        return b != null ? b.trim() : "";
+    }
 }

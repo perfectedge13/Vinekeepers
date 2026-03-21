@@ -190,6 +190,26 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void buildRouterParsesDiscordChannelsExclude(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            routing:
+              - botId: luna
+                filter:
+                  discordMention: luna
+                  discordAuthors: ["novawilde13_72571"]
+                  discordChannelsExclude: ["excluded-channel-id"]
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        Router router = loader.buildRouter(config);
+        com.vinekeepers.events.Event inExcluded = new com.vinekeepers.events.Event(
+                "discord:g:ch", "message",
+                Map.of("channelId", "excluded-channel-id", "content", "ping @Luna",
+                        "author", "novawilde13_72571", "mentions", List.of("luna")));
+        assertTrue(router.route(inExcluded).isEmpty());
+    }
+
+    @Test
     void buildBotsParsesDiscordTokenEnvKey(@TempDir Path dir) throws Exception {
         Path yaml = dir.resolve("bots.yaml");
         Files.writeString(yaml, """

@@ -1,0 +1,102 @@
+package com.vinekeepers.workflow.planreview;
+
+import com.vinekeepers.profile.ArtifactState;
+import com.vinekeepers.profile.SectionState;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class PlanningPacketDepthEvaluatorTest {
+
+    @Test
+    void wordCount_emptyIsZero() {
+        assertEquals(0, PlanningPacketDepthEvaluator.wordCount(null));
+        assertEquals(0, PlanningPacketDepthEvaluator.wordCount(""));
+        assertEquals(0, PlanningPacketDepthEvaluator.wordCount("   "));
+    }
+
+    @Test
+    void wordCount_countsTokens() {
+        assertEquals(3, PlanningPacketDepthEvaluator.wordCount("a b c"));
+    }
+
+    @Test
+    void evaluate_failsWhenExplorationThin() {
+        FeaturePlanState plan = minimalPlanWithNarrative("word ".repeat(20), "y".repeat(200));
+        PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
+        assertFalse(r.ok());
+        assertTrue(r.reason().contains("exploration"));
+    }
+
+    @Test
+    void evaluate_failsWhenNarrativesThin() {
+        String exploration = "word ".repeat(30);
+        FeaturePlanState plan = minimalPlanWithNarrative(exploration, "short");
+        PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
+        assertFalse(r.ok());
+        assertTrue(r.reason().contains("thin"));
+    }
+
+    @Test
+    void evaluate_okWhenThresholdsMet() {
+        String exploration = "word ".repeat(30);
+        String narrative = "state ".repeat(20);
+        FeaturePlanState plan = minimalPlanWithNarrative(exploration, narrative);
+        PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
+        assertTrue(r.ok());
+    }
+
+    private static FeaturePlanState minimalPlanWithNarrative(String explorationBody, String currentState) {
+        Map<String, Object> reqValues = new LinkedHashMap<>();
+        reqValues.put("feature_summary", "");
+        reqValues.put("current_state_summary", currentState);
+        SectionState reqSec = new SectionState("narrative", SectionState.STATUS_DRAFT, reqValues, List.of());
+        ArtifactState reqArt = new ArtifactState("requirements_spec", Map.of("narrative", reqSec));
+
+        Map<String, Object> exValues = new LinkedHashMap<>();
+        exValues.put("exploration_body", explorationBody);
+        SectionState exSec = new SectionState("analysis", SectionState.STATUS_DRAFT, exValues, List.of());
+        ArtifactState exArt = new ArtifactState("request_exploration", Map.of("analysis", exSec));
+
+        Map<String, ArtifactState> arts = new LinkedHashMap<>();
+        arts.put("requirements_spec", reqArt);
+        arts.put("request_exploration", exArt);
+        FeaturePlanState empty = new FeaturePlanState(
+                "ctx",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning",
+                Map.of(),
+                null,
+                null);
+        return empty.withArtifacts(arts);
+    }
+}

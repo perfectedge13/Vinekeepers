@@ -19,8 +19,9 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # ensure_repo_workspace: git on PATH; openssh for git@ clones; stable clone root (mount a volume here to persist)
-# Gadget: add ansible in a derived image or `apk add ansible` when your Alpine mirror provides it; mount /var/run/docker.sock for host Docker.
-RUN apk add --no-cache git openssh-client \
+# Deploy workflow: ansible-playbook + git (branch list); mount host paths and /var/run/docker.sock as needed.
+RUN apk add --no-cache git openssh-client python3 py3-pip \
+    && pip3 install --break-system-packages ansible-core \
     && mkdir -p /app/checkouts
 ENV VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts
 ENV GADGET_ANSIBLE_ROOT=/app/ansible

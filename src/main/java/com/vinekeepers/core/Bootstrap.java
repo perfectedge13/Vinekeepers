@@ -15,6 +15,7 @@ import com.vinekeepers.connectors.DiscordReplyTargetResolver;
 import com.vinekeepers.connectors.GitHubEventSource;
 import com.vinekeepers.connectors.DiscordSpaceOperations;
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
+import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.connectors.SpaceOperationsRegistry;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudAdapterImpl;
@@ -39,6 +40,7 @@ import com.vinekeepers.profile.WorkProfileLoader;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.providers.GadgetProjectsChoiceProvider;
 import com.vinekeepers.providers.GitHubReposChoiceProvider;
+import com.vinekeepers.providers.GitRemoteBranchesChoiceProvider;
 import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunner;
@@ -60,6 +62,8 @@ import com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueAction;
 import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
+import com.vinekeepers.workflow.actions.DeployResolveProjectAction;
+import com.vinekeepers.workflow.actions.EvaluatePlanningPacketDepthAction;
 import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.EnsureRepoWorkspaceAction;
 import com.vinekeepers.workflow.actions.GadgetResolveBranchAction;
@@ -74,6 +78,7 @@ import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
+import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
 import com.vinekeepers.workflow.actions.RunPlanCritiqueAndReadinessAction;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
 import com.vinekeepers.workflow.actions.ProvisionBotInstanceAction;
@@ -84,6 +89,7 @@ import com.vinekeepers.workflow.actions.SetPlanSectionStatusAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
 import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
 import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
+import com.vinekeepers.workflow.actions.SpreadPlanWorkspaceSignalsAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
 import com.vinekeepers.workflow.actions.UpsertArtifactSectionDataAction;
 import org.slf4j.Logger;
@@ -150,8 +156,10 @@ public final class Bootstrap {
         registerLegacyActions(actionRegistry);
         registerLifecycleActions(actionRegistry);
         actionRegistry.register("gadget_resolve_branch", new GadgetResolveBranchAction());
+        GadgetProjectRegistry bootstrapGadgetProjects = GadgetProjectRegistry.load(Path.of("config", "gadget-projects.yaml"));
+        actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(bootstrapGadgetProjects));
         actionRegistry.register("start_gadget_deploy", new StartGadgetDeployAction(outboundDeliveryRouter,
-                GadgetProjectRegistry.load(Path.of("config", "gadget-projects.yaml")), "gadget"));
+                bootstrapGadgetProjects, "gadget"));
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
         this.router = new Router(lifecycleContextStore, featureRoomStateStore);
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
@@ -207,6 +215,7 @@ public final class Bootstrap {
                 engine.registerRunner(bot.getId(), runner);
                 engine.registerReasoner(bot.getId(), new StubReasoner());
             }
+            actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(gadgetProjectRegistry));
             actionRegistry.register("start_gadget_deploy", new StartGadgetDeployAction(outboundDeliveryRouter, gadgetProjectRegistry, "gadget"));
         } catch (Exception e) {
             log.warn("Could not load config from {}: {}", configPath, e.getMessage());
@@ -276,6 +285,7 @@ public final class Bootstrap {
     }
 
     private void registerLifecycleActions(WorkflowActionRegistry registry) {
+        OpenAiChatClient openAiChatClient = new OpenAiChatClient();
         registry.register("provision_bot_instance", new ProvisionBotInstanceAction(stateStore));
         registry.register("create_lifecycle_context", new CreateLifecycleContextAction(lifecycleContextStore));
         registry.register("provision_room_participants", new ProvisionRoomParticipantsAction(stateStore));
@@ -324,6 +334,11 @@ public final class Bootstrap {
         registry.register("ensure_repo_workspace", new EnsureRepoWorkspaceAction(
                 repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore,
                 outboundDeliveryRouter));
+        registry.register("spread_plan_workspace_signals", new SpreadPlanWorkspaceSignalsAction(featurePlanStateStore));
+        registry.register("evaluate_planning_packet_depth", new EvaluatePlanningPacketDepthAction(featurePlanStateStore));
+        registry.register(
+                "run_llm_planning_synthesis",
+                new RunLlmPlanningSynthesisAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
         registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore, featurePlanStateStore));
         registry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
     }

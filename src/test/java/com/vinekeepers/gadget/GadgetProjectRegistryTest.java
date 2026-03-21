@@ -31,4 +31,22 @@ class GadgetProjectRegistryTest {
         GadgetProjectRegistry reg = GadgetProjectRegistry.load(Path.of("nonexistent-gadget-projects.yaml"));
         assertTrue(reg.getProjects().isEmpty());
     }
+
+    @Test
+    void loadParsesGitRemoteAndExtraVars(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("gadget-projects.yaml");
+        Files.writeString(f, """
+                projects:
+                  - id: svc
+                    label: Service
+                    playbook: playbooks/svc.yml
+                    gitRemote: https://example.com/repo.git
+                    extraVars:
+                      checkout_path: /srv/app
+                """);
+        GadgetProjectRegistry reg = GadgetProjectRegistry.load(f);
+        var p = reg.findById("svc").orElseThrow();
+        assertEquals("https://example.com/repo.git", p.getGitRemote());
+        assertEquals("/srv/app", p.getExtraVars().get("checkout_path"));
+    }
 }

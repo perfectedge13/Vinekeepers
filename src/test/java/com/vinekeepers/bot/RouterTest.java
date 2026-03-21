@@ -261,6 +261,27 @@ class RouterTest {
     }
 
     @Test
+    void routeDoesNotMatchWhenChannelInDiscordChannelsExclude() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of("allowed_user"),
+                Set.of(),
+                Set.of("exclude-ch"),
+                null,
+                "luna",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        router.addRouting(new RoutingRule(filter, "luna"));
+        Event interaction = new Event("discord:g:guild", "interaction",
+                Map.of("channelId", "exclude-ch", "author", "allowed_user"));
+        assertTrue(router.route(interaction).isEmpty());
+        Event message = new Event("discord:g:guild", "message",
+                Map.of("channelId", "exclude-ch", "author", "allowed_user",
+                        "mentions", List.of("luna"), "content", "hi @Luna"));
+        assertTrue(router.route(message).isEmpty());
+    }
+
+    @Test
     void routeDoesNotMatchWhenMentionPresentButAuthorNotInFilter() {
         RoutingFilter filter = new RoutingFilter(
                 Set.of("allowed_user"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());

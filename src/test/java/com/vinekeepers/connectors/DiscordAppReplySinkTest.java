@@ -167,6 +167,21 @@ class DiscordAppReplySinkTest {
         assertEquals("tok|Hi", defaultGw.lastSendFollowUp);
     }
 
+    @Test
+    void channelTargetWithReplyAsBotIdUsesThatBotsGatewayNotDefault() {
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
+        RecordingDiscordGateway defaultGw = new RecordingDiscordGateway();
+        RecordingDiscordGateway gadgetGw = new RecordingDiscordGateway();
+        router.setDefaultGateway(defaultGw);
+        router.registerSender("gadget", gadgetGw::send, gadgetGw);
+        DiscordAppReplySink routerSink = new DiscordAppReplySink(router);
+        ChannelTarget target = new ChannelTarget("discord:g", "ch1", "", "gadget");
+        routerSink.respondImmediately(OutboundResponse.ofText("Deploy menu"), target);
+        assertEquals(0, defaultGw.sendCalls.get());
+        assertEquals(1, gadgetGw.sendCalls.get());
+        assertTrue(gadgetGw.lastSend.startsWith("ch1|"));
+    }
+
     private static final class RecordingDiscordGateway implements DiscordGateway {
 
         final AtomicInteger sendCalls = new AtomicInteger(0);

@@ -105,7 +105,7 @@ requirements:
         - BotConfig maps to BotDefinition structure
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
-        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
+        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, discordAuthors (list of string ids or usernames), and optional discordChannelsExclude (Discord channel ids where the rule must not match) from YAML
         - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces, optional ingress) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
         - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId, target, targetChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported

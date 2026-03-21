@@ -189,6 +189,12 @@ public final class Router {
         String kind = context.getEventType();
 
         if ("discord".equals(sourceType)) {
+            if (!f.getDiscordChannelsExclude().isEmpty()) {
+                String exCh = context.getChannelId();
+                if (exCh != null && !exCh.isBlank() && f.getDiscordChannelsExclude().contains(exCh)) {
+                    return false;
+                }
+            }
             if (!f.getDiscordAuthors().isEmpty()) {
                 String actorId = context.getActorId();
                 String actorUsername = context.getActorUsername();
