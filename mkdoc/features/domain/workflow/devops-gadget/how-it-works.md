@@ -12,4 +12,4 @@
 
 **Luna vs ops channel:** Luna’s routing can include `discordChannelsExclude` for the same ops channel id so button/select interactions there do not match Luna (only author checks apply to interactions today).
 
-**Host access from Docker:** the runtime image installs **ansible-core** via pip; mount `/var/run/docker.sock` and host paths your playbooks need. Example playbook: `ansible/playbooks/site.yml` (generic vars only — implement deploy logic in Ansible).
+**Host access from Docker:** the runtime image is **Ubuntu Jammy** and installs **ansible** via **apt** (reliable; avoids Alpine/musl pip issues). Mount `/var/run/docker.sock` and host paths your playbooks need. Example playbook: `ansible/playbooks/site.yml` writes a staging manifest under `/tmp/gadget-deploy-staging` (override with env **`GADGET_DEPLOY_STAGING`**) — extend it with checkout, build, and service tasks.

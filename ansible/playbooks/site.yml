@@ -1,14 +1,56 @@
 ---
-# Generic example: parameters come from ansible-playbook -e (project_id, branch, gadget_project, gadget_branch,
-# plus manifest extraVars). Implement checkout, build, and service restart in your own play or role — not in Java.
-# Run from the Vinekeepers container with DEPLOY_ANSIBLE_ROOT / GADGET_ANSIBLE_ROOT pointing at this tree.
-- name: Deploy parameters (example)
+# Example Gadget deploy playbook — real tasks you can extend (git, build, systemd, docker, etc.).
+# Java passes -e project_id, branch, gadget_project, gadget_branch plus manifest extraVars.
+# Override staging root: export GADGET_DEPLOY_STAGING=/path (default /tmp/gadget-deploy-staging).
+- name: Gadget deploy (example)
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
+  vars:
+    _project: "{{ project_id | default(gadget_project | default('', true), true) | trim }}"
+    _branch: "{{ branch | default(gadget_branch | default('main', true), true) | trim }}"
+    deploy_staging_base: "{{ lookup('env', 'GADGET_DEPLOY_STAGING') | default('/tmp/gadget-deploy-staging', true) }}"
+    safe_project: "{{ _project | regex_replace('[^a-zA-Z0-9._-]', '_') }}"
   tasks:
-    - name: Echo deploy context
+    - name: Require project id from Vinekeepers (-e project_id or -e gadget_project)
+      ansible.builtin.assert:
+        that:
+          - _project | length > 0
+        fail_msg: >-
+          project_id is required (GadgetDeployRunner sets it). For manual runs:
+          ansible-playbook playbooks/site.yml -e project_id=demo -e branch=main
+
+    - name: Ensure deploy staging directory exists
+      ansible.builtin.file:
+        path: "{{ deploy_staging_base }}/{{ safe_project }}"
+        state: directory
+        mode: "0755"
+
+    - name: Write deploy manifest (audit / hook for CI)
+      ansible.builtin.copy:
+        dest: "{{ deploy_staging_base }}/{{ safe_project }}/last-deploy.json"
+        mode: "0644"
+        content: "{{ deploy_manifest | to_nice_json }}\n"
+      vars:
+        deploy_manifest:
+          project_id: "{{ _project }}"
+          branch: "{{ _branch }}"
+          legacy_gadget_project: "{{ gadget_project | default('') }}"
+          legacy_gadget_branch: "{{ gadget_branch | default('') }}"
+          hostname: "{{ ansible_facts.hostname }}"
+          finished: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Record runner environment hint (optional)
+      ansible.builtin.copy:
+        dest: "{{ deploy_staging_base }}/{{ safe_project }}/README.txt"
+        mode: "0644"
+        content: |
+          This directory is written by the example playbook ansible/playbooks/site.yml.
+          Replace the manifest tasks with your own: git archive/checkout, mvn/docker build,
+          rolling restart, etc. Mount this path or /app/checkouts from the host when using Docker.
+
+    - name: Show deploy summary
       ansible.builtin.debug:
         msg: >-
-          project_id={{ project_id | default('') }} branch={{ branch | default('') }}
-          (legacy gadget_project={{ gadget_project | default('') }} gadget_branch={{ gadget_branch | default('') }})
+          Example deploy recorded manifest at {{ deploy_staging_base }}/{{ safe_project }}/last-deploy.json
+          for branch={{ _branch }}. Add your build and release tasks after this play.

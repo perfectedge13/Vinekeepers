@@ -15,13 +15,15 @@ RUN mvn -B package -Dmaven.test.skip=true && \
     mvn -B dependency:copy-dependencies -DoutputDirectory=target/lib
 
 # ---- Run ----
-FROM eclipse-temurin:21-jre-alpine
+# Ubuntu Jammy runtime: apt-installed Ansible avoids Alpine/musl pip failures (cryptography/rust wheels).
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
-# ensure_repo_workspace: git on PATH; openssh for git@ clones; stable clone root (mount a volume here to persist)
-# Deploy workflow: ansible-playbook + git (branch list); mount host paths and /var/run/docker.sock as needed.
-RUN apk add --no-cache git openssh-client python3 py3-pip \
-    && pip3 install --break-system-packages ansible-core \
+# ensure_repo_workspace: git + ssh for clones; Ansible for Gadget deploy; mount volumes to persist checkouts.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        git openssh-client ansible \
+    && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/checkouts
 ENV VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts
 ENV GADGET_ANSIBLE_ROOT=/app/ansible

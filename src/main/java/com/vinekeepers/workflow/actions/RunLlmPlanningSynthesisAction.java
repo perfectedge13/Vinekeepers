@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -205,7 +206,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         return t;
     }
 
-    private static String buildUserPayload(FeaturePlanState plan, String profileId) throws Exception {
+    private static String buildUserPayload(FeaturePlanState plan, String profileId) {
         Map<String, Object> snap = new LinkedHashMap<>();
         snap.put("profileId", profileId);
         snap.put("initialRequest", plan.getInitialRequest());
@@ -218,7 +219,12 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         snap.put("acceptance_criteria", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
         snap.put("open_questions", PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"));
         snap.put("plan_body", PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"));
-        return "Profile snapshot (JSON):\n" + JSON.writerWithDefaultPrettyPrinter().writeValueAsString(snap);
+        try {
+            return "Profile snapshot (JSON):\n" + JSON.writerWithDefaultPrettyPrinter().writeValueAsString(snap);
+        } catch (JsonProcessingException e) {
+            log.warn("Planning LLM: failed to serialize profile snapshot: {}", e.getMessage());
+            return "Profile snapshot (JSON):\n{}";
+        }
     }
 
     private static String getString(Map<String, Object> map, String key) {

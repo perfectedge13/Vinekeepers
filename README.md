@@ -15,7 +15,7 @@ Requirements: Java 21, Maven, Node 18+ for the spec gates.
 
 ### Docker
 
-Build and run in a container (Java 21 runtime, Alpine-based). The image includes **`git`** and **`openssh-client`** so **ensure_repo_workspace** can shallow-clone when **`VINEKEEPERS_ALLOW_GIT_CLONE=true`**. The image sets **`VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts`** by default; clones live there and are **ephemeral** unless you mount a volume (e.g. `-v vinekeepers-clones:/app/checkouts`).
+Build uses a **Java 21 JDK (Alpine)** stage; the **runtime image is Ubuntu Jammy** with **`git`**, **`openssh-client`**, and **`ansible`** (apt) so **ensure_repo_workspace** can shallow-clone when **`VINEKEEPERS_ALLOW_GIT_CLONE=true`** and **GadgetDeployRunner** can run **`ansible/playbooks/site.yml`** without fragile pip-on-Alpine installs. The image sets **`VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts`** by default; clones live there and are **ephemeral** unless you mount a volume (e.g. `-v vinekeepers-clones:/app/checkouts`).
 
 ```bash
 docker build -t vinekeepers .

@@ -2066,7 +2066,9 @@ requirements:
         - >-
           GadgetDeployRunner invokes ansible-playbook with -e project_id, branch, gadget_project, gadget_branch, and manifest
           extraVars; respects DEPLOY_ANSIBLE_DISABLED/GADGET_ANSIBLE_DISABLED for dry run; posts via sendAs workflow bot id
-        - ansible/playbooks ships generic example site.yml; Dockerfile copies ansible tree, sets GADGET_ANSIBLE_ROOT, installs ansible-core
+        - >-
+          ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies
+          ansible tree, sets GADGET_ANSIBLE_ROOT, installs ansible via apt on Ubuntu Jammy runtime (not Alpine pip)
       examples: []
     traceability:
       assets:
