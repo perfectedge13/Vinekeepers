@@ -241,6 +241,26 @@ class RouterTest {
     }
 
     @Test
+    void routeMatchesGadgetWhenMentionAndChannelAllowlist() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of("ops-chan"), null, "gadget", Set.of(), Set.of(), Set.of());
+        router.addRouting(new RoutingRule(filter, "gadget"));
+        Event event = new Event("discord:g:guild", "message",
+                Map.of("channelId", "ops-chan", "content", "@Gadget deploy", "mentions", List.of("gadget")));
+        assertEquals(List.of("gadget"), router.route(event));
+    }
+
+    @Test
+    void routeDoesNotMatchGadgetWhenChannelNotInAllowlist() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of("ops-chan"), null, "gadget", Set.of(), Set.of(), Set.of());
+        router.addRouting(new RoutingRule(filter, "gadget"));
+        Event event = new Event("discord:g:guild", "message",
+                Map.of("channelId", "other-chan", "content", "@Gadget deploy", "mentions", List.of("gadget")));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
     void routeDoesNotMatchWhenMentionPresentButAuthorNotInFilter() {
         RoutingFilter filter = new RoutingFilter(
                 Set.of("allowed_user"), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());

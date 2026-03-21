@@ -37,23 +37,34 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
             return out;
         }
         String outline = PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body");
-        String decisions = PlanningArtifactTexts.artifactField(plan, "decision_log", "decisions", "decision_text");
+        String decisions = PlanningArtifactTexts.firstRepeatableField(plan, "decision_log", "decisions", "decision_text");
         String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
         String featureSummary = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
         String acceptance = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria");
         String scope = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary");
+        String stories = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories");
         String contextSummary = PlanningArtifactTexts.artifactField(plan, "project_context", "context", "context_summary");
+        String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary");
+        String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
+        String risks = PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary");
+        String openQ = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
         int issueCount = plan.getIssues() != null ? plan.getIssues().size() : 0;
 
-        out.put("architectThreadMessage", buildArchitect(outline, decisions));
-        out.put("auditorThreadMessage", buildAuditor(validation, issueCount));
-        out.put("scribeThreadMessage", buildScribe(featureSummary, acceptance, scope, contextSummary));
+        out.put("architectThreadMessage", buildArchitect(outline, decisions, arch, comps));
+        out.put("auditorThreadMessage", buildAuditor(validation, issueCount, risks, openQ));
+        out.put("scribeThreadMessage", buildScribe(featureSummary, acceptance, scope, stories, contextSummary));
         return out;
     }
 
-    private static String buildArchitect(String outline, String decisions) {
+    private static String buildArchitect(String outline, String decisions, String arch, String comps) {
         StringBuilder sb = new StringBuilder();
         sb.append("**Architect — structure & boundaries**\n");
+        if (comps != null && !comps.isBlank()) {
+            sb.append("**Components:** ").append(comps.trim()).append("\n\n");
+        }
+        if (arch != null && !arch.isBlank()) {
+            sb.append(arch.trim()).append("\n\n");
+        }
         if (outline != null && !outline.isBlank()) {
             sb.append(outline.trim());
         } else {
@@ -65,11 +76,17 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         return sb.toString();
     }
 
-    private static String buildAuditor(String validation, int issueCount) {
+    private static String buildAuditor(String validation, int issueCount, String risks, String openQ) {
         StringBuilder sb = new StringBuilder();
         sb.append("**Auditor — validation & risks**\n");
+        if (risks != null && !risks.isBlank()) {
+            sb.append("**Risk register**\n").append(risks.trim()).append("\n\n");
+        }
+        if (openQ != null && !openQ.isBlank()) {
+            sb.append("**Open questions**\n").append(openQ.trim()).append("\n\n");
+        }
         if (validation != null && !validation.isBlank()) {
-            sb.append(validation.trim());
+            sb.append("**Validation**\n").append(validation.trim());
         } else {
             sb.append("_No validation approach recorded yet._");
         }
@@ -77,13 +94,21 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         return sb.toString();
     }
 
-    private static String buildScribe(String featureSummary, String acceptance, String scope, String contextSummary) {
+    private static String buildScribe(
+            String featureSummary,
+            String acceptance,
+            String scope,
+            String stories,
+            String contextSummary) {
         StringBuilder sb = new StringBuilder();
         sb.append("**Scribe — requirements & context**\n");
         sb.append("**Summary:** ");
         sb.append(featureSummary != null && !featureSummary.isBlank() ? featureSummary.trim() : "_None._");
         sb.append("\n\n**Scope:** ");
         sb.append(scope != null && !scope.isBlank() ? scope.trim() : "_Not specified._");
+        if (stories != null && !stories.isBlank()) {
+            sb.append("\n\n**User stories / scenarios:**\n").append(stories.trim());
+        }
         sb.append("\n\n**Acceptance criteria:** ");
         sb.append(acceptance != null && !acceptance.isBlank() ? acceptance.trim() : "_Not specified._");
         if (contextSummary != null && !contextSummary.isBlank()) {

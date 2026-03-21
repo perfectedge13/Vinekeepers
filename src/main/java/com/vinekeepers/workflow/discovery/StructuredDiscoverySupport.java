@@ -245,10 +245,12 @@ public final class StructuredDiscoverySupport {
             m.put("discoveryApplyFieldId", first.getFieldId());
             m.put("discoveryApplyMode", first.getApplyMode());
         }
+        m.putIfAbsent("discoveryBundledApplyJson", "[]");
         return m;
     }
 
-    private static final Comparator<DiscoveryGap> GAP_COMPARATOR =
+    /** Exposed for insight/bundled discovery ordering. */
+    public static final Comparator<DiscoveryGap> GAP_COMPARATOR =
             Comparator.comparingInt(StructuredDiscoverySupport::severityRank)
                     .thenComparing(DiscoveryGap::getGapId);
 

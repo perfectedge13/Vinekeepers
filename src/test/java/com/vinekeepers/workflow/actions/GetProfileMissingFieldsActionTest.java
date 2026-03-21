@@ -15,7 +15,12 @@ class GetProfileMissingFieldsActionTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        assertEquals("OK", init.run(null, Map.of("contextId", "cx", "channelId", "ch"), Map.of()));
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "cx", "channelId", "ch"),
+                        Map.of("profileId", "software_feature_planning")));
 
         GetProfileMissingFieldsAction get = new GetProfileMissingFieldsAction(store, reg);
         Object summary = get.run(null, Map.of("contextId", "cx"), Map.of());
@@ -29,7 +34,10 @@ class GetProfileMissingFieldsActionTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "cy", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "cy", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(store, reg);
         upsert.run(
                 null,

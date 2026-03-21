@@ -1,585 +1,797 @@
-# Bot definitions and routing for Vinekeepers
-# Luna: listens for @Luna mentions on Discord, gathers repository + feature request,
-# then launches a Cursor Cloud agent run and reports progress back to chat.
-# Arrietty: template for lifecycle room bot instances (provisioned at runtime per channel).
-#
-# Discord identity is connector-scoped under identities.discord. Each bot may set
-# identities.discord.tokenEnvKey to the env var name for that bot's Discord token (never put
-# raw tokens here). identities.discord.handlesOwnedSpaces is connector-scoped ownership for
-# Discord lifecycle channels (single-owner precedence). Optional identities.discord.ingress sets
-# messages (none | routed | owned_spaces) and interactions (none | routed | own_messages | owned_spaces);
-# defaults derive from YAML routing and handlesOwnedSpaces. Optional top-level defaultDiscordTokenEnvKey
-# is a retained transitional setting when a bot has no identities.discord.tokenEnvKey.
-
 defaultDiscordTokenEnvKey: LUNA_DISCORD_TOKEN
-
 bots:
-  - id: luna
-    persona:
-      name: Luna
-      systemPrompt: You are Luna, a bot that helps users run code changes via Cursor Cloud API. You gather which project to update and what change to make, then create a branch, run nova-commit, push, and optionally open a PR.
-    workflow:
-      type: configured
-      params:
-        workflowRef: luna_cursor
-    identities:
-      discord:
-        tokenEnvKey: LUNA_DISCORD_TOKEN
-        ingress:
-          messages: routed
-          interactions: routed
-  - id: arrietty
-    persona:
-      name: Arrietty
-      systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature rooms. You help users in this channel with follow-up and context for Cursor runs.
-    sessionKeyStrategy: thread  # Session key per thread for feature-room bots
-    conversationMode: conversational  # Intake thread: do not restart full planning after launch completes
-    workflow:
-      type: configured
-      params:
-        workflowRef: arrietty_room
-    identities:
-      discord:
-        handlesOwnedSpaces: true
-        tokenEnvKey: ARRIETTY_DISCORD_TOKEN
-        ingress:
-          messages: owned_spaces
-          interactions: own_messages
-  - id: architect
-    persona:
-      name: Architect
-      systemPrompt: You are Architect, a feature room participant. In the intake/spec thread, you contribute visible design and structure proposals when the workflow drives role turns; the main room stays coordinator-led so you do not auto-reply to generic room traffic.
-    sessionKeyStrategy: thread
-    workflow:
-      type: configured
-      params:
-        workflowRef: architect_intro
-    identities:
-      discord:
-        tokenEnvKey: ARCHITECT_DISCORD_TOKEN
-  - id: auditor
-    persona:
-      name: Auditor
-      systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you reply only when invoked via action.
-    sessionKeyStrategy: thread
-    workflow:
-      type: configured
-      params:
-        workflowRef: auditor_intro
-    identities:
-      discord:
-        tokenEnvKey: AUDITOR_DISCORD_TOKEN
-  - id: scribe
-    persona:
-      name: Scribe
-      systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread, you post consolidation and status when the workflow drives role turns; the room channel defaults to the orchestrator for summaries.
-    sessionKeyStrategy: thread
-    workflow:
-      type: configured
-      params:
-        workflowRef: scribe_intro
-    identities:
-      discord:
-        tokenEnvKey: SCRIBE_DISCORD_TOKEN
-
+- id: luna
+  persona:
+    name: Luna
+    systemPrompt: You are Luna, a bot that helps users run code changes via Cursor Cloud API. You gather which project to update and what change to make, then create a branch, run nova-commit, push, and optionally open a PR.
+  workflow:
+    type: configured
+    params:
+      workflowRef: luna_cursor
+  identities:
+    discord:
+      tokenEnvKey: LUNA_DISCORD_TOKEN
+      ingress:
+        messages: routed
+        interactions: routed
+- id: arrietty
+  persona:
+    name: Arrietty
+    systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature rooms. You help users in this channel with follow-up and context for Cursor runs.
+  sessionKeyStrategy: thread
+  conversationMode: conversational
+  workflow:
+    type: configured
+    params:
+      workflowRef: arrietty_room
+  identities:
+    discord:
+      handlesOwnedSpaces: true
+      tokenEnvKey: ARRIETTY_DISCORD_TOKEN
+      ingress:
+        messages: owned_spaces
+        interactions: own_messages
+- id: architect
+  persona:
+    name: Architect
+    systemPrompt: You are Architect, a feature room participant. In the intake/spec thread, you contribute visible design and structure proposals when the workflow drives role turns; the main room stays coordinator-led so you do not auto-reply to generic room traffic.
+  sessionKeyStrategy: thread
+  workflow:
+    type: configured
+    params:
+      workflowRef: architect_intro
+  identities:
+    discord:
+      tokenEnvKey: ARCHITECT_DISCORD_TOKEN
+- id: auditor
+  persona:
+    name: Auditor
+    systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you reply only when invoked via action.
+  sessionKeyStrategy: thread
+  workflow:
+    type: configured
+    params:
+      workflowRef: auditor_intro
+  identities:
+    discord:
+      tokenEnvKey: AUDITOR_DISCORD_TOKEN
+- id: scribe
+  persona:
+    name: Scribe
+    systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread, you post consolidation and status when the workflow drives role turns; the room channel defaults to the orchestrator for summaries.
+  sessionKeyStrategy: thread
+  workflow:
+    type: configured
+    params:
+      workflowRef: scribe_intro
+  identities:
+    discord:
+      tokenEnvKey: SCRIBE_DISCORD_TOKEN
+- id: gadget
+  persona:
+    name: Gadget
+    systemPrompt: You are Gadget, a DevOps assistant. When @Gadget in the ops channel, you offer deploy actions, gather project and branch, run Ansible on the host, and post progress to a Discord thread.
+  workflow:
+    type: configured
+    params:
+      workflowRef: gadget_deploy
+  identities:
+    discord:
+      tokenEnvKey: GADGET_DISCORD_TOKEN
+      ingress:
+        messages: routed
+        interactions: routed
 routing:
-  - botId: luna
-    filter:
-      discordMention: "luna"
-      # discordAuthors: numeric Discord user id (matches actorId) or username (matches actorUsername, case-insensitive)
-      discordAuthors: ["novawilde13_72571"]
-
-# Workflows DSL: id -> steps (ask_input, prompt_for_field, capture_field, call_action, branch, done)
-# Optional: intent/choices/confirmLabel/cancelLabel/fields for rich interactions
+- botId: luna
+  filter:
+    discordMention: luna
+    discordAuthors:
+    - novawilde13_72571
+- botId: gadget
+  filter:
+    discordMention: gadget
+    discordChannels:
+    - REPLACE_WITH_DEVOPS_CHANNEL_ID
 workflows:
-  # Silent intro workflows: no prompt; reply only when invoked via post_channel_message asRole.
   architect_intro:
     steps:
-      - type: done
-        message: ""
+    - type: done
+      message: ''
   auditor_intro:
     steps:
-      - type: done
-        message: ""
+    - type: done
+      message: ''
   scribe_intro:
     steps:
-      - type: done
-        message: ""
+    - type: done
+      message: ''
   arrietty_room:
     steps:
-      - type: call_action
-        action: hydrate_planning_session
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: coordinatorKickoff, value: "true" }
-            next: 50
-          - when: { key: planningIntakeThread, value: "true" }
-            next: 2
-          - when: else
-            next: 42
-      - type: call_action
-        action: get_profile_missing_fields
-        storeIn: profileMissingSummary
-      - type: call_action
-        action: generate_planning_proposals
-        storeSpread: true
-      - type: call_action
-        action: apply_auto_planning_proposals
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: planningHasConfirmPending, value: "true" }
-            next: 6
-          - when: else
-            next: 14
-      - type: call_action
-        action: build_proposal_confirm_prompt
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: proposalConfirmPrompt, operator: nonblank }
-            next: 8
-          - when: else
-            next: 14
-      - type: prompt_for_field
-        prompt: "{{proposalConfirmPrompt}}"
-        storeIn: discoveryAnswerRaw
-      - type: capture_field
-        storeIn: discoveryAnswerRaw
-      - type: call_action
-        action: resolve_proposal_confirmation
-        storeSpread: true
-      - type: call_action
-        action: classify_assumption_or_issue
-      - type: call_action
-        action: recompute_plan_progress
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: planningHasConfirmPending, value: "true" }
-            next: 6
-            clear: [discoveryAnswerRaw]
-          - when: else
-            next: 14
-      - type: call_action
-        action: get_structured_discovery_gaps
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: discoveryHasOpenGaps, value: "true" }
-            next: 16
-          - when: else
-            next: 24
-      - type: call_action
-        action: build_discovery_agenda
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: discoveryCurrentQuestionPrompt, operator: nonblank }
-            next: 18
-          - when: else
-            next: 24
-      - type: prompt_for_field
-        prompt: "{{discoveryCurrentQuestionPrompt}}"
-        storeIn: discoveryAnswerRaw
-      - type: capture_field
-        storeIn: discoveryAnswerRaw
-      - type: call_action
-        action: capture_and_apply_discovery_answer
-      - type: call_action
-        action: classify_assumption_or_issue
-      - type: call_action
-        action: recompute_plan_progress
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: discoveryBlockingIssueMode, value: "true" }
-            next: 24
-          - when: { key: discoveryHasOpenGaps, value: "true" }
-            next: 16
-            clear: [discoveryAnswerRaw]
-          - when: else
-            next: 24
-      - type: call_action
-        action: run_plan_critique_and_readiness
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: planReadinessStatus, value: BLOCKED }
-            next: 39
-          - when: { key: planReadinessStatus, value: NEEDS_REVISION }
-            next: 2
-            clear:
-              - discoveryAnswerRaw
-              - planApprovalDecision
-              - planningProposalsJson
-              - planningConfirmQueueJson
-              - proposalConfirmPrompt
-              - proposalConfirmProposalId
-              - proposalConfirmArtifactId
-              - proposalConfirmSectionId
-              - proposalConfirmFieldId
-              - proposalConfirmProposedValue
-              - planningHasConfirmPending
-              - readinessProceedRaw
-          - when: { key: planReadinessStatus, value: NEEDS_HUMAN_DECISION }
-            next: 57
-          - when: else
-            next: 26
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: |
-            **Drafted plan (orchestrator)**
-            {{planningThreadReviewBody}}
-            {{planningThreadReviewBuildError}}
-            ---
-            **Pre-launch review**
-            **Status:** {{planReadinessStatus}}
-            {{planReadinessSummary}}
+    - type: call_action
+      action: hydrate_planning_session
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: coordinatorKickoff
+          value: 'true'
+        next: 56
+      - when:
+          key: planningIntakeThread
+          value: 'true'
+        next: 2
+      - when: else
+        next: 48
+    - type: call_action
+      action: get_profile_missing_fields
+      storeIn: profileMissingSummary
+    - type: call_action
+      action: generate_planning_proposals
+      storeSpread: true
+    - type: call_action
+      action: apply_auto_planning_proposals
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: planningHasConfirmPending
+          value: 'true'
+        next: 6
+      - when: else
+        next: 14
+    - type: call_action
+      action: build_proposal_confirm_prompt
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: proposalConfirmPrompt
+          operator: nonblank
+        next: 8
+      - when: else
+        next: 14
+    - type: prompt_for_field
+      prompt: '{{proposalConfirmPrompt}}'
+      storeIn: discoveryAnswerRaw
+    - type: capture_field
+      storeIn: discoveryAnswerRaw
+    - type: call_action
+      action: resolve_proposal_confirmation
+      storeSpread: true
+    - type: call_action
+      action: classify_assumption_or_issue
+    - type: call_action
+      action: recompute_plan_progress
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: planningHasConfirmPending
+          value: 'true'
+        next: 6
+        clear:
+        - discoveryAnswerRaw
+      - when: else
+        next: 14
+    - type: call_action
+      action: get_structured_discovery_gaps
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: discoveryHasOpenGaps
+          value: 'true'
+        next: 16
+      - when: else
+        next: 24
+    - type: call_action
+      action: build_insight_discovery_agenda
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: discoveryCurrentQuestionPrompt
+          operator: nonblank
+        next: 18
+      - when: else
+        next: 24
+    - type: prompt_for_field
+      prompt: '{{discoveryCurrentQuestionPrompt}}'
+      storeIn: discoveryAnswerRaw
+    - type: capture_field
+      storeIn: discoveryAnswerRaw
+    - type: call_action
+      action: capture_and_apply_discovery_answer
+    - type: call_action
+      action: classify_assumption_or_issue
+    - type: call_action
+      action: recompute_plan_progress
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: discoveryBlockingIssueMode
+          value: 'true'
+        next: 24
+      - when:
+          key: discoveryHasOpenGaps
+          value: 'true'
+        next: 16
+        clear:
+        - discoveryAnswerRaw
+      - when: else
+        next: 24
+    - type: call_action
+      action: synthesize_pre_critique_artifacts
+    - type: call_action
+      action: build_role_planning_thread_messages
+      storeSpread: true
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{architectThreadMessage}}'
+        asRole: architect
+        target: thread
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{auditorThreadMessage}}'
+        asRole: auditor
+        target: thread
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{scribeThreadMessage}}'
+        asRole: scribe
+        target: thread
+    - type: call_action
+      action: run_plan_critique_and_readiness
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: planReadinessStatus
+          value: BLOCKED
+        next: 45
+      - when:
+          key: planReadinessStatus
+          value: NEEDS_REVISION
+        next: 2
+        clear:
+        - discoveryAnswerRaw
+        - planApprovalDecision
+        - planningProposalsJson
+        - planningConfirmQueueJson
+        - proposalConfirmPrompt
+        - proposalConfirmProposalId
+        - proposalConfirmArtifactId
+        - proposalConfirmSectionId
+        - proposalConfirmFieldId
+        - proposalConfirmProposedValue
+        - planningHasConfirmPending
+        - readinessProceedRaw
+        - discoveryBundledApplyJson
+      - when:
+          key: planReadinessStatus
+          value: NEEDS_HUMAN_DECISION
+        next: 63
+      - when: else
+        next: 31
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Drafted plan (orchestrator)**
 
-            **Assumptions**
-            {{planAssumptionsSummary}}
+          {{planningThreadReviewBody}}
 
-            **Issues / risks**
-            {{planIssuesSummary}}
+          {{planningThreadReviewBuildError}}
 
-            **Critique**
-            {{planCritiqueSummary}}
+          ---
 
-            _Approval choices follow in the next message._
-          asRole: orchestrator
-          target: thread
-      - type: prompt_for_field
-        prompt: "Approve implementation launch?"
-        storeIn: planApprovalDecision
-        intent: present_choices
-        choices:
-          - { id: approve, label: Approve }
-          - { id: approve_with_risks, label: Approve with risks }
-          - { id: revise, label: Revise plan }
-          - { id: reject, label: Reject }
-      - type: capture_field
-        storeIn: planApprovalDecision
-      - type: branch
-        branches:
-          - when: { key: planApprovalDecision, value: approve }
-            next: 31
-          - when: { key: planApprovalDecision, value: approve_with_risks }
-            next: 31
-          - when: { key: planApprovalDecision, value: revise }
-            next: 2
-            clear:
-              - discoveryAnswerRaw
-              - planApprovalDecision
-              - planningProposalsJson
-              - planningConfirmQueueJson
-              - proposalConfirmPrompt
-              - proposalConfirmProposalId
-              - proposalConfirmArtifactId
-              - proposalConfirmSectionId
-              - proposalConfirmFieldId
-              - proposalConfirmProposedValue
-              - planningHasConfirmPending
-              - readinessProceedRaw
-          - when: { key: planApprovalDecision, value: reject }
-            next: 42
-          - when: else
-            next: 42
-      - type: call_action
-        action: persist_plan_approval
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Intake/spec thread — orchestrator kickoff. Repo: {{project}}. Request: {{codeChange}}. Plan approved; proceeding with role handoff."
-          asRole: orchestrator
-          target: thread
-      - type: call_action
-        action: build_role_planning_thread_messages
-        storeSpread: true
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "{{architectThreadMessage}}"
-          asRole: architect
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "{{auditorThreadMessage}}"
-          asRole: auditor
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "{{scribeThreadMessage}}"
-          asRole: scribe
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Feature room ready. Thread above has role contributions. Launching next."
-          asRole: orchestrator
-          target: room
-      - type: call_action
-        action: launch_cursor_run
-        bind: {}
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: { key: launchSucceeded, value: "false" }
-            next: 64
-          - when: else
-            next: 66
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Planning blocked: readiness is BLOCKED ({{planCritiqueError}}). {{planReadinessSummary}}"
-          asRole: orchestrator
-          target: thread
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread."
-          asRole: orchestrator
-          target: room
-      - type: done
-        message: "Planning blocked; not launching."
-      - type: done
-        message: "Planning rejected; not launching."
-      - type: capture_field
-        storeIn: roomAction
-        trimAndLower: true
-      - type: branch
-        branches:
-          - when: { key: roomAction, value: status }
-            next: 45
-          - when: { key: roomAction, value: retry }
-            next: 46
-          - when: { key: roomAction, value: close }
-            next: 47
-          - when: { key: roomAction, value: "" }
-            next: 48
-          - when: else
-            next: 48
-      - type: done
-        message: "Room status: active. Repo and request are in context."
-      - type: done
-        message: "Retry requested. You can ask for another run."
-      - type: done
-        message: "Room closed. Use the channel for follow-up."
-      - type: done
-        message: "What would you like? (status, retry, close, or ask anything)"
-      - type: done
-        message: "{{roomAction}}"
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: |
-            **Discovery kickoff (coordinator)**
+          **Pre-launch review**
 
-            Repo: `{{project}}`
-            **Request:** {{codeChange}}
+          **Status:** {{planReadinessStatus}}
 
-            Before we draft a full plan, add **scope**, **acceptance criteria**, **constraints**, and any **risks** you care about. Reply in this thread (one message is fine). After that we’ll synthesize drafts and run structured discovery if anything is still missing.
-          asRole: orchestrator
-          target: thread
-      - type: prompt_for_field
-        prompt: "What scope, acceptance criteria, constraints, or risks should we capture before drafting?"
-        storeIn: discoveryAnswerRaw
-      - type: capture_field
-        storeIn: discoveryAnswerRaw
-      - type: call_action
-        action: capture_and_apply_discovery_answer
-      - type: call_action
-        action: classify_assumption_or_issue
-      - type: call_action
-        action: recompute_plan_progress
-        storeSpread: true
-      - type: call_action
-        action: mark_intake_discovery_complete
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: else
-            next: 2
-            clear:
-              - coordinatorKickoff
-              - discoveryAnswerRaw
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: |
-            **Human review requested**
+          {{planReadinessSummary}}
 
-            Readiness: **{{planReadinessStatus}}**
-            {{planReadinessSummary}}
 
-            **Critique (summary)**
-            {{planCritiqueSummary}}
-          asRole: orchestrator
-          target: thread
-      - type: prompt_for_field
-        prompt: "Reply **proceed** to continue to approval (you accept remaining warnings) or **revise** to refine the plan first."
-        storeIn: readinessProceedRaw
-      - type: capture_field
-        storeIn: readinessProceedRaw
-        trimAndLower: true
-      - type: branch
-        branches:
-          - when: { key: readinessProceedRaw, value: proceed }
-            next: 62
-          - when: { key: readinessProceedRaw, value: revise }
-            next: 2
-            clear:
-              - readinessProceedRaw
-              - discoveryAnswerRaw
-              - planApprovalDecision
-              - planningProposalsJson
-              - planningConfirmQueueJson
-              - proposalConfirmPrompt
-              - proposalConfirmProposalId
-              - proposalConfirmArtifactId
-              - proposalConfirmSectionId
-              - proposalConfirmFieldId
-              - proposalConfirmProposedValue
-              - planningHasConfirmPending
-          - when: else
-            next: 59
-      - type: call_action
-        action: acknowledge_readiness_human_decision
-        storeSpread: true
-      - type: branch
-        branches:
-          - when: else
-            next: 26
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "{{launchMessage}}"
-          asRole: orchestrator
-          target: thread
-      - type: done
-        message: "{{launchMessage}}"
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "{{launchMessage}}"
-          asRole: orchestrator
-          target: thread
-      - type: done
-        message: "{{launchMessage}}"
+          **Assumptions**
+
+          {{planAssumptionsSummary}}
+
+
+          **Issues / risks**
+
+          {{planIssuesSummary}}
+
+
+          **Critique**
+
+          {{planCritiqueSummary}}
+
+
+          _Approval choices follow in the next message._
+
+          '
+        asRole: orchestrator
+        target: thread
+    - type: prompt_for_field
+      prompt: Approve implementation launch?
+      storeIn: planApprovalDecision
+      intent: present_choices
+      choices:
+      - id: approve
+        label: Approve
+      - id: approve_with_risks
+        label: Approve with risks
+      - id: revise
+        label: Revise plan
+      - id: reject
+        label: Reject
+    - type: capture_field
+      storeIn: planApprovalDecision
+    - type: branch
+      branches:
+      - when:
+          key: planApprovalDecision
+          value: approve
+        next: 35
+      - when:
+          key: planApprovalDecision
+          value: approve_with_risks
+        next: 35
+      - when:
+          key: planApprovalDecision
+          value: revise
+        next: 2
+        clear:
+        - discoveryAnswerRaw
+        - planApprovalDecision
+        - planningProposalsJson
+        - planningConfirmQueueJson
+        - proposalConfirmPrompt
+        - proposalConfirmProposalId
+        - proposalConfirmArtifactId
+        - proposalConfirmSectionId
+        - proposalConfirmFieldId
+        - proposalConfirmProposedValue
+        - planningHasConfirmPending
+        - readinessProceedRaw
+        - discoveryBundledApplyJson
+      - when:
+          key: planApprovalDecision
+          value: reject
+        next: 48
+      - when: else
+        next: 48
+    - type: call_action
+      action: persist_plan_approval
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: 'Intake/spec thread — orchestrator kickoff. Repo: {{project}}. Request: {{codeChange}}. Plan approved; proceeding with role handoff.'
+        asRole: orchestrator
+        target: thread
+    - type: call_action
+      action: build_role_planning_thread_messages
+      storeSpread: true
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{architectThreadMessage}}'
+        asRole: architect
+        target: thread
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{auditorThreadMessage}}'
+        asRole: auditor
+        target: thread
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{scribeThreadMessage}}'
+        asRole: scribe
+        target: thread
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: Feature room ready. Thread above has role contributions. Launching next.
+        asRole: orchestrator
+        target: room
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout up to ~2 minutes). A success or failure message follows in this thread.'
+        asRole: orchestrator
+        target: thread
+    - type: call_action
+      action: launch_cursor_run
+      bind: {}
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: launchSucceeded
+          value: 'false'
+        next: 70
+      - when: else
+        next: 72
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: 'Planning blocked: readiness is BLOCKED ({{planCritiqueError}}). {{planReadinessSummary}}'
+        asRole: orchestrator
+        target: thread
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread.
+        asRole: orchestrator
+        target: room
+    - type: done
+      message: Planning blocked; not launching.
+    - type: done
+      message: Planning rejected; not launching.
+    - type: capture_field
+      storeIn: roomAction
+      trimAndLower: true
+    - type: branch
+      branches:
+      - when:
+          key: roomAction
+          value: status
+        next: 51
+      - when:
+          key: roomAction
+          value: retry
+        next: 52
+      - when:
+          key: roomAction
+          value: close
+        next: 53
+      - when:
+          key: roomAction
+          value: ''
+        next: 54
+      - when: else
+        next: 54
+    - type: done
+      message: 'Room status: active. Repo and request are in context.'
+    - type: done
+      message: Retry requested. You can ask for another run.
+    - type: done
+      message: Room closed. Use the channel for follow-up.
+    - type: done
+      message: What would you like? (status, retry, close, or ask anything)
+    - type: done
+      message: '{{roomAction}}'
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Discovery kickoff (coordinator)**
+
+
+          Repo: `{{project}}`
+
+          **Request:** {{codeChange}}
+
+
+          We will draft a full planning packet from your request and repo context. **Reply once** with scope boundaries, acceptance criteria, constraints, and risks if you have them — or say **continue** to proceed with drafts. Follow-ups will be bundled where possible.'
+        asRole: orchestrator
+        target: thread
+    - type: prompt_for_field
+      prompt: What scope, acceptance criteria, constraints, or risks should we capture before drafting?
+      storeIn: discoveryAnswerRaw
+    - type: capture_field
+      storeIn: discoveryAnswerRaw
+    - type: call_action
+      action: capture_and_apply_discovery_answer
+    - type: call_action
+      action: classify_assumption_or_issue
+    - type: call_action
+      action: recompute_plan_progress
+      storeSpread: true
+    - type: call_action
+      action: mark_intake_discovery_complete
+      storeSpread: true
+    - type: branch
+      branches:
+      - when: else
+        next: 2
+        clear:
+        - coordinatorKickoff
+        - discoveryAnswerRaw
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Human review requested**
+
+
+          Readiness: **{{planReadinessStatus}}**
+
+          {{planReadinessSummary}}
+
+
+          **Critique (summary)**
+
+          {{planCritiqueSummary}}
+
+          '
+        asRole: orchestrator
+        target: thread
+    - type: prompt_for_field
+      prompt: Reply **proceed** to continue to approval (you accept remaining warnings) or **revise** to refine the plan first.
+      storeIn: readinessProceedRaw
+    - type: capture_field
+      storeIn: readinessProceedRaw
+      trimAndLower: true
+    - type: branch
+      branches:
+      - when:
+          key: readinessProceedRaw
+          value: proceed
+        next: 68
+      - when:
+          key: readinessProceedRaw
+          value: revise
+        next: 2
+        clear:
+        - readinessProceedRaw
+        - discoveryAnswerRaw
+        - planApprovalDecision
+        - planningProposalsJson
+        - planningConfirmQueueJson
+        - proposalConfirmPrompt
+        - proposalConfirmProposalId
+        - proposalConfirmArtifactId
+        - proposalConfirmSectionId
+        - proposalConfirmFieldId
+        - proposalConfirmProposedValue
+        - planningHasConfirmPending
+        - discoveryBundledApplyJson
+      - when: else
+        next: 65
+    - type: call_action
+      action: acknowledge_readiness_human_decision
+      storeSpread: true
+    - type: branch
+      branches:
+      - when: else
+        next: 31
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{launchMessage}}'
+        asRole: orchestrator
+        target: thread
+    - type: done
+      message: '{{launchMessage}}'
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{launchMessage}}'
+        asRole: orchestrator
+        target: thread
+    - type: done
+      message: '{{launchMessage}}'
   simple_echo:
     steps:
-      - type: ask_input
-        prompt: What should I echo?
-        storeIn: userMessage
-      - type: done
-        message: "Echo: {{userMessage}}"
+    - type: ask_input
+      prompt: What should I echo?
+      storeIn: userMessage
+    - type: done
+      message: 'Echo: {{userMessage}}'
   luna_cursor:
     steps:
-      - type: prompt_for_field
-        prompt: "Choose a repository"
-        storeIn: project
-        choiceProvider: githubRepos
-      - type: capture_field
-        storeIn: project
-      - type: branch
-        branches:
-          - when: { key: project, value: __custom__ }
-            next: 3
-          - when: else
-            next: 5
-      - type: prompt_for_field
-        prompt: "Enter repo URL or owner/repo"
-        storeIn: project
-      - type: capture_field
-        storeIn: project
-      - type: prompt_for_field
-        prompt: "What feature or spec-driven code change should I implement?"
-        storeIn: codeChange
-      - type: capture_field
-        storeIn: codeChange
-      - type: prompt_for_field
-        prompt: "Repo: {{project}}, Branch: main. Change: {{codeChange}}. Confirm?"
-        storeIn: confirmAction
-        intent: present_choices
-        choices:
-          - { id: launch, label: Launch }
-          - { id: edit_repo, label: Edit repo }
-          - { id: edit_request, label: Edit request }
-          - { id: cancel, label: Cancel }
-      - type: capture_field
-        storeIn: confirmAction
-      - type: branch
-        branches:
-          - when: { key: confirmAction, value: launch }
-            next: 10
-          - when: { key: confirmAction, value: edit_repo }
-            next: 0
-            clear: [project, codeChange, confirmAction]
-          - when: { key: confirmAction, value: edit_request }
-            next: 5
-            clear: [codeChange, confirmAction]
-          - when: { key: confirmAction, value: cancel }
-            next: 23
-          - when: else
-            next: 23
-      - type: call_action
-        action: create_channel
-        bind:
-          participantBotIds: [arrietty, architect, auditor, scribe]
-          lifecycleOwnerBotId: arrietty
+    - type: prompt_for_field
+      prompt: Choose a repository
+      storeIn: project
+      choiceProvider: githubRepos
+    - type: capture_field
+      storeIn: project
+    - type: branch
+      branches:
+      - when:
+          key: project
+          value: __custom__
+        next: 3
+      - when: else
+        next: 5
+    - type: prompt_for_field
+      prompt: Enter repo URL or owner/repo
+      storeIn: project
+    - type: capture_field
+      storeIn: project
+    - type: prompt_for_field
+      prompt: What feature or spec-driven code change should I implement?
+      storeIn: codeChange
+    - type: capture_field
+      storeIn: codeChange
+    - type: prompt_for_field
+      prompt: 'Repo: {{project}}, Branch: main. Change: {{codeChange}}. Confirm?'
+      storeIn: confirmAction
+      intent: present_choices
+      choices:
+      - id: launch
+        label: Launch
+      - id: edit_repo
+        label: Edit repo
+      - id: edit_request
+        label: Edit request
+      - id: cancel
+        label: Cancel
+    - type: capture_field
+      storeIn: confirmAction
+    - type: branch
+      branches:
+      - when:
+          key: confirmAction
+          value: launch
+        next: 10
+      - when:
+          key: confirmAction
+          value: edit_repo
+        next: 0
+        clear:
+        - project
+        - codeChange
+        - confirmAction
+      - when:
+          key: confirmAction
+          value: edit_request
+        next: 5
+        clear:
+        - codeChange
+        - confirmAction
+      - when:
+          key: confirmAction
+          value: cancel
+        next: 23
+      - when: else
+        next: 23
+    - type: call_action
+      action: create_channel
+      bind:
+        participantBotIds:
+        - arrietty
+        - architect
+        - auditor
+        - scribe
+        lifecycleOwnerBotId: arrietty
+      storeIn: channelId
+    - type: branch
+      branches:
+      - when:
+          key: channelId
+          value: CHANNEL_CREATE_FAILED
+        next: 22
+      - when: else
+        next: 12
+    - type: call_action
+      action: provision_bot_instance
+      bind:
+        templateBotId: arrietty
+      storeIn: instanceId
+    - type: call_action
+      action: create_lifecycle_context
+      bind:
+        configuredBotId: arrietty
+      storeIn: contextId
+    - type: call_action
+      action: create_thread
+      bind:
+        threadName: intake-spec
+      storeIn: deliveryChannelId
+    - type: call_action
+      action: provision_room_participants
+      storeIn: featureRoomParticipants
+    - type: call_action
+      action: initialize_feature_room_state
+    - type: call_action
+      action: initialize_feature_plan_state
+    - type: call_action
+      action: ensure_repo_workspace
+    - type: call_action
+      action: upsert_artifact_section_data
+      bind:
+        artifactId: requirements_spec
+        sectionId: narrative
+        mode: replace
+        data:
+          feature_summary: '{{codeChange}}'
+          scope_summary: 'Refine in intake thread — initial scope to be confirmed with coordinator.'
+          user_stories: ''
+          acceptance_criteria: 'Draft — refine in intake thread; criteria must be testable before approval.'
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here — the coordinator will post next; reply in-thread when prompted.
+        asRole: orchestrator
+        target: thread
+    - type: call_action
+      action: start_coordinator_planning
+      bind:
+        intakeThreadId: '{{deliveryChannelId}}'
+    - type: done
+      message: Feature room is ready. Continue in the intake/spec thread above to complete the plan, approval, and launch.
+    - type: done
+      message: Could not create room.
+    - type: done
+      message: Cancelled.
+  gadget_deploy:
+    steps:
+    - type: extract_event
+      fromEvent:
+      - from: context.channelId
         storeIn: channelId
-      - type: branch
-        branches:
-          - when: { key: channelId, value: CHANNEL_CREATE_FAILED }
-            next: 22
-          - when: else
-            next: 12
-      - type: call_action
-        action: provision_bot_instance
-        bind: { templateBotId: arrietty }
-        storeIn: instanceId
-      - type: call_action
-        action: create_lifecycle_context
-        bind: { configuredBotId: arrietty }
-        storeIn: contextId
-      - type: call_action
-        action: create_thread
-        bind: { threadName: "intake-spec" }
-        storeIn: deliveryChannelId
-      - type: call_action
-        action: provision_room_participants
-        storeIn: featureRoomParticipants
-      - type: call_action
-        action: initialize_feature_room_state
-      - type: call_action
-        action: initialize_feature_plan_state
-      - type: call_action
-        action: ensure_repo_workspace
-      - type: call_action
-        action: upsert_artifact_section_data
-        bind:
-          artifactId: requirements_spec
-          sectionId: narrative
-          mode: replace
-          data:
-            feature_summary: "{{codeChange}}"
-      - type: call_action
-        action: post_channel_message
-        bind:
-          content: "Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here — the coordinator will post next; reply in-thread when prompted."
-          asRole: orchestrator
-          target: thread
-      - type: call_action
-        action: start_coordinator_planning
-        bind:
-          intakeThreadId: "{{deliveryChannelId}}"
-      - type: done
-        message: "Feature room is ready. Continue in the intake/spec thread above to complete the plan, approval, and launch."
-      - type: done
-        message: "Could not create room."
-      - type: done
-        message: "Cancelled."
+    - type: prompt_for_field
+      prompt: '**Gadget** — choose an action:'
+      storeIn: menuChoice
+      intent: present_choices
+      choices:
+      - id: deploy_docker
+        label: Deploy to Docker
+      - id: cancel
+        label: Cancel
+    - type: capture_field
+      storeIn: menuChoice
+    - type: branch
+      branches:
+      - when:
+          key: menuChoice
+          value: cancel
+        next: 15
+      - when:
+          key: menuChoice
+          value: deploy_docker
+        next: 4
+      - when: else
+        next: 15
+    - type: prompt_for_field
+      prompt: Which project should we deploy?
+      storeIn: gadgetProject
+      choiceProvider: gadgetProjects
+    - type: capture_field
+      storeIn: gadgetProject
+    - type: prompt_for_field
+      prompt: Which Git branch should we deploy?
+      storeIn: branchChoice
+      intent: present_choices
+      choices:
+      - id: main
+        label: main
+      - id: develop
+        label: develop
+      - id: other
+        label: Other (type branch name)
+    - type: capture_field
+      storeIn: branchChoice
+    - type: branch
+      branches:
+      - when:
+          key: branchChoice
+          value: other
+        next: 9
+      - when: else
+        next: 11
+    - type: prompt_for_field
+      prompt: Enter the branch name to deploy.
+      storeIn: branchCustom
+    - type: capture_field
+      storeIn: branchCustom
+    - type: call_action
+      action: gadget_resolve_branch
+      storeSpread: true
+    - type: call_action
+      action: create_thread
+      bind:
+        threadName: gadget-deploy
+      storeIn: deliveryChannelId
+    - type: call_action
+      action: start_gadget_deploy
+      storeSpread: true
+    - type: done
+      message: '{{gadgetDeployMessage}}'
+    - type: done
+      message: Cancelled.

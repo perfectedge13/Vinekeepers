@@ -19,14 +19,17 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # ensure_repo_workspace: git on PATH; openssh for git@ clones; stable clone root (mount a volume here to persist)
+# Gadget: add ansible in a derived image or `apk add ansible` when your Alpine mirror provides it; mount /var/run/docker.sock for host Docker.
 RUN apk add --no-cache git openssh-client \
     && mkdir -p /app/checkouts
 ENV VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts
+ENV GADGET_ANSIBLE_ROOT=/app/ansible
 
 # Config and optional .env (can override by mount)
 COPY --from=builder /build/target/vinekeepers-*.jar ./app.jar
 COPY --from=builder /build/target/lib ./lib
 COPY config ./config
+COPY ansible ./ansible
 
 # Default: run the app (Discord/GitHub tokens via env or .env)
 ENV JAVA_OPTS=""

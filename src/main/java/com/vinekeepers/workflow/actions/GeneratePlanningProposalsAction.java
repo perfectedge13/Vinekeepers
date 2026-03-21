@@ -80,6 +80,7 @@ public final class GeneratePlanningProposalsAction implements com.vinekeepers.wo
         maybeAddPlanBody(plan, request, workspaceReady, readme, sampleFiles, proposals, confirmQueue, seq);
         maybeAddValidation(plan, workspaceReady, sampleFiles, proposals, confirmQueue, seq);
         maybeAddContext(plan, workspaceReady, readme, proposals, confirmQueue, seq);
+        maybeAddV2ExtendedDrafts(plan, request, workspaceReady, sampleFiles, proposals, confirmQueue, seq);
 
         try {
             spread.put("planningProposalsJson", PlanningProposalJson.toJson(proposals));
@@ -225,6 +226,104 @@ public final class GeneratePlanningProposalsAction implements com.vinekeepers.wo
                     "CONFIRM",
                     List.of("INITIAL_REQUEST"),
                     "Lightweight context draft. Reply OK to record it, or paste an edited version.",
+                    ""));
+            confirmQueue.add(id);
+        }
+    }
+
+    private void maybeAddV2ExtendedDrafts(
+            FeaturePlanState plan,
+            String request,
+            boolean workspaceReady,
+            List<String> sampleFiles,
+            List<PlanningProposal> proposals,
+            List<String> confirmQueue,
+            AtomicInteger seq) {
+        if (profileRegistry == null || plan.getProfileId() == null || plan.getProfileId().isBlank()) {
+            return;
+        }
+        if (profileRegistry.get(plan.getProfileId()).flatMap(p -> p.findSection("architecture_notes", "impact")).isEmpty()) {
+            return;
+        }
+        if (isFieldEmpty(plan, "architecture_notes", "impact", "architecture_summary")) {
+            String draft = PlanningDraftSupport.buildArchitectureDraft(request, workspaceReady ? sampleFiles : List.of());
+            String id = "prop-" + seq.getAndIncrement();
+            if (workspaceReady) {
+                proposals.add(new PlanningProposal(
+                        id,
+                        "architecture_notes",
+                        "impact",
+                        "architecture_summary",
+                        draft,
+                        "HIGH",
+                        "AUTO_APPLY",
+                        buildSources(false, "", sampleFiles),
+                        "Draft architecture notes from request and sample paths.",
+                        ""));
+            } else {
+                proposals.add(new PlanningProposal(
+                        id,
+                        "architecture_notes",
+                        "impact",
+                        "architecture_summary",
+                        draft,
+                        "MEDIUM",
+                        "CONFIRM",
+                        List.of("INITIAL_REQUEST"),
+                        "Architecture draft without local workspace. Reply OK or paste edits.",
+                        ""));
+                confirmQueue.add(id);
+            }
+        }
+        if (isFieldEmpty(plan, "architecture_notes", "impact", "components_impacted")) {
+            String id = "prop-" + seq.getAndIncrement();
+            String hint = "Infer from request and repo layout; refine after quick code search.";
+            proposals.add(new PlanningProposal(
+                    id,
+                    "architecture_notes",
+                    "impact",
+                    "components_impacted",
+                    hint,
+                    "HIGH",
+                    workspaceReady ? "AUTO_APPLY" : "CONFIRM",
+                    List.of("INITIAL_REQUEST"),
+                    "Placeholder components line; edit if you know exact modules.",
+                    ""));
+            if (!workspaceReady) {
+                confirmQueue.add(id);
+            }
+        }
+        if (isFieldEmpty(plan, "risk_register", "main", "risk_summary")) {
+            String draft = PlanningDraftSupport.buildRiskDraft(request);
+            String id = "prop-" + seq.getAndIncrement();
+            proposals.add(new PlanningProposal(
+                    id,
+                    "risk_register",
+                    "main",
+                    "risk_summary",
+                    draft,
+                    "HIGH",
+                    workspaceReady ? "AUTO_APPLY" : "CONFIRM",
+                    List.of("INITIAL_REQUEST"),
+                    "Draft risk / edge-case list.",
+                    ""));
+            if (!workspaceReady) {
+                confirmQueue.add(id);
+            }
+        }
+        if (isFieldEmpty(plan, "open_questions_block", "backlog", "open_questions")) {
+            String draft = PlanningDraftSupport.buildOpenQuestionsDraft(request);
+            String id = "prop-" + seq.getAndIncrement();
+            proposals.add(new PlanningProposal(
+                    id,
+                    "open_questions_block",
+                    "backlog",
+                    "open_questions",
+                    draft,
+                    "MEDIUM",
+                    "CONFIRM",
+                    List.of("INITIAL_REQUEST"),
+                    "Starter open questions; reply OK or replace with your list.",
                     ""));
             confirmQueue.add(id);
         }

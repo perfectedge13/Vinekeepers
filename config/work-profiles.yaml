@@ -91,3 +91,149 @@ profiles:
                 type: text
                 required: false
                 promptHint: Links, constraints, or background.
+
+  # Richer default for feature-room planning: more approval artifacts and required scope.
+  software_feature_planning_v2:
+    profileId: software_feature_planning_v2
+    title: Software feature planning (v2)
+    artifacts:
+      - artifactId: requirements_spec
+        title: Requirements specification
+        ownerRoles: [ORCHESTRATOR, SCRIBE]
+        requiredForApproval: true
+        sections:
+          - sectionId: narrative
+            title: Feature narrative
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: feature_summary
+                label: Problem / goal
+                type: text
+                required: true
+                promptHint: What problem this solves and who it is for (not only a one-line title).
+              - fieldId: scope_summary
+                label: Scope and non-goals
+                type: text
+                required: true
+                promptHint: In scope, explicit out-of-scope, and boundaries.
+              - fieldId: user_stories
+                label: User stories / scenarios
+                type: markdown
+                required: false
+                promptHint: Short stories or use cases; bullets are fine.
+              - fieldId: acceptance_criteria
+                label: Acceptance criteria
+                type: text
+                required: true
+                promptHint: Testable criteria; bullets.
+      - artifactId: architecture_notes
+        title: Architecture and design
+        ownerRoles: [ARCHITECT, ORCHESTRATOR]
+        requiredForApproval: true
+        sections:
+          - sectionId: impact
+            title: Impacted components
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: components_impacted
+                label: Components / modules touched
+                type: text
+                required: true
+                promptHint: Packages, services, or major classes likely involved.
+              - fieldId: architecture_summary
+                label: Design notes
+                type: markdown
+                required: true
+                promptHint: Approach, constraints, and notable design choices.
+      - artifactId: risk_register
+        title: Risks and issues
+        ownerRoles: [AUDITOR, ORCHESTRATOR]
+        requiredForApproval: true
+        sections:
+          - sectionId: main
+            title: Risks
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: risk_summary
+                label: Risks, edge cases, rollbacks
+                type: text
+                required: true
+                promptHint: What could go wrong, mitigations, rollout/fallback if relevant.
+      - artifactId: open_questions_block
+        title: Open questions
+        ownerRoles: [ORCHESTRATOR, SCRIBE]
+        requiredForApproval: true
+        sections:
+          - sectionId: backlog
+            title: Unresolved questions
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: open_questions
+                label: Open questions
+                type: text
+                required: true
+                promptHint: Unknowns to confirm; use "None — ready to implement" if truly none.
+      - artifactId: decision_log
+        title: Decision log
+        ownerRoles: [ARCHITECT, ORCHESTRATOR]
+        requiredForApproval: true
+        sections:
+          - sectionId: decisions
+            title: Decisions
+            repeatable: true
+            required: false
+            fields:
+              - fieldId: decision_text
+                label: Decision
+                type: text
+                required: true
+                promptHint: "ADR-style: decision, context, consequences."
+      - artifactId: overall_plan
+        title: Overall plan
+        ownerRoles: [ARCHITECT]
+        requiredForApproval: true
+        sections:
+          - sectionId: outline
+            title: Plan outline
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: plan_body
+                label: Plan
+                type: markdown
+                required: true
+                promptHint: Sequenced implementation steps tied to the repo.
+      - artifactId: validation_plan
+        title: Validation plan
+        ownerRoles: [AUDITOR]
+        requiredForApproval: true
+        sections:
+          - sectionId: checks
+            title: Validation checks
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: validation_notes
+                label: Validation approach
+                type: text
+                required: true
+                promptHint: Tests, manual checks, spec validation commands.
+      - artifactId: project_context
+        title: Project context
+        ownerRoles: [SCRIBE]
+        requiredForApproval: false
+        sections:
+          - sectionId: context
+            title: Context
+            repeatable: false
+            required: false
+            fields:
+              - fieldId: context_summary
+                label: Context summary
+                type: text
+                required: false
+                promptHint: Links, constraints, or background.

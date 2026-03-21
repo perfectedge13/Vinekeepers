@@ -18,7 +18,7 @@ import java.util.UUID;
  */
 public final class InitializeFeaturePlanStateAction implements com.vinekeepers.workflow.WorkflowAction {
 
-    public static final String DEFAULT_PROFILE_ID = "software_feature_planning";
+    public static final String DEFAULT_PROFILE_ID = "software_feature_planning_v2";
 
     private final FeaturePlanStateStore planStateStore;
     private final FeatureRoomStateStore featureRoomStateStore;

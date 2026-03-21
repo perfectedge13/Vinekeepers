@@ -466,6 +466,18 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
 
 
+    private static long parseTimeoutMs(String raw, long fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            long v = Long.parseLong(raw.trim());
+            return v > 0 ? v : fallback;
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
     private static String normalizeRepository(String project) {
 
         if (project == null || project.isBlank()) {

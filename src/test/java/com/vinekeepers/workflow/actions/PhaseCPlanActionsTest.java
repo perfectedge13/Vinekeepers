@@ -25,7 +25,8 @@ class PhaseCPlanActionsTest {
         assertEquals("OK", init.run(null, Map.of(
                 "contextId", "c1",
                 "channelId", "room1",
-                "codeChange", "Ship dark-mode toggle with accessibility review and QA sign-off."), Map.of()));
+                "codeChange", "Ship dark-mode toggle with accessibility review and QA sign-off."),
+                Map.of("profileId", "software_feature_planning")));
         var upsertCrit = new UpsertArtifactSectionDataAction(store, reg);
         assertEquals("OK", upsertCrit.run(null,
                 Map.of("contextId", "c1"),
@@ -34,6 +35,22 @@ class PhaseCPlanActionsTest {
                         "sectionId", "narrative",
                         "mode", "merge",
                         "data", Map.of("acceptance_criteria", "- Toggle persists; - WCAG AA contrast; - QA sign-off in staging."))));
+        assertEquals("OK", upsertCrit.run(null,
+                Map.of("contextId", "c1"),
+                Map.of(
+                        "artifactId", "overall_plan",
+                        "sectionId", "outline",
+                        "mode", "replace",
+                        "data", Map.of("plan_body", "Step A: theme tokens. Step B: UI wiring. Step C: QA and a11y audit. "
+                                + "Step D: docs and rollout checklist with rollback notes."))));
+        assertEquals("OK", upsertCrit.run(null,
+                Map.of("contextId", "c1"),
+                Map.of(
+                        "artifactId", "validation_plan",
+                        "sectionId", "checks",
+                        "mode", "replace",
+                        "data", Map.of("validation_notes", "Automated UI tests; manual screen reader pass; contrast checker; "
+                                + "staging soak before production flag."))));
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
                 .run(null, Map.of("contextId", "c1", "humanDiscoveryCompleted", "true"), Map.of());
@@ -64,7 +81,9 @@ class PhaseCPlanActionsTest {
                         "artifactId", "overall_plan",
                         "sectionId", "outline",
                         "mode", "replace",
-                        "data", Map.of("plan_body", "Phase 1: data model and API. Phase 2: UI export flow. Phase 3: QA and docs."))));
+                        "data", Map.of("plan_body", "Phase 1: data model and API. Phase 2: UI export flow. Phase 3: QA and docs. "
+                                + "Phase 4: performance tuning. Phase 5: rollout and monitoring. "
+                                + "Each phase includes code review and incremental integration tests."))));
         assertEquals("OK", upsert.run(null,
                 Map.of("contextId", "c-review"),
                 Map.of(
@@ -95,7 +114,10 @@ class PhaseCPlanActionsTest {
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "c2", "channelId", "r2"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "c2", "channelId", "r2"),
+                Map.of("profileId", "software_feature_planning"));
         var action = new PersistPlanApprovalAction(store);
         Object r = action.run(
                 new Event("discord", "message", Map.of()),
@@ -111,7 +133,12 @@ class PhaseCPlanActionsTest {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
-        assertEquals("OK", init.run(null, Map.of("contextId", "c3", "channelId", "room3"), Map.of()));
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "c3", "channelId", "room3"),
+                        Map.of("profileId", "software_feature_planning")));
 
         var upsert = new UpsertArtifactSectionDataAction(store, reg);
         assertEquals("OK", upsert.run(null,
@@ -127,7 +154,7 @@ class PhaseCPlanActionsTest {
                         "artifactId", "validation_plan",
                         "sectionId", "checks",
                         "mode", "replace",
-                        "data", Map.of("validation_notes", "Run mvn test."))));
+                        "data", Map.of("validation_notes", "Run mvn test and mvn compile; run npm validate scripts when specs change."))));
 
         var build = new BuildPlanningThreadReviewBodyAction(store);
         @SuppressWarnings("unchecked")
@@ -137,6 +164,6 @@ class PhaseCPlanActionsTest {
         assertTrue(body.contains("Implementation outline"));
         assertTrue(body.contains("Step one; step two."));
         assertTrue(body.contains("Validation approach"));
-        assertTrue(body.contains("Run mvn test."));
+        assertTrue(body.contains("Run mvn test"));
     }
 }

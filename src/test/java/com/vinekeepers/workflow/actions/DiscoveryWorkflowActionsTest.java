@@ -55,7 +55,10 @@ class DiscoveryWorkflowActionsTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "ag", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "ag", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         var gapsAction = new GetStructuredDiscoveryGapsAction(store, reg);
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) gapsAction.run(null, Map.of("contextId", "ag"), Map.of());
@@ -71,7 +74,10 @@ class DiscoveryWorkflowActionsTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "sk", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "sk", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         var capture = new CaptureAndApplyDiscoveryAnswerAction(store, reg);
         assertEquals(
                 "OK_SKIP_APPLY",
@@ -123,7 +129,10 @@ class DiscoveryWorkflowActionsTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "rc", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "rc", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         var upsert = new UpsertArtifactSectionDataAction(store, reg);
         upsert.run(
                 null,

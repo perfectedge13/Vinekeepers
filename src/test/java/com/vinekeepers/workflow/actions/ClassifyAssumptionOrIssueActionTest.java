@@ -15,7 +15,10 @@ class ClassifyAssumptionOrIssueActionTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "c1", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "c1", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         var action = new ClassifyAssumptionOrIssueAction(store);
         assertEquals("OK", action.run(null,
                 Map.of("contextId", "c1", "discoveryAnswerRaw", "We cannot proceed without API access."),
@@ -28,7 +31,10 @@ class ClassifyAssumptionOrIssueActionTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "c2", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "c2", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         var action = new ClassifyAssumptionOrIssueAction(store);
         assertEquals("OK", action.run(null,
                 Map.of("contextId", "c2", "discoveryAnswerRaw", "We assume the default branch is main."),

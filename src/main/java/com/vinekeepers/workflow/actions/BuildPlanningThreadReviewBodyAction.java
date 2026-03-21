@@ -15,9 +15,9 @@ import java.util.Map;
 public final class BuildPlanningThreadReviewBodyAction implements com.vinekeepers.workflow.WorkflowAction {
 
     /** Max characters for the combined body (leave room for wrapper text in Discord 2000 limit). */
-    private static final int TOTAL_CAP = 1500;
+    private static final int TOTAL_CAP = 1900;
     /** Per-section budget before truncation. */
-    private static final int SECTION_SOFT_MAX = 520;
+    private static final int SECTION_SOFT_MAX = 380;
 
     private final FeaturePlanStateStore planStore;
 
@@ -48,16 +48,43 @@ public final class BuildPlanningThreadReviewBodyAction implements com.vinekeeper
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
         String repo = firstNonBlank(plan.getRepoRef(), getString(state, "project"));
 
+        String featureSummary = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary"), SECTION_SOFT_MAX);
+        String scope = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"), SECTION_SOFT_MAX);
+        String stories = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories"), SECTION_SOFT_MAX);
+        String acceptance = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"), SECTION_SOFT_MAX);
         String planBody = truncate(PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"), SECTION_SOFT_MAX);
         String validation = truncate(PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes"), SECTION_SOFT_MAX);
         String context = truncate(PlanningArtifactTexts.artifactField(plan, "project_context", "context", "context_summary"), SECTION_SOFT_MAX);
+        String arch = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary"), SECTION_SOFT_MAX);
+        String comps = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted"), 200);
+        String risks = truncate(PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary"), SECTION_SOFT_MAX);
+        String openQ = truncate(PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"), SECTION_SOFT_MAX);
+        String decision = truncate(
+                PlanningArtifactTexts.firstRepeatableField(plan, "decision_log", "decisions", "decision_text"),
+                SECTION_SOFT_MAX);
 
         StringBuilder sb = new StringBuilder();
         appendSection(sb, "**Request**", request);
         if (repo != null && !repo.isBlank()) {
             appendSection(sb, "**Repo**", repo);
         }
+        appendSection(sb, "**Problem / goal**", featureSummary.isBlank() ? "(not drafted yet)" : featureSummary);
+        appendSection(sb, "**Scope**", scope.isBlank() ? "(not drafted yet)" : scope);
+        if (!stories.isBlank()) {
+            appendSection(sb, "**User stories / scenarios**", stories);
+        }
+        appendSection(sb, "**Acceptance criteria**", acceptance.isBlank() ? "(not drafted yet)" : acceptance);
+        if (!comps.isBlank() || !arch.isBlank()) {
+            appendSection(sb, "**Architecture**",
+                    (comps.isBlank() ? "" : "**Components:** " + comps + "\n\n")
+                            + (arch.isBlank() ? "(not drafted yet)" : arch));
+        }
         appendSection(sb, "**Implementation outline**", planBody.isBlank() ? "(not drafted yet)" : planBody);
+        appendSection(sb, "**Risks / edge cases**", risks.isBlank() ? "(not drafted yet)" : risks);
+        appendSection(sb, "**Open questions**", openQ.isBlank() ? "(not drafted yet)" : openQ);
+        if (!decision.isBlank()) {
+            appendSection(sb, "**Recorded decision**", decision);
+        }
         appendSection(sb, "**Validation approach**", validation.isBlank() ? "(not drafted yet)" : validation);
         appendSection(sb, "**Project context**", context.isBlank() ? "(not drafted yet)" : context);
 

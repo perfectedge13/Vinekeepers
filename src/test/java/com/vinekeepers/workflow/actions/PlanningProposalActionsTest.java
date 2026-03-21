@@ -22,7 +22,7 @@ class PlanningProposalActionsTest {
                 init.run(
                         null,
                         Map.of("contextId", "gp1", "channelId", "ch", "codeChange", "Add dark mode toggle"),
-                        Map.of()));
+                        Map.of("profileId", "software_feature_planning")));
         var gen = new GeneratePlanningProposalsAction(store, reg);
         @SuppressWarnings("unchecked")
         Map<String, Object> out = (Map<String, Object>) gen.run(null, Map.of("contextId", "gp1"), Map.of());
@@ -37,7 +37,10 @@ class PlanningProposalActionsTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "aa1", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "aa1", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         String proposalsJson =
                 "[{\"proposalId\":\"p-auto\",\"artifactId\":\"overall_plan\",\"sectionId\":\"outline\",\"fieldId\":\"plan_body\","
                         + "\"proposedValue\":\"AUTO BODY\",\"confidence\":\"HIGH\",\"interaction\":\"AUTO_APPLY\","
@@ -57,7 +60,10 @@ class PlanningProposalActionsTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "cr1", "channelId", "ch", "codeChange", "Feature X"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "cr1", "channelId", "ch", "codeChange", "Feature X"),
+                Map.of("profileId", "software_feature_planning"));
         var gen = new GeneratePlanningProposalsAction(store, reg);
         @SuppressWarnings("unchecked")
         Map<String, Object> genOut = (Map<String, Object>) gen.run(null, Map.of("contextId", "cr1"), Map.of());

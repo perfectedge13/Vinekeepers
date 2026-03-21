@@ -147,20 +147,34 @@ public final class VinekeepersEngine implements EventSubscriber {
         if (existing.isPresent()) {
             ConfigurableWorkflowState s = existing.get();
             if (s.getStatus() == ConfigurableWorkflowState.Status.WAITING_INPUT) {
+                log.info(
+                        "Coordinator planning kickoff skipped (waiting input): botId={} sessionKey={}",
+                        coordinatorBotId,
+                        stateKey);
                 return "SKIPPED_WAITING";
             }
             if (s.getStatus() == ConfigurableWorkflowState.Status.COMPLETED
                     && ConfigurableWorkflowRunner.isThreadScopedSessionKey(stateKey, coordinatorBotId)) {
+                log.info(
+                        "Coordinator planning kickoff skipped (thread completed): botId={} sessionKey={}",
+                        coordinatorBotId,
+                        stateKey);
                 return "SKIPPED_COMPLETED";
             }
             if ((s.getStatus() == ConfigurableWorkflowState.Status.ACTIVE
                     || s.getStatus() == ConfigurableWorkflowState.Status.ERROR)
                     && s.getStepIndex() > 0) {
+                log.info(
+                        "Coordinator planning kickoff skipped (in progress): botId={} sessionKey={} step={}",
+                        coordinatorBotId,
+                        stateKey,
+                        s.getStepIndex());
                 return "SKIPPED_IN_PROGRESS";
             }
         }
         auditRecorder.record(AuditLog.fromEvent(syntheticThreadMessage, coordinatorBotId, "received", ""));
         runWorkflowReasonerAndDeliver(syntheticThreadMessage, bot, coordinatorBotId);
+        log.info("Coordinator planning kickoff finished for botId={} sessionKey={}", coordinatorBotId, stateKey);
         return "RAN";
     }
 

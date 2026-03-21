@@ -10,6 +10,7 @@ change_triggers:
   paths:
     - src
     - config
+    - ansible
     - specs
     - pom.xml
     - README.md

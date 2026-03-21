@@ -38,7 +38,7 @@ dependencies:
       criticality: required
       spec: org.junit.jupiter:junit-jupiter
       install_hint: Maven test dependency
-      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001, REQ-GADGET-001]
 
 assets:
   - id: ASSET-CONFIG-LOADER
@@ -57,9 +57,10 @@ assets:
       retained transitional; lifecycleBotName in step bind; Arrietty template workflowRef arrietty_room;
       create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.";
       optional workflow steps provision_room_participants and initialize_feature_room_state for multi-bot feature room;
-      four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys)
-    requires: [REQ-CONFIG-001, REQ-LUNA-001]
-    feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
+      four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys;
+      gadget bot workflowRef gadget_deploy and routing discordChannels placeholder REPLACE_WITH_DEVOPS_CHANNEL_ID)
+    requires: [REQ-CONFIG-001, REQ-LUNA-001, REQ-GADGET-001]
+    feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING, FEAT-DEVOPS-GADGET]
   - id: ASSET-BOT-CONFIG
     kind: source
     path: src/main/java/com/vinekeepers/config/BotConfig.java

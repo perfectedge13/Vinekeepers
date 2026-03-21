@@ -17,11 +17,17 @@ public final class PlanCritiqueSupport {
     public static final String SOURCE_RULES_V1 = "RULES_V1";
 
     /** Minimum trimmed length for initial request text before approval is allowed. */
-    public static final int MIN_INITIAL_REQUEST_CHARS = 20;
+    public static final int MIN_INITIAL_REQUEST_CHARS = 40;
     /** Minimum trimmed length for implementation outline artifact text. */
-    public static final int MIN_OUTLINE_CHARS = 40;
+    public static final int MIN_OUTLINE_CHARS = 120;
     /** Minimum trimmed length for validation approach artifact text. */
-    public static final int MIN_VALIDATION_CHARS = 30;
+    public static final int MIN_VALIDATION_CHARS = 80;
+    /** Minimum for architecture design notes (v2). */
+    public static final int MIN_ARCHITECTURE_CHARS = 80;
+    /** Minimum for risk summary (v2). */
+    public static final int MIN_RISK_CHARS = 60;
+    /** Minimum for open questions block (v2). */
+    public static final int MIN_OPEN_QUESTIONS_CHARS = 40;
 
     private PlanCritiqueSupport() {}
 
@@ -38,6 +44,7 @@ public final class PlanCritiqueSupport {
         }
         if (plan != null) {
             addSubstanceFindings(plan, out, seq);
+            addV2PacketFindings(plan, profile, out, seq);
             if (!plan.getIssues().isEmpty()) {
                 out.add(new PlanCritiqueFinding(
                         "crit-iss-" + seq.getAndIncrement(),
@@ -116,6 +123,61 @@ public final class PlanCritiqueSupport {
                     "Validation approach is missing or too thin ("
                             + validation.length() + " chars; need at least " + MIN_VALIDATION_CHARS + ").",
                     "validation_plan.checks"));
+        }
+    }
+
+    private static void addV2PacketFindings(
+            FeaturePlanState plan,
+            WorkProfileDefinition profile,
+            List<PlanCritiqueFinding> out,
+            AtomicInteger seq) {
+        if (plan == null || profile == null || profile.findSection("architecture_notes", "impact").isEmpty()) {
+            return;
+        }
+        String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary");
+        if (arch.length() < MIN_ARCHITECTURE_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-v2-arch-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_ARCHITECTURE_NOTES",
+                    "Architecture / design notes are missing or too thin ("
+                            + arch.length() + " chars; need at least " + MIN_ARCHITECTURE_CHARS + ").",
+                    "architecture_notes.impact"));
+        }
+        String risks = PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary");
+        if (risks.length() < MIN_RISK_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-v2-risk-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_RISK_REGISTER",
+                    "Risk / edge-case summary is missing or too thin ("
+                            + risks.length() + " chars; need at least " + MIN_RISK_CHARS + ").",
+                    "risk_register.main"));
+        }
+        String oq = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
+        if (oq.length() < MIN_OPEN_QUESTIONS_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-v2-oq-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_OPEN_QUESTIONS",
+                    "Open questions block is missing or too thin ("
+                            + oq.length() + " chars; need at least " + MIN_OPEN_QUESTIONS_CHARS + ").",
+                    "open_questions_block.backlog"));
+        }
+        var art = plan.getArtifacts().get("decision_log");
+        var sec = art != null ? art.getSectionsById().get("decisions") : null;
+        boolean noDecisions = sec == null || sec.getEntries() == null || sec.getEntries().isEmpty();
+        if (noDecisions) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-v2-dec-" + seq.getAndIncrement(),
+                    "PROCESS",
+                    "MUST_FIX",
+                    "MISSING_DECISION_LOG_ENTRY",
+                    "At least one decision log entry is required before approval.",
+                    "decision_log.decisions"));
         }
     }
 

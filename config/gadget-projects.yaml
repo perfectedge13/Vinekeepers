@@ -1,0 +1,6 @@
+# Deploy targets for Gadget (config/bots.yaml workflow gadget_deploy).
+# playbook paths are relative to GADGET_ANSIBLE_ROOT (default: ansible/ in repo or /app/ansible in Docker).
+projects:
+  - id: vinekeepers
+    label: Vinekeepers
+    playbook: playbooks/site.yml

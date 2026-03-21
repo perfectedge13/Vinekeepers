@@ -74,6 +74,7 @@ dependencies:
         - REQ-REASONER-001
         - REQ-WORKFLOW-001
         - REQ-LUNA-001
+        - REQ-GADGET-001
 assets:
   - id: ASSET-BOOTSTRAP
     kind: source
@@ -86,15 +87,18 @@ assets:
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
-      build_planning_thread_review_body, persist_plan_approval, append/set plan actions
+      build_planning_thread_review_body, persist_plan_approval, append/set plan actions; register gadget_resolve_branch
+      and start_gadget_deploy; load GadgetProjectRegistry and register gadgetProjects choice provider on config load
     requires:
       - REQ-CORE-002
       - REQ-TOOLS-001
       - REQ-LUNA-001
+      - REQ-GADGET-001
     feature_ids:
       - FEAT-CORE
       - FEAT-TOOLS
       - FEAT-CURSOR-GATHERING
+      - FEAT-DEVOPS-GADGET
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
@@ -121,13 +125,16 @@ assets:
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
       workflowRef arrietty_room, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
-      blank/empty)
+      blank/empty; gadget bot with workflowRef gadget_deploy, routing discordMention gadget and discordChannels allowlist
+      placeholder REPLACE_WITH_DEVOPS_CHANNEL_ID
     requires:
       - REQ-CONFIG-001
       - REQ-LUNA-001
+      - REQ-GADGET-001
     feature_ids:
       - FEAT-CONFIG
       - FEAT-CURSOR-GATHERING
+      - FEAT-DEVOPS-GADGET
   - id: ASSET-CURSOR-FULL-RUN-TOOL
     kind: source
     path: src/main/java/com/vinekeepers/tools/CursorFullRunTool.java
@@ -394,6 +401,63 @@ assets:
       - REQ-LUNA-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
+  - id: ASSET-GADGET-PROJECT-REGISTRY
+    kind: source
+    path: src/main/java/com/vinekeepers/gadget/GadgetProjectRegistry.java
+    role: Loads deployable Gadget projects from config/gadget-projects.yaml (id, label, playbook path)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-GADGET-DEPLOY-RUNNER
+    kind: source
+    path: src/main/java/com/vinekeepers/gadget/GadgetDeployRunner.java
+    role: >-
+      Background ansible-playbook execution; streams TASK/fatal lines to Discord via OutboundDeliveryRouter.sendAs;
+      env GADGET_ANSIBLE_ROOT, GADGET_ANSIBLE_BINARY, GADGET_ANSIBLE_INVENTORY, GADGET_ANSIBLE_DISABLED
+    requires:
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-GADGET-PROJECTS-CHOICE-PROVIDER
+    kind: source
+    path: src/main/java/com/vinekeepers/providers/GadgetProjectsChoiceProvider.java
+    role: Dynamic choice provider gadgetProjects for gadget_deploy project selection
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-GADGET-RESOLVE-BRANCH-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/GadgetResolveBranchAction.java
+    role: Workflow action gadget_resolve_branch; sets deployBranch from branchChoice or branchCustom when other
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-START-GADGET-DEPLOY-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/StartGadgetDeployAction.java
+    role: >-
+      Workflow action start_gadget_deploy; validates project, resolves progress target (thread or parent channel on
+      THREAD_CREATE_FAILED), submits GadgetDeployRunner
+    requires:
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-GADGET-PROJECTS-YAML
+    kind: config
+    path: config/gadget-projects.yaml
+    role: Gadget deploy targets list (projects with id, label, playbook relative to GADGET_ANSIBLE_ROOT)
+    requires:
+      - REQ-CONFIG-001
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-CONFIG
+      - FEAT-DEVOPS-GADGET
   - id: ASSET-DONE-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/DoneStep.java
@@ -1883,6 +1947,76 @@ requirements:
       - >-
         Do not serialize null fields in Cursor API request payload because it can cause API errors or unexpected
         behavior.
+  - id: REQ-GADGET-001
+    title: Gadget bot — DevOps Discord menu, Ansible deploy, thread progress
+    statement: >-
+      Bot id gadget with Discord token env GADGET_DISCORD_TOKEN; routing uses discordMention gadget and discordChannels
+      allowlist (ops channel id); workflow gadget_deploy uses extract_event for channelId, menu Deploy to Docker or Cancel,
+      choiceProvider gadgetProjects from config/gadget-projects.yaml, branch choices main/develop/other with
+      gadget_resolve_branch, create_thread for progress thread, start_gadget_deploy to run ansible-playbook asynchronously
+      with OutboundDeliveryRouter.sendAs gadget; progress falls back to parent channel when THREAD_CREATE_FAILED
+    status: active
+    priority: medium
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - bots.yaml defines gadget bot with workflowRef gadget_deploy and identities.discord ingress routed
+        - >-
+          Routing filter discordMention gadget and discordChannels; messages match only in allowlisted channel with
+          @Gadget mention metadata
+        - >-
+          gadget_deploy registers choiceProvider gadgetProjects; Bootstrap registers gadget_resolve_branch and
+          start_gadget_deploy; reload start_gadget_deploy when config loads with fresh GadgetProjectRegistry
+        - >-
+          GadgetDeployRunner invokes ansible-playbook with -e gadget_project and -e gadget_branch; respects
+          GADGET_ANSIBLE_DISABLED for dry run; posts via sendAs gadget bot id
+        - ansible/playbooks ships example site.yml; Dockerfile copies ansible tree and sets GADGET_ANSIBLE_ROOT
+      examples: []
+    traceability:
+      assets:
+        - ASSET-GADGET-PROJECT-REGISTRY
+        - ASSET-GADGET-DEPLOY-RUNNER
+        - ASSET-GADGET-PROJECTS-CHOICE-PROVIDER
+        - ASSET-GADGET-RESOLVE-BRANCH-ACTION
+        - ASSET-START-GADGET-DEPLOY-ACTION
+        - ASSET-GADGET-PROJECTS-YAML
+        - ASSET-BOOTSTRAP
+        - ASSET-BOTS-YAML
+        - ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
+        - ASSET-CREATE-THREAD-ACTION
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-GADGET-RESOLVE-BRANCH
+          title: GadgetResolveBranchActionTest
+          intent: Verify deployBranch from branchChoice and branchCustom when other
+          testClass: com.vinekeepers.workflow.actions.GadgetResolveBranchActionTest
+          preconditions: []
+        - id: UNIT-GADGET-PROJECT-REGISTRY
+          title: GadgetProjectRegistryTest
+          intent: Verify YAML load and findById for gadget projects
+          testClass: com.vinekeepers.gadget.GadgetProjectRegistryTest
+          preconditions: []
+        - id: UNIT-START-GADGET-DEPLOY
+          title: StartGadgetDeployActionTest
+          intent: Verify unknown project failure and dry-run path posts via sendAs gadget
+          testClass: com.vinekeepers.workflow.actions.StartGadgetDeployActionTest
+          preconditions: []
+        - id: UNIT-GADGET-ROUTING
+          title: RouterTest
+          intent: Verify gadget routing with mention and discordChannels allowlist
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeMatchesGadgetWhenMentionAndChannelAllowlist
+          preconditions: []
+    anti_patterns:
+      - Running ansible-playbook on the engine thread (blocks Discord gateway)
+      - Posting deploy progress with default sender when multi-bot; use sendAs gadget
 features:
   - id: FEAT-WORKFLOW
     slug: workflow
@@ -1993,4 +2127,26 @@ features:
       - ASSET-DISCORD-SPACE-OPERATIONS
       - ASSET-REPLY-SENDER
       - ASSET-OUTBOUND-GATEWAY
+    status: active
+  - id: FEAT-DEVOPS-GADGET
+    slug: devops-gadget
+    title: Gadget DevOps Discord bot and Ansible deploy
+    domain_slug: workflow
+    doc_path: features/domain/workflow/gadget-devops.md
+    summary: >-
+      Gadget offers a deploy menu in an allowlisted Discord channel, gathers project and branch, opens a status thread,
+      and runs ansible-playbook on the host with progress posts as the gadget bot.
+    requirement_ids:
+      - REQ-GADGET-001
+    asset_ids:
+      - ASSET-GADGET-PROJECT-REGISTRY
+      - ASSET-GADGET-DEPLOY-RUNNER
+      - ASSET-GADGET-PROJECTS-CHOICE-PROVIDER
+      - ASSET-GADGET-RESOLVE-BRANCH-ACTION
+      - ASSET-START-GADGET-DEPLOY-ACTION
+      - ASSET-GADGET-PROJECTS-YAML
+      - ASSET-BOTS-YAML
+      - ASSET-BOOTSTRAP
+      - ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
+      - ASSET-CREATE-THREAD-ACTION
     status: active

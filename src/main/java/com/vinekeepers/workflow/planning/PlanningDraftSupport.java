@@ -125,4 +125,61 @@ public final class PlanningDraftSupport {
         }
         return sb.toString();
     }
+
+    /** Draft architecture impact from request and sample paths (v2 profile). */
+    public static String buildArchitectureDraft(String request, List<String> sampleFiles) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("(Draft — refine before approval.)\n\n");
+        if (request != null && !request.isBlank()) {
+            sb.append("**Goal (from request):** ").append(request.trim()).append("\n\n");
+        }
+        sb.append("**Likely touchpoints:** infer from request; confirm packages/modules.\n");
+        if (sampleFiles != null && !sampleFiles.isEmpty()) {
+            sb.append("\n**Candidate paths:**\n");
+            int n = Math.min(8, sampleFiles.size());
+            for (int i = 0; i < n; i++) {
+                sb.append("- ").append(sampleFiles.get(i)).append("\n");
+            }
+        }
+        sb.append("\n**Design:** Prefer smallest change, match repo conventions, keep spec/docs in sync if behavior changes.\n");
+        return sb.toString();
+    }
+
+    /** Draft risk / edge-case block from request. */
+    public static String buildRiskDraft(String request) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("(Draft — refine before approval.)\n");
+        sb.append("- Regression in existing workflows or connectors.\n");
+        sb.append("- Config/spec drift if YAML, specs, or mkdoc change.\n");
+        sb.append("- Discord or Cursor API failures; retry and user-visible errors.\n");
+        if (request != null && !request.isBlank()) {
+            String t = request.trim();
+            sb.append("- Request-specific: ").append(t.length() > 200 ? t.substring(0, 200) + "…" : t).append("\n");
+        }
+        return sb.toString();
+    }
+
+    /** Draft open-questions placeholder to be replaced during discovery. */
+    public static String buildOpenQuestionsDraft(String request) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Review the following after drafts are generated:\n");
+        sb.append("- Confirm scope boundaries and out-of-scope items.\n");
+        sb.append("- Any product or API contracts that must stay stable?\n");
+        if (request != null && !request.isBlank()) {
+            String t = request.trim();
+            sb.append("- Clarify ambiguities in: ").append(t.length() > 120 ? t.substring(0, 120) + "…" : t).append("\n");
+        }
+        sb.append("Replace with **None — ready to implement** only if nothing is uncertain.\n");
+        return sb.toString();
+    }
+
+    /** Seed decision row text for empty decision log (v2). */
+    public static String buildSeedDecisionText(String request) {
+        String r = request != null ? request.trim() : "";
+        if (r.length() > 160) {
+            r = r.substring(0, 160) + "…";
+        }
+        return "Proceed with implementation aligned to the approved planning packet"
+                + (r.isBlank() ? "." : (" for: " + r));
+    }
 }

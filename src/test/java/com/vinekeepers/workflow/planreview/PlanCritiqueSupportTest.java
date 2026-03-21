@@ -39,13 +39,15 @@ class PlanCritiqueSupportTest {
     void sufficientArtifactsOmitInsufficientCodesAndAllowReady() {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         WorkProfileDefinition profile = reg.get("software_feature_planning").orElseThrow();
+        String longOutline = "1234567890123456789012345678901234567890ABCD".repeat(3);
+        String longVal = "1234567890123456789012345678901234567890ABCD".repeat(2);
         SectionState outline = new SectionState("outline", SectionState.STATUS_DRAFT,
-                Map.of("plan_body", "1234567890123456789012345678901234567890ABCD"), List.of());
+                Map.of("plan_body", longOutline), List.of());
         SectionState checks = new SectionState("checks", SectionState.STATUS_DRAFT,
-                Map.of("validation_notes", "123456789012345678901234567890"), List.of());
+                Map.of("validation_notes", longVal), List.of());
         ArtifactState overall = new ArtifactState("overall_plan", Map.of("outline", outline));
         ArtifactState val = new ArtifactState("validation_plan", Map.of("checks", checks));
-        FeaturePlanState plan = basePlan("123456789012345678901234567890").withArtifacts(Map.of(
+        FeaturePlanState plan = basePlan("1234567890123456789012345678901234567890ABCD").withArtifacts(Map.of(
                 "overall_plan", overall,
                 "validation_plan", val));
         List<PlanCritiqueFinding> f = PlanCritiqueSupport.buildFindings(plan, profile, List.of());

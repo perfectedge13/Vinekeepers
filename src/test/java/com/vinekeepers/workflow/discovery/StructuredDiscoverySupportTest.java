@@ -21,7 +21,12 @@ class StructuredDiscoverySupportTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        assertEquals("OK", init.run(null, Map.of("contextId", "cx", "channelId", "ch"), Map.of()));
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "cx", "channelId", "ch"),
+                        Map.of("profileId", "software_feature_planning")));
         var plan = store.getByContextId("cx").orElseThrow();
         var profile = reg.get(plan.getProfileId()).orElseThrow();
 
@@ -46,7 +51,10 @@ class StructuredDiscoverySupportTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
-        init.run(null, Map.of("contextId", "cy", "channelId", "ch"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "cy", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
         var upsert = new UpsertArtifactSectionDataAction(store, reg);
         upsert.run(null, Map.of("contextId", "cy"),
                 Map.of("artifactId", "requirements_spec", "sectionId", "narrative", "data",

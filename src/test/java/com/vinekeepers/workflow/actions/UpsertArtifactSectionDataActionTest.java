@@ -24,7 +24,12 @@ class UpsertArtifactSectionDataActionTest {
     @Test
     void upsertReplacesValuesAndSetsDraft() {
         var init = new InitializeFeaturePlanStateAction(planStore, new com.vinekeepers.state.planning.FeatureRoomStateStore(), registry);
-        assertEquals("OK", init.run(null, Map.of("contextId", "c1", "channelId", "room1"), Map.of()));
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "c1", "channelId", "room1"),
+                        Map.of("profileId", "software_feature_planning")));
 
         UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(planStore, registry);
         Object r = upsert.run(
@@ -49,7 +54,10 @@ class UpsertArtifactSectionDataActionTest {
     @Test
     void rejectsUnknownSection() {
         var init = new InitializeFeaturePlanStateAction(planStore, new com.vinekeepers.state.planning.FeatureRoomStateStore(), registry);
-        init.run(null, Map.of("contextId", "c2", "channelId", "r"), Map.of());
+        init.run(
+                null,
+                Map.of("contextId", "c2", "channelId", "r"),
+                Map.of("profileId", "software_feature_planning"));
         UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(planStore, registry);
         Object r = upsert.run(
                 null,

@@ -34,8 +34,10 @@ import com.vinekeepers.tools.CursorFullRunTool;
 import com.vinekeepers.tools.EchoTool;
 import com.vinekeepers.tools.ToolRegistry;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.gadget.GadgetProjectRegistry;
 import com.vinekeepers.profile.WorkProfileLoader;
 import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.providers.GadgetProjectsChoiceProvider;
 import com.vinekeepers.providers.GitHubReposChoiceProvider;
 import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
@@ -48,6 +50,7 @@ import com.vinekeepers.workflow.actions.AppendIssueAction;
 import com.vinekeepers.workflow.actions.AppendRequirementAction;
 import com.vinekeepers.workflow.actions.AppendValidationNoteAction;
 import com.vinekeepers.workflow.actions.BuildDiscoveryAgendaAction;
+import com.vinekeepers.workflow.actions.BuildInsightDiscoveryAgendaAction;
 import com.vinekeepers.workflow.actions.BuildPlanningThreadReviewBodyAction;
 import com.vinekeepers.workflow.actions.BuildProposalConfirmPromptAction;
 import com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesAction;
@@ -57,6 +60,8 @@ import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
 import com.vinekeepers.workflow.actions.EnsureRepoWorkspaceAction;
+import com.vinekeepers.workflow.actions.GadgetResolveBranchAction;
+import com.vinekeepers.workflow.actions.StartGadgetDeployAction;
 import com.vinekeepers.workflow.actions.GeneratePlanningProposalsAction;
 import com.vinekeepers.workflow.actions.GetProfileMissingFieldsAction;
 import com.vinekeepers.workflow.actions.GetStructuredDiscoveryGapsAction;
@@ -75,7 +80,9 @@ import com.vinekeepers.workflow.actions.ResolveProposalConfirmationAction;
 import com.vinekeepers.workflow.actions.SetPlanSectionStatusAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
 import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
+import com.vinekeepers.workflow.actions.StartGadgetDeployAction;
 import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
+import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
 import com.vinekeepers.workflow.actions.UpsertArtifactSectionDataAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -140,6 +147,9 @@ public final class Bootstrap {
         this.outboundDeliveryRouter = new OutboundDeliveryRouter(lifecycleContextStore, featureRoomStateStore);
         registerLegacyActions(actionRegistry);
         registerLifecycleActions(actionRegistry);
+        actionRegistry.register("gadget_resolve_branch", new GadgetResolveBranchAction());
+        actionRegistry.register("start_gadget_deploy", new StartGadgetDeployAction(outboundDeliveryRouter,
+                GadgetProjectRegistry.load(Path.of("config", "gadget-projects.yaml")), "gadget"));
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
         this.router = new Router(lifecycleContextStore, featureRoomStateStore);
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
@@ -176,6 +186,8 @@ public final class Bootstrap {
             loader.addRoutings(config, router);
             DynamicChoiceProviderRegistry choiceProviderRegistry = new DynamicChoiceProviderRegistry();
             choiceProviderRegistry.register("githubRepos", new GitHubReposChoiceProvider(stateStore));
+            GadgetProjectRegistry gadgetProjectRegistry = GadgetProjectRegistry.load(Path.of("config", "gadget-projects.yaml"));
+            choiceProviderRegistry.register("gadgetProjects", new GadgetProjectsChoiceProvider(gadgetProjectRegistry));
             List<BotDefinition> bots = loader.buildBots(config);
             lastLoadedBots.clear();
             lastLoadedBots.addAll(bots);
@@ -193,6 +205,7 @@ public final class Bootstrap {
                 engine.registerRunner(bot.getId(), runner);
                 engine.registerReasoner(bot.getId(), new StubReasoner());
             }
+            actionRegistry.register("start_gadget_deploy", new StartGadgetDeployAction(outboundDeliveryRouter, gadgetProjectRegistry, "gadget"));
         } catch (Exception e) {
             log.warn("Could not load config from {}: {}", configPath, e.getMessage());
         }
@@ -277,6 +290,12 @@ public final class Bootstrap {
         registry.register("get_profile_missing_fields", new GetProfileMissingFieldsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("get_structured_discovery_gaps", new GetStructuredDiscoveryGapsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("build_discovery_agenda", new BuildDiscoveryAgendaAction());
+        registry.register(
+                "build_insight_discovery_agenda",
+                new BuildInsightDiscoveryAgendaAction(featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "synthesize_pre_critique_artifacts",
+                new SynthesizePreCritiqueArtifactsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("capture_and_apply_discovery_answer", new CaptureAndApplyDiscoveryAnswerAction(featurePlanStateStore, workProfileRegistry));
         registry.register("classify_assumption_or_issue", new ClassifyAssumptionOrIssueAction(featurePlanStateStore));
         registry.register("recompute_plan_progress", new RecomputePlanProgressAction(featurePlanStateStore, workProfileRegistry));
