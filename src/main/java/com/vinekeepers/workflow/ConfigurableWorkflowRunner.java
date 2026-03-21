@@ -20,25 +20,37 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     private static final Logger log = LoggerFactory.getLogger(ConfigurableWorkflowRunner.class);
 
     private final String sessionKeyStrategyName;
+    private final String botDefaultCursorModel;
     private final List<WorkflowStep> steps;
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry) {
-        this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null);
+        this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null, null);
     }
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
                                       ToolRunner toolRunner, ToolPolicy toolPolicy,
                                       ConversationMode conversationMode, String sessionKeyStrategyName) {
-        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName, null);
+        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName, null, null);
     }
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
                                       ToolRunner toolRunner, ToolPolicy toolPolicy,
                                       ConversationMode conversationMode, String sessionKeyStrategyName,
                                       DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName,
+                choiceProviderRegistry, null);
+    }
+
+    public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
+                                      ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                      ConversationMode conversationMode, String sessionKeyStrategyName,
+                                      DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                      String botDefaultCursorModel) {
         WorkflowDefinition resolvedDefinition = definition != null ? definition : new WorkflowDefinition("", List.of());
         WorkflowActionRegistry resolvedRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.sessionKeyStrategyName = sessionKeyStrategyName;
+        this.botDefaultCursorModel = botDefaultCursorModel != null && !botDefaultCursorModel.isBlank()
+                ? botDefaultCursorModel.trim() : null;
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
                 toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
     }
@@ -53,9 +65,11 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         ConfigurableWorkflowState state = stateStore.get(stateKey, ConfigurableWorkflowState.class)
                 .orElseGet(ConfigurableWorkflowState::new);
         state.put("__sessionKey", stateKey);
+        applyBotDefaultCursorModel(state);
         if (state.getStatus() == ConfigurableWorkflowState.Status.COMPLETED || state.getStepIndex() >= steps.size()) {
             state.resetForNewRun();
             state.put("__sessionKey", stateKey);
+            applyBotDefaultCursorModel(state);
         }
 
         int maxSteps = 100;
@@ -127,6 +141,12 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         return WorkflowRunResult.error("Workflow step limit reached.");
     }
 
+    private void applyBotDefaultCursorModel(ConfigurableWorkflowState state) {
+        if (botDefaultCursorModel != null) {
+            state.put("__botDefaultCursorModel", botDefaultCursorModel);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static List<WorkflowStep> buildSteps(WorkflowDefinition definition, WorkflowActionRegistry registry,
                                                  ToolRunner toolRunner, ToolPolicy toolPolicy,
@@ -163,13 +183,17 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                             (String) stepMap.get("contentKey"),
                             Boolean.TRUE.equals(trimAndLower)));
                 }
-                case "call_action" -> out.add(new com.vinekeepers.workflow.steps.CallActionStep(
-                        registry,
-                        toolRunner,
-                        toolPolicy,
-                        (String) stepMap.get("action"),
-                        (Map<String, Object>) stepMap.get("bind"),
-                        (String) stepMap.get("storeIn")));
+                case "call_action" -> {
+                    String stepModel = stepMap.get("model") != null ? String.valueOf(stepMap.get("model")) : null;
+                    out.add(new com.vinekeepers.workflow.steps.CallActionStep(
+                            registry,
+                            toolRunner,
+                            toolPolicy,
+                            (String) stepMap.get("action"),
+                            (Map<String, Object>) stepMap.get("bind"),
+                            (String) stepMap.get("storeIn"),
+                            stepModel));
+                }
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(

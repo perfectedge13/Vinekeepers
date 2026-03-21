@@ -3,6 +3,7 @@ package com.vinekeepers.workflow;
 import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.ToolPolicy;
+import com.vinekeepers.core.cursor.CursorLaunchModel;
 import com.vinekeepers.tools.ToolRunner;
 
 import java.util.List;
@@ -18,7 +19,7 @@ public final class WorkflowRunnerFactory {
      */
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams) {
         return create(workflowType, workflowParams, null, null, null, ToolPolicy.allowAll(),
-                ConversationMode.SINGLE_EVENT, null);
+                ConversationMode.SINGLE_EVENT, null, null, null);
     }
 
     /**
@@ -33,7 +34,7 @@ public final class WorkflowRunnerFactory {
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry) {
         return create(workflowType, workflowParams, workflows, actionRegistry, null, ToolPolicy.allowAll(),
-                ConversationMode.SINGLE_EVENT, null, null);
+                ConversationMode.SINGLE_EVENT, null, null, null);
     }
 
     public static WorkflowRunner create(BotDefinition bot, Map<String, Object> workflows,
@@ -47,11 +48,12 @@ public final class WorkflowRunnerFactory {
         BotDefinition resolvedBot = bot;
         if (resolvedBot == null) {
             return create("stub", null, workflows, actionRegistry, toolRunner, ToolPolicy.allowAll(),
-                    ConversationMode.SINGLE_EVENT, null, null);
+                    ConversationMode.SINGLE_EVENT, null, null, null);
         }
+        String botCursorModel = CursorLaunchModel.fromBotProfile(resolvedBot.getModelProfile());
         return create(resolvedBot.getWorkflowType(), resolvedBot.getWorkflowParams(), workflows, actionRegistry,
                 toolRunner, resolvedBot.getToolPolicy(), resolvedBot.getConversationMode(),
-                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry);
+                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry, botCursorModel);
     }
 
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
@@ -59,7 +61,7 @@ public final class WorkflowRunnerFactory {
                                         ToolRunner toolRunner, ToolPolicy toolPolicy,
                                         ConversationMode conversationMode, String sessionKeyStrategy) {
         return create(workflowType, workflowParams, workflows, actionRegistry, toolRunner, toolPolicy,
-                conversationMode, sessionKeyStrategy, null);
+                conversationMode, sessionKeyStrategy, null, null);
     }
 
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
@@ -67,12 +69,23 @@ public final class WorkflowRunnerFactory {
                                         ToolRunner toolRunner, ToolPolicy toolPolicy,
                                         ConversationMode conversationMode, String sessionKeyStrategy,
                                         DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        return create(workflowType, workflowParams, workflows, actionRegistry, toolRunner, toolPolicy,
+                conversationMode, sessionKeyStrategy, choiceProviderRegistry, null);
+    }
+
+    public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
+                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry,
+                                        ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                        ConversationMode conversationMode, String sessionKeyStrategy,
+                                        DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                        String botDefaultCursorModel) {
         String type = workflowType != null && !workflowType.isBlank() ? workflowType : "stub";
         return switch (type) {
             case "configured" -> {
                 WorkflowDefinition def = resolveWorkflowDefinition(workflowParams, workflows);
                 yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry(),
-                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry);
+                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry,
+                        botDefaultCursorModel);
             }
             default -> new StubWorkflowRunner();
         };

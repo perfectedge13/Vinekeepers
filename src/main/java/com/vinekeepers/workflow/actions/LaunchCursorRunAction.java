@@ -5,6 +5,7 @@ import com.vinekeepers.core.cursor.CursorAgentLaunchResult;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudException;
 import com.vinekeepers.core.cursor.CursorInstructionComposer;
+import com.vinekeepers.core.cursor.CursorLaunchModel;
 import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.events.Event;
@@ -79,7 +80,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                CursorLaunchModel.resolveForLaunch(args)
         );
 
         try {
