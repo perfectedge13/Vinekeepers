@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-21
+
+- **Cursor launch model resolution:** Documented per-workflow-step **`model`** on **`call_action`**, bind override keys, bot **`persona.model`** default via **`WorkflowRunnerFactory`**, and **`CURSOR_MODEL`** fallback; **`launch_cursor_run`** uses **`CursorLaunchModel.resolveForLaunch`**. README, architecture, configuring-bots, workflow-steps, and cursor-gathering contracts/how-it-works updated.
+
 ## 2026-03-13
 
 - **Arrietty room UX and message-first capture:** Arrietty template in `config/bots.yaml` uses `workflowRef: arrietty_room` with **message-first** flow: first step is `capture_field` (e.g. `storeIn: roomAction`) with optional **trimAndLower: true** for room name UX (trim and lowercase user input). Router ownership warning when lifecycle owner lacks handlesOwnedSpaces. No hardcoded bot ids in Router or engine.

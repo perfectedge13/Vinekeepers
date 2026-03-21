@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-21
+
+- **Docs:** Config feature page notes optional **`persona.model`** as the bot default Cursor model for configured workflow runners and points to workflow docs for per-step **`call_action.model`** and env fallback.
+
 ## 2026-03-13
 
 - **Blank branch in step bind:** `config/bots.yaml` supports branch value `""` (blank/empty) in workflow step bindings (e.g. for branch steps). ConfigLoader and workflow runner treat empty string as blank branch; Arrietty template and Luna workflow can use this for UX (e.g. clear branch selection).

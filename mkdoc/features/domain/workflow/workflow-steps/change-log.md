@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-21
+
+- **Per-step Cursor model:** `call_action` steps may declare optional **`model`** (Cursor model id); when bind omits **`cursorModel`** and **`model`**, **`CallActionStep`** supplies **`cursorModel`** from the step model. **`WorkflowRunnerFactory`** passes bot **`persona.model`** as **`__botDefaultCursorModel`** for configured runners. **`CursorLaunchModel.resolveForLaunch`** precedence: **`cursorModel`**, **`model`**, **`__botDefaultCursorModel`**, **`CURSOR_MODEL`** env. README, architecture, configuring-bots runbook, workflow-steps how-it-works/contracts, and cursor-gathering docs updated.
+
 ## 2026-03-13
 
 - **capture_field trimAndLower:** `CaptureFieldFromEventStep` supports optional **trimAndLower** (boolean) in step config. When true, captured text from message content is trimmed and lowercased before storing in state (e.g. room name in arrietty_room). `ConfigurableWorkflowRunner` parses `trimAndLower` from capture_field step config and passes it to the step. Tests: `CaptureFieldFromEventStepTest.messageEventWithTrimAndLowerTrimsAndLowercasesContent`, `ConfigurableWorkflowRunnerTest.runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue`.
