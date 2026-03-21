@@ -36,6 +36,12 @@ Events that match the filter are sent to the engine for that `botId`; the engine
 - A bot’s `workflow.params.workflowRef` must reference one of these ids (or a custom workflow registered in code for that bot).
 - Workflow steps use types such as `ask_input`, `prompt_for_field`, `capture_field`, `call_action`, `branch`, `done`; see the existing `workflows:` section in `config/bots.yaml` for examples (choiceProvider, intent, branches, storeIn).
 
+## Cursor model for workflow launches
+
+- **Bot default:** Optional **`persona.model`** in a bot entry is the bot’s Cursor model profile id. **`WorkflowRunnerFactory`** passes it into **`ConfigurableWorkflowRunner`** as **`__botDefaultCursorModel`** (stub/placeholder profiles do not supply a default).
+- **Per step:** A **`call_action`** step in **`workflows:`** may set optional **`model`** (Cursor model id). For launches, step **`bind`** may set **`cursorModel`** or **`model`**; bind and state still follow the usual precedence (bind overrides state for the same keys), and bind **`cursorModel`** / **`model`** override the step-level **`model`**.
+- **Env fallback:** **`CURSOR_MODEL`** applies when no non-blank model is resolved from merged launch args.
+
 ## Adding a new bot end-to-end
 
 1. Edit `config/bots.yaml`: add a new object to `bots:` with `id`, `persona`, and `workflow` (with `workflowRef` pointing to a workflow in `workflows:` or a custom one).

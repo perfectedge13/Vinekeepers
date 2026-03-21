@@ -1,5 +1,8 @@
 package com.vinekeepers.workflow;
 
+import com.vinekeepers.bot.ConversationMode;
+import com.vinekeepers.bot.ToolPolicy;
+import com.vinekeepers.core.cursor.CursorLaunchModel;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
 import org.junit.jupiter.api.Test;
@@ -383,6 +386,50 @@ class ConfigurableWorkflowRunnerTest {
         ConfigurableWorkflowState finalState = store.get(stateKey, ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("repo-B", finalState.get("project"));
         assertEquals("second request", finalState.get("codeChange"));
+    }
+
+    @Test
+    void launchModelUsesStepModelOverBotDefaultCursorModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_model", (e, s, b) -> CursorLaunchModel.resolveForLaunch(b));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_model", "model", "step-m",
+                        "bind", Map.of(), "storeIn", "out"),
+                Map.of("type", "done", "message", "Result: {{out}}"));
+        WorkflowDefinition def = new WorkflowDefinition("launch-model", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry, null,
+                ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null, "bot-m");
+        String out = runner.run(new Event("t", "msg", Map.of()), new StateStore(), "b");
+        assertEquals("Result: step-m", out);
+    }
+
+    @Test
+    void launchModelUsesBindModelOverStepModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_model", (e, s, b) -> CursorLaunchModel.resolveForLaunch(b));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_model", "model", "step-m",
+                        "bind", Map.of("model", "bind-m"), "storeIn", "out"),
+                Map.of("type", "done", "message", "Result: {{out}}"));
+        WorkflowDefinition def = new WorkflowDefinition("launch-model-bind", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry, null,
+                ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null, "bot-m");
+        String out = runner.run(new Event("t", "msg", Map.of()), new StateStore(), "b");
+        assertEquals("Result: bind-m", out);
+    }
+
+    @Test
+    void launchModelUsesBotDefaultWhenStepHasNoModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_model", (e, s, b) -> CursorLaunchModel.resolveForLaunch(b));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_model", "bind", Map.of(), "storeIn", "out"),
+                Map.of("type", "done", "message", "Result: {{out}}"));
+        WorkflowDefinition def = new WorkflowDefinition("launch-model-bot", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry, null,
+                ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null, "bot-m");
+        String out = runner.run(new Event("t", "msg", Map.of()), new StateStore(), "b");
+        assertEquals("Result: bot-m", out);
     }
 
     @Test

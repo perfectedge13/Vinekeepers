@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-03-21T00:00:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -212,7 +212,10 @@ assets:
   - id: ASSET-WORKFLOW-RUNNER-FACTORY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowRunnerFactory.java
-    role: Create WorkflowRunner from workflow type, params, and bot runtime options from config
+    role: >-
+      Create WorkflowRunner from workflow type, params, and bot runtime options from config; create(BotDefinition, ...)
+      passes bot ModelProfile model id as ConfigurableWorkflowRunner bot default Cursor model (stub/stub yields no
+      default)
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -298,8 +301,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
     role: >-
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
-      intent, choices, confirmLabel, cancelLabel, fields, and trimAndLower for steps; applies StepResult clearKeys to
-      state before setStepIndex
+      intent, choices, confirmLabel, cancelLabel, fields, trimAndLower, and optional call_action model for steps; injects
+      __botDefaultCursorModel into state when runner was constructed with bot default model; applies StepResult clearKeys
+      to state before setStepIndex
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -336,7 +340,9 @@ assets:
   - id: ASSET-CALL-ACTION-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/CallActionStep.java
-    role: Step that invokes a registered WorkflowAction or ToolRunner-backed tool with bound arguments
+    role: >-
+      Step that invokes a registered WorkflowAction or ToolRunner-backed tool with bound arguments; optional step-level
+      model id applies as cursorModel when bind omits cursorModel and model (bind keys override step model)
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -498,6 +504,19 @@ assets:
       - REQ-LUNA-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
+  - id: ASSET-CURSOR-LAUNCH-MODEL
+    kind: source
+    path: src/main/java/com/vinekeepers/core/cursor/CursorLaunchModel.java
+    role: >-
+      Resolves Cursor Cloud agent model id for launch: fromBotProfile returns non-blank model id from bot ModelProfile
+      except stub/stub placeholder; resolveForLaunch uses non-blank cursorModel, else model, else __botDefaultCursorModel,
+      else CURSOR_MODEL env
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-WORKFLOW
+      - FEAT-CURSOR-GATHERING
   - id: ASSET-LIFECYCLE-CONTEXT
     kind: source
     path: src/main/java/com/vinekeepers/state/LifecycleContext.java
@@ -601,8 +620,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java
     role: >-
-      Workflow action to launch a Cursor cloud run and register run record; passes optional deliveryChannelId into
-      LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room
+      Workflow action to launch a Cursor cloud run and register run record; CursorLaunchModel.resolveForLaunch on
+      bind-or-state args sets API model (cursorModel/model, __botDefaultCursorModel, CURSOR_MODEL env); passes optional
+      deliveryChannelId into LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -616,7 +636,9 @@ requirements:
       Workflow<S> handle(event, context, state) returns WorkflowResult<S>; WorkflowRunner runs a workflow for an event
       and returns WorkflowRunResult with reply, waiting, completion, and error state. WorkflowRunnerFactory creates
       runners from config workflow type and params (stub, configured), and configurable workflows can pause for later
-      events using session key strategies.
+      events using session key strategies. Configurable call_action steps may set an optional per-step model id for
+      Cursor launches; WorkflowRunnerFactory passes the bot ModelProfile model id as the default Cursor model for
+      configured runners; CursorLaunchModel centralizes resolution order for launch-time model selection.
     status: active
     priority: high
     type: functional
@@ -636,6 +658,17 @@ requirements:
         - Configurable workflow state records waiting field, pending prompt, completion, and error status
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
         - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
+        - >-
+          call_action step YAML may include optional model (Cursor model id); when bind omits cursorModel and model,
+          CallActionStep supplies that step model as cursorModel in merged action args (supports {{key}} interpolation)
+        - >-
+          call_action bind keys cursorModel or model override step-level model when present (bind wins over step model)
+        - >-
+          ConfigurableWorkflowRunner injects __botDefaultCursorModel into workflow state when constructed with a non-blank
+          bot default Cursor model (from WorkflowRunnerFactory.create(BotDefinition, ...) via CursorLaunchModel.fromBotProfile)
+        - >-
+          WorkflowRunnerFactory.create(BotDefinition, ...) supplies bot profile model id as ConfigurableWorkflowRunner default
+          except stub/stub ModelProfile placeholder (no default injected)
         - >-
           capture_field step supports optional trimAndLower (boolean); when true, captured text is trimmed and
           lowercased; for message events content is read from payload content or text (and optional contentKey)
@@ -681,6 +714,7 @@ requirements:
         - ASSET-PROMPT-FOR-FIELD-STEP
         - ASSET-CAPTURE-FIELD-STEP
         - ASSET-CALL-ACTION-STEP
+        - ASSET-CURSOR-LAUNCH-MODEL
         - ASSET-BRANCH-STEP
         - ASSET-DONE-STEP
         - ASSET-CREATE-CHANNEL-ACTION
@@ -754,6 +788,55 @@ requirements:
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
           preconditions: []
+        - id: UNIT-CURSOR-LAUNCH-MODEL
+          title: CursorLaunchModelTest
+          intent: >-
+            Verify CursorLaunchModel.fromBotProfile (stub placeholder, blank) and resolveForLaunch precedence (cursorModel,
+            model, __botDefaultCursorModel, CURSOR_MODEL env)
+          testClass: com.vinekeepers.core.cursor.CursorLaunchModelTest
+          preconditions: []
+        - id: UNIT-CALL-ACTION-STEP-CURSOR-MODEL
+          title: CallActionStepTest
+          intent: Verify call_action step model supplies cursorModel when bind omits model keys
+          testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          testMethod: executeAppliesStepModelWhenBindOmitsModelKeys
+          preconditions: []
+        - id: UNIT-CALL-ACTION-STEP-BIND-MODEL-OVERRIDES-STEP
+          title: CallActionStepTest
+          intent: Verify call_action bind model overrides step-level model
+          testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          testMethod: executeBindModelKeyOverridesStepModel
+          preconditions: []
+        - id: UNIT-CALL-ACTION-STEP-BIND-CURSOR-OVERRIDES-STEP
+          title: CallActionStepTest
+          intent: Verify call_action bind cursorModel overrides step-level model
+          testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          testMethod: executeBindCursorModelOverridesStepModel
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LAUNCH-MODEL-STEP
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action step model beats __botDefaultCursorModel in resolved launch model
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: launchModelUsesStepModelOverBotDefaultCursorModel
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LAUNCH-MODEL-BIND
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action bind model overrides step model for resolved launch model
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: launchModelUsesBindModelOverStepModel
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LAUNCH-MODEL-BOT-DEFAULT
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify __botDefaultCursorModel used when call_action has no step model
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: launchModelUsesBotDefaultWhenStepHasNoModel
+          preconditions: []
+        - id: UNIT-WORKFLOW-RUNNER-FACTORY-BOT-CURSOR-MODEL
+          title: WorkflowRunnerFactoryTest
+          intent: Verify factory passes bot ModelProfile model as default Cursor model for configured workflow
+          testClass: com.vinekeepers.workflow.WorkflowRunnerFactoryTest
+          testMethod: createFromBotDefinitionSuppliesBotProfileAsDefaultCursorModelForConfiguredWorkflow
+          preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
           intent: Verify DoneStep completes with message and template
@@ -823,7 +906,8 @@ requirements:
       LifecycleContextStore; RuntimeBotInstance for provisioned bots (e.g. Arrietty) stored under generic prefix
       bot_instance:; workflow actions create_channel (Discord createTextChannel, sentinel CHANNEL_CREATE_FAILED, room
       naming from state or fallback), post_channel_message, provision_bot_instance, create_lifecycle_context,
-      launch_cursor_run.
+      launch_cursor_run. CursorLaunchModel resolves the Cursor Cloud agent model for launch_cursor_run from step/bind
+      args, bot default, and env.
     status: active
     priority: high
     type: functional
@@ -854,8 +938,8 @@ requirements:
           launching via launch_cursor_run (cursor.fullRun not used in luna_cursor)
         - >-
           launch_cursor_run action resolves repository input, uses CursorInstructionComposer for prompt (single source
-          including /nova-code), launches the official Cursor Cloud Agent API, stores LifecycleRunRecord, and
-          immediately acknowledges launch to Discord
+          including /nova-code), sets launch model via CursorLaunchModel.resolveForLaunch on bind-or-state args, launches
+          the official Cursor Cloud Agent API, stores LifecycleRunRecord, and immediately acknowledges launch to Discord
         - >-
           CursorCloudRunMonitor polls agent status and conversation feedback and relays updates such as running state,
           PR URL, and final summary to Discord; when LifecycleRunRecord has deliveryChannelId set, sends to that
@@ -890,6 +974,10 @@ requirements:
         - >-
           launch_cursor_run acknowledgement to Discord includes optional status (e.g. launching) and directs user to
           lifecycle room; passes optional deliveryChannelId from bind/state into LifecycleRunRecord
+        - >-
+          launch_cursor_run passes CursorAgentLaunchRequest model from CursorLaunchModel.resolveForLaunch using non-empty
+          bind map when provided else state: non-blank cursorModel, else model, else __botDefaultCursorModel, else
+          CURSOR_MODEL env
       examples: []
     traceability:
       assets:
@@ -909,6 +997,7 @@ requirements:
         - ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE
         - ASSET-CURSOR-CLOUD-EXCEPTION
         - ASSET-CURSOR-INSTRUCTION-COMPOSER
+        - ASSET-CURSOR-LAUNCH-MODEL
         - ASSET-CURSOR-FULL-RUN-TOOL
         - ASSET-ENGINE
         - ASSET-BOOTSTRAP
@@ -919,6 +1008,7 @@ requirements:
         - ASSET-CONFIGURABLE-WORKFLOW-STATE
         - ASSET-STEP-RESULT
         - ASSET-BRANCH-STEP
+        - ASSET-CALL-ACTION-STEP
         - ASSET-LIFECYCLE-CONTEXT
         - ASSET-LIFECYCLE-CONTEXT-STORE
         - ASSET-RUNTIME-BOT-INSTANCE
@@ -1122,6 +1212,24 @@ requirements:
           testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
           testMethod: runLaunchesAndStoresRecordAndBindsContext
           preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-MODEL-EXPLICIT
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run passes explicit cursorModel to Cursor API launch request
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runPassesExplicitCursorModelOnLaunchRequest
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-MODEL-BOT-DEFAULT
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run uses __botDefaultCursorModel when no explicit model in args
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesBotDefaultCursorModelWhenNoExplicitModel
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-MODEL-ENV
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run falls back to CURSOR_MODEL env when no explicit or bot default
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesCursorModelEnvWhenNoExplicitOrBotDefault
+          preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
       - Storing secrets in state
@@ -1157,6 +1265,7 @@ features:
       - ASSET-SESSION-KEY-STRATEGIES
       - ASSET-CONFIGURABLE-WORKFLOW-STATE
       - ASSET-CONFIGURABLE-WORKFLOW-RUNNER
+      - ASSET-CURSOR-LAUNCH-MODEL
       - ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
     status: active
   - id: FEAT-WORKFLOW-STEPS
@@ -1209,6 +1318,7 @@ features:
       - ASSET-CURSOR-CLOUD-TRANSPORT-RESPONSE
       - ASSET-CURSOR-CLOUD-EXCEPTION
       - ASSET-CURSOR-INSTRUCTION-COMPOSER
+      - ASSET-CURSOR-LAUNCH-MODEL
       - ASSET-CURSOR-FULL-RUN-TOOL
       - ASSET-GITHUB-REPOS-CHOICE-PROVIDER
       - ASSET-BOTS-YAML
