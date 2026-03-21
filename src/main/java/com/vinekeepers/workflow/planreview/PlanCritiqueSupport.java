@@ -5,6 +5,7 @@ import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.workflow.planning.PlanningPlaceholderDetection;
+import com.vinekeepers.workflow.planning.RequestExplorationSupport;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,8 @@ public final class PlanCritiqueSupport {
     public static final int MIN_RISK_CHARS = 60;
     /** Minimum for open questions block (v2). */
     public static final int MIN_OPEN_QUESTIONS_CHARS = 40;
+    /** Minimum for current state / baseline (v2 narrative). */
+    public static final int MIN_CURRENT_STATE_CHARS = 40;
 
     private PlanCritiqueSupport() {}
 
@@ -46,6 +49,7 @@ public final class PlanCritiqueSupport {
         if (plan != null) {
             addSubstanceFindings(plan, out, seq);
             addV2PacketFindings(plan, profile, out, seq);
+            addExplorationAndEchoFindings(plan, profile, out, seq);
             addPlaceholderPacketFindings(plan, profile, out, seq);
             if (!plan.getIssues().isEmpty()) {
                 out.add(new PlanCritiqueFinding(
@@ -157,6 +161,25 @@ public final class PlanCritiqueSupport {
                     "Risk / edge-case summary is missing or too thin ("
                             + risks.length() + " chars; need at least " + MIN_RISK_CHARS + ").",
                     "risk_register.main"));
+        } else if (!RequestExplorationSupport.riskSummaryMentionsMitigation(risks)) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-v2-risk-mit-" + seq.getAndIncrement(),
+                    "RISK",
+                    "WARN",
+                    "RISK_MITIGATION_NOT_EXPLICIT",
+                    "Risk register should mention mitigations, fallback, or rollback for major risks.",
+                    "risk_register.main"));
+        }
+        String current = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "current_state_summary");
+        if (current.length() < MIN_CURRENT_STATE_CHARS) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-v2-cur-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "INSUFFICIENT_CURRENT_STATE",
+                    "Current state / baseline is missing or too thin ("
+                            + current.length() + " chars; need at least " + MIN_CURRENT_STATE_CHARS + ").",
+                    "requirements_spec.narrative"));
         }
         String oq = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
         if (oq.length() < MIN_OPEN_QUESTIONS_CHARS) {
@@ -180,6 +203,39 @@ public final class PlanCritiqueSupport {
                     "MISSING_DECISION_LOG_ENTRY",
                     "At least one decision log entry is required before approval.",
                     "decision_log.decisions"));
+        }
+    }
+
+    private static void addExplorationAndEchoFindings(
+            FeaturePlanState plan,
+            WorkProfileDefinition profile,
+            List<PlanCritiqueFinding> out,
+            AtomicInteger seq) {
+        if (plan == null || profile == null) {
+            return;
+        }
+        if (profile.findSection("request_exploration", "analysis").isPresent()) {
+            String ex = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
+            if (ex.isBlank() || RequestExplorationSupport.explorationLooksShallow(ex)) {
+                out.add(new PlanCritiqueFinding(
+                        "crit-explore-" + seq.getAndIncrement(),
+                        "COVERAGE",
+                        "MUST_FIX",
+                        "INSUFFICIENT_REQUEST_EXPLORATION",
+                        "Request exploration is missing or too shallow; complete the planning flow so exploration is generated, then edit if needed.",
+                        "request_exploration.analysis"));
+            }
+        }
+        String req = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
+        String fs = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
+        if (req.length() >= 120 && RequestExplorationSupport.summaryMostlyEchoesRequest(req, fs)) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-echo-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "FEATURE_SUMMARY_ECHOES_REQUEST",
+                    "Problem / goal mostly repeats the raw request; expand with who, pain, and success criteria.",
+                    "requirements_spec.narrative.feature_summary"));
         }
     }
 
@@ -223,7 +279,7 @@ public final class PlanCritiqueSupport {
                     "COVERAGE",
                     "MUST_FIX",
                     "PLACEHOLDER_PLANNING_FIELD",
-                    "Planning field still looks like a template or thin placeholder: " + path + ". Reply with detail or say **continue** so we can expand drafts.",
+                    "Planning field still looks like a template or thin placeholder: " + path + ". Add detail in-thread or use **Add scope / must-haves / risks** so drafts can expand.",
                     path));
         }
     }

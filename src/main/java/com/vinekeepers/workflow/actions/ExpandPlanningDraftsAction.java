@@ -87,6 +87,19 @@ public final class ExpandPlanningDraftsAction implements com.vinekeepers.workflo
                 PlanningDraftSupport.buildAcceptanceDraftFromRequest(request));
 
         plan = planStateStore.getByContextId(contextId).orElse(plan);
+        if (profile.findSection("requirements_spec", "narrative").isPresent()) {
+            maybeReplace(
+                    upsert,
+                    event,
+                    base,
+                    plan,
+                    "requirements_spec",
+                    "narrative",
+                    "current_state_summary",
+                    PlanningDraftSupport.buildCurrentStateDraft(request));
+        }
+
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
         if (profile.findSection("architecture_notes", "impact").isPresent()) {
             String comps = fieldString(plan, "architecture_notes", "impact", "components_impacted");
             String arch = fieldString(plan, "architecture_notes", "impact", "architecture_summary");

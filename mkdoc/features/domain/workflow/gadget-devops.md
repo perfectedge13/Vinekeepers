@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Operator-driven Docker deploys from Discord (**REQ-GADGET-001**). The **gadget** bot uses `workflowRef: gadget_deploy`, routing with `discordMention: gadget` and `discordChannels` (replace `REPLACE_WITH_DEVOPS_CHANNEL_ID` in `config/bots.yaml`). Flow: action menu → project pick (`gadgetProjects` / `config/gadget-projects.yaml`) → branch (`main` / `develop` / other) → `create_thread` → `start_gadget_deploy` runs **ansible-playbook** in a background thread; progress posts use **`OutboundDeliveryRouter.sendAs`** so they appear as Gadget. See [How it works](devops-gadget/how-it-works.md).
+Operator-driven Docker deploys from Discord (**REQ-GADGET-001**). The **gadget** bot uses `workflowRef: gadget_deploy`, routing with `discordMention: gadget` and `discordChannels` (ops channel id is documented at the top of `config/bots.yaml` and listed under the **gadget** routing rule). Flow: action menu → project pick (`gadgetProjects` / `config/gadget-projects.yaml`) → branch (`main` / `develop` / other) → `create_thread` → `start_gadget_deploy` runs **ansible-playbook** in a background thread; progress posts use **`OutboundDeliveryRouter.sendAs`** so they appear as Gadget. See [How it works](devops-gadget/how-it-works.md).
 
 # Key assets
 

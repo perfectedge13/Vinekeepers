@@ -58,7 +58,7 @@ assets:
       create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.";
       optional workflow steps provision_room_participants and initialize_feature_room_state for multi-bot feature room;
       four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys;
-      gadget bot workflowRef gadget_deploy and routing discordChannels placeholder REPLACE_WITH_DEVOPS_CHANNEL_ID)
+      gadget bot workflowRef gadget_deploy and routing discordChannels for ops channel id at top of file)
     requires: [REQ-CONFIG-001, REQ-LUNA-001, REQ-GADGET-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING, FEAT-DEVOPS-GADGET]
   - id: ASSET-BOT-CONFIG

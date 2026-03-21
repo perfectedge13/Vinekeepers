@@ -121,6 +121,62 @@ class CursorCloudRunMonitorTest {
     }
 
     @Test
+    void tickSuppressesDuplicateAssistantTextAcrossMessageIds() {
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            private int seq;
+
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return new CursorAgentDetails(
+                        agentId,
+                        "Run",
+                        "RUNNING",
+                        "https://github.com/acme/repo",
+                        "main",
+                        "br",
+                        "https://cursor.com/agents?id=" + agentId,
+                        null,
+                        null,
+                        Instant.now());
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                seq++;
+                String id = "msg_" + seq;
+                return new CursorAgentConversation(agentId, List.of(
+                        new CursorAgentMessage(id, "assistant_message", "Same status update text")));
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        StateStore store = new StateStore();
+        LifecycleRunRecord runState = new LifecycleRunRecord(
+                "bc_dedupe", "session", "acme/repo", "https://github.com/acme/repo",
+                "main", "br", "https://cursor.com/agents?id=bc_dedupe",
+                "Req", "chan-1", "msg-1", Instant.now(), "RUNNING");
+        store.put("cursor:run:bc_dedupe", runState);
+        CursorCloudRunMonitor monitor = new CursorCloudRunMonitor(adapter, store, 1000);
+        List<String> messages = new ArrayList<>();
+        monitor.setReplySender((channelId, messageId, content) -> messages.add(content));
+
+        monitor.tick();
+        monitor.tick();
+
+        long feedback = messages.stream().filter(m -> m.contains("Same status update text")).count();
+        assertEquals(1, feedback);
+        monitor.close();
+    }
+
+    @Test
     void tickSendsToThreadWhenDeliveryChannelIdSet() {
         CursorCloudAdapter adapter = new CursorCloudAdapter() {
             @Override

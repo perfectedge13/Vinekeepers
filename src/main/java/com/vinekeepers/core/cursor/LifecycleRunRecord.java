@@ -29,6 +29,10 @@ public final class LifecycleRunRecord {
     private Instant lastPolledAt;
     private Instant completedAt;
     private boolean terminalNotificationSent;
+    /** Last Discord line posted for status / assistant / PR (dedupe repeated polls). */
+    private String lastPostedStatusLine;
+    private String lastPostedAssistantLine;
+    private String lastPostedPrLine;
 
     public LifecycleRunRecord(String agentId, String sessionKey, String projectInput,
                              String repositoryUrl, String baseRef, String branchName,
@@ -160,6 +164,39 @@ public final class LifecycleRunRecord {
 
     public synchronized void markTerminalNotificationSent() {
         this.terminalNotificationSent = true;
+    }
+
+    public synchronized boolean shouldPostStatusLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (line.equals(lastPostedStatusLine)) {
+            return false;
+        }
+        this.lastPostedStatusLine = line;
+        return true;
+    }
+
+    public synchronized boolean shouldPostAssistantLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (line.equals(lastPostedAssistantLine)) {
+            return false;
+        }
+        this.lastPostedAssistantLine = line;
+        return true;
+    }
+
+    public synchronized boolean shouldPostPrLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (line.equals(lastPostedPrLine)) {
+            return false;
+        }
+        this.lastPostedPrLine = line;
+        return true;
     }
 
     public synchronized boolean isTerminal() {

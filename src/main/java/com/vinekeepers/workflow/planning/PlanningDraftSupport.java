@@ -149,9 +149,9 @@ public final class PlanningDraftSupport {
     public static String buildRiskDraft(String request) {
         StringBuilder sb = new StringBuilder();
         sb.append("(Draft — refine before approval.)\n");
-        sb.append("- Regression in existing workflows or connectors.\n");
-        sb.append("- Config/spec drift if YAML, specs, or mkdoc change.\n");
-        sb.append("- Discord or Cursor API failures; retry and user-visible errors.\n");
+        sb.append("- Regression in existing workflows or connectors. **Mitigation:** targeted tests and staged rollout.\n");
+        sb.append("- Config/spec drift if YAML, specs, or mkdoc change. **Mitigation:** run validate-specs / validate-drift.\n");
+        sb.append("- Discord or Cursor API failures; retry and user-visible errors. **Mitigation:** clear error copy and retry path.\n");
         if (request != null && !request.isBlank()) {
             String t = request.trim();
             sb.append("- Request-specific: ").append(t.length() > 200 ? t.substring(0, 200) + "…" : t).append("\n");
@@ -170,6 +170,21 @@ public final class PlanningDraftSupport {
             sb.append("- Clarify ambiguities in: ").append(t.length() > 120 ? t.substring(0, 120) + "…" : t).append("\n");
         }
         sb.append("Replace with **None — ready to implement** only if nothing is uncertain.\n");
+        return sb.toString();
+    }
+
+    /** Draft current-state / baseline before the change (v2 narrative). */
+    public static String buildCurrentStateDraft(String request) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("(Draft — please edit.)\n");
+        sb.append("Summarize how the system behaves today for the area touched by this request.\n");
+        sb.append("Call out gaps, bugs, or missing capability that motivate the change.\n");
+        if (request != null && !request.isBlank()) {
+            String r = request.trim();
+            sb.append("\n**Request (for context):** ")
+                    .append(r.length() > 400 ? r.substring(0, 400) + "…" : r)
+                    .append("\n");
+        }
         return sb.toString();
     }
 

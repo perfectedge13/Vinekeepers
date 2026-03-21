@@ -3,7 +3,9 @@ bots:
 - id: luna
   persona:
     name: Luna
-    systemPrompt: You are Luna, a bot that helps users run code changes via Cursor Cloud API. You gather which project to update and what change to make, then create a branch, run nova-commit, push, and optionally open a PR.
+    systemPrompt: You are Luna, a bot that helps users run code changes via Cursor
+      Cloud API. You gather which project to update and what change to make, then
+      create a branch, run nova-commit, push, and optionally open a PR.
   workflow:
     type: configured
     params:
@@ -17,7 +19,9 @@ bots:
 - id: arrietty
   persona:
     name: Arrietty
-    systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature rooms. You help users in this channel with follow-up and context for Cursor runs.
+    systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature
+      rooms. You help users in this channel with follow-up and context for Cursor
+      runs.
   sessionKeyStrategy: thread
   conversationMode: conversational
   workflow:
@@ -34,7 +38,10 @@ bots:
 - id: architect
   persona:
     name: Architect
-    systemPrompt: You are Architect, a feature room participant. In the intake/spec thread, you contribute visible design and structure proposals when the workflow drives role turns; the main room stays coordinator-led so you do not auto-reply to generic room traffic.
+    systemPrompt: You are Architect, a feature room participant. In the intake/spec
+      thread, you contribute visible design and structure proposals when the workflow
+      drives role turns; the main room stays coordinator-led so you do not auto-reply
+      to generic room traffic.
   sessionKeyStrategy: thread
   workflow:
     type: configured
@@ -46,7 +53,8 @@ bots:
 - id: auditor
   persona:
     name: Auditor
-    systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you reply only when invoked via action.
+    systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you
+      reply only when invoked via action.
   sessionKeyStrategy: thread
   workflow:
     type: configured
@@ -58,7 +66,9 @@ bots:
 - id: scribe
   persona:
     name: Scribe
-    systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread, you post consolidation and status when the workflow drives role turns; the room channel defaults to the orchestrator for summaries.
+    systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread,
+      you post consolidation and status when the workflow drives role turns; the room
+      channel defaults to the orchestrator for summaries.
   sessionKeyStrategy: thread
   workflow:
     type: configured
@@ -70,7 +80,9 @@ bots:
 - id: gadget
   persona:
     name: Gadget
-    systemPrompt: You are Gadget, a DevOps assistant. When @Gadget in the ops channel, you offer deploy actions, gather project and branch, run Ansible on the host, and post progress to a Discord thread.
+    systemPrompt: You are Gadget, a DevOps assistant. When @Gadget in the ops channel,
+      you offer deploy actions, gather project and branch, run Ansible on the host,
+      and post progress to a Discord thread.
   workflow:
     type: configured
     params:
@@ -91,7 +103,7 @@ routing:
   filter:
     discordMention: gadget
     discordChannels:
-    - REPLACE_WITH_DEVOPS_CHANNEL_ID
+    - '1484800775342391378'
 workflows:
   architect_intro:
     steps:
@@ -115,13 +127,13 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 49
+        next: 51
       - when:
           key: planningIntakeThread
           value: 'true'
         next: 2
       - when: else
-        next: 41
+        next: 43
     - type: call_action
       action: get_profile_missing_fields
       storeIn: profileMissingSummary
@@ -183,7 +195,7 @@ workflows:
           value: 'true'
         next: 16
       - when: else
-        next: 24
+        next: 26
     - type: call_action
       action: build_insight_discovery_agenda
       storeSpread: true
@@ -194,7 +206,7 @@ workflows:
           operator: nonblank
         next: 18
       - when: else
-        next: 24
+        next: 26
     - type: prompt_for_field
       prompt: '{{discoveryCurrentQuestionPrompt}}'
       storeIn: discoveryAnswerRaw
@@ -212,7 +224,7 @@ workflows:
       - when:
           key: discoveryBlockingIssueMode
           value: 'true'
-        next: 24
+        next: 26
       - when:
           key: discoveryHasOpenGaps
           value: 'true'
@@ -220,7 +232,11 @@ workflows:
         clear:
         - discoveryAnswerRaw
       - when: else
-        next: 24
+        next: 26
+    - type: call_action
+      action: build_request_exploration
+    - type: call_action
+      action: expand_planning_drafts
     - type: call_action
       action: synthesize_pre_critique_artifacts
     - type: call_action
@@ -234,7 +250,7 @@ workflows:
       - when:
           key: planReadinessStatus
           value: BLOCKED
-        next: 38
+        next: 40
       - when:
           key: planReadinessStatus
           value: NEEDS_REVISION
@@ -253,16 +269,18 @@ workflows:
         - planningHasConfirmPending
         - readinessProceedRaw
         - discoveryBundledApplyJson
+        - intakeChoice
       - when:
           key: planReadinessStatus
           value: NEEDS_HUMAN_DECISION
-        next: 57
+        next: 65
       - when: else
-        next: 28
+        next: 30
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Pre-launch review** (planning packet posted above in one or more messages)
+        content: '**Pre-launch review** (planning packet posted above in one or more
+          messages)
 
           **Status:** {{planReadinessStatus}}
 
@@ -312,11 +330,11 @@ workflows:
       - when:
           key: planApprovalDecision
           value: approve
-        next: 32
+        next: 34
       - when:
           key: planApprovalDecision
           value: approve_with_risks
-        next: 32
+        next: 34
       - when:
           key: planApprovalDecision
           value: revise
@@ -335,30 +353,34 @@ workflows:
         - planningHasConfirmPending
         - readinessProceedRaw
         - discoveryBundledApplyJson
+        - intakeChoice
       - when:
           key: planApprovalDecision
           value: reject
-        next: 41
+        next: 43
       - when: else
-        next: 41
+        next: 43
     - type: call_action
       action: persist_plan_approval
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request summary is in the planning packet above.'
+        content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request
+          summary is in the planning packet above.'
         asRole: orchestrator
         target: thread
     - type: call_action
       action: post_channel_message
       bind:
-        content: Feature room ready. Launching Cursor run from the approved planning packet.
+        content: Feature room ready. Launching Cursor run from the approved planning
+          packet.
         asRole: orchestrator
         target: room
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout up to ~2 minutes). A success or failure message follows in this thread.'
+        content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout
+          up to ~2 minutes). A success or failure message follows in this thread.'
         asRole: orchestrator
         target: thread
     - type: call_action
@@ -370,19 +392,21 @@ workflows:
       - when:
           key: launchSucceeded
           value: 'false'
-        next: 38
+        next: 40
       - when: else
-        next: 64
+        next: 72
     - type: call_action
       action: post_channel_message
       bind:
-        content: 'Planning blocked: readiness is BLOCKED ({{planCritiqueError}}). {{planReadinessSummary}}'
+        content: 'Planning blocked: readiness is BLOCKED ({{planCritiqueError}}).
+          {{planReadinessSummary}}'
         asRole: orchestrator
         target: thread
     - type: call_action
       action: post_channel_message
       bind:
-        content: Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread.
+        content: Planning blocked — cannot launch until workspace/gaps are resolved.
+          See intake/spec thread.
         asRole: orchestrator
         target: room
     - type: done
@@ -397,21 +421,21 @@ workflows:
       - when:
           key: roomAction
           value: status
-        next: 44
-      - when:
-          key: roomAction
-          value: retry
-        next: 45
-      - when:
-          key: roomAction
-          value: close
         next: 46
       - when:
           key: roomAction
+          value: retry
+        next: 47
+      - when:
+          key: roomAction
+          value: close
+        next: 48
+      - when:
+          key: roomAction
           value: ''
-        next: 47
+        next: 49
       - when: else
-        next: 47
+        next: 49
     - type: done
       message: 'Room status: active. Repo and request are in context.'
     - type: done
@@ -428,21 +452,51 @@ workflows:
         content: '**Discovery kickoff (coordinator)**
 
 
+
           Repo: `{{project}}`
+
 
           **Request:** {{codeChange}}
 
 
-          We will draft a full planning packet from your request and repo context. **Reply once** with scope boundaries, acceptance criteria, constraints, and risks if you have them — or say **continue** to proceed with drafts. Follow-ups will be bundled where possible.'
+          We will explore what this request means, expand drafts from repo context,
+          then post the planning packet. **Use the buttons or menu below** to continue,
+          add scope/must-haves/risks, or jump to clarifying questions.'
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
-      prompt: 'Optional: add scope, must-haves, or risks — or say **continue** and we will draft from your request and repo.'
-      storeIn: discoveryAnswerRaw
+      prompt: '**Choose a next step** (buttons or dropdown).'
+      storeIn: intakeChoice
+      intent: present_choices
+      choices:
+      - id: continue_planning
+        label: Continue to planning packet
+      - id: add_details
+        label: Add scope / must-haves / risks
+      - id: clarify_questions
+        label: Answer clarifying questions
     - type: capture_field
-      storeIn: discoveryAnswerRaw
-    - type: call_action
-      action: capture_and_apply_discovery_answer
+      storeIn: intakeChoice
+    - type: branch
+      branches:
+      - when:
+          key: intakeChoice
+          value: continue_planning
+        next: 55
+        clear:
+        - discoveryAnswerRaw
+      - when:
+          key: intakeChoice
+          value: add_details
+        next: 59
+      - when:
+          key: intakeChoice
+          value: clarify_questions
+        next: 16
+      - when: else
+        next: 52
+        clear:
+        - intakeChoice
     - type: call_action
       action: classify_assumption_or_issue
     - type: call_action
@@ -457,6 +511,27 @@ workflows:
         next: 2
         clear:
         - coordinatorKickoff
+        - discoveryAnswerRaw
+        - intakeChoice
+    - type: prompt_for_field
+      prompt: Add scope, must-haves, risks, or constraints (one message). We will
+        merge into the plan.
+      storeIn: discoveryAnswerRaw
+    - type: capture_field
+      storeIn: discoveryAnswerRaw
+    - type: call_action
+      action: capture_and_apply_discovery_answer
+    - type: call_action
+      action: classify_assumption_or_issue
+    - type: call_action
+      action: recompute_plan_progress
+      storeSpread: true
+    - type: branch
+      branches:
+      - when: else
+        next: 52
+        clear:
+        - intakeChoice
         - discoveryAnswerRaw
     - type: call_action
       action: post_channel_message
@@ -477,17 +552,23 @@ workflows:
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
-      prompt: Reply **proceed** to continue to approval (you accept remaining warnings) or **revise** to refine the plan first.
+      prompt: Readiness needs your decision. Continue to launch approval or revise
+        the plan first?
       storeIn: readinessProceedRaw
+      intent: present_choices
+      choices:
+      - id: proceed
+        label: Continue to approval
+      - id: revise
+        label: Revise plan first
     - type: capture_field
       storeIn: readinessProceedRaw
-      trimAndLower: true
     - type: branch
       branches:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 61
+        next: 69
       - when:
           key: readinessProceedRaw
           value: revise
@@ -506,15 +587,16 @@ workflows:
         - proposalConfirmProposedValue
         - planningHasConfirmPending
         - discoveryBundledApplyJson
+        - intakeChoice
       - when: else
-        next: 58
+        next: 66
     - type: call_action
       action: acknowledge_readiness_human_decision
       storeSpread: true
     - type: branch
       branches:
       - when: else
-        next: 28
+        next: 30
     - type: call_action
       action: post_channel_message
       bind:
@@ -656,13 +738,19 @@ workflows:
         mode: replace
         data:
           feature_summary: '{{codeChange}}'
-          scope_summary: 'Refine in intake thread — initial scope to be confirmed with coordinator.'
+          current_state_summary: Baseline to be confirmed in intake — describe current
+            behavior and gaps before the change.
+          scope_summary: Refine in intake thread — initial scope to be confirmed with
+            coordinator.
           user_stories: ''
-          acceptance_criteria: 'Draft — refine in intake thread; criteria must be testable before approval.'
+          acceptance_criteria: Draft — refine in intake thread; criteria must be testable
+            before approval.
     - type: call_action
       action: post_channel_message
       bind:
-        content: Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here — the coordinator will post next; reply in-thread when prompted.
+        content: Continue planning in this **intake/spec** thread. Discovery, review,
+          and launch approval all happen here — the coordinator will post next; reply
+          in-thread when prompted.
         asRole: orchestrator
         target: thread
     - type: call_action
@@ -670,7 +758,8 @@ workflows:
       bind:
         intakeThreadId: '{{deliveryChannelId}}'
     - type: done
-      message: Feature room is ready. Continue in the intake/spec thread above to complete the plan, approval, and launch.
+      message: Feature room is ready. Continue in the intake/spec thread above to
+        complete the plan, approval, and launch.
     - type: done
       message: Could not create room.
     - type: done

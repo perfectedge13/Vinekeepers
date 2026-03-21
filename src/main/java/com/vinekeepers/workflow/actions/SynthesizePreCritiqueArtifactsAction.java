@@ -71,6 +71,15 @@ public final class SynthesizePreCritiqueArtifactsAction implements com.vinekeepe
         base.put("contextId", contextId);
 
         plan = planStateStore.getByContextId(contextId).orElse(plan);
+        if (isEmptyField(plan, "requirements_spec", "narrative", "current_state_summary")) {
+            upsert.run(event, base, Map.of(
+                    "artifactId", "requirements_spec",
+                    "sectionId", "narrative",
+                    "mode", "replace",
+                    "data", Map.of("current_state_summary", PlanningDraftSupport.buildCurrentStateDraft(request))));
+        }
+
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
 
         if (isEmptyField(plan, "architecture_notes", "impact", "components_impacted")
                 && isEmptyField(plan, "architecture_notes", "impact", "architecture_summary")) {

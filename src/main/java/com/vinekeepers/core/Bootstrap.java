@@ -53,6 +53,7 @@ import com.vinekeepers.workflow.actions.BuildDiscoveryAgendaAction;
 import com.vinekeepers.workflow.actions.BuildInsightDiscoveryAgendaAction;
 import com.vinekeepers.workflow.actions.BuildPlanningThreadReviewBodyAction;
 import com.vinekeepers.workflow.actions.BuildProposalConfirmPromptAction;
+import com.vinekeepers.workflow.actions.BuildRequestExplorationAction;
 import com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesAction;
 import com.vinekeepers.workflow.actions.CaptureAndApplyDiscoveryAnswerAction;
 import com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueAction;
@@ -297,6 +298,9 @@ public final class Bootstrap {
         registry.register(
                 "synthesize_pre_critique_artifacts",
                 new SynthesizePreCritiqueArtifactsAction(featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "build_request_exploration",
+                new BuildRequestExplorationAction(featurePlanStateStore, workProfileRegistry));
         registry.register("capture_and_apply_discovery_answer", new CaptureAndApplyDiscoveryAnswerAction(featurePlanStateStore, workProfileRegistry));
         registry.register("classify_assumption_or_issue", new ClassifyAssumptionOrIssueAction(featurePlanStateStore));
         registry.register("recompute_plan_progress", new RecomputePlanProgressAction(featurePlanStateStore, workProfileRegistry));

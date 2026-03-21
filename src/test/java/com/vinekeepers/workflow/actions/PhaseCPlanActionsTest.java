@@ -73,7 +73,8 @@ class PhaseCPlanActionsTest {
         assertEquals("OK", init.run(null, Map.of(
                 "contextId", "c-review",
                 "channelId", "roomR",
-                "codeChange", "Add export-to-PDF with pagination and embedded metadata for audit trails."), Map.of()));
+                "codeChange", "Add export-to-PDF with pagination and embedded metadata for audit trails."),
+                Map.of("profileId", "software_feature_planning")));
         var upsert = new UpsertArtifactSectionDataAction(store, reg);
         assertEquals("OK", upsert.run(null,
                 Map.of("contextId", "c-review"),

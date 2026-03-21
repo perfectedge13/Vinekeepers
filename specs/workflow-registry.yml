@@ -87,7 +87,7 @@ assets:
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
-      build_planning_thread_review_body, post_planning_packet_thread, expand_planning_drafts, persist_plan_approval,
+      build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
       append/set plan actions; register gadget_resolve_branch
       and start_gadget_deploy; load GadgetProjectRegistry and register gadgetProjects choice provider on config load
     requires:
@@ -127,7 +127,7 @@ assets:
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
       workflowRef arrietty_room, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
       blank/empty; gadget bot with workflowRef gadget_deploy, routing discordMention gadget and discordChannels allowlist
-      placeholder REPLACE_WITH_DEVOPS_CHANNEL_ID
+      ops channel id in discordChannels (see comment block top of config/bots.yaml)
     requires:
       - REQ-CONFIG-001
       - REQ-LUNA-001
@@ -1192,7 +1192,7 @@ requirements:
           resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
           capture_and_apply_discovery_answer,
           classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness,
-          build_planning_thread_review_body, post_planning_packet_thread, expand_planning_drafts, persist_plan_approval,
+          build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
           append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry
@@ -1218,6 +1218,8 @@ requirements:
         - >-
           post_planning_packet_thread builds the planning packet from FeaturePlanState, splits for Discord size limits,
           posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount
+        - >-
+          build_request_exploration writes the request_exploration artifact (v2 profile) from request and repo hints before synthesis
         - >-
           expand_planning_drafts replaces placeholder-heavy artifact fields with request- and repo-grounded drafts
         - >-

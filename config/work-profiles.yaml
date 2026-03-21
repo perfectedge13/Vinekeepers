@@ -112,6 +112,11 @@ profiles:
                 type: text
                 required: true
                 promptHint: What problem this solves and who it is for (not only a one-line title).
+              - fieldId: current_state_summary
+                label: Current state / baseline
+                type: text
+                required: true
+                promptHint: What exists today; what fails or is painful without this change (not the proposed fix).
               - fieldId: scope_summary
                 label: Scope and non-goals
                 type: text
@@ -221,7 +226,26 @@ profiles:
                 label: Validation approach
                 type: text
                 required: true
-                promptHint: Tests, manual checks, spec validation commands.
+                promptHint: >-
+                  List concrete commands (e.g. mvn test, mvn compile, npm run validate-specs) and manual checks
+                  for this feature.
+      - artifactId: request_exploration
+        title: Request exploration
+        ownerRoles: [ORCHESTRATOR, ARCHITECT]
+        requiredForApproval: true
+        sections:
+          - sectionId: analysis
+            title: Explored dimensions
+            repeatable: false
+            required: true
+            fields:
+              - fieldId: exploration_body
+                label: Exploration notes
+                type: markdown
+                required: true
+                promptHint: >-
+                  Structured exploration of what the feature means (workflow touchpoints, config model, compat,
+                  validation). Filled automatically before the packet; edit if wrong.
       - artifactId: project_context
         title: Project context
         ownerRoles: [SCRIBE]

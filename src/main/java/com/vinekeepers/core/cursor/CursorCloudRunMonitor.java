@@ -81,10 +81,16 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         runState.applyAgentDetails(details);
 
         if (!Objects.equals(previousStatus, runState.getStatus())) {
-            sendUpdate(runState, formatStatusUpdate(runState));
+            String statusLine = formatStatusUpdate(runState);
+            if (runState.shouldPostStatusLine(statusLine)) {
+                sendUpdate(runState, statusLine);
+            }
         }
         if (!Objects.equals(previousPrUrl, runState.getPrUrl()) && runState.getPrUrl() != null) {
-            sendUpdate(runState, "Cursor opened a pull request: " + runState.getPrUrl());
+            String prLine = "Cursor opened a pull request: " + runState.getPrUrl();
+            if (runState.shouldPostPrLine(prLine)) {
+                sendUpdate(runState, prLine);
+            }
         }
 
         CursorAgentConversation conversation = adapter.getConversation(runState.getAgentId());
@@ -92,7 +98,10 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
         if (latestAssistant.isPresent()
                 && !Objects.equals(previousAssistantMessageId, latestAssistant.get().id())) {
             runState.recordAssistantMessage(latestAssistant.get());
-            sendUpdate(runState, "Cursor feedback: " + latestAssistant.get().text());
+            String fb = "Cursor feedback: " + latestAssistant.get().text();
+            if (runState.shouldPostAssistantLine(fb)) {
+                sendUpdate(runState, fb);
+            }
         }
 
         if (runState.isTerminal() && !runState.isTerminalNotificationSent()) {

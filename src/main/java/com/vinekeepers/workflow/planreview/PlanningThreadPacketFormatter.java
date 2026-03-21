@@ -23,7 +23,13 @@ public final class PlanningThreadPacketFormatter {
         String request = firstNonBlank(plan.getInitialRequest(), requestFallback);
         String repo = firstNonBlank(plan.getRepoRef(), repoFallback);
 
+        String exploration = truncate(
+                PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body"),
+                SECTION_SOFT_MAX * 2);
         String featureSummary = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary"), SECTION_SOFT_MAX);
+        String currentState = truncate(
+                PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "current_state_summary"),
+                SECTION_SOFT_MAX);
         String scope = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"), SECTION_SOFT_MAX);
         String stories = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories"), SECTION_SOFT_MAX);
         String acceptance = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"), SECTION_SOFT_MAX);
@@ -41,7 +47,11 @@ public final class PlanningThreadPacketFormatter {
         if (repo != null && !repo.isBlank()) {
             appendSection(sb, "**Repo**", repo);
         }
+        if (!exploration.isBlank()) {
+            appendSection(sb, "**Request exploration**", exploration);
+        }
         appendSection(sb, "**Problem / goal**", orPlaceholder(featureSummary));
+        appendSection(sb, "**Current state / baseline**", orPlaceholder(currentState));
         appendSection(sb, "**Proposed behavior / outline**", orPlaceholder(planBody));
         appendSection(sb, "**Scope & non-goals**", orPlaceholder(scope));
         if (!stories.isBlank()) {
