@@ -63,11 +63,13 @@ public final class CallActionStep implements WorkflowStep {
             args.putAll(state.getData());
         }
         args.put("__event", buildEventMetadata(event));
-        if (stepCursorModel != null) {
-            args.put("cursorModel", resolve(stepCursorModel, state));
-        }
         for (Map.Entry<String, Object> entry : bind.entrySet()) {
             args.put(entry.getKey(), resolve(entry.getValue(), state));
+        }
+        if (stepCursorModel != null
+                && !bind.containsKey("cursorModel")
+                && !bind.containsKey("model")) {
+            args.put("cursorModel", resolve(stepCursorModel, state));
         }
         return args;
     }

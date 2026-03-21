@@ -10,11 +10,13 @@ import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
 import com.vinekeepers.state.StateStore;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -23,6 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LaunchCursorRunActionTest {
 
     private static final Instant NOW = Instant.parse("2026-03-09T12:00:00Z");
+
+    @AfterEach
+    void clearCursorModelProperty() {
+        System.clearProperty("CURSOR_MODEL");
+    }
 
     @Test
     void runReturnsErrorWhenDependenciesNull() {
@@ -152,6 +159,101 @@ class LaunchCursorRunActionTest {
         assertTrue(ack.contains("Status: launching"), "ack must include status");
         assertTrue(ack.contains("lifecycle room"), "ack must mention lifecycle room");
         assertTrue(ack.contains("Agent: "), "ack must include agent URL when present");
+    }
+
+    @Test
+    void runPassesExplicitCursorModelOnLaunchRequest() {
+        AtomicReference<String> modelRef = new AtomicReference<>();
+        CursorAgentLaunchResult launchResult = new CursorAgentLaunchResult(
+                "agent-m", "Run", "CREATING",
+                "https://github.com/acme/repo", "main", "luna/x",
+                "https://cursor.com/agents?id=agent-m", null, true, NOW);
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                modelRef.set(request.model());
+                return launchResult;
+            }
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+        action.run(null, Map.of(), Map.of(
+                "project", "acme/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "s1",
+                "cursorModel", "explicit-model"));
+        assertEquals("explicit-model", modelRef.get());
+    }
+
+    @Test
+    void runUsesBotDefaultCursorModelWhenNoExplicitModel() {
+        AtomicReference<String> modelRef = new AtomicReference<>();
+        CursorAgentLaunchResult launchResult = new CursorAgentLaunchResult(
+                "agent-b", "Run", "CREATING",
+                "https://github.com/acme/repo", "main", "luna/x",
+                "https://cursor.com/agents?id=agent-b", null, true, NOW);
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                modelRef.set(request.model());
+                return launchResult;
+            }
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+        action.run(null, Map.of(), Map.of(
+                "project", "acme/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "s1",
+                "__botDefaultCursorModel", "bot-profile-model"));
+        assertEquals("bot-profile-model", modelRef.get());
+    }
+
+    @Test
+    void runUsesCursorModelEnvWhenNoExplicitOrBotDefault() {
+        System.setProperty("CURSOR_MODEL", "from-env");
+        AtomicReference<String> modelRef = new AtomicReference<>();
+        CursorAgentLaunchResult launchResult = new CursorAgentLaunchResult(
+                "agent-e", "Run", "CREATING",
+                "https://github.com/acme/repo", "main", "luna/x",
+                "https://cursor.com/agents?id=agent-e", null, true, NOW);
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                modelRef.set(request.model());
+                return launchResult;
+            }
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+        action.run(null, Map.of(), Map.of(
+                "project", "acme/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "s1"));
+        assertEquals("from-env", modelRef.get());
     }
 
     @Test
