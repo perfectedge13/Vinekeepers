@@ -115,13 +115,13 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 56
+        next: 49
       - when:
           key: planningIntakeThread
           value: 'true'
         next: 2
       - when: else
-        next: 48
+        next: 41
     - type: call_action
       action: get_profile_missing_fields
       storeIn: profileMissingSummary
@@ -224,26 +224,8 @@ workflows:
     - type: call_action
       action: synthesize_pre_critique_artifacts
     - type: call_action
-      action: build_role_planning_thread_messages
+      action: post_planning_packet_thread
       storeSpread: true
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{architectThreadMessage}}'
-        asRole: architect
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{auditorThreadMessage}}'
-        asRole: auditor
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{scribeThreadMessage}}'
-        asRole: scribe
-        target: thread
     - type: call_action
       action: run_plan_critique_and_readiness
       storeSpread: true
@@ -252,7 +234,7 @@ workflows:
       - when:
           key: planReadinessStatus
           value: BLOCKED
-        next: 45
+        next: 38
       - when:
           key: planReadinessStatus
           value: NEEDS_REVISION
@@ -274,21 +256,13 @@ workflows:
       - when:
           key: planReadinessStatus
           value: NEEDS_HUMAN_DECISION
-        next: 63
+        next: 57
       - when: else
-        next: 31
+        next: 28
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Drafted plan (orchestrator)**
-
-          {{planningThreadReviewBody}}
-
-          {{planningThreadReviewBuildError}}
-
-          ---
-
-          **Pre-launch review**
+        content: '**Pre-launch review** (planning packet posted above in one or more messages)
 
           **Status:** {{planReadinessStatus}}
 
@@ -308,6 +282,9 @@ workflows:
           **Critique**
 
           {{planCritiqueSummary}}
+
+
+          {{planningThreadReviewBuildError}}
 
 
           _Approval choices follow in the next message._
@@ -335,11 +312,11 @@ workflows:
       - when:
           key: planApprovalDecision
           value: approve
-        next: 35
+        next: 32
       - when:
           key: planApprovalDecision
           value: approve_with_risks
-        next: 35
+        next: 32
       - when:
           key: planApprovalDecision
           value: revise
@@ -361,42 +338,21 @@ workflows:
       - when:
           key: planApprovalDecision
           value: reject
-        next: 48
+        next: 41
       - when: else
-        next: 48
+        next: 41
     - type: call_action
       action: persist_plan_approval
     - type: call_action
       action: post_channel_message
       bind:
-        content: 'Intake/spec thread — orchestrator kickoff. Repo: {{project}}. Request: {{codeChange}}. Plan approved; proceeding with role handoff.'
+        content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request summary is in the planning packet above.'
         asRole: orchestrator
         target: thread
     - type: call_action
-      action: build_role_planning_thread_messages
-      storeSpread: true
-    - type: call_action
       action: post_channel_message
       bind:
-        content: '{{architectThreadMessage}}'
-        asRole: architect
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{auditorThreadMessage}}'
-        asRole: auditor
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{scribeThreadMessage}}'
-        asRole: scribe
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: Feature room ready. Thread above has role contributions. Launching next.
+        content: Feature room ready. Launching Cursor run from the approved planning packet.
         asRole: orchestrator
         target: room
     - type: call_action
@@ -414,9 +370,9 @@ workflows:
       - when:
           key: launchSucceeded
           value: 'false'
-        next: 70
+        next: 38
       - when: else
-        next: 72
+        next: 64
     - type: call_action
       action: post_channel_message
       bind:
@@ -441,21 +397,21 @@ workflows:
       - when:
           key: roomAction
           value: status
-        next: 51
+        next: 44
       - when:
           key: roomAction
           value: retry
-        next: 52
+        next: 45
       - when:
           key: roomAction
           value: close
-        next: 53
+        next: 46
       - when:
           key: roomAction
           value: ''
-        next: 54
+        next: 47
       - when: else
-        next: 54
+        next: 47
     - type: done
       message: 'Room status: active. Repo and request are in context.'
     - type: done
@@ -481,7 +437,7 @@ workflows:
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
-      prompt: What scope, acceptance criteria, constraints, or risks should we capture before drafting?
+      prompt: 'Optional: add scope, must-haves, or risks — or say **continue** and we will draft from your request and repo.'
       storeIn: discoveryAnswerRaw
     - type: capture_field
       storeIn: discoveryAnswerRaw
@@ -531,7 +487,7 @@ workflows:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 68
+        next: 61
       - when:
           key: readinessProceedRaw
           value: revise
@@ -551,14 +507,14 @@ workflows:
         - planningHasConfirmPending
         - discoveryBundledApplyJson
       - when: else
-        next: 65
+        next: 58
     - type: call_action
       action: acknowledge_readiness_human_decision
       storeSpread: true
     - type: branch
       branches:
       - when: else
-        next: 31
+        next: 28
     - type: call_action
       action: post_channel_message
       bind:

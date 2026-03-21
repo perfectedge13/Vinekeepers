@@ -161,9 +161,9 @@ class PhaseCPlanActionsTest {
         Map<String, Object> spread = (Map<String, Object>) build.run(null, Map.of("contextId", "c3"), Map.of());
         assertEquals("", spread.get("planningThreadReviewBuildError"));
         String body = (String) spread.get("planningThreadReviewBody");
-        assertTrue(body.contains("Implementation outline"));
+        assertTrue(body.contains("Proposed behavior / outline"));
         assertTrue(body.contains("Step one; step two."));
-        assertTrue(body.contains("Validation approach"));
+        assertTrue(body.contains("Validation strategy"));
         assertTrue(body.contains("Run mvn test"));
     }
 }

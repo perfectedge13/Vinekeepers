@@ -4,6 +4,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.discovery.InsightDiscoverySupport;
+import com.vinekeepers.workflow.planning.LightweightPlanningReply;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +39,10 @@ public final class CaptureAndApplyDiscoveryAnswerAction implements com.vinekeepe
         }
         if (answer == null || answer.isBlank()) {
             return "Missing discoveryAnswerRaw.";
+        }
+        if (LightweightPlanningReply.isConsentToProceed(answer)) {
+            new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, state, bind);
+            return "OK";
         }
         if ("BUNDLED".equalsIgnoreCase(kind != null ? kind : "")) {
             return applyBundled(event, state, bind, contextId, answer);

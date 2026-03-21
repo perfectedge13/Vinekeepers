@@ -39,13 +39,15 @@ public final class InsightDiscoverySupport {
             String initialRequest) throws JsonProcessingException {
         List<DiscoveryGap> gaps = StructuredDiscoverySupport.parseGapsJson(gapsJson);
         boolean blocker = gaps.stream().anyMatch(g -> "BLOCKER".equalsIgnoreCase(g.getSeverity()));
-        List<DiscoveryGap> required = gaps.stream()
+        List<DiscoveryGap> requiredAll = gaps.stream()
                 .filter(g -> "REQUIRED_FIELD".equalsIgnoreCase(g.getKind()))
                 .sorted(StructuredDiscoverySupport.GAP_COMPARATOR)
                 .toList();
-        if (blocker || required.size() < 2 || profile == null) {
+        if (blocker || requiredAll.size() < 2 || profile == null) {
             return StructuredDiscoverySupport.buildAgendaSpread(gapsJson);
         }
+        int cap = Math.min(3, requiredAll.size());
+        List<DiscoveryGap> required = requiredAll.subList(0, cap);
 
         List<BundledTarget> targets = new ArrayList<>();
         for (DiscoveryGap g : required) {
@@ -125,6 +127,10 @@ public final class InsightDiscoverySupport {
             }
         }
         if (!any && !text.isBlank()) {
+            List<Map<String, String>> numbered = parseNumberedAnswers(text, targets);
+            if (!numbered.isEmpty()) {
+                return numbered;
+            }
             Map<String, String> first = targets.get(0);
             Map<String, String> row = new LinkedHashMap<>();
             row.put("artifactId", first.get("artifactId"));
@@ -134,6 +140,37 @@ public final class InsightDiscoverySupport {
             out.add(row);
         }
         return out;
+    }
+
+    /** Maps "1. ... 2. ..." lines to targets in order. */
+    private static List<Map<String, String>> parseNumberedAnswers(String text, List<Map<String, String>> targets) {
+        List<Map<String, String>> parsed = new ArrayList<>();
+        if (text == null || targets == null || targets.isEmpty()) {
+            return parsed;
+        }
+        Pattern linePat = Pattern.compile("(?m)^\\s*(\\d+)\\.\\s*(.+)$");
+        Matcher lm = linePat.matcher(text);
+        List<String> answers = new ArrayList<>();
+        while (lm.find()) {
+            answers.add(lm.group(2).trim());
+        }
+        if (answers.size() < targets.size()) {
+            return List.of();
+        }
+        for (int i = 0; i < targets.size(); i++) {
+            Map<String, String> t = targets.get(i);
+            String v = answers.get(i);
+            if (v == null || v.isBlank()) {
+                continue;
+            }
+            Map<String, String> row = new LinkedHashMap<>();
+            row.put("artifactId", t.get("artifactId"));
+            row.put("sectionId", t.get("sectionId"));
+            row.put("fieldId", t.get("fieldId"));
+            row.put("value", v);
+            parsed.add(row);
+        }
+        return parsed;
     }
 
     public static List<Map<String, String>> parseBundledTargetsJson(String json) throws JsonProcessingException {
@@ -162,17 +199,45 @@ public final class InsightDiscoverySupport {
 
     private static String buildBundledPrompt(String initialRequest, List<BundledTarget> targets) {
         StringBuilder sb = new StringBuilder();
-        sb.append("**Planning clarification**\n\n");
+        sb.append("**Planning check-in** — a few focused questions so we can firm up the packet.\n\n");
         if (initialRequest != null && !initialRequest.isBlank()) {
-            sb.append("**Request (context):** ").append(initialRequest.trim()).append("\n\n");
+            String rq = initialRequest.trim();
+            sb.append("**Your request:** ")
+                    .append(rq.length() > 400 ? rq.substring(0, 400) + "…" : rq)
+                    .append("\n\n");
         }
-        sb.append("Reply in **one message** using the headings below (copy/paste the headings). ");
-        sb.append("Under each heading, add concrete detail so we can update the plan packet — not just a yes/no.\n\n");
+        int n = 1;
         for (BundledTarget t : targets) {
-            sb.append("**").append(t.label()).append("**\n\n");
+            sb.append(n++)
+                    .append(". ")
+                    .append(pmQuestion(t.fieldId(), t.label()))
+                    .append("\n\n");
         }
-        sb.append("_Tip: bullets are fine; aim to resolve several sections at once._");
+        sb.append(
+                "Reply in **one** message. Either number your answers (1., 2., …) to match, or use **")
+                .append(targets.get(0).label())
+                .append("**-style headings with detail under each.");
         return sb.toString();
+    }
+
+    private static String pmQuestion(String fieldId, String label) {
+        if (fieldId == null) {
+            return "Clarify **" + label + "** for this plan.";
+        }
+        return switch (fieldId) {
+            case "feature_summary" -> "What problem are we solving and who benefits when this ships?";
+            case "scope_summary" -> "What is in scope vs explicitly out of scope? Anything that must stay backward-compatible?";
+            case "acceptance_criteria" -> "What must be true when we’re done (testable outcomes / checks)?";
+            case "user_stories" -> "What are the main user flows or scenarios we should not miss?";
+            case "components_impacted" -> "Which parts of the codebase or services are likely to change?";
+            case "architecture_summary" -> "What approach and constraints should we follow (integration points, data, APIs)?";
+            case "risk_summary" -> "What could go wrong, and how should we roll back or mitigate?";
+            case "open_questions" -> "What decisions or unknowns still need an owner or answer before implementation?";
+            case "plan_body" -> "What’s the phased implementation order that matches this repo?";
+            case "validation_notes" -> "How will we prove this works (tests, manual checks, gates)?";
+            case "context_summary" -> "What repo or environment context should implementers know?";
+            default -> "Help us flesh out **" + label + "** with concrete detail.";
+        };
     }
 
     private static String resolveFieldLabel(

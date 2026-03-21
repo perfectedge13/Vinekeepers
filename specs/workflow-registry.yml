@@ -87,7 +87,8 @@ assets:
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
-      build_planning_thread_review_body, persist_plan_approval, append/set plan actions; register gadget_resolve_branch
+      build_planning_thread_review_body, post_planning_packet_thread, expand_planning_drafts, persist_plan_approval,
+      append/set plan actions; register gadget_resolve_branch
       and start_gadget_deploy; load GadgetProjectRegistry and register gadgetProjects choice provider on config load
     requires:
       - REQ-CORE-002
@@ -1191,7 +1192,7 @@ requirements:
           resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
           capture_and_apply_discovery_answer,
           classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness,
-          build_planning_thread_review_body, persist_plan_approval,
+          build_planning_thread_review_body, post_planning_packet_thread, expand_planning_drafts, persist_plan_approval,
           append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry
@@ -1208,9 +1209,17 @@ requirements:
           spread from get_structured_discovery_gaps, spreads discoveryCurrentQuestionPrompt and discoveryApplyKind (e.g.
           REQUIRED_FIELD)
         - >-
-          capture_and_apply_discovery_answer returns OK_SKIP_APPLY when discoveryApplyKind is not REQUIRED_FIELD; when kind
+          capture_and_apply_discovery_answer returns OK_SKIP_APPLY when discoveryApplyKind is not REQUIRED_FIELD/BUNDLED
+          and the message is not a lightweight consent token; lightweight consent replies (ok, continue, proceed, etc.)
+          run expand_planning_drafts and return OK; when kind
           is REQUIRED_FIELD with discoveryApplyArtifactId, discoveryApplySectionId, discoveryApplyFieldId, and
-          discoveryApplyMode, applies discoveryAnswerRaw into plan artifacts (upsert semantics)
+          discoveryApplyMode, applies discoveryAnswerRaw into plan artifacts (upsert semantics); BUNDLED applies parsed
+          sections to multiple targets
+        - >-
+          post_planning_packet_thread builds the planning packet from FeaturePlanState, splits for Discord size limits,
+          posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount
+        - >-
+          expand_planning_drafts replaces placeholder-heavy artifact fields with request- and repo-grounded drafts
         - >-
           recompute_plan_progress spreads discoveryHasOpenGaps false and discoveryRecomputeError when contextId is missing;
           when plan has artifacts, persists projected section statuses and returns a refreshed gap spread map

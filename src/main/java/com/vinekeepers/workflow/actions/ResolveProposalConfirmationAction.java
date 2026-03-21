@@ -5,12 +5,12 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanningProposal;
+import com.vinekeepers.workflow.planning.LightweightPlanningReply;
 import com.vinekeepers.workflow.planning.PlanningProposalJson;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -84,7 +84,7 @@ public final class ResolveProposalConfirmationAction implements com.vinekeepers.
             return spread;
         }
         String valueToStore;
-        if (isOkToken(answer)) {
+        if (LightweightPlanningReply.isConsentToProceed(answer)) {
             valueToStore = firstNonBlank(
                     getString(bind, "proposalConfirmProposedValue"), getString(state, "proposalConfirmProposedValue"));
             if (valueToStore == null) {
@@ -108,6 +108,7 @@ public final class ResolveProposalConfirmationAction implements com.vinekeepers.
                         "sectionId", match.getSectionId(),
                         "mode", "replace",
                         "data", Map.of(match.getFieldId(), valueToStore)));
+        new ExpandPlanningDraftsAction(planStore, profileRegistry).run(event, baseState, bind);
 
         List<String> newQueue = new ArrayList<>(queue.subList(1, queue.size()));
         List<PlanningProposal> newProposals = new ArrayList<>();
@@ -126,18 +127,6 @@ public final class ResolveProposalConfirmationAction implements com.vinekeepers.
         }
         spread.put("proposalResolveStatus", "OK");
         return spread;
-    }
-
-    private static boolean isOkToken(String answer) {
-        String t = answer.trim();
-        if (t.isEmpty()) {
-            return false;
-        }
-        String lower = t.toLowerCase(Locale.ROOT);
-        return lower.equals("ok")
-                || lower.equals("yes")
-                || lower.equals("y")
-                || lower.equals("accept");
     }
 
     private static String getString(Map<String, Object> map, String key) {

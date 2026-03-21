@@ -59,6 +59,7 @@ import com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueAction;
 import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
+import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.EnsureRepoWorkspaceAction;
 import com.vinekeepers.workflow.actions.GadgetResolveBranchAction;
 import com.vinekeepers.workflow.actions.StartGadgetDeployAction;
@@ -70,6 +71,7 @@ import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import com.vinekeepers.workflow.actions.InitializeFeatureRoomStateAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
+import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
 import com.vinekeepers.workflow.actions.RunPlanCritiqueAndReadinessAction;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
@@ -80,7 +82,6 @@ import com.vinekeepers.workflow.actions.ResolveProposalConfirmationAction;
 import com.vinekeepers.workflow.actions.SetPlanSectionStatusAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
 import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
-import com.vinekeepers.workflow.actions.StartGadgetDeployAction;
 import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
 import com.vinekeepers.workflow.actions.UpsertArtifactSectionDataAction;
@@ -305,6 +306,10 @@ public final class Bootstrap {
         registry.register("build_role_planning_thread_messages", new BuildRolePlanningThreadMessagesAction(featurePlanStateStore));
         registry.register("run_plan_critique_and_readiness", new RunPlanCritiqueAndReadinessAction(featurePlanStateStore, workProfileRegistry));
         registry.register("build_planning_thread_review_body", new BuildPlanningThreadReviewBodyAction(featurePlanStateStore));
+        registry.register(
+                "post_planning_packet_thread",
+                new PostPlanningPacketThreadAction(outboundDeliveryRouter, featurePlanStateStore));
+        registry.register("expand_planning_drafts", new ExpandPlanningDraftsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("persist_plan_approval", new PersistPlanApprovalAction(featurePlanStateStore));
         registry.register("append_plan_requirement", new AppendRequirementAction(featurePlanStateStore));
         registry.register("append_plan_assumption", new AppendAssumptionAction(featurePlanStateStore));

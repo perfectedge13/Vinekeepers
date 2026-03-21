@@ -27,20 +27,14 @@ public final class PlanningPromptFormatter {
         String label = field.getLabel() != null && !field.getLabel().isBlank()
                 ? field.getLabel()
                 : "this item";
-        String sectionTitle = section.getTitle() != null && !section.getTitle().isBlank()
-                ? section.getTitle()
-                : section.getSectionId();
-        String artTitle = artifact.getTitle() != null && !artifact.getTitle().isBlank()
-                ? artifact.getTitle()
-                : artifact.getArtifactId();
         String rowNote = repeatableRowIndex >= 0 ? " (entry " + (repeatableRowIndex + 1) + ")" : "";
         StringBuilder sb = new StringBuilder();
-        sb.append("**").append(label).append("**").append(rowNote);
-        sb.append(" under _").append(sectionTitle).append("_ (").append(artTitle).append(") is still empty.");
+        sb.append("For **").append(label).append("**").append(rowNote).append(": ");
         if (field.getPromptHint() != null && !field.getPromptHint().isBlank()) {
-            sb.append(" ").append(field.getPromptHint());
+            sb.append(field.getPromptHint().trim());
+        } else {
+            sb.append("share concrete detail we should capture in the planning packet.");
         }
-        sb.append(" Reply in one message with what we should record.");
         return sb.toString();
     }
 

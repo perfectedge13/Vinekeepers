@@ -1,5 +1,6 @@
 package com.vinekeepers.bot;
 
+import com.vinekeepers.debug.AgentDebugLog;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -87,6 +89,24 @@ public final class Router {
             }
         }
 
+        // #region agent log
+        if (context != null && "discord".equals(context.getSourceType()) && "message".equals(context.getEventType())) {
+            String tp = context.getText();
+            if (tp != null && tp.length() > 120) {
+                tp = tp.substring(0, 120);
+            }
+            if (tp == null) {
+                tp = "";
+            }
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("channelId", String.valueOf(context.getChannelId()));
+            d.put("mentions", context.getMentions().toString());
+            d.put("filterBotIds", filterBotIds.toString());
+            d.put("textPrefix", tp);
+            AgentDebugLog.log("H1", "Router.route:filter", "after_rule_scan", d);
+        }
+        // #endregion
+
         if (context != null && "discord".equals(context.getSourceType())) {
             String channelId = context.getChannelId();
             if (channelId != null && !channelId.isBlank()) {
@@ -98,18 +118,30 @@ public final class Router {
                         if ("interaction".equals(context.getEventType())) {
                             Optional<String> coordinator = FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(threadRoom);
                             if (coordinator.isPresent()) {
+                                // #region agent log
+                                AgentDebugLog.log("H3", "Router.route:featureRoom", "override_intake_thread_coordinator",
+                                        Map.of("channelId", String.valueOf(channelId), "bot", coordinator.get()));
+                                // #endregion
                                 return List.of(coordinator.get());
                             }
                             log.warn("Intake thread has feature room state but no coordinator; falling back to participant list");
                         }
                         List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(threadRoom);
                         if (!participantBotIds.isEmpty()) {
+                            // #region agent log
+                            AgentDebugLog.log("H3", "Router.route:featureRoom", "override_intake_thread_participants",
+                                    Map.of("channelId", String.valueOf(channelId), "bots", participantBotIds.toString()));
+                            // #endregion
                             return List.copyOf(participantBotIds);
                         }
                     }
                     if (byRoom.isPresent()) {
                         Optional<String> coordinator = FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(byRoom.get());
                         if (coordinator.isPresent()) {
+                            // #region agent log
+                            AgentDebugLog.log("H3", "Router.route:featureRoom", "override_room_channel_coordinator",
+                                    Map.of("channelId", String.valueOf(channelId), "bot", coordinator.get()));
+                            // #endregion
                             return List.of(coordinator.get());
                         }
                     }
@@ -124,6 +156,10 @@ public final class Router {
                         String ownerBotId = lc.getConfiguredBotId();
                         if (ownerBotId != null && !ownerBotId.isBlank()) {
                             if (Boolean.TRUE.equals(handlesOwnedSpacesByBotId.get(ownerBotId))) {
+                                // #region agent log
+                                AgentDebugLog.log("H3", "Router.route:lifecycle", "override_single_owner",
+                                        Map.of("channelId", String.valueOf(channelId), "ownerBotId", ownerBotId));
+                                // #endregion
                                 return List.of(ownerBotId);
                             }
                             log.warn("Channel has lifecycle owner bot {} but that bot does not have handlesOwnedSpaces; using filter-based routing", ownerBotId);
@@ -170,7 +206,16 @@ public final class Router {
             }
             if (!f.getDiscordChannels().isEmpty()) {
                 String channel = context.getChannelId();
-                if (channel == null || !f.getDiscordChannels().contains(channel)) return false;
+                if (channel == null || !f.getDiscordChannels().contains(channel)) {
+                    // #region agent log
+                    if (f.getDiscordMention() != null && "gadget".equalsIgnoreCase(f.getDiscordMention().trim())) {
+                        AgentDebugLog.log("H1", "Router.matches", "discord_channels_reject",
+                                Map.of("eventChannelId", String.valueOf(channel),
+                                        "allowedChannels", f.getDiscordChannels().toString()));
+                    }
+                    // #endregion
+                    return false;
+                }
             }
             // Only enforce trigger/mention on message events; interactions have no mentions so use author/channel only
             if (!"interaction".equals(kind)) {
@@ -180,7 +225,16 @@ public final class Router {
                 }
                 if (f.getDiscordMention() != null && !f.getDiscordMention().isBlank()) {
                     String mention = f.getDiscordMention().trim().toLowerCase(Locale.ROOT);
-                    if (!context.getMentions().contains(mention)) return false;
+                    if (!context.getMentions().contains(mention)) {
+                        // #region agent log
+                        if ("gadget".equals(mention)) {
+                            AgentDebugLog.log("H2", "Router.matches", "discord_mention_reject",
+                                    Map.of("expectedMention", mention,
+                                            "actualMentions", context.getMentions().toString()));
+                        }
+                        // #endregion
+                        return false;
+                    }
                 }
             }
             return true;

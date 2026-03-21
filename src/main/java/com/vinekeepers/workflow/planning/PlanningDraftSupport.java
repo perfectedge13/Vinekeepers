@@ -173,6 +173,34 @@ public final class PlanningDraftSupport {
         return sb.toString();
     }
 
+    /** Replaces thin intake placeholders with request-grounded scope text. */
+    public static String buildScopeDraftFromRequest(String request) {
+        String r = request != null ? request.trim() : "";
+        StringBuilder sb = new StringBuilder();
+        sb.append("**In scope:** Implement the change described in the request (below).\n");
+        sb.append("**Out of scope:** Unrelated refactors, style-only edits, and features not implied by the request.\n");
+        sb.append("**Compatibility:** Preserve existing public behavior unless the request explicitly changes it.\n");
+        if (!r.isBlank()) {
+            sb.append("\n**Request:** ").append(r.length() > 500 ? r.substring(0, 500) + "…" : r);
+        }
+        return sb.toString();
+    }
+
+    /** Replaces thin intake placeholders with testable acceptance bullets. */
+    public static String buildAcceptanceDraftFromRequest(String request) {
+        String r = request != null ? request.trim() : "";
+        StringBuilder sb = new StringBuilder();
+        sb.append("- Primary user flow for this feature works end-to-end.\n");
+        sb.append("- `mvn test` and `mvn compile` pass.\n");
+        sb.append("- Config/spec/docs updated when behavior or contracts change.\n");
+        if (!r.isBlank()) {
+            sb.append("- Delivers: ")
+                    .append(r.length() > 280 ? r.substring(0, 280) + "…" : r)
+                    .append("\n");
+        }
+        return sb.toString();
+    }
+
     /** Seed decision row text for empty decision log (v2). */
     public static String buildSeedDecisionText(String request) {
         String r = request != null ? request.trim() : "";

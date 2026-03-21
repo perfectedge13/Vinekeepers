@@ -4,6 +4,7 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
+import com.vinekeepers.workflow.planning.PlanningPlaceholderDetection;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,6 +46,7 @@ public final class PlanCritiqueSupport {
         if (plan != null) {
             addSubstanceFindings(plan, out, seq);
             addV2PacketFindings(plan, profile, out, seq);
+            addPlaceholderPacketFindings(plan, profile, out, seq);
             if (!plan.getIssues().isEmpty()) {
                 out.add(new PlanCritiqueFinding(
                         "crit-iss-" + seq.getAndIncrement(),
@@ -178,6 +180,51 @@ public final class PlanCritiqueSupport {
                     "MISSING_DECISION_LOG_ENTRY",
                     "At least one decision log entry is required before approval.",
                     "decision_log.decisions"));
+        }
+    }
+
+    private static void addPlaceholderPacketFindings(
+            FeaturePlanState plan,
+            WorkProfileDefinition profile,
+            List<PlanCritiqueFinding> out,
+            AtomicInteger seq) {
+        if (plan == null || profile == null || profile.findSection("architecture_notes", "impact").isEmpty()) {
+            return;
+        }
+        checkPlaceholderField(
+                plan,
+                out,
+                seq,
+                "requirements_spec.narrative.scope_summary",
+                PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"));
+        checkPlaceholderField(
+                plan,
+                out,
+                seq,
+                "requirements_spec.narrative.acceptance_criteria",
+                PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
+        checkPlaceholderField(
+                plan,
+                out,
+                seq,
+                "open_questions_block.backlog.open_questions",
+                PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"));
+    }
+
+    private static void checkPlaceholderField(
+            FeaturePlanState plan,
+            List<PlanCritiqueFinding> out,
+            AtomicInteger seq,
+            String path,
+            String value) {
+        if (PlanningPlaceholderDetection.looksLikePlaceholder(value)) {
+            out.add(new PlanCritiqueFinding(
+                    "crit-ph-" + seq.getAndIncrement(),
+                    "COVERAGE",
+                    "MUST_FIX",
+                    "PLACEHOLDER_PLANNING_FIELD",
+                    "Planning field still looks like a template or thin placeholder: " + path + ". Reply with detail or say **continue** so we can expand drafts.",
+                    path));
         }
     }
 

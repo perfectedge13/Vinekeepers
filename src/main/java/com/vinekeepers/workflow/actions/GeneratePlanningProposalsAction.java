@@ -138,7 +138,7 @@ public final class GeneratePlanningProposalsAction implements com.vinekeepers.wo
                     "MEDIUM",
                     "CONFIRM",
                     List.of("INITIAL_REQUEST"),
-                    "Workspace is not ready yet; this draft uses your request only. Reply OK to record it, or paste an edited version.",
+                    "Workspace is not ready yet; this draft uses your request only. Reply **OK** or **continue** to record it, or paste an edited version.",
                     ""));
             confirmQueue.add(id);
         }
@@ -225,7 +225,7 @@ public final class GeneratePlanningProposalsAction implements com.vinekeepers.wo
                     "MEDIUM",
                     "CONFIRM",
                     List.of("INITIAL_REQUEST"),
-                    "Lightweight context draft. Reply OK to record it, or paste an edited version.",
+                    "Lightweight context draft. Reply **OK** or **continue** to record it, or paste an edited version.",
                     ""));
             confirmQueue.add(id);
         }
@@ -323,7 +323,7 @@ public final class GeneratePlanningProposalsAction implements com.vinekeepers.wo
                     "MEDIUM",
                     "CONFIRM",
                     List.of("INITIAL_REQUEST"),
-                    "Starter open questions; reply OK or replace with your list.",
+                    "Starter open questions; reply **OK**/**continue** to keep, or replace with your list.",
                     ""));
             confirmQueue.add(id);
         }
