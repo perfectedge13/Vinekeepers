@@ -66,6 +66,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             String optA = text(meta, "optA");
             String optB = text(meta, "optB");
             String q = text(meta, "questionText");
+            String coordinatorGapId = text(meta, "gapId");
             String decisionLine;
             if ("planning_clarify_default".equals(choice)) {
                 decisionLine = "Decision (user selected default): " + (defaultText.isBlank() ? "Use recommended baseline." : defaultText);
@@ -109,7 +110,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             String qText = q.isBlank() ? firstNonBlank(getString(state, "planningClarificationQuestionText"), "") : q;
             ledger =
                     PlanningDeliberationLedgerSync.mergeAnswerIntoLedger(
-                            ledger, ledgerItemId, qText, choice, choice.trim());
+                            ledger, ledgerItemId, qText, coordinatorGapId, choice, choice.trim());
             UnresolvedItemLedger.mergeLedgerIntoSpread(spread, ledger);
 
             UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);

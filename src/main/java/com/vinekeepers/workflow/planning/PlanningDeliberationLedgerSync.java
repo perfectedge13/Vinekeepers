@@ -5,9 +5,13 @@ import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
 
 import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
+
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Keeps {@link UnresolvedItemLedger} in sync with planning clarification ranking and merge (dual-write with
@@ -75,6 +79,98 @@ public final class PlanningDeliberationLedgerSync {
     }
 
     /**
+     * Upsert when {@link com.vinekeepers.profile.CoordinatorClarificationMode#CANONICAL_V1} drives the question: correlate
+     * by stable {@code gapId} instead of only question-text fingerprint.
+     */
+    public static UpsertResult upsertOpenQuestionForCanonicalGap(
+            UnresolvedItemLedger ledger,
+            PlanningQuestionRankingPolicy.RankedClarification ranked,
+            String canonicalGapId,
+            boolean gapRuleBlocking) {
+        UnresolvedItemLedger base = ledger != null ? ledger : UnresolvedItemLedger.empty();
+        if (!ranked.userInputRequired()) {
+            return new UpsertResult(base, Optional.empty());
+        }
+        String q = ranked.questionText() != null ? ranked.questionText().trim() : "";
+        if (q.isBlank() || canonicalGapId == null || canonicalGapId.isBlank()) {
+            return new UpsertResult(base, Optional.empty());
+        }
+        if (mergedPlanningCoversSemanticallySimilarQuestion(base, q)) {
+            return new UpsertResult(base, Optional.empty());
+        }
+        if (base.hasFingerprintMergeClosed(q)) {
+            return new UpsertResult(base, Optional.empty());
+        }
+        String fp = UnresolvedItemLedger.normalizeFingerprint(q);
+        String inputKind = ranked.useStructuredChoices() ? "bounded_choice" : "open";
+        Map<String, String> source = new LinkedHashMap<>();
+        source.put("channel", PLANNING_CLARIFICATION_CHANNEL);
+        source.put("gapId", canonicalGapId.trim());
+        source.put("topicKey", canonicalGapId.trim());
+        source.put("inputKind", inputKind);
+        source.put("lastAskedAt", String.valueOf(System.currentTimeMillis()));
+        boolean blocking = gapRuleBlocking || ranked.blockingQuestionCount() > 0;
+        String severity = blocking ? "blocking" : "normal";
+
+        Optional<UnresolvedItem> active = base.findOpenPlanningByGapId(canonicalGapId);
+        if (active.isPresent()) {
+            UnresolvedItem it = active.get();
+            UnresolvedItem next =
+                    it.withIncrementRepeatCount()
+                            .withMergedSource(source)
+                            .withStatus(UnresolvedItemStatus.OPEN);
+            return new UpsertResult(base.withReplaced(it.getId(), next), Optional.of(it.getId()));
+        }
+
+        UnresolvedItemLedger withoutOthers = base.withCancelledOpenPlanningExcept("");
+        String id = UnresolvedItemLedger.newId();
+        UnresolvedItem created =
+                new UnresolvedItem(
+                        id,
+                        fp,
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        q,
+                        severity,
+                        source,
+                        List.of(),
+                        List.of(),
+                        0);
+        return new UpsertResult(withoutOthers.withAdded(created), Optional.of(id));
+    }
+
+    /**
+     * Cancel OPEN {@code planning_clarification} items that are not in {@code allowedOpenGapIds}. When the set is empty,
+     * cancels every OPEN planning clarification (no canonical gaps remain).
+     */
+    public static UnresolvedItemLedger reconcileCanonicalOpenGaps(
+            UnresolvedItemLedger ledger, Set<String> allowedOpenGapIds) {
+        UnresolvedItemLedger base = ledger != null ? ledger : UnresolvedItemLedger.empty();
+        Set<String> allowed = allowedOpenGapIds != null ? allowedOpenGapIds : Set.of();
+        List<UnresolvedItem> next = new ArrayList<>();
+        for (UnresolvedItem it : base.items()) {
+            if (it.getStatus() == UnresolvedItemStatus.OPEN
+                    && PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"))) {
+                String gid = it.getSource().getOrDefault("gapId", "");
+                boolean cancel = allowed.isEmpty() || gid.isBlank() || !allowed.contains(gid.trim());
+                if (cancel) {
+                    next.add(
+                            it.withStatus(UnresolvedItemStatus.CANCELLED)
+                                    .withMergedSource(
+                                            Map.of(
+                                                    "resolutionNotes",
+                                                    allowed.isEmpty()
+                                                            ? "Canonical gap evaluation: no open coordinator gaps."
+                                                            : "Canonical gap evaluation: gap no longer active or superseded.")));
+                    continue;
+                }
+            }
+            next.add(it);
+        }
+        return new UnresolvedItemLedger(next);
+    }
+
+    /**
      * Mark the active planning clarification as merged with the user's answer (authoritative closure for fingerprint).
      */
     public static UnresolvedItemLedger mergeAnswerIntoLedger(
@@ -83,12 +179,32 @@ public final class PlanningDeliberationLedgerSync {
             String questionFingerprint,
             String rawAnswer,
             String normalizedAnswer) {
+        return mergeAnswerIntoLedger(ledger, ledgerItemId, questionFingerprint, null, rawAnswer, normalizedAnswer);
+    }
+
+    /**
+     * Same as {@link #mergeAnswerIntoLedger(UnresolvedItemLedger, String, String, String, String)} with optional
+     * {@code coordinatorGapId} to locate the OPEN item when the ledger item id was cleared from session.
+     */
+    public static UnresolvedItemLedger mergeAnswerIntoLedger(
+            UnresolvedItemLedger ledger,
+            String ledgerItemId,
+            String questionFingerprint,
+            String coordinatorGapId,
+            String rawAnswer,
+            String normalizedAnswer) {
         UnresolvedItemLedger base = ledger != null ? ledger : UnresolvedItemLedger.empty();
         if (ledgerItemId != null && !ledgerItemId.isBlank()) {
             for (UnresolvedItem it : base.items()) {
                 if (it.getId().equals(ledgerItemId.trim())) {
                     return replaceMerged(base, it, rawAnswer, normalizedAnswer);
                 }
+            }
+        }
+        if (coordinatorGapId != null && !coordinatorGapId.isBlank()) {
+            Optional<UnresolvedItem> byGap = base.findOpenPlanningByGapId(coordinatorGapId);
+            if (byGap.isPresent()) {
+                return replaceMerged(base, byGap.get(), rawAnswer, normalizedAnswer);
             }
         }
         if (questionFingerprint != null && !questionFingerprint.isBlank()) {

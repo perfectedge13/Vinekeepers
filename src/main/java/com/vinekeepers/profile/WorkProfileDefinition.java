@@ -28,6 +28,8 @@ public final class WorkProfileDefinition {
     private final boolean inferBoundedChoiceFromOrInText;
     /** Substrings that must not appear in user-visible packet fields (declarative quality gate). */
     private final List<String> packetQualityForbiddenSubstrings;
+    /** Optional coordinator clarification gap model; absent in YAML implies {@link CoordinatorClarificationSettings#legacyDefault()}. */
+    private final CoordinatorClarificationSettings coordinatorClarification;
 
     public WorkProfileDefinition(String profileId, String title, List<ArtifactDefinition> artifacts) {
         this(profileId, title, artifacts, List.of(), false);
@@ -72,6 +74,26 @@ public final class WorkProfileDefinition {
             boolean boundedClarificationChoices,
             boolean inferBoundedChoiceFromOrInText,
             List<String> packetQualityForbiddenSubstrings) {
+        this(
+                profileId,
+                title,
+                artifacts,
+                readinessAnyOfGroups,
+                boundedClarificationChoices,
+                inferBoundedChoiceFromOrInText,
+                packetQualityForbiddenSubstrings,
+                CoordinatorClarificationSettings.legacyDefault());
+    }
+
+    public WorkProfileDefinition(
+            String profileId,
+            String title,
+            List<ArtifactDefinition> artifacts,
+            List<ReadinessAnyOfGroup> readinessAnyOfGroups,
+            boolean boundedClarificationChoices,
+            boolean inferBoundedChoiceFromOrInText,
+            List<String> packetQualityForbiddenSubstrings,
+            CoordinatorClarificationSettings coordinatorClarification) {
         this.profileId = Objects.requireNonNull(profileId, "profileId").trim();
         this.title = title != null ? title : "";
         Map<String, ArtifactDefinition> m = new LinkedHashMap<>();
@@ -86,6 +108,8 @@ public final class WorkProfileDefinition {
         this.inferBoundedChoiceFromOrInText = inferBoundedChoiceFromOrInText;
         this.packetQualityForbiddenSubstrings =
                 packetQualityForbiddenSubstrings != null ? List.copyOf(packetQualityForbiddenSubstrings) : List.of();
+        this.coordinatorClarification =
+                coordinatorClarification != null ? coordinatorClarification : CoordinatorClarificationSettings.legacyDefault();
     }
 
     public String getProfileId() {
@@ -130,6 +154,10 @@ public final class WorkProfileDefinition {
 
     public List<String> getPacketQualityForbiddenSubstrings() {
         return packetQualityForbiddenSubstrings;
+    }
+
+    public CoordinatorClarificationSettings getCoordinatorClarification() {
+        return coordinatorClarification;
     }
 
     public boolean hasDeclarativeReadiness() {

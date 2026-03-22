@@ -19,4 +19,12 @@ class WorkProfileLoaderTest {
         assertTrue(def.findSection("requirements_spec", "narrative").orElseThrow().getFields().stream()
                 .anyMatch(f -> "feature_summary".equals(f.getFieldId())));
     }
+
+    @Test
+    void softwareFeaturePlanningV2LoadsCanonicalCoordinatorClarification() {
+        WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        WorkProfileDefinition v2 = reg.get("software_feature_planning_v2").orElseThrow();
+        assertTrue(v2.getCoordinatorClarification().isCanonicalV1());
+        assertFalse(v2.getCoordinatorClarification().getGaps().isEmpty());
+    }
 }

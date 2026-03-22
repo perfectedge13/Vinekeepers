@@ -82,8 +82,50 @@ public final class WorkProfileLoader {
         boolean boundedChoices = parseBoundedClarificationChoices(raw.get("deliberation"));
         boolean inferOrHeuristic = parseInferBoundedChoiceFromOrInText(raw.get("deliberation"));
         List<String> forbidden = parsePacketQualityForbidden(raw.get("packetQuality"));
+        CoordinatorClarificationSettings coord = parseCoordinatorClarification(raw.get("coordinatorClarification"));
         return new WorkProfileDefinition(
-                profileId, title, artifacts, readiness, boundedChoices, inferOrHeuristic, forbidden);
+                profileId, title, artifacts, readiness, boundedChoices, inferOrHeuristic, forbidden, coord);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static CoordinatorClarificationSettings parseCoordinatorClarification(Object node) {
+        if (!(node instanceof Map<?, ?> cm)) {
+            return CoordinatorClarificationSettings.legacyDefault();
+        }
+        Map<String, Object> m = (Map<String, Object>) cm;
+        String modeStr = stringVal(m.get("mode"));
+        CoordinatorClarificationMode mode =
+                "canonical_v1".equalsIgnoreCase(modeStr) ? CoordinatorClarificationMode.CANONICAL_V1 : CoordinatorClarificationMode.LEGACY;
+        List<CoordinatorClarificationGapRule> gaps = new ArrayList<>();
+        Object gapsObj = m.get("gaps");
+        if (gapsObj instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> gm) {
+                    CoordinatorClarificationGapRule r = parseCoordinatorGap((Map<String, Object>) gm);
+                    if (r != null) {
+                        gaps.add(r);
+                    }
+                }
+            }
+        }
+        return new CoordinatorClarificationSettings(mode, gaps);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static CoordinatorClarificationGapRule parseCoordinatorGap(Map<String, Object> raw) {
+        if (raw == null) {
+            return null;
+        }
+        String id = stringVal(raw.get("id"));
+        if (id.isBlank()) {
+            return null;
+        }
+        boolean blocking = booleanVal(raw.get("blocking"));
+        String template = stringVal(raw.get("questionTemplate"));
+        List<String> hintAll = stringList(raw.get("hintDetectAllOf"));
+        List<String> canonOpen = stringList(raw.get("canonicalOpenAllOf"));
+        List<String> resolveAny = stringList(raw.get("resolveAnySubstring"));
+        return new CoordinatorClarificationGapRule(id, blocking, template, hintAll, canonOpen, resolveAny);
     }
 
     @SuppressWarnings("unchecked")

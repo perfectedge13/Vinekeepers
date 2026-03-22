@@ -124,6 +124,44 @@ profiles:
   software_feature_planning_v2:
     profileId: software_feature_planning_v2
     title: Software feature planning (v2)
+    coordinatorClarification:
+      mode: canonical_v1
+      gaps:
+        - id: config_vs_runtime_scope
+          blocking: false
+          questionTemplate: >-
+            Should this work stay **configuration/schema only** (YAML and config files), touch **runtime/bootstrap**
+            resolution in code, or **both**? Reply in plain text (e.g. "config only", "runtime too", or "both").
+          hintDetectAllOf:
+            - config
+            - runtime
+          resolveAnySubstring:
+            - config-driven
+            - config only
+            - configuration only
+            - yaml only
+            - runtime only
+            - both
+            - default: assume both
+            - decision (user
+            - coordinator clarification (user)
+        - id: config_runtime_specifics
+          blocking: false
+          questionTemplate: >-
+            You indicated both configuration and runtime may change — **where** should defaults live (repo YAML only,
+            environment overrides, or both)? Reply briefly in plain text.
+          hintDetectAllOf: []
+          canonicalOpenAllOf:
+            - both
+            - config
+            - runtime
+          resolveAnySubstring:
+            - yaml
+            - bootstrap
+            - env
+            - override
+            - .yaml
+            - environment
     # Declarative readiness: generic evaluator + supplemental workspace/validation checks in Java.
     readiness:
       anyOfGroups:

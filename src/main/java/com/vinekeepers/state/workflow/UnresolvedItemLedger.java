@@ -114,6 +114,29 @@ public final class UnresolvedItemLedger {
         return false;
     }
 
+    /**
+     * First OPEN planning_clarification item whose {@code source.gapId} matches (canonical coordinator gap correlation).
+     */
+    public Optional<UnresolvedItem> findOpenPlanningByGapId(String gapId) {
+        if (gapId == null || gapId.isBlank()) {
+            return Optional.empty();
+        }
+        String want = gapId.trim();
+        for (UnresolvedItem it : items) {
+            if (it.getStatus() != UnresolvedItemStatus.OPEN) {
+                continue;
+            }
+            if (!"planning_clarification".equals(it.getSource().get("channel"))) {
+                continue;
+            }
+            String g = it.getSource().get("gapId");
+            if (g != null && want.equals(g.trim())) {
+                return Optional.of(it);
+            }
+        }
+        return Optional.empty();
+    }
+
     /** First item in OPEN, ANSWERED, or BLOCKED with this normalized fingerprint, if any. */
     public Optional<UnresolvedItem> findActiveByFingerprint(String fingerprint) {
         if (fingerprint == null || fingerprint.isBlank()) {

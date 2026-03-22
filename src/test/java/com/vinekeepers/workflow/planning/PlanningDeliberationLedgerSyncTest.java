@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanningDeliberationLedgerSyncTest {
@@ -47,5 +48,57 @@ class PlanningDeliberationLedgerSyncTest {
         PlanningDeliberationLedgerSync.UpsertResult out =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, ranked);
         assertTrue(out.activeItemId().isEmpty());
+    }
+
+    @Test
+    void reconcileCancelsOpenPlanningWhenNoAllowedGaps() {
+        UnresolvedItem open =
+                new UnresolvedItem(
+                        "uq_x",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "Still there?",
+                        "normal",
+                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL, "gapId", "old_gap"),
+                        List.of(),
+                        List.of(),
+                        0);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(open);
+        UnresolvedItemLedger next = PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(ledger, java.util.Set.of());
+        long openCount =
+                next.items().stream()
+                        .filter(i -> i.getStatus() == UnresolvedItemStatus.OPEN)
+                        .count();
+        assertEquals(0, openCount);
+        assertTrue(
+                next.items().stream()
+                        .anyMatch(
+                                i -> i.getId().equals("uq_x")
+                                        && i.getStatus() == UnresolvedItemStatus.CANCELLED));
+    }
+
+    @Test
+    void upsertCanonicalGapUsesGapIdInSource() {
+        PlanningQuestionRankingPolicy.RankedClarification ranked =
+                new PlanningQuestionRankingPolicy.RankedClarification(
+                        true,
+                        "",
+                        "[]",
+                        "{\"questionText\":\"Q?\",\"gapId\":\"my_gap\"}",
+                        0,
+                        List.of(),
+                        false,
+                        "Q?");
+        PlanningDeliberationLedgerSync.UpsertResult out =
+                PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
+                        UnresolvedItemLedger.empty(), ranked, "my_gap", false);
+        assertTrue(out.activeItemId().isPresent());
+        UnresolvedItem it =
+                out.ledger().items().stream()
+                        .filter(i -> i.getId().equals(out.activeItemId().get()))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("my_gap", it.getSource().get("gapId"));
     }
 }

@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.workflow.UnresolvedItem;
@@ -12,8 +13,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Gap evaluation: open deliberation/clarification work is {@linkplain UnresolvedItemLedger ledger}-authoritative.
- * LLM ranking feeds upserts but does not alone decide {@code planningUserInputRequired}.
+ * Clarification gating: {@linkplain UnresolvedItemLedger ledger} OPEN items drive {@code planningUserInputRequired} after
+ * {@link PlanningDeliberationLedgerSync} upsert. In {@link com.vinekeepers.profile.CoordinatorClarificationMode#CANONICAL_V1},
+ * {@link #effectiveRanked} does not rehydrate questions from stale ledger rows — the pipeline reconciles OPEN items from
+ * canonical gap evaluation first.
  */
 public final class PlanningGapEvaluator {
 
@@ -60,7 +63,21 @@ public final class PlanningGapEvaluator {
             UnresolvedItemLedger ledgerAfterUpsert,
             RankedClarification rankedFromLlm,
             WorkProfileDefinition profile) {
+        CoordinatorClarificationSettings coord =
+                profile != null ? profile.getCoordinatorClarification() : CoordinatorClarificationSettings.legacyDefault();
+        return effectiveRanked(plan, ledgerAfterUpsert, rankedFromLlm, profile, coord);
+    }
+
+    public static RankedClarification effectiveRanked(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledgerAfterUpsert,
+            RankedClarification rankedFromLlm,
+            WorkProfileDefinition profile,
+            CoordinatorClarificationSettings coordinatorClarification) {
         if (ledgerAfterUpsert == null || rankedFromLlm == null) {
+            return rankedFromLlm;
+        }
+        if (coordinatorClarification != null && coordinatorClarification.isCanonicalV1()) {
             return rankedFromLlm;
         }
         if (!requiresUserInputForPlanningClarification(ledgerAfterUpsert)) {

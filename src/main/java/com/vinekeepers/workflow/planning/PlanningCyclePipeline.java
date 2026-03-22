@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.AssumptionEntry;
@@ -58,6 +59,11 @@ public final class PlanningCyclePipeline {
             String depthReason,
             String lastRoleRoundSummary,
             String lastSynthLlmLine) {}
+
+    private record ClarificationRoundOutcome(
+            FeaturePlanState plan,
+            RankedClarification rankedLlm,
+            PlanningDeliberationLedgerSync.UpsertResult upsert) {}
 
     private final OpenAiChatClient openAiChatClient;
     private final FeaturePlanStateStore planStateStore;
@@ -127,27 +133,16 @@ public final class PlanningCyclePipeline {
         spread.put("planningCycleSynthesisLlmNote", lastSynthLlmLine);
 
         plan = planStateStore.getByContextId(contextId).orElse(planPtr);
-        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
-        RankedClarification rankedLlm =
-                PlanningQuestionRankingPolicy.rank(
-                        plan,
-                        aggregatedFollowUps,
-                        3,
-                        ledger,
-                        profile.isBoundedClarificationChoicesEnabled(),
-                        profile.isInferBoundedChoiceFromOrInTextEnabled());
-        for (String assumption : rankedLlm.assumptionsToRecord()) {
-            plan = appendAssumption(plan, assumption);
-        }
-        planStateStore.update(plan);
-
-        PlanningDeliberationLedgerSync.UpsertResult upsert =
-                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
+        ClarificationRoundOutcome clr = resolveClarificationRound(contextId, plan, state, profile, aggregatedFollowUps);
+        plan = clr.plan();
+        RankedClarification rankedLlm = clr.rankedLlm();
+        PlanningDeliberationLedgerSync.UpsertResult upsert = clr.upsert();
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsert.ledger());
         spread.put("planningClarificationLedgerItemId", upsert.activeItemId().orElse(""));
 
+        CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
         RankedClarification ranked =
-                PlanningGapEvaluator.effectiveRanked(plan, upsert.ledger(), rankedLlm, profile);
+                PlanningGapEvaluator.effectiveRanked(plan, upsert.ledger(), rankedLlm, profile, coord);
         boolean userInputRequired = PlanningGapEvaluator.requiresUserInputForPlanningClarification(upsert.ledger());
 
         spread.put("planningQuestionsAskedThisRound", rankedLlm.userInputRequired() ? "1" : "0");
@@ -318,28 +313,18 @@ public final class PlanningCyclePipeline {
         spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
 
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
-        UnresolvedItemLedger ledgerFin = UnresolvedItemLedger.readFrom(state);
         WorkProfileDefinition profileFin = ctx.profile();
-        RankedClarification rankedLlmFin =
-                PlanningQuestionRankingPolicy.rank(
-                        plan,
-                        aggregatedFollowUps,
-                        3,
-                        ledgerFin,
-                        profileFin.isBoundedClarificationChoicesEnabled(),
-                        profileFin.isInferBoundedChoiceFromOrInTextEnabled());
-        for (String assumption : rankedLlmFin.assumptionsToRecord()) {
-            plan = appendAssumption(plan, assumption);
-        }
-        planStateStore.update(plan);
-
-        PlanningDeliberationLedgerSync.UpsertResult upsertFin =
-                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledgerFin, rankedLlmFin);
+        ClarificationRoundOutcome clrFin =
+                resolveClarificationRound(contextId, plan, state, profileFin, aggregatedFollowUps);
+        plan = clrFin.plan();
+        RankedClarification rankedLlmFin = clrFin.rankedLlm();
+        PlanningDeliberationLedgerSync.UpsertResult upsertFin = clrFin.upsert();
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsertFin.ledger());
         spread.put("planningClarificationLedgerItemId", upsertFin.activeItemId().orElse(""));
 
+        CoordinatorClarificationSettings coordFin = profileFin.getCoordinatorClarification();
         RankedClarification ranked =
-                PlanningGapEvaluator.effectiveRanked(plan, upsertFin.ledger(), rankedLlmFin, profileFin);
+                PlanningGapEvaluator.effectiveRanked(plan, upsertFin.ledger(), rankedLlmFin, profileFin, coordFin);
         boolean userInputRequired = PlanningGapEvaluator.requiresUserInputForPlanningClarification(upsertFin.ledger());
 
         spread.put("planningQuestionsAskedThisRound", rankedLlmFin.userInputRequired() ? "1" : "0");
@@ -419,6 +404,162 @@ public final class PlanningCyclePipeline {
         enrichUserCopyAndProgressLog(state, spread);
         finishProgressFingerprint(state, spread);
         return spread;
+    }
+
+    private ClarificationRoundOutcome resolveClarificationRound(
+            String contextId,
+            FeaturePlanState plan,
+            Map<String, Object> state,
+            WorkProfileDefinition profile,
+            List<String> aggregatedFollowUps) {
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
+        CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
+        RankedClarification rankedLlm;
+        if (coord.isCanonicalV1()) {
+            List<CoordinatorClarificationGapEvaluator.OpenGap> openA =
+                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
+            ledger =
+                    PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
+                            ledger, CoordinatorClarificationGapEvaluator.openGapIds(openA));
+            if (openA.isEmpty()) {
+                rankedLlm = emptyRankedClarification();
+            } else {
+                CoordinatorClarificationGapEvaluator.OpenGap top = openA.get(0);
+                rankedLlm =
+                        PlanningQuestionRankingPolicy.rank(
+                                plan,
+                                List.of(top.questionText()),
+                                3,
+                                ledger,
+                                profile.isBoundedClarificationChoicesEnabled(),
+                                profile.isInferBoundedChoiceFromOrInTextEnabled());
+                rankedLlm = withCoordinatorGapMeta(rankedLlm, top.gapId(), top.blocking());
+            }
+            for (String assumption : rankedLlm.assumptionsToRecord()) {
+                plan = appendAssumption(plan, assumption);
+            }
+            planStateStore.update(plan);
+            plan = planStateStore.getByContextId(contextId).orElse(plan);
+
+            List<CoordinatorClarificationGapEvaluator.OpenGap> openB =
+                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
+            ledger =
+                    PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
+                            ledger, CoordinatorClarificationGapEvaluator.openGapIds(openB));
+            if (openB.isEmpty()) {
+                rankedLlm = emptyRankedClarification();
+            } else {
+                CoordinatorClarificationGapEvaluator.OpenGap top = openB.get(0);
+                rankedLlm =
+                        PlanningQuestionRankingPolicy.rank(
+                                plan,
+                                List.of(top.questionText()),
+                                3,
+                                ledger,
+                                profile.isBoundedClarificationChoicesEnabled(),
+                                profile.isInferBoundedChoiceFromOrInTextEnabled());
+                rankedLlm = withCoordinatorGapMeta(rankedLlm, top.gapId(), top.blocking());
+            }
+            for (String assumption : rankedLlm.assumptionsToRecord()) {
+                plan = appendAssumption(plan, assumption);
+            }
+            planStateStore.update(plan);
+            plan = planStateStore.getByContextId(contextId).orElse(plan);
+
+            List<CoordinatorClarificationGapEvaluator.OpenGap> openFinal =
+                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
+            ledger =
+                    PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
+                            ledger, CoordinatorClarificationGapEvaluator.openGapIds(openFinal));
+            if (openFinal.isEmpty()) {
+                rankedLlm = emptyRankedClarification();
+            } else {
+                CoordinatorClarificationGapEvaluator.OpenGap top = openFinal.get(0);
+                rankedLlm =
+                        PlanningQuestionRankingPolicy.rank(
+                                plan,
+                                List.of(top.questionText()),
+                                3,
+                                ledger,
+                                profile.isBoundedClarificationChoicesEnabled(),
+                                profile.isInferBoundedChoiceFromOrInTextEnabled());
+                rankedLlm = withCoordinatorGapMeta(rankedLlm, top.gapId(), top.blocking());
+            }
+            PlanningDeliberationLedgerSync.UpsertResult upsert;
+            if (openFinal.isEmpty()) {
+                upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
+            } else {
+                CoordinatorClarificationGapEvaluator.OpenGap top = openFinal.get(0);
+                upsert =
+                        PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
+                                ledger, rankedLlm, top.gapId(), top.blocking());
+            }
+            return new ClarificationRoundOutcome(plan, rankedLlm, upsert);
+        }
+        rankedLlm =
+                PlanningQuestionRankingPolicy.rank(
+                        plan,
+                        aggregatedFollowUps,
+                        3,
+                        ledger,
+                        profile.isBoundedClarificationChoicesEnabled(),
+                        profile.isInferBoundedChoiceFromOrInTextEnabled());
+        for (String assumption : rankedLlm.assumptionsToRecord()) {
+            plan = appendAssumption(plan, assumption);
+        }
+        planStateStore.update(plan);
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
+        PlanningDeliberationLedgerSync.UpsertResult upsert =
+                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
+        return new ClarificationRoundOutcome(plan, rankedLlm, upsert);
+    }
+
+    private static RankedClarification emptyRankedClarification() {
+        return new RankedClarification(false, "", "[]", "{}", 0, List.of(), false, "");
+    }
+
+    private static RankedClarification withCoordinatorGapMeta(
+            RankedClarification ranked, String gapId, boolean gapRuleBlocking) {
+        if (ranked == null) {
+            return emptyRankedClarification();
+        }
+        int blocking =
+                gapRuleBlocking
+                        ? Math.max(1, ranked.blockingQuestionCount())
+                        : ranked.blockingQuestionCount();
+        if (gapId == null || gapId.isBlank()) {
+            if (blocking != ranked.blockingQuestionCount()) {
+                return new RankedClarification(
+                        ranked.userInputRequired(),
+                        ranked.orchestratorPrompt(),
+                        ranked.choicesJson(),
+                        ranked.metaJson(),
+                        blocking,
+                        ranked.assumptionsToRecord(),
+                        ranked.useStructuredChoices(),
+                        ranked.questionText());
+            }
+            return ranked;
+        }
+        try {
+            Map<String, Object> meta =
+                    ranked.metaJson() == null || ranked.metaJson().isBlank()
+                            ? new LinkedHashMap<>()
+                            : JSON.readValue(ranked.metaJson(), new TypeReference<>() {});
+            meta.put("gapId", gapId.trim());
+            String metaJson = JSON.writeValueAsString(meta);
+            return new RankedClarification(
+                    ranked.userInputRequired(),
+                    ranked.orchestratorPrompt(),
+                    ranked.choicesJson(),
+                    metaJson,
+                    blocking,
+                    ranked.assumptionsToRecord(),
+                    ranked.useStructuredChoices(),
+                    ranked.questionText());
+        } catch (JsonProcessingException e) {
+            return ranked;
+        }
     }
 
     private LoadedCycle loadCycleOrAbort(

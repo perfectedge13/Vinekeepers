@@ -353,8 +353,10 @@ assets:
       filtering; optional selective rerun after merge (skips expansion, one inner round); ConfigurablePassRunner resolves
       architect/auditor/scribe order from planningRolePassOrder bind; sets planningPhase READY_FOR_REVIEW when draft is
       review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
-      derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; uses PlanningGapEvaluator for
-      ledger-backed planningUserInputRequired and effective RankedClarification when OPEN ledger items persist across cycles
+      derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
+      mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts;
+      legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering; PlanningGapEvaluator effectiveRanked
+      skips ledger rehydration in canonical_v1 mode
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -363,8 +365,20 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningGapEvaluator.java
     role: >-
-      Ledger-first gap evaluation: requiresUserInputForPlanningClarification reads OPEN planning_clarification items;
-      effectiveRanked rehydrates UI fields from the ledger when the LLM ranker returns no question for the cycle
+      Clarification gating after PlanningDeliberationLedgerSync upsert: requiresUserInputForPlanningClarification reflects OPEN
+      planning_clarification items; effectiveRanked rehydrates from the ledger in legacy mode only; CANONICAL_V1 coordinator
+      profiles skip rehydration so stale OPEN rows cannot resurrect questions after CoordinatorClarificationGapEvaluator reconcile
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-COORDINATOR-CLARIFICATION-GAP-EVALUATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/CoordinatorClarificationGapEvaluator.java
+    role: >-
+      Profile-driven open gaps for coordinator clarification (canonical_v1): scans assumptions, request_exploration, and
+      decision_log text; LLM follow-up lines trigger gaps via hintDetectAllOf; optional canonicalOpenAllOf for narrower follow-ups;
+      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -2027,8 +2041,9 @@ requirements:
       WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
-      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; PlanningGapEvaluator makes OPEN ledger items
-      authoritative for planningUserInputRequired; PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
+      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; OPEN ledger items after upsert drive
+      planningUserInputRequired; canonical_v1 profiles reconcile OPEN items from profile coordinatorClarification gaps before upsert;
+      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
     status: active
     priority: high
     type: functional
