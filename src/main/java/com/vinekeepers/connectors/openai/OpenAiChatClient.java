@@ -134,8 +134,10 @@ public final class OpenAiChatClient {
             }
             return content;
         } catch (Exception e) {
-            log.warn("OpenAI request failed: {}", e.getMessage());
-            return "ERROR: " + (e.getMessage() != null ? e.getMessage() : "request failed");
+            log.warn("OpenAI request failed: {} — {}", e.getClass().getName(), formatExceptionChain(e));
+            String detail =
+                    e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
+            return "ERROR: " + detail;
         }
     }
 
@@ -153,5 +155,23 @@ public final class OpenAiChatClient {
             return s;
         }
         return s.substring(0, max) + "…";
+    }
+
+    private static String formatExceptionChain(Throwable t) {
+        if (t == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        int depth = 0;
+        for (Throwable c = t; c != null && depth < 5; c = c.getCause(), depth++) {
+            if (depth > 0) {
+                sb.append(" | caused by: ");
+            }
+            sb.append(c.getClass().getSimpleName());
+            if (c.getMessage() != null && !c.getMessage().isBlank()) {
+                sb.append(": ").append(truncate(c.getMessage(), 200));
+            }
+        }
+        return sb.toString();
     }
 }

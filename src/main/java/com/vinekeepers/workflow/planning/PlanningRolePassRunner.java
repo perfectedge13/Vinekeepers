@@ -51,8 +51,9 @@ public final class PlanningRolePassRunner {
         try {
             raw = client.complete(system, user);
         } catch (Exception e) {
-            log.warn("{} pass failed: {}", role, e.getMessage());
-            return new RolePassResult(0, List.of(), e.getMessage() != null ? e.getMessage() : "llm failed", false);
+            log.warn("{} pass failed: {} — {}", role, e.getClass().getName(), chainBrief(e));
+            String msg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
+            return new RolePassResult(0, List.of(), msg, false);
         }
         if (raw.startsWith("ERROR:")) {
             return new RolePassResult(0, List.of(), raw, false);
@@ -136,5 +137,23 @@ public final class PlanningRolePassRunner {
                 case SCRIBE -> "Make the packet readable and internally consistent.";
             };
         }
+    }
+
+    private static String chainBrief(Throwable t) {
+        if (t == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        int depth = 0;
+        for (Throwable c = t; c != null && depth < 5; c = c.getCause(), depth++) {
+            if (depth > 0) {
+                sb.append(" | ");
+            }
+            sb.append(c.getClass().getSimpleName());
+            if (c.getMessage() != null && !c.getMessage().isBlank()) {
+                sb.append(": ").append(c.getMessage());
+            }
+        }
+        return sb.toString();
     }
 }

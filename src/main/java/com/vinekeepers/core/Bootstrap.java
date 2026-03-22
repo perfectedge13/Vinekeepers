@@ -83,6 +83,7 @@ import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
 import com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
+import com.vinekeepers.workflow.actions.PostPlanningProgressIfChangedAction;
 import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
 import com.vinekeepers.workflow.actions.RunArchitectPlanningPassAction;
 import com.vinekeepers.workflow.actions.RunAuditorPlanningPassAction;
@@ -266,7 +267,10 @@ public final class Bootstrap {
             actionRegistry.register("create_channel", new CreateChannelAction(spaceOperationsRegistry));
             actionRegistry.register("create_thread", new CreateThreadAction(spaceOperationsRegistry));
         }
-        actionRegistry.register("post_channel_message", new PostChannelMessageAction(outboundDeliveryRouter));
+        PostChannelMessageAction postChannelMessageAction = new PostChannelMessageAction(outboundDeliveryRouter);
+        actionRegistry.register("post_channel_message", postChannelMessageAction);
+        actionRegistry.register(
+                "post_planning_progress_if_changed", new PostPlanningProgressIfChangedAction(postChannelMessageAction));
         return this;
     }
 

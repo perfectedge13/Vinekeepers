@@ -51,9 +51,10 @@ class ExecutePlanningRoomCycleActionSummaryTest {
         assertTrue(ranked.userInputRequired());
         String summary =
                 ExecutePlanningRoomCycleAction.buildOrchestratorSummary(
-                        plan, true, "", ranked, 1, false);
+                        plan, true, "", ranked, 1, false, false, "");
         assertTrue(summary.contains("exponential backoff"));
-        assertTrue(summary.contains("What happens next"));
+        assertTrue(summary.contains("Next I'll"));
+        assertTrue(summary.contains("Here's my current understanding"));
         assertTrue(summary.contains("plain text"));
         assertFalse(ranked.useStructuredChoices());
     }

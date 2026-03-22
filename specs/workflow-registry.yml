@@ -86,7 +86,7 @@ assets:
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, spread_plan_workspace_signals,
       evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
-      merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
+      post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
@@ -719,6 +719,19 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-POST-PLANNING-PROGRESS-IF-CHANGED-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PostPlanningProgressIfChangedAction.java
+    role: >-
+      Workflow action post_planning_progress_if_changed — when planningProgressPostWorthy is true, delegates to
+      post_channel_message (same bind); on OK updates planningLastProgressPostHash from planningProgressPostFingerprint;
+      otherwise spreads planningProgressPostSkipped true without sending (idempotent progress line vs prior hash)
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/ProvisionRoomParticipantsAction.java
@@ -1138,7 +1151,9 @@ assets:
       vs at most one clarification round;       storeSpread planningPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
       planningClarificationChoicesJson/MetaJson, planningClarificationUseStructuredChoices, planningClarificationQuestionText,
       planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningCycleProgressSummary, planningReadyToPostPacket,
-      planningRoomCycleIteration, etc.
+      planningRoomCycleIteration, planningProgressPostWorthy, planningProgressPostFingerprint, planningCycleRolePassSummary,
+      planningClarificationStuck, planningClarificationStuckHint, planningPreviousClarificationQuestionText (from merge),
+      planningCycleUserVisibleFailure, etc.
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1150,7 +1165,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/MergePlanningClarificationChoiceAction.java
     role: >-
       Workflow action merge_planning_clarification_choice — applies planningClarificationRaw to assumptions and decision_log;
-      clears planningClarificationChoicesJson; sets planningUserInputRequired false; spreads planningClarificationMergeOk true on success
+      clears planningClarificationChoicesJson; sets planningUserInputRequired false; on success spreads planningPreviousClarificationQuestionText
+      (normalized) and resets planningClarificationRepeatCount; spreads planningClarificationMergeOk true on success
       and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE)
     requires:
       - REQ-WORKFLOW-001
@@ -1398,7 +1414,7 @@ requirements:
         - >-
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, spread_plan_workspace_signals,
           evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
-          merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
+          post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
           resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
@@ -1483,6 +1499,7 @@ requirements:
         - ASSET-CREATE-CHANNEL-ACTION
         - ASSET-EXPLICIT-BOT-SENDER
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
+        - ASSET-POST-PLANNING-PROGRESS-IF-CHANGED-ACTION
         - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
         - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
         - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
@@ -1889,6 +1906,7 @@ requirements:
         - ASSET-CREATE-CHANNEL-ACTION
         - ASSET-EXPLICIT-BOT-SENDER
         - ASSET-POST-CHANNEL-MESSAGE-ACTION
+        - ASSET-POST-PLANNING-PROGRESS-IF-CHANGED-ACTION
         - ASSET-PROVISION-BOT-INSTANCE-ACTION
         - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION
         - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
@@ -2384,6 +2402,7 @@ features:
       - ASSET-CREATE-CHANNEL-ACTION
       - ASSET-EXPLICIT-BOT-SENDER
       - ASSET-POST-CHANNEL-MESSAGE-ACTION
+      - ASSET-POST-PLANNING-PROGRESS-IF-CHANGED-ACTION
       - ASSET-PROVISION-ROOM-PARTICIPANTS-ACTION
       - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
       - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION

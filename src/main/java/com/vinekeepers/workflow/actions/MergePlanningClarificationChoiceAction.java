@@ -126,6 +126,15 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             spread.put("planningPhase", "REVISING");
             spread.put("planningClarificationRaw", "");
             spread.put("planningClarificationMergeOk", "true");
+            spread.put("planningClarificationRepeatCount", "0");
+            String qForPrev =
+                    !q.isBlank()
+                            ? q
+                            : firstNonBlank(
+                                    getString(state, "planningClarificationQuestionText"), "");
+            spread.put(
+                    "planningPreviousClarificationQuestionText",
+                    ExecutePlanningRoomCycleAction.normalizeClarificationQuestion(qForPrev));
             return spread;
         } catch (Exception e) {
             spread.put("planningClarificationMergeError", e.getMessage() != null ? e.getMessage() : "merge failed");

@@ -18,6 +18,9 @@ import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,16 +55,19 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         Map<String, Object> spread = baseSpread();
         if (planStateStore == null || workProfileRegistry == null) {
             spread.put("planningRoomCycleError", "MISSING_DEPS");
+            finishProgressFingerprint(state, spread);
             return spread;
         }
         String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
         if (contextId == null || contextId.isBlank()) {
             spread.put("planningRoomCycleError", "NO_CONTEXT");
+            finishProgressFingerprint(state, spread);
             return spread;
         }
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
         if (plan == null) {
             spread.put("planningRoomCycleError", "NO_PLAN");
+            finishProgressFingerprint(state, spread);
             return spread;
         }
         String profileId = plan.getProfileId();
@@ -70,6 +76,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
                 : null;
         if (profile == null || profile.findSection("request_exploration", "analysis").isEmpty()) {
             spread.put("planningRoomCycleError", "PROFILE_NOT_V2");
+            finishProgressFingerprint(state, spread);
             return spread;
         }
 
@@ -86,27 +93,28 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         Object expansionObj = new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry)
                 .run(event, work, bind);
         if (expansionObj instanceof Map<?, ?> expMap) {
-            for (Map.Entry<?, ?> e : expMap.entrySet()) {
-                if (e.getKey() != null) {
-                    work.put(e.getKey().toString(), e.getValue());
-                    spread.put(e.getKey().toString(), e.getValue());
-                }
-            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> exp = (Map<String, Object>) expMap;
+            mergeSpreadIntoWorkAndOuter(exp, work, spread);
         }
         mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
 
         new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
         String depthReason = "";
         boolean depthOk = false;
+        String lastRoleRoundSummary = "";
+        String lastSynthLlmLine = "";
 
         for (int inner = 0; inner < MAX_BOT_INNER_ROUNDS; inner++) {
             spread.put("planningPhase", "DRAFTING");
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.ARCHITECT, plan, profile, event, work, spread, aggregatedFollowUps);
+            List<String> roleTags = new ArrayList<>();
+            runRole(PlanningRole.ARCHITECT, plan, profile, event, work, spread, aggregatedFollowUps, roleTags);
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.AUDITOR, plan, profile, event, work, spread, aggregatedFollowUps);
+            runRole(PlanningRole.AUDITOR, plan, profile, event, work, spread, aggregatedFollowUps, roleTags);
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.SCRIBE, plan, profile, event, work, spread, aggregatedFollowUps);
+            runRole(PlanningRole.SCRIBE, plan, profile, event, work, spread, aggregatedFollowUps, roleTags);
+            lastRoleRoundSummary = summarizeRoleRound(roleTags);
 
             new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
 
@@ -116,7 +124,9 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
             @SuppressWarnings("unchecked")
             Map<String, Object> synthSpread =
                     synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-            mergeSynthFollowUps(synthSpread, aggregatedFollowUps);
+            mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
+            mergeSynthFollowUps(spread, aggregatedFollowUps);
+            lastSynthLlmLine = pickSynthLlmLine(synthSpread, lastSynthLlmLine);
 
             new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
 
@@ -131,6 +141,9 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
                 break;
             }
         }
+
+        spread.put("planningCycleRolePassSummary", lastRoleRoundSummary);
+        spread.put("planningCycleSynthesisLlmNote", lastSynthLlmLine);
 
         plan = planStateStore.getByContextId(contextId).orElse(plan);
         RankedClarification ranked = PlanningQuestionRankingPolicy.rank(plan, aggregatedFollowUps, 3);
@@ -150,31 +163,144 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
                 "planningClarificationOrchestratorPrompt",
                 ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
         boolean readyToPost = depthOk && !ranked.userInputRequired();
+        applyClarificationStuck(state, spread, ranked);
+
+        boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
+        String stuckHint = getString(spread, "planningClarificationStuckHint");
         spread.put(
                 "planningOrchestratorRoundSummary",
-                buildOrchestratorSummary(plan, depthOk, depthReason, ranked, cycleIteration, readyToPost));
+                buildOrchestratorSummary(
+                        plan,
+                        depthOk,
+                        depthReason,
+                        ranked,
+                        cycleIteration,
+                        readyToPost,
+                        clarificationStuck,
+                        stuckHint != null ? stuckHint : ""));
         spread.put(
                 "planningRevisionNeeded",
                 (!depthOk || ranked.userInputRequired()) ? "true" : "false");
 
         spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
-        spread.put("planningPhase", ranked.userInputRequired() ? "WAITING_FOR_CLARIFICATION" : (readyToPost ? "READY_FOR_APPROVAL" : "REVISING"));
+        spread.put(
+                "planningPhase",
+                ranked.userInputRequired()
+                        ? "WAITING_FOR_CLARIFICATION"
+                        : (readyToPost ? "READY_FOR_APPROVAL" : "REVISING"));
         spread.put("planningAssumptionsUsed", String.valueOf(ranked.assumptionsToRecord().size()));
 
         if (!readyToPost && !ranked.userInputRequired() && cycleIteration >= 4) {
             spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
+        String rolePassErr =
+                spread.get("planningRolePassLastError") != null
+                        ? spread.get("planningRolePassLastError").toString()
+                        : "";
+        String llmErr = firstNonBlank(getString(spread, "planningLlmError"), "");
+        spread.put(
+                "planningCycleUserVisibleFailure",
+                buildUserVisibleFailure(
+                        spread.get("planningRoomCycleError") != null
+                                ? spread.get("planningRoomCycleError").toString()
+                                : "",
+                        llmErr));
+
         spread.put(
                 "planningCycleProgressSummary",
                 buildCycleProgressSummary(
+                        cycleIteration,
                         depthOk,
                         depthReason,
                         ranked,
-                        spread.get("planningRoomCycleError") != null ? spread.get("planningRoomCycleError").toString() : "",
-                        spread.get("planningRolePassLastError") != null
-                                ? spread.get("planningRolePassLastError").toString()
-                                : ""));
+                        spread.get("planningRoomCycleError") != null
+                                ? spread.get("planningRoomCycleError").toString()
+                                : "",
+                        rolePassErr,
+                        lastRoleRoundSummary,
+                        lastSynthLlmLine,
+                        llmErr,
+                        getString(spread, "planningExpansionFallbackUsed"),
+                        getString(spread, "planningLlmSkipReason")));
+
+        finishProgressFingerprint(state, spread);
         return spread;
+    }
+
+    private static void mergeSpreadIntoWorkAndOuter(
+            Map<String, Object> from, Map<String, Object> work, Map<String, Object> spread) {
+        if (from == null) {
+            return;
+        }
+        for (Map.Entry<String, Object> e : from.entrySet()) {
+            if (e.getKey() == null) {
+                continue;
+            }
+            String k = e.getKey().toString();
+            work.put(k, e.getValue());
+            spread.put(k, e.getValue());
+        }
+    }
+
+    private static void finishProgressFingerprint(Map<String, Object> state, Map<String, Object> spread) {
+        String summary =
+                spread.get("planningCycleProgressSummary") != null
+                        ? spread.get("planningCycleProgressSummary").toString()
+                        : "";
+        String fullForHash = normalizeProgressPostBody("**Planning cycle** — " + summary);
+        String fp = sha256Hex(fullForHash);
+        spread.put("planningProgressPostFingerprint", fp);
+        String last = state != null ? getString(state, "planningLastProgressPostHash") : null;
+        boolean worthy = last == null || last.isBlank() || !fp.equals(last.trim());
+        spread.put("planningProgressPostWorthy", worthy ? "true" : "false");
+    }
+
+    private static String buildUserVisibleFailure(String cycleError, String planningLlmError) {
+        StringBuilder sb = new StringBuilder();
+        if (cycleError != null && !cycleError.isBlank()) {
+            sb.append(truncateOneLine(cycleError, 200));
+        }
+        if (planningLlmError != null && !planningLlmError.isBlank()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(truncateOneLine(planningLlmError, 200));
+        }
+        return sb.toString().trim();
+    }
+
+    private static void applyClarificationStuck(
+            Map<String, Object> state, Map<String, Object> spread, RankedClarification ranked) {
+        String prevQ = normalizeClarificationQuestion(getString(state, "planningPreviousClarificationQuestionText"));
+        String currQ = normalizeClarificationQuestion(ranked.questionText());
+        boolean sameAsPrev = ranked.userInputRequired() && !prevQ.isEmpty() && currQ.equals(prevQ);
+        int prevCount = parseInt(getString(state, "planningClarificationRepeatCount"), 0);
+        int newCount = sameAsPrev ? prevCount + 1 : 0;
+        spread.put("planningClarificationRepeatCount", String.valueOf(newCount));
+        boolean stuck = sameAsPrev && newCount >= 1;
+        spread.put("planningClarificationStuck", stuck ? "true" : "false");
+        spread.put(
+                "planningClarificationStuckHint",
+                stuck
+                        ? "We already recorded your answer, but the draft still surfaces the same blocking question. "
+                                + "Reply with a concrete example or constraint, use **Use recommended default** if shown, "
+                                + "or use the coordinator menu to add scope or reframe the request."
+                        : "");
+    }
+
+    private static String pickSynthLlmLine(Map<String, Object> synthSpread, String previous) {
+        if (synthSpread == null) {
+            return previous;
+        }
+        String err = getString(synthSpread, "planningLlmError");
+        if (err != null && !err.isBlank()) {
+            return truncateOneLine(err, 140);
+        }
+        String skip = getString(synthSpread, "planningLlmSkipReason");
+        if (skip != null && !skip.isBlank() && !"OK".equalsIgnoreCase(skip)) {
+            return "Synthesis skipped: " + truncateOneLine(skip, 120);
+        }
+        return previous;
     }
 
     private static void mergeExpansionFollowUpsFromWork(Map<String, Object> work, List<String> aggregated) {
@@ -224,16 +350,64 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
             Event event,
             Map<String, Object> state,
             Map<String, Object> spread,
-            List<String> aggregatedFollowUps) {
+            List<String> aggregatedFollowUps,
+            List<String> roleRoundTags) {
         spread.put("planningPhase", "CRITIQUING");
-        RolePassResult r = PlanningRolePassRunner.run(
-                role, openAiChatClient, plan, profile, event, state, planStateStore, workProfileRegistry);
+        RolePassResult r =
+                PlanningRolePassRunner.run(
+                        role, openAiChatClient, plan, profile, event, state, planStateStore, workProfileRegistry);
         if (!r.followUps().isEmpty()) {
             aggregatedFollowUps.addAll(r.followUps());
         }
-        if (r.error() != null && !r.error().isBlank() && !r.skipped()) {
+        String label = roleUserLabel(role);
+        if (r.skipped() && "NO_API_KEY".equals(r.error())) {
+            roleRoundTags.add("SKIP_NO_KEY");
+            spread.put("planningRolePassLastError", label + ": skipped (no API key)");
+        } else if (r.skipped()) {
+            String reason = r.error() != null ? r.error() : "skipped";
+            roleRoundTags.add("SKIP_OTHER:" + label + ": " + truncateOneLine(reason, 80));
+            spread.put("planningRolePassLastError", label + ": skipped (" + truncateOneLine(reason, 100) + ")");
+        } else if (r.error() != null && !r.error().isBlank()) {
             spread.put("planningRolePassLastError", role.name() + ": " + r.error());
+            roleRoundTags.add("ERR:" + label + ": " + truncateOneLine(r.error(), 100));
+        } else {
+            roleRoundTags.add("OK:" + label);
         }
+    }
+
+    private static String summarizeRoleRound(List<String> tags) {
+        String[] labels = {"Architect", "Auditor", "Scribe"};
+        if (tags == null || tags.isEmpty()) {
+            return "Role passes not run.";
+        }
+        if (tags.size() == 3 && tags.stream().allMatch("SKIP_NO_KEY"::equals)) {
+            return "Architect, Auditor, and Scribe passes skipped (OpenAI API key not configured).";
+        }
+        List<String> parts = new ArrayList<>();
+        for (int i = 0; i < tags.size(); i++) {
+            String t = tags.get(i);
+            String who = i < labels.length ? labels[i] : "Role";
+            if ("SKIP_NO_KEY".equals(t)) {
+                parts.add(who + " skipped (no API key)");
+            } else if (t != null && t.startsWith("SKIP_OTHER:")) {
+                parts.add(t.substring("SKIP_OTHER:".length()).trim());
+            } else if (t != null && t.startsWith("ERR:")) {
+                parts.add(t.substring(4).trim());
+            } else if (t != null && t.startsWith("OK:")) {
+                parts.add(who + " ok");
+            } else {
+                parts.add(t != null ? t : who);
+            }
+        }
+        return String.join("; ", parts);
+    }
+
+    private static String roleUserLabel(PlanningRole role) {
+        return switch (role) {
+            case ARCHITECT -> "Architect";
+            case AUDITOR -> "Auditor";
+            case SCRIBE -> "Scribe";
+        };
     }
 
     private static FeaturePlanState appendAssumption(FeaturePlanState plan, String text) {
@@ -248,18 +422,38 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
      * One short line for thread progress posts after a planning cycle (plain English).
      */
     private static String buildCycleProgressSummary(
+            int cycleIteration,
             boolean depthOk,
             String depthReason,
             RankedClarification ranked,
             String cycleError,
-            String rolePassError) {
+            String rolePassError,
+            String roleRoundSummary,
+            String synthesisNote,
+            String planningLlmError,
+            String expansionFallbackUsed,
+            String planningLlmSkipReason) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Ran architect, auditor, and scribe passes; expanded drafts and synthesis. ");
+        sb.append("**Round ").append(cycleIteration).append(":** ");
+        sb.append(roleRoundSummary != null ? roleRoundSummary : "").append(' ');
+        if (synthesisNote != null && !synthesisNote.isBlank()) {
+            sb.append("Synthesis: ").append(truncateOneLine(synthesisNote, 120)).append(' ');
+        }
+        if ("true".equalsIgnoreCase(expansionFallbackUsed)) {
+            sb.append("Exploration expansion used deterministic fallback. ");
+        }
         if (rolePassError != null && !rolePassError.isBlank()) {
-            sb.append("Note: ").append(truncateOneLine(rolePassError, 120)).append(" ");
+            sb.append("Pass note: ").append(truncateOneLine(rolePassError, 120)).append(' ');
+        }
+        if (planningLlmError != null && planningLlmError.startsWith("ERROR:")) {
+            sb.append("LLM: ").append(truncateOneLine(planningLlmError, 120)).append(' ');
+        } else if (planningLlmSkipReason != null
+                && !planningLlmSkipReason.isBlank()
+                && !"MISSING_DEPS".equals(planningLlmSkipReason)) {
+            sb.append("Synthesis skip: ").append(truncateOneLine(planningLlmSkipReason, 100)).append(' ');
         }
         if (ranked.userInputRequired()) {
-            sb.append("A clarification is needed before posting the packet.");
+            sb.append("I need one answer before I can finish the draft and post the packet.");
         } else if (depthOk) {
             sb.append("Depth check passed.");
         } else {
@@ -289,13 +483,18 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
             String depthReason,
             RankedClarification ranked,
             int cycleIteration,
-            boolean readyToPostPacket) {
+            boolean readyToPostPacket,
+            boolean clarificationStuck,
+            String stuckHint) {
         String req = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         String gist = req.length() > 200 ? req.substring(0, 199) + "…" : req;
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
         StringBuilder sb = new StringBuilder();
+        if (clarificationStuck && stuckHint != null && !stuckHint.isBlank()) {
+            sb.append("**Heads up:** ").append(stuckHint).append("\n\n");
+        }
         sb.append("**Planning round ").append(cycleIteration).append("**\n\n");
-        sb.append("**What we're working from:** ");
+        sb.append("**Here's my current understanding:** ");
         if (gist.isBlank()) {
             sb.append("Your feature request from this thread (no separate summary text on file).");
         } else {
@@ -303,7 +502,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         }
         sb.append(workspaceSummaryLine(plan));
 
-        sb.append("\n\n**Draft status:** ");
+        sb.append("\n\n**Where the draft stands:** ");
         if (ranked.userInputRequired()) {
             sb.append(
                     "The coordinator passes have run on the current draft, but we are **not** posting the planning packet yet until we resolve the clarification below.");
@@ -316,7 +515,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
             sb.append("We will retry automatically inside this round or ask you only when something needs a human decision.");
         }
         if (!arch.isBlank()) {
-            sb.append("\n\n**Likely touchpoints:** ")
+            sb.append("\n\n**I think this will mainly touch:** ")
                     .append(arch.length() > 200 ? arch.substring(0, 199) + "…" : arch);
         }
 
@@ -329,7 +528,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
 
         if (ranked.userInputRequired()) {
             String q = ranked.questionText() != null ? ranked.questionText().trim() : "";
-            sb.append("\n**Clarification**\n\n");
+            sb.append("\n**I need one answer before I can finish the draft:**\n\n");
             if (!q.isBlank()) {
                 sb.append(q).append("\n\n");
             }
@@ -342,7 +541,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
                         "This shapes scope and design choices in the packet so implementation matches what you expect.\n\n");
             }
             sb.append(
-                    "**What happens next:** After you answer, we refresh the draft, re-run depth checks, update the planning packet in this thread when ready, and run critique/readiness again **before** any approval step.\n");
+                    "**Next I'll:** refresh exploration, run the three coordinator passes, check depth, then post the packet or ask again if something is still ambiguous.\n");
             if (ranked.useStructuredChoices()) {
                 sb.append(
                         "\nChoose an option below, or pick **Use recommended default** to record our baseline and continue.");
@@ -377,6 +576,35 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         return w.toString();
     }
 
+    static String normalizeClarificationQuestion(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.toLowerCase().replaceAll("\\s+", " ").trim();
+        return t.replaceAll("[^a-z0-9?\\s]", "");
+    }
+
+    private static String normalizeProgressPostBody(String full) {
+        if (full == null) {
+            return "";
+        }
+        return full.replace("\r\n", "\n").trim();
+    }
+
+    private static String sha256Hex(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] dig = md.digest(text.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(dig.length * 2);
+            for (byte b : dig) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static Map<String, Object> baseSpread() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("planningRoomCycleError", "");
@@ -398,6 +626,16 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         m.put("planningClarificationQuestionText", "");
         m.put("planningClarificationOrchestratorPrompt", "");
         m.put("planningCycleProgressSummary", "");
+        m.put("planningProgressPostWorthy", "true");
+        m.put("planningProgressPostFingerprint", "");
+        m.put("planningClarificationStuck", "false");
+        m.put("planningClarificationStuckHint", "");
+        m.put("planningClarificationRepeatCount", "0");
+        m.put("planningCycleRolePassSummary", "");
+        m.put("planningCycleSynthesisLlmNote", "");
+        m.put("planningCycleUserVisibleFailure", "");
+        m.put("planningLlmError", "");
+        m.put("planningLlmSkipReason", "");
         return m;
     }
 
