@@ -17,7 +17,7 @@ public final class WorkflowV2Loader {
     @SuppressWarnings("unchecked")
     public static WorkflowV2Model load(String workflowId, Map<String, Object> root) {
         if (root == null) {
-            return new WorkflowV2Model(workflowId, "", Map.of(), Map.of(), Map.of(), Map.of(),
+            return new WorkflowV2Model(workflowId, "", Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
                     WorkflowTemplatePolicy.LEGACY_FULL_STATE);
         }
         String entry = root.get("entryPhase") != null ? root.get("entryPhase").toString().trim() : "";
@@ -92,7 +92,23 @@ public final class WorkflowV2Loader {
                 }
             }
         }
+        Map<String, Object> deliberation = new LinkedHashMap<>();
+        Object delObj = root.get("deliberation");
+        if (delObj instanceof Map<?, ?> dm) {
+            for (Map.Entry<?, ?> e : dm.entrySet()) {
+                if (e.getKey() != null) {
+                    deliberation.put(e.getKey().toString(), e.getValue());
+                }
+            }
+        }
         return new WorkflowV2Model(
-                workflowId, entry, phases, caps, rulesets, llm, WorkflowTemplatePolicy.fromYaml(root.get("templates")));
+                workflowId,
+                entry,
+                phases,
+                caps,
+                rulesets,
+                llm,
+                deliberation,
+                WorkflowTemplatePolicy.fromYaml(root.get("templates")));
     }
 }

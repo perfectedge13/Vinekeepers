@@ -79,7 +79,17 @@ public final class WorkProfileLoader {
             }
         }
         List<ReadinessAnyOfGroup> readiness = parseReadinessAnyOfGroups(raw.get("readiness"));
-        return new WorkProfileDefinition(profileId, title, artifacts, readiness);
+        boolean boundedChoices = parseBoundedClarificationChoices(raw.get("deliberation"));
+        return new WorkProfileDefinition(profileId, title, artifacts, readiness, boundedChoices);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean parseBoundedClarificationChoices(Object deliberationNode) {
+        if (!(deliberationNode instanceof Map<?, ?> dm)) {
+            return false;
+        }
+        Object v = ((Map<String, Object>) dm).get("boundedClarificationChoices");
+        return booleanVal(v);
     }
 
     @SuppressWarnings("unchecked")

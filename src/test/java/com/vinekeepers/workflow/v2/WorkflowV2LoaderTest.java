@@ -19,11 +19,16 @@ class WorkflowV2LoaderTest {
         phases.put("a", Map.of("pipeline", List.of("cap1")));
         wf.put("phases", phases);
         wf.put("capabilities", Map.of("cap1", Map.of("kind", "legacy_action", "action", "v2_noop")));
+        wf.put(
+                "deliberation",
+                Map.of("profileHint", "test_profile", "label", "unit_deliberation"));
 
         WorkflowV2Model m = WorkflowV2Loader.load("id", wf);
         assertEquals("a", m.getEntryPhase());
         assertTrue(m.getPhases().containsKey("a"));
         assertEquals(1, m.getPhases().get("a").getPipeline().size());
         assertTrue(m.getCapabilities().containsKey("cap1"));
+        assertEquals("test_profile", m.getDeliberation().get("profileHint"));
+        assertEquals("unit_deliberation", m.getDeliberation().get("label"));
     }
 }

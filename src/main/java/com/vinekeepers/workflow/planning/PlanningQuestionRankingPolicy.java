@@ -3,6 +3,7 @@ package com.vinekeepers.workflow.planning;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,7 +15,8 @@ import java.util.regex.Pattern;
 /**
  * Ranks LLM/critique follow-up questions, applies safe defaults as assumptions instead of asking,
  * and prepares at most one clarification round. Open questions default to plain-text capture;
- * structured buttons are used only when the question has an explicit {@code or}-separated alternative pair.
+ * structured buttons are used only when the work profile enables bounded UI and the question has an explicit
+ * {@code or}-separated alternative pair.
  */
 public final class PlanningQuestionRankingPolicy {
 
@@ -40,13 +42,30 @@ public final class PlanningQuestionRankingPolicy {
             String questionText) {}
 
     /**
-     * @param candidates   raw questions from LLM passes (deduped)
-     * @param maxQuestions budget for how many distinct topics we consider (selection still surfaces one round)
+     * Same as {@link #rank(FeaturePlanState, List, int, UnresolvedItemLedger, boolean)} with an empty ledger and
+     * bounded choice UI disabled (plain text by default).
      */
     public static RankedClarification rank(
             FeaturePlanState plan,
             List<String> candidates,
             int maxQuestions) {
+        return rank(plan, candidates, maxQuestions, UnresolvedItemLedger.empty(), false);
+    }
+
+    /**
+     * @param candidates   raw questions from LLM passes (deduped)
+     * @param maxQuestions budget for how many distinct topics we consider (selection still surfaces one round)
+     * @param ledger       items with merge-closed fingerprints are skipped so resolved questions are not re-asked
+     * @param allowBoundedChoiceUi when false, never emit button/dropdown clarification even if the text looks like A
+     *     or B
+     */
+    public static RankedClarification rank(
+            FeaturePlanState plan,
+            List<String> candidates,
+            int maxQuestions,
+            UnresolvedItemLedger ledger,
+            boolean allowBoundedChoiceUi) {
+        UnresolvedItemLedger led = ledger != null ? ledger : UnresolvedItemLedger.empty();
         List<String> assumptions = new ArrayList<>();
         List<String> pending = new ArrayList<>();
         int blocking = 0;
@@ -57,6 +76,9 @@ public final class PlanningQuestionRankingPolicy {
             String q = raw.trim();
             if (q.length() > 240) {
                 q = q.substring(0, 239) + "…";
+            }
+            if (led.hasFingerprintMergeClosed(q)) {
+                continue;
             }
             DefaultResolution d = tryResolveWithDefault(q);
             if (d != null) {
@@ -79,7 +101,7 @@ public final class PlanningQuestionRankingPolicy {
             return new RankedClarification(false, "", "[]", "{}", 0, assumptions, false, "");
         }
         String top = pending.get(0);
-        ClarificationOptions bounded = inferBoundedOrOptions(top);
+        ClarificationOptions bounded = allowBoundedChoiceUi ? inferBoundedOrOptions(top) : null;
         try {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("questionText", top);

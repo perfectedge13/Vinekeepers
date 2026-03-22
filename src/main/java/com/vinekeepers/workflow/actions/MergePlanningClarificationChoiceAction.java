@@ -7,6 +7,8 @@ import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.workflow.UnresolvedItemLedger;
+import com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSync;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -99,6 +101,14 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
 
             planStateStore.update(plan);
 
+            UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
+            String ledgerItemId = firstNonBlank(getString(state, "planningClarificationLedgerItemId"), "");
+            String qText = q.isBlank() ? firstNonBlank(getString(state, "planningClarificationQuestionText"), "") : q;
+            ledger =
+                    PlanningDeliberationLedgerSync.mergeAnswerIntoLedger(
+                            ledger, ledgerItemId, qText, choice, choice.trim());
+            UnresolvedItemLedger.mergeLedgerIntoSpread(spread, ledger);
+
             UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
             Map<String, Object> base = new LinkedHashMap<>();
             if (state != null) {
@@ -120,6 +130,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
 
             appendCoordinatorClarificationToExploration(event, base, upsert, q, choice);
             spread.put("planningClarificationMerged", "true");
+            spread.put("planningJustMergedClarification", "true");
             spread.put("planningClarificationChoicesJson", "[]");
             spread.put("planningClarificationMetaJson", "{}");
             spread.put("planningUserInputRequired", "false");
@@ -127,6 +138,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             spread.put("planningClarificationRaw", "");
             spread.put("planningClarificationMergeOk", "true");
             spread.put("planningClarificationRepeatCount", "0");
+            spread.put("planningClarificationLedgerItemId", "");
             String qForPrev =
                     !q.isBlank()
                             ? q

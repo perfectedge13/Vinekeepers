@@ -43,6 +43,9 @@ class GraphWorkflowRunnerTest {
                 "c2",
                 Map.of("kind", "legacy_action", "action", "v2_noop", "storeSpread", true));
         wf.put("capabilities", caps);
+        wf.put(
+                "deliberation",
+                Map.of("profileHint", "runner_hint", "label", "runner_l"));
 
         WorkflowV2Model model = WorkflowV2Loader.load("t", wf);
         GraphWorkflowRunner runner =
@@ -62,5 +65,7 @@ class GraphWorkflowRunnerTest {
         var st = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class);
         assertTrue(st.isPresent());
         assertEquals("true", st.get().get("v2NoopRan"));
+        assertEquals("runner_hint", st.get().get("deliberationProfileHint"));
+        assertEquals("runner_l", st.get().get("deliberationLabel"));
     }
 }

@@ -16,7 +16,11 @@ public final class UserCopyContext {
             "progressLine",
             "whatChangedSinceLastTurn",
             "approvalPromptBody",
-            "resolutionExplanation");
+            "resolutionExplanation",
+            "userCopyBlockerSummary",
+            "userCopyClarificationLedgerId",
+            "userCopyProgressDelta",
+            "userCopyProgressEventLatest");
 
     private UserCopyContext() {}
 

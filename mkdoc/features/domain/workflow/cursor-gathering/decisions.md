@@ -13,4 +13,3 @@
 **Decision:** Expose Phase B as **`call_action`** steps with **storeSpread** outputs (`discoveryHasOpenGaps`, `discoveryBlockingIssueMode`, prompts, apply targets). **`StructuredDiscoverySupport`** plus planning types (**`DiscoveryGap`**, **`DiscoveryAgenda`**, etc.) own the logic; **`classify_assumption_or_issue`** routes to existing **`append_plan_issue`** / **`append_plan_assumption`** actions.
 
 **Consequence:** YAML owns loop structure (branch + clear **`discoveryAnswerRaw`**); blocker severity ends the loop so downstream messaging can surface issues before **`launch_cursor_run`**.
-

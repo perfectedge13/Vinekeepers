@@ -339,8 +339,8 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Recorded your answer** — updating the draft and rerunning the full planning cycle (may take up to a minute).
-          Another status line follows when the cycle finishes.'
+        content: '**Recorded your answer** — merging it into the draft and refreshing impacted planner sections (expansion
+          may be skipped on this pass). Another status line follows when the run finishes.'
         asRole: orchestrator
         target: thread
     - type: branch
@@ -783,9 +783,12 @@ workflows:
       provider: openai
       model: gpt-4o-mini
       timeoutMs: 120000
-    entryPhase: cycle
+    deliberation:
+      label: planning_packet_deliberation
+      profileHint: software_feature_planning
+    entryPhase: draft
     phases:
-      cycle:
+      draft:
         pipeline: [cap_run_planning_cycle]
         defaultNextPhase: done
       done:

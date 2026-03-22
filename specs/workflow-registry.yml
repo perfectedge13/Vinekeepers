@@ -248,7 +248,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/v2/GraphWorkflowRunner.java
     role: >-
       Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action capabilities); applies workflow
-      template policy to state each run
+      template policy to state each run; when YAML includes deliberation map, writes workflowDeliberationMetaJson plus
+      deliberationProfileHint and deliberationLabel when present
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -256,7 +257,7 @@ assets:
   - id: ASSET-WORKFLOW-V2-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/WorkflowV2Loader.java
-    role: Parse workflow YAML map into WorkflowV2Model (phases, capabilities, rulesets, optional templates)
+    role: Parse workflow YAML map into WorkflowV2Model (phases, capabilities, rulesets, optional templates, optional deliberation map)
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -288,6 +289,28 @@ assets:
       - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW
+  - id: ASSET-PROGRESS-EVENT-LOG
+    kind: source
+    path: src/main/java/com/vinekeepers/state/workflow/ProgressEventLog.java
+    role: >-
+      Append-only workflowProgressEventsJson with coarse dedupe; PlanningCyclePipeline merges deltas into spread and exposes
+      userCopyProgressEventLatest for safe templates
+    requires:
+      - REQ-WORKFLOW-002
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-DELIBERATION-LEDGER-SYNC
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningDeliberationLedgerSync.java
+    role: >-
+      Dual-write planning clarification ranking/merge into UnresolvedItemLedger (workflowUnresolvedItemsJson) alongside
+      FeaturePlanState assumptions
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/template/WorkflowSafeTemplateRenderer.java
@@ -321,7 +344,8 @@ assets:
     role: >-
       Composable planning-room cycle logic invoked by execute_planning_room_cycle; exposes partial phases
       runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
-      planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls
+      planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls; ranks clarifications with ledger fingerprint
+      filtering; optional selective rerun after merge (skips expansion, one inner round); enriches userCopy* keys and ProgressEventLog
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1950,7 +1974,7 @@ requirements:
       criteria:
         - WorkflowDefinition carries optional workflowSchema; v2 resolves when YAML has phases without steps list
         - GraphWorkflowRunner runs legacy_action capability pipeline and phase transitions via defaultNextPhase or rulesets
-        - WorkflowV2Loader parses phases, capabilities, rulesets, and llm from workflow map
+        - WorkflowV2Loader parses phases, capabilities, rulesets, llm, and optional deliberation map from workflow map
         - UnresolvedItemLedger serializes to workflowUnresolvedItemsJson; WorkflowRulesEngine hasOpenUnresolved predicate works
         - ProgressDedupeHelper provides normalize + fingerprint + isPostWorthy for generic progress dedupe
         - post_planning_progress_if_changed supports optional bind keys progressPostWorthyKey, progressPostFingerprintKey, lastProgressPostHashKey
@@ -1963,6 +1987,9 @@ requirements:
           applies declarative depth before supplemental packet checks
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
         - Staging workflow arrietty_room_v2 (workflowSchema v2) wraps execute_planning_room_cycle for gradual cutover
+        - >-
+          PlanningDeliberationLedgerSync keeps workflowUnresolvedItemsJson aligned with clarification rank/merge; ProgressEventLog
+          records deduped progress lines; work profiles may set deliberation.boundedClarificationChoices for button-style clarifications
       examples: []
     traceability:
       assets:
@@ -1973,6 +2000,8 @@ requirements:
         - ASSET-UNRESOLVED-ITEM
         - ASSET-UNRESOLVED-ITEM-STATUS
         - ASSET-PROGRESS-DEDUPE-HELPER
+        - ASSET-PROGRESS-EVENT-LOG
+        - ASSET-PLANNING-DELIBERATION-LEDGER-SYNC
         - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
         - ASSET-WORKFLOW-TEMPLATE-POLICY
         - ASSET-WORKFLOW-TEMPLATE-INTERPOLATOR
@@ -2010,6 +2039,16 @@ requirements:
           title: WorkflowV2LoaderTest
           intent: Verify loader extracts phases and capabilities
           testClass: com.vinekeepers.workflow.v2.WorkflowV2LoaderTest
+          preconditions: []
+        - id: UNIT-PROGRESS-EVENT-LOG
+          title: ProgressEventLogTest
+          intent: Verify append-if-changed dedupe and spread merge keys
+          testClass: com.vinekeepers.state.workflow.ProgressEventLogTest
+          preconditions: []
+        - id: UNIT-PLANNING-DELIBERATION-LEDGER-SYNC
+          title: PlanningDeliberationLedgerSyncTest
+          intent: Verify ledger upsert on rank and merge closure on answer
+          testClass: com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSyncTest
           preconditions: []
         - id: UNIT-PROMPT-FOR-FIELD-CONTROL-MODE
           title: PromptForFieldStepTest

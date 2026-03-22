@@ -15,13 +15,27 @@ public final class WorkProfileDefinition {
     private final String title;
     private final Map<String, ArtifactDefinition> artifactsById;
     private final List<ReadinessAnyOfGroup> readinessAnyOfGroups;
+    /**
+     * When true, planning clarification may use button/dropdown UI for explicit A-or-B style questions.
+     * Default false: plain-text clarification only unless the profile opts in.
+     */
+    private final boolean boundedClarificationChoices;
 
     public WorkProfileDefinition(String profileId, String title, List<ArtifactDefinition> artifacts) {
-        this(profileId, title, artifacts, List.of());
+        this(profileId, title, artifacts, List.of(), false);
     }
 
     public WorkProfileDefinition(
             String profileId, String title, List<ArtifactDefinition> artifacts, List<ReadinessAnyOfGroup> readinessAnyOfGroups) {
+        this(profileId, title, artifacts, readinessAnyOfGroups, false);
+    }
+
+    public WorkProfileDefinition(
+            String profileId,
+            String title,
+            List<ArtifactDefinition> artifacts,
+            List<ReadinessAnyOfGroup> readinessAnyOfGroups,
+            boolean boundedClarificationChoices) {
         this.profileId = Objects.requireNonNull(profileId, "profileId").trim();
         this.title = title != null ? title : "";
         Map<String, ArtifactDefinition> m = new LinkedHashMap<>();
@@ -32,6 +46,7 @@ public final class WorkProfileDefinition {
         }
         this.artifactsById = Map.copyOf(m);
         this.readinessAnyOfGroups = readinessAnyOfGroups != null ? List.copyOf(readinessAnyOfGroups) : List.of();
+        this.boundedClarificationChoices = boundedClarificationChoices;
     }
 
     public String getProfileId() {
@@ -64,6 +79,10 @@ public final class WorkProfileDefinition {
 
     public List<ReadinessAnyOfGroup> getReadinessAnyOfGroups() {
         return readinessAnyOfGroups;
+    }
+
+    public boolean isBoundedClarificationChoicesEnabled() {
+        return boundedClarificationChoices;
     }
 
     public boolean hasDeclarativeReadiness() {

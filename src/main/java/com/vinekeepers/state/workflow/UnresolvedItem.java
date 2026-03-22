@@ -126,6 +126,26 @@ public final class UnresolvedItem {
                 repeatCount + 1);
     }
 
+    /** Returns a copy with {@link #source} entries merged (patch wins on key collision). */
+    public UnresolvedItem withMergedSource(Map<String, String> patch) {
+        if (patch == null || patch.isEmpty()) {
+            return this;
+        }
+        Map<String, String> m = new LinkedHashMap<>(source);
+        m.putAll(patch);
+        return new UnresolvedItem(
+                id,
+                fingerprint,
+                status,
+                promptTemplateRef,
+                questionText,
+                severity,
+                m,
+                answers,
+                affectedPaths,
+                repeatCount);
+    }
+
     public UnresolvedItem withAppendedAnswer(String raw, String normalized) {
         List<Map<String, String>> next = new ArrayList<>(answers);
         Map<String, String> row = new LinkedHashMap<>();

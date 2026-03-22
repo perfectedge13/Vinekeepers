@@ -75,4 +75,42 @@ class UnresolvedItemLedgerTest {
                         List.of());
         assertFalse(new UnresolvedItemLedger(java.util.List.of(closed)).hasOpenItems());
     }
+
+    @Test
+    void mergeClosedFingerprintDetected() {
+        String q = "What is the deployment target?";
+        String fp = UnresolvedItemLedger.normalizeFingerprint(q);
+        UnresolvedItem merged =
+                new UnresolvedItem(
+                        "i1",
+                        fp,
+                        UnresolvedItemStatus.MERGED,
+                        "",
+                        q,
+                        "",
+                        Map.of(),
+                        List.of(),
+                        List.of());
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(merged);
+        assertTrue(ledger.hasFingerprintMergeClosed(q));
+        assertFalse(ledger.hasFingerprintMergeClosed("totally different question"));
+    }
+
+    @Test
+    void cancelledOpenPlanningExceptKeepsId() {
+        UnresolvedItem open =
+                new UnresolvedItem(
+                        "keep",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "q",
+                        "",
+                        Map.of("channel", "planning_clarification"),
+                        List.of(),
+                        List.of());
+        UnresolvedItemLedger led = UnresolvedItemLedger.empty().withAdded(open);
+        UnresolvedItemLedger next = led.withCancelledOpenPlanningExcept("keep");
+        assertEquals(UnresolvedItemStatus.OPEN, next.items().get(0).getStatus());
+    }
 }

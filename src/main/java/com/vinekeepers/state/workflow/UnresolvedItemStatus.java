@@ -9,5 +9,7 @@ public enum UnresolvedItemStatus {
     MERGED,
     RESOLVED_ASSUMPTION,
     BLOCKED,
-    CANCELLED
+    CANCELLED,
+    /** Closed without merge; same fingerprint may surface again after artifact invalidation. */
+    INVALIDATED
 }

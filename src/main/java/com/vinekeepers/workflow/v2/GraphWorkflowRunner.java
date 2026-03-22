@@ -13,6 +13,7 @@ import com.vinekeepers.workflow.WorkflowRunResult;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.steps.CallActionStep;
 import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import java.util.Optional;
 public final class GraphWorkflowRunner implements WorkflowRunner {
 
     private static final Logger log = LoggerFactory.getLogger(GraphWorkflowRunner.class);
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     public static final String PHASE_KEY = "__v2_phaseId";
     public static final String PIPELINE_INDEX_KEY = "__v2_pipelineIndex";
@@ -49,8 +51,18 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             ToolPolicy toolPolicy,
             ConversationMode conversationMode,
             String sessionKeyStrategyName) {
-        WorkflowV2Model resolved = model != null ? model : new WorkflowV2Model("", "", Map.of(), Map.of(), Map.of(),
-                Map.of(), WorkflowTemplatePolicy.LEGACY_FULL_STATE);
+        WorkflowV2Model resolved =
+                model != null
+                        ? model
+                        : new WorkflowV2Model(
+                                "",
+                                "",
+                                Map.of(),
+                                Map.of(),
+                                Map.of(),
+                                Map.of(),
+                                Map.of(),
+                                WorkflowTemplatePolicy.LEGACY_FULL_STATE);
         this.model = resolved;
         this.actionRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.toolRunner = toolRunner;
@@ -85,6 +97,22 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
 
         applyWorkflowLlmDefaults(state);
         templatePolicy.writeIntoState(state);
+        Map<String, Object> deliberation = model.getDeliberation();
+        if (deliberation != null && !deliberation.isEmpty()) {
+            try {
+                state.put("workflowDeliberationMetaJson", JSON.writeValueAsString(deliberation));
+            } catch (Exception e) {
+                state.put("workflowDeliberationMetaJson", "{}");
+            }
+            Object profileHint = deliberation.get("profileHint");
+            if (profileHint != null) {
+                state.put("deliberationProfileHint", profileHint.toString());
+            }
+            Object label = deliberation.get("label");
+            if (label != null) {
+                state.put("deliberationLabel", label.toString());
+            }
+        }
 
         String phaseId = state.get(PHASE_KEY) != null ? state.get(PHASE_KEY).toString().trim() : "";
         if (phaseId.isBlank()) {
@@ -204,6 +232,24 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
         state.markError();
         stateStore.put(stateKey, state);
         return WorkflowRunResult.error("Graph workflow step limit reached.");
+    }
+
+    private static void applyDeliberationHints(ConfigurableWorkflowState state, WorkflowV2Model model) {
+        if (state == null || model == null) {
+            return;
+        }
+        Map<String, Object> del = model.getDeliberation();
+        if (del.isEmpty()) {
+            return;
+        }
+        Object hint = del.get("profileHint");
+        if (hint != null && !hint.toString().isBlank()) {
+            state.put("deliberationProfileHint", hint.toString().trim());
+        }
+        Object label = del.get("label");
+        if (label != null && !label.toString().isBlank()) {
+            state.put("deliberationLabel", label.toString().trim());
+        }
     }
 
     private void applyWorkflowLlmDefaults(ConfigurableWorkflowState state) {

@@ -15,6 +15,8 @@ public final class WorkflowV2Model {
     private final Map<String, WorkflowV2CapabilityModel> capabilities;
     private final Map<String, List<Map<String, Object>>> rulesets;
     private final Map<String, Object> llm;
+    /** Optional generic deliberation metadata (profile hints, phase names); does not hardcode planning semantics. */
+    private final Map<String, Object> deliberation;
     private final WorkflowTemplatePolicy templatePolicy;
 
     public WorkflowV2Model(
@@ -24,6 +26,7 @@ public final class WorkflowV2Model {
             Map<String, WorkflowV2CapabilityModel> capabilities,
             Map<String, List<Map<String, Object>>> rulesets,
             Map<String, Object> llm,
+            Map<String, Object> deliberation,
             WorkflowTemplatePolicy templatePolicy) {
         this.id = id != null ? id : "";
         this.entryPhase = entryPhase != null ? entryPhase : "";
@@ -31,6 +34,7 @@ public final class WorkflowV2Model {
         this.capabilities = capabilities != null && !capabilities.isEmpty() ? Map.copyOf(capabilities) : Map.of();
         this.rulesets = rulesets != null && !rulesets.isEmpty() ? Map.copyOf(rulesets) : Map.of();
         this.llm = llm != null && !llm.isEmpty() ? Map.copyOf(llm) : Map.of();
+        this.deliberation = deliberation != null && !deliberation.isEmpty() ? Map.copyOf(deliberation) : Map.of();
         this.templatePolicy = templatePolicy != null ? templatePolicy : WorkflowTemplatePolicy.LEGACY_FULL_STATE;
     }
 
@@ -56,6 +60,10 @@ public final class WorkflowV2Model {
 
     public Map<String, Object> getLlm() {
         return llm;
+    }
+
+    public Map<String, Object> getDeliberation() {
+        return deliberation;
     }
 
     public WorkflowTemplatePolicy getTemplatePolicy() {

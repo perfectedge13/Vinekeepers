@@ -11,6 +11,10 @@ import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.ProgressDedupeHelper;
+import com.vinekeepers.state.workflow.ProgressEventLog;
+import com.vinekeepers.state.workflow.UnresolvedItem;
+import com.vinekeepers.state.workflow.UnresolvedItemLedger;
+import com.vinekeepers.state.workflow.UnresolvedItemStatus;
 import com.vinekeepers.workflow.actions.BuildRequestExplorationAction;
 import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
@@ -85,7 +89,18 @@ public final class PlanningCyclePipeline {
         spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
 
         List<String> aggregatedFollowUps = new ArrayList<>();
-        runExpansionPhase(event, work, spread, bind, aggregatedFollowUps);
+        boolean selective = selectiveRerunAfterClarificationEnabled(state, bind);
+        boolean justMerged = "true".equalsIgnoreCase(getString(state, "planningJustMergedClarification"));
+        boolean skipExpansion = selective && justMerged;
+        if (!skipExpansion) {
+            runExpansionPhase(event, work, spread, bind, aggregatedFollowUps);
+        } else {
+            spread.put("planningSelectiveRerunActive", "true");
+            spread.put(
+                    "planningSelectiveRerunNote",
+                    "Selective rerun: skipped request-expansion; running one critique round after your clarification.");
+            mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
+        }
 
         String depthReason = "";
         boolean depthOk = false;
@@ -93,7 +108,8 @@ public final class PlanningCyclePipeline {
         String lastSynthLlmLine = "";
         FeaturePlanState planPtr = plan;
 
-        for (int inner = 0; inner < MAX_BOT_INNER_ROUNDS; inner++) {
+        int innerRounds = (selective && justMerged) ? 1 : MAX_BOT_INNER_ROUNDS;
+        for (int inner = 0; inner < innerRounds; inner++) {
             InnerRoundResult round =
                     runSingleInnerRound(
                             event, contextId, profile, work, spread, bind, aggregatedFollowUps, planPtr, lastSynthLlmLine);
@@ -111,11 +127,22 @@ public final class PlanningCyclePipeline {
         spread.put("planningCycleSynthesisLlmNote", lastSynthLlmLine);
 
         plan = planStateStore.getByContextId(contextId).orElse(planPtr);
-        RankedClarification ranked = PlanningQuestionRankingPolicy.rank(plan, aggregatedFollowUps, 3);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
+        RankedClarification ranked =
+                PlanningQuestionRankingPolicy.rank(
+                        plan,
+                        aggregatedFollowUps,
+                        3,
+                        ledger,
+                        profile.isBoundedClarificationChoicesEnabled());
         for (String assumption : ranked.assumptionsToRecord()) {
             plan = appendAssumption(plan, assumption);
         }
         planStateStore.update(plan);
+
+        PlanningDeliberationLedgerSync.UpsertResult upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, ranked);
+        UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsert.ledger());
+        spread.put("planningClarificationLedgerItemId", upsert.activeItemId().orElse(""));
 
         spread.put("planningQuestionsAskedThisRound", ranked.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
@@ -186,8 +213,12 @@ public final class PlanningCyclePipeline {
                         lastSynthLlmLine,
                         llmErr,
                         getString(spread, "planningExpansionFallbackUsed"),
-                        getString(spread, "planningLlmSkipReason")));
+                        getString(spread, "planningLlmSkipReason"),
+                        getString(spread, "planningSelectiveRerunNote")));
 
+        enrichUserCopyAndProgressLog(state, spread);
+        spread.put("planningJustMergedClarification", "false");
+        spread.put("planningSelectiveRerunActive", "false");
         finishProgressFingerprint(state, spread);
         return spread;
     }
@@ -279,11 +310,23 @@ public final class PlanningCyclePipeline {
         spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
 
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
-        RankedClarification ranked = PlanningQuestionRankingPolicy.rank(plan, aggregatedFollowUps, 3);
+        UnresolvedItemLedger ledgerFin = UnresolvedItemLedger.readFrom(state);
+        RankedClarification ranked =
+                PlanningQuestionRankingPolicy.rank(
+                        plan,
+                        aggregatedFollowUps,
+                        3,
+                        ledgerFin,
+                        ctx.profile().isBoundedClarificationChoicesEnabled());
         for (String assumption : ranked.assumptionsToRecord()) {
             plan = appendAssumption(plan, assumption);
         }
         planStateStore.update(plan);
+
+        PlanningDeliberationLedgerSync.UpsertResult upsertFin =
+                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledgerFin, ranked);
+        UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsertFin.ledger());
+        spread.put("planningClarificationLedgerItemId", upsertFin.activeItemId().orElse(""));
 
         spread.put("planningQuestionsAskedThisRound", ranked.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
@@ -354,8 +397,10 @@ public final class PlanningCyclePipeline {
                         lastSynthLlmLine,
                         llmErr,
                         getString(spread, "planningExpansionFallbackUsed"),
-                        getString(spread, "planningLlmSkipReason")));
+                        getString(spread, "planningLlmSkipReason"),
+                        ""));
 
+        enrichUserCopyAndProgressLog(state, spread);
         finishProgressFingerprint(state, spread);
         return spread;
     }
@@ -494,6 +539,42 @@ public final class PlanningCyclePipeline {
         }
     }
 
+    private static void enrichUserCopyAndProgressLog(Map<String, Object> state, Map<String, Object> spread) {
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(spread);
+        StringBuilder blockers = new StringBuilder();
+        for (UnresolvedItem it : ledger.items()) {
+            UnresolvedItemStatus s = it.getStatus();
+            if (s == UnresolvedItemStatus.OPEN || s == UnresolvedItemStatus.BLOCKED) {
+                String q = it.getQuestionText();
+                if (q != null && !q.isBlank()) {
+                    if (blockers.length() > 0) {
+                        blockers.append("; ");
+                    }
+                    blockers.append(q.trim());
+                }
+            }
+        }
+        spread.put("userCopyBlockerSummary", blockers.toString());
+        String lid = getString(spread, "planningClarificationLedgerItemId");
+        spread.put("userCopyClarificationLedgerId", lid != null ? lid : "");
+
+        String delta =
+                firstNonBlank(
+                        getString(spread, "planningSelectiveRerunNote"),
+                        truncateOneLine(getString(spread, "planningCycleProgressSummary"), 220));
+        spread.put("userCopyProgressDelta", delta != null ? delta : "");
+
+        ProgressEventLog log = ProgressEventLog.readFrom(state);
+        String line =
+                firstNonBlank(
+                        getString(spread, "planningSelectiveRerunNote"),
+                        truncateOneLine(getString(spread, "planningCycleProgressSummary"), 300));
+        if (line != null && !line.isBlank()) {
+            log = log.withAppendedIfChanged(line);
+        }
+        ProgressEventLog.mergeIntoSpread(spread, log);
+    }
+
     private static void finishProgressFingerprint(Map<String, Object> state, Map<String, Object> spread) {
         String summary =
                 spread.get("planningCycleProgressSummary") != null
@@ -531,10 +612,14 @@ public final class PlanningCyclePipeline {
         spread.put("planningClarificationRepeatCount", String.valueOf(newCount));
         boolean stuck = sameAsPrev && newCount >= 1;
         spread.put("planningClarificationStuck", stuck ? "true" : "false");
+        String lid = getString(spread, "planningClarificationLedgerItemId");
+        String lidNote =
+                lid != null && !lid.isBlank() ? " Ledger item `" + lid + "` is still open — " : " ";
         spread.put(
                 "planningClarificationStuckHint",
                 stuck
-                        ? "We already recorded your answer, but the draft still surfaces the same blocking question. "
+                        ? "We already recorded your answer, but the draft still surfaces the same blocking question."
+                                + lidNote
                                 + "Reply with a concrete example or constraint, use **Use recommended default** if shown, "
                                 + "or use the coordinator menu to add scope or reframe the request."
                         : "");
@@ -681,8 +766,12 @@ public final class PlanningCyclePipeline {
             String synthesisNote,
             String planningLlmError,
             String expansionFallbackUsed,
-            String planningLlmSkipReason) {
+            String planningLlmSkipReason,
+            String selectiveRerunNote) {
         StringBuilder sb = new StringBuilder();
+        if (selectiveRerunNote != null && !selectiveRerunNote.isBlank()) {
+            sb.append(selectiveRerunNote.trim()).append(' ');
+        }
         sb.append("**Round ").append(cycleIteration).append(":** ");
         sb.append(roleRoundSummary != null ? roleRoundSummary : "").append(' ');
         if (synthesisNote != null && !synthesisNote.isBlank()) {
@@ -856,6 +945,11 @@ public final class PlanningCyclePipeline {
         m.put("planningClarificationStuck", "false");
         m.put("planningClarificationStuckHint", "");
         m.put("planningClarificationRepeatCount", "0");
+        m.put("planningClarificationLedgerItemId", "");
+        m.put("planningJustMergedClarification", "false");
+        m.put("planningSelectiveRerunActive", "false");
+        m.put("planningSelectiveRerunNote", "");
+        m.put("workflowUnresolvedHasOpen", "false");
         m.put("planningCycleRolePassSummary", "");
         m.put("planningCycleSynthesisLlmNote", "");
         m.put("planningCycleUserVisibleFailure", "");
@@ -873,6 +967,18 @@ public final class PlanningCyclePipeline {
         } catch (NumberFormatException e) {
             return dflt;
         }
+    }
+
+    /** Default true: after a merged clarification, skip expansion and run a single inner critique round. */
+    private static boolean selectiveRerunAfterClarificationEnabled(Map<String, Object> state, Map<String, Object> bind) {
+        String v =
+                firstNonBlank(
+                        getString(bind, "planningSelectiveRerunAfterClarification"),
+                        getString(state, "planningSelectiveRerunAfterClarification"));
+        if (v == null || v.isBlank()) {
+            return true;
+        }
+        return !"false".equalsIgnoreCase(v.trim());
     }
 
     private static String getString(Map<String, Object> map, String key) {

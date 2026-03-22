@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Workflow state machine and config-driven runners (REQ-WORKFLOW-001, REQ-WORKFLOW-002). `Workflow<S>` remains the legacy state-machine contract, while `WorkflowRunner` is the engine-facing interface that loads session state, runs a configured or stub workflow, and returns `WorkflowRunResult`. `WorkflowRunnerFactory`, `ConfigurableWorkflowRunner`, `ConfigurableWorkflowState`, and session key strategies handle pause/resume lifecycle across conversational sessions. Workflows may set `workflowSchema: v2` with a `phases` map to use `GraphWorkflowRunner` (phase graph, optional rules, legacy actions as capabilities). Generic clarification ledger types live under `com.vinekeepers.state.workflow`. The step DSL is documented separately in the Workflow Steps feature.
+Workflow state machine and config-driven runners (REQ-WORKFLOW-001, REQ-WORKFLOW-002). `Workflow<S>` remains the legacy state-machine contract, while `WorkflowRunner` is the engine-facing interface that loads session state, runs a configured or stub workflow, and returns `WorkflowRunResult`. `WorkflowRunnerFactory`, `ConfigurableWorkflowRunner`, `ConfigurableWorkflowState`, and session key strategies handle pause/resume lifecycle across conversational sessions. Workflows may set `workflowSchema: v2` with a `phases` map to use `GraphWorkflowRunner` (phase graph, optional rules, legacy actions as capabilities). Optional top-level `deliberation` YAML on v2 workflows is loaded into `WorkflowV2Model` and mirrored to session as `workflowDeliberationMetaJson` for tooling. Generic clarification ledger and progress-event types live under `com.vinekeepers.state.workflow` (`workflowUnresolvedItemsJson`, `workflowProgressEventsJson`). Coordinator-facing template keys are allowlisted via `UserCopyContext` when templates use safe mode. The step DSL is documented separately in the Workflow Steps feature.
 
 # Key assets
 
@@ -26,6 +26,8 @@ Workflow state machine and config-driven runners (REQ-WORKFLOW-001, REQ-WORKFLOW
 | ASSET-WORKFLOW-V2-LOADER | Loads v2 phase/capability/rules YAML into `WorkflowV2Model` | src/main/java/com/vinekeepers/workflow/v2/WorkflowV2Loader.java |
 | ASSET-WORKFLOW-RULES-ENGINE | Evaluates minimal `when`/`then` rules for v2 transitions | src/main/java/com/vinekeepers/workflow/v2/WorkflowRulesEngine.java |
 | ASSET-UNRESOLVED-ITEM-LEDGER | Serialize/deserialize generic unresolved items in session JSON | src/main/java/com/vinekeepers/state/workflow/UnresolvedItemLedger.java |
+| ASSET-PROGRESS-EVENT-LOG | Deduped append-only progress events in session JSON | src/main/java/com/vinekeepers/state/workflow/ProgressEventLog.java |
+| ASSET-PLANNING-DELIBERATION-LEDGER-SYNC | Planning rank/merge sync into generic ledger | src/main/java/com/vinekeepers/workflow/planning/PlanningDeliberationLedgerSync.java |
 | ASSET-PROGRESS-DEDUPE-HELPER | Normalize + hash text for progress post dedupe | src/main/java/com/vinekeepers/state/workflow/ProgressDedupeHelper.java |
 | ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER | Allowlisted `{{path}}` template rendering for user-facing copy | src/main/java/com/vinekeepers/workflow/template/WorkflowSafeTemplateRenderer.java |
 | ASSET-STUB-WORKFLOW | Stub workflow implementation | src/main/java/com/vinekeepers/workflow/StubWorkflow.java |

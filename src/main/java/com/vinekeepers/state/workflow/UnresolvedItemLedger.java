@@ -77,6 +77,80 @@ public final class UnresolvedItemLedger {
         return false;
     }
 
+    /**
+     * True if this fingerprint has been closed in a way that must not be re-asked until explicitly invalidated.
+     * {@link UnresolvedItemStatus#INVALIDATED} does not block re-surfacing the same fingerprint.
+     */
+    public boolean hasFingerprintMergeClosed(String fingerprint) {
+        if (fingerprint == null || fingerprint.isBlank()) {
+            return false;
+        }
+        String norm = normalizeFingerprint(fingerprint);
+        for (UnresolvedItem it : items) {
+            if (!norm.equals(it.getFingerprint())) {
+                continue;
+            }
+            UnresolvedItemStatus s = it.getStatus();
+            if (s == UnresolvedItemStatus.MERGED
+                    || s == UnresolvedItemStatus.RESOLVED_ASSUMPTION
+                    || s == UnresolvedItemStatus.CANCELLED) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** First item in OPEN, ANSWERED, or BLOCKED with this normalized fingerprint, if any. */
+    public Optional<UnresolvedItem> findActiveByFingerprint(String fingerprint) {
+        if (fingerprint == null || fingerprint.isBlank()) {
+            return Optional.empty();
+        }
+        String norm = normalizeFingerprint(fingerprint);
+        for (UnresolvedItem it : items) {
+            if (!norm.equals(it.getFingerprint())) {
+                continue;
+            }
+            if (it.getStatus() == UnresolvedItemStatus.OPEN
+                    || it.getStatus() == UnresolvedItemStatus.ANSWERED
+                    || it.getStatus() == UnresolvedItemStatus.BLOCKED) {
+                return Optional.of(it);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Cancel other planning-clarification OPEN items so at most one active question is tracked.
+     */
+    public UnresolvedItemLedger withCancelledOpenPlanningExcept(String keepId) {
+        if (keepId == null) {
+            keepId = "";
+        }
+        List<UnresolvedItem> next = new ArrayList<>();
+        for (UnresolvedItem it : items) {
+            if (shouldCancelPlanningOpen(it, keepId)) {
+                next.add(
+                        it.withStatus(UnresolvedItemStatus.CANCELLED)
+                                .withMergedSource(Map.of(
+                                        "resolutionNotes",
+                                        "Superseded by a newer clarification request.")));
+            } else {
+                next.add(it);
+            }
+        }
+        return new UnresolvedItemLedger(next);
+    }
+
+    private static boolean shouldCancelPlanningOpen(UnresolvedItem it, String keepId) {
+        if (it.getStatus() != UnresolvedItemStatus.OPEN) {
+            return false;
+        }
+        if (keepId.equals(it.getId())) {
+            return false;
+        }
+        return "planning_clarification".equals(it.getSource().get("channel"));
+    }
+
     public Optional<UnresolvedItem> findByFingerprint(String fingerprint) {
         if (fingerprint == null || fingerprint.isBlank()) {
             return Optional.empty();
