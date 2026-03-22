@@ -1,5 +1,7 @@
 package com.vinekeepers.workflow.v2;
 
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +17,8 @@ public final class WorkflowV2Loader {
     @SuppressWarnings("unchecked")
     public static WorkflowV2Model load(String workflowId, Map<String, Object> root) {
         if (root == null) {
-            return new WorkflowV2Model(workflowId, "", Map.of(), Map.of(), Map.of(), Map.of());
+            return new WorkflowV2Model(workflowId, "", Map.of(), Map.of(), Map.of(), Map.of(),
+                    WorkflowTemplatePolicy.LEGACY_FULL_STATE);
         }
         String entry = root.get("entryPhase") != null ? root.get("entryPhase").toString().trim() : "";
         Map<String, WorkflowV2PhaseModel> phases = new LinkedHashMap<>();
@@ -89,6 +92,7 @@ public final class WorkflowV2Loader {
                 }
             }
         }
-        return new WorkflowV2Model(workflowId, entry, phases, caps, rulesets, llm);
+        return new WorkflowV2Model(
+                workflowId, entry, phases, caps, rulesets, llm, WorkflowTemplatePolicy.fromYaml(root.get("templates")));
     }
 }

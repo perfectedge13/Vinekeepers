@@ -90,6 +90,17 @@ public final class UnresolvedItemLedger {
         return Optional.empty();
     }
 
+    /** Maximum {@link UnresolvedItem#getRepeatCount()} among {@link UnresolvedItemStatus#OPEN} items. */
+    public int maxOpenItemRepeatCount() {
+        int max = 0;
+        for (UnresolvedItem it : items) {
+            if (it.getStatus() == UnresolvedItemStatus.OPEN && it.getRepeatCount() > max) {
+                max = it.getRepeatCount();
+            }
+        }
+        return max;
+    }
+
     public int countOpenMatchingFingerprint(String fingerprint) {
         if (fingerprint == null || fingerprint.isBlank()) {
             return 0;

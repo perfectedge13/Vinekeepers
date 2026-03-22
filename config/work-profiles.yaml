@@ -96,6 +96,24 @@ profiles:
   software_feature_planning_v2:
     profileId: software_feature_planning_v2
     title: Software feature planning (v2)
+    # Declarative readiness: generic evaluator + supplemental workspace/validation checks in Java.
+    readiness:
+      anyOfGroups:
+        - rules:
+            - artifactId: requirements_spec
+              sectionId: narrative
+              fieldId: current_state_summary
+              minWords: 14
+              readinessChecks:
+                - placeholder
+            - artifactId: requirements_spec
+              sectionId: narrative
+              fieldId: feature_summary
+              minWords: 14
+              maxEchoOverlapWithRequest: 0.72
+              echoWordSlack: 10
+              readinessChecks:
+                - placeholder
     artifacts:
       - artifactId: requirements_spec
         title: Requirements specification
@@ -181,6 +199,10 @@ profiles:
                 label: Open questions
                 type: text
                 required: true
+                skipReadinessIfBlank: true
+                minWords: 8
+                readinessChecks:
+                  - placeholder
                 promptHint: Unknowns to confirm; use "None — ready to implement" if truly none.
       - artifactId: decision_log
         title: Decision log
@@ -243,6 +265,12 @@ profiles:
                 label: Exploration notes
                 type: markdown
                 required: true
+                minWords: 24
+                maxEchoOverlapWithRequest: 0.72
+                echoWordSlack: 15
+                readinessChecks:
+                  - placeholder
+                  - hollow_exploration
                 promptHint: >-
                   Structured exploration of what the feature means (workflow touchpoints, config model, compat,
                   validation). Filled automatically before the packet; edit if wrong.

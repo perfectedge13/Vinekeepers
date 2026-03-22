@@ -5,19 +5,17 @@ import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 
 import java.util.Map;
 
-/**
- * Workflow action facade for one planning-room cycle; delegates to {@link PlanningCyclePipeline}.
- */
-public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.workflow.WorkflowAction {
+/** Partial planning-room cycle: clarification ranking, orchestrator summary, progress fingerprint. */
+public final class PlanningFinalizePlanningCycleAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final PlanningCyclePipeline pipeline;
 
-    public ExecutePlanningRoomCycleAction(PlanningCyclePipeline pipeline) {
+    public PlanningFinalizePlanningCycleAction(PlanningCyclePipeline pipeline) {
         this.pipeline = pipeline != null ? pipeline : new PlanningCyclePipeline(null, null, null);
     }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return pipeline.execute(event, state, bind);
+        return pipeline.finalizePlanningCycleSpread(event, state, bind);
     }
 }

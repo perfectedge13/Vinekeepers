@@ -4,6 +4,8 @@ import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.PlanningRole;
+import com.vinekeepers.workflow.template.WorkflowTemplateInterpolator;
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -66,7 +68,8 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
         Map<String, Object> merged = new HashMap<>();
         if (state != null) merged.putAll(state);
         if (bind != null) merged.putAll(bind);
-        content = interpolate(content, merged);
+        WorkflowTemplatePolicy pol = WorkflowTemplatePolicy.readFromStateMap(merged);
+        content = WorkflowTemplateInterpolator.interpolate(content, merged, pol);
         if (content.isBlank()) {
             return "Blank content for post_channel_message.";
         }
@@ -112,18 +115,4 @@ public final class PostChannelMessageAction implements com.vinekeepers.workflow.
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
     }
 
-    /** Replaces {{key}} in template with state.get(key) for all keys in state. */
-    private static String interpolate(String template, Map<String, Object> state) {
-        if (template == null || state == null || state.isEmpty()) return template != null ? template : "";
-        String out = template;
-        for (String key : state.keySet()) {
-            if (key == null) continue;
-            String placeholder = "{{" + key + "}}";
-            if (out.contains(placeholder)) {
-                Object v = state.get(key);
-                out = out.replace(placeholder, v != null ? v.toString() : "");
-            }
-        }
-        return out;
-    }
 }

@@ -47,6 +47,7 @@ import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.WorkflowRunnerFactory;
+import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 import com.vinekeepers.workflow.actions.AcknowledgeReadinessHumanDecisionAction;
 import com.vinekeepers.workflow.actions.ApplyAutoPlanningProposalsAction;
 import com.vinekeepers.workflow.actions.AppendAssumptionAction;
@@ -82,6 +83,9 @@ import com.vinekeepers.workflow.actions.InitializeFeatureRoomStateAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
 import com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceAction;
+import com.vinekeepers.workflow.actions.PlanningFinalizePlanningCycleAction;
+import com.vinekeepers.workflow.actions.PlanningRunExpansionPhaseAction;
+import com.vinekeepers.workflow.actions.PlanningRunInnerRoundAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PostPlanningProgressIfChangedAction;
 import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
@@ -304,6 +308,8 @@ public final class Bootstrap {
 
     private void registerLifecycleActions(WorkflowActionRegistry registry) {
         OpenAiChatClient openAiChatClient = new OpenAiChatClient();
+        PlanningCyclePipeline planningCyclePipeline =
+                new PlanningCyclePipeline(openAiChatClient, featurePlanStateStore, workProfileRegistry);
         registry.register(
                 "v2_noop",
                 (event, state, bind) -> java.util.Map.of("v2NoopRan", "true"));
@@ -356,11 +362,16 @@ public final class Bootstrap {
                 repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore,
                 outboundDeliveryRouter));
         registry.register("spread_plan_workspace_signals", new SpreadPlanWorkspaceSignalsAction(featurePlanStateStore));
-        registry.register("evaluate_planning_packet_depth", new EvaluatePlanningPacketDepthAction(featurePlanStateStore));
-        registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction());
         registry.register(
-                "execute_planning_room_cycle",
-                new ExecutePlanningRoomCycleAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+                "evaluate_planning_packet_depth",
+                new EvaluatePlanningPacketDepthAction(featurePlanStateStore, workProfileRegistry));
+        registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction());
+        registry.register("execute_planning_room_cycle", new ExecutePlanningRoomCycleAction(planningCyclePipeline));
+        registry.register(
+                "planning_cycle_run_expansion", new PlanningRunExpansionPhaseAction(planningCyclePipeline));
+        registry.register("planning_cycle_run_inner_round", new PlanningRunInnerRoundAction(planningCyclePipeline));
+        registry.register(
+                "planning_cycle_finalize", new PlanningFinalizePlanningCycleAction(planningCyclePipeline));
         registry.register(
                 "merge_planning_clarification_choice",
                 new MergePlanningClarificationChoiceAction(featurePlanStateStore, workProfileRegistry));

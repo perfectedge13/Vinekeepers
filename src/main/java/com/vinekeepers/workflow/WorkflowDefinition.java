@@ -1,5 +1,7 @@
 package com.vinekeepers.workflow;
 
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,20 +17,31 @@ public final class WorkflowDefinition {
     private final Map<String, Object> llm;
     /** When {@code v2}, {@link com.vinekeepers.workflow.v2.GraphWorkflowRunner} may be used when phases are present. */
     private final String workflowSchema;
+    private final WorkflowTemplatePolicy templatePolicy;
 
     public WorkflowDefinition(String id, List<Map<String, Object>> steps, Map<String, Object> llm) {
-        this(id, steps, llm, null);
+        this(id, steps, llm, null, null);
     }
 
     public WorkflowDefinition(String id, List<Map<String, Object>> steps, Map<String, Object> llm, String workflowSchema) {
+        this(id, steps, llm, workflowSchema, null);
+    }
+
+    public WorkflowDefinition(
+            String id,
+            List<Map<String, Object>> steps,
+            Map<String, Object> llm,
+            String workflowSchema,
+            WorkflowTemplatePolicy templatePolicy) {
         this.id = id != null ? id : "";
         this.steps = steps != null ? List.copyOf(steps) : List.of();
         this.llm = llm != null && !llm.isEmpty() ? Map.copyOf(llm) : Map.of();
         this.workflowSchema = workflowSchema != null && !workflowSchema.isBlank() ? workflowSchema.trim() : null;
+        this.templatePolicy = templatePolicy != null ? templatePolicy : WorkflowTemplatePolicy.LEGACY_FULL_STATE;
     }
 
     public WorkflowDefinition(String id, List<Map<String, Object>> steps) {
-        this(id, steps, Map.of(), null);
+        this(id, steps, Map.of(), null, null);
     }
 
     public String getId() {
@@ -52,6 +65,10 @@ public final class WorkflowDefinition {
 
     public boolean isWorkflowSchemaV2() {
         return "v2".equalsIgnoreCase(workflowSchema);
+    }
+
+    public WorkflowTemplatePolicy getTemplatePolicy() {
+        return templatePolicy;
     }
 
     /**

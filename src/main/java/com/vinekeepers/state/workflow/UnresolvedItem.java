@@ -20,6 +20,7 @@ public final class UnresolvedItem {
     private final Map<String, String> source;
     private final List<Map<String, String>> answers;
     private final List<String> affectedPaths;
+    private final int repeatCount;
 
     public UnresolvedItem(
             String id,
@@ -31,6 +32,20 @@ public final class UnresolvedItem {
             Map<String, String> source,
             List<Map<String, String>> answers,
             List<String> affectedPaths) {
+        this(id, fingerprint, status, promptTemplateRef, questionText, severity, source, answers, affectedPaths, 0);
+    }
+
+    public UnresolvedItem(
+            String id,
+            String fingerprint,
+            UnresolvedItemStatus status,
+            String promptTemplateRef,
+            String questionText,
+            String severity,
+            Map<String, String> source,
+            List<Map<String, String>> answers,
+            List<String> affectedPaths,
+            int repeatCount) {
         this.id = id != null ? id : "";
         this.fingerprint = fingerprint != null ? fingerprint : "";
         this.status = status != null ? status : UnresolvedItemStatus.OPEN;
@@ -40,6 +55,7 @@ public final class UnresolvedItem {
         this.source = source != null ? Map.copyOf(source) : Map.of();
         this.answers = answers != null ? List.copyOf(answers) : List.of();
         this.affectedPaths = affectedPaths != null ? List.copyOf(affectedPaths) : List.of();
+        this.repeatCount = Math.max(0, repeatCount);
     }
 
     public String getId() {
@@ -78,9 +94,36 @@ public final class UnresolvedItem {
         return affectedPaths;
     }
 
+    public int getRepeatCount() {
+        return repeatCount;
+    }
+
     public UnresolvedItem withStatus(UnresolvedItemStatus newStatus) {
         return new UnresolvedItem(
-                id, fingerprint, newStatus, promptTemplateRef, questionText, severity, source, answers, affectedPaths);
+                id,
+                fingerprint,
+                newStatus,
+                promptTemplateRef,
+                questionText,
+                severity,
+                source,
+                answers,
+                affectedPaths,
+                repeatCount);
+    }
+
+    public UnresolvedItem withIncrementRepeatCount() {
+        return new UnresolvedItem(
+                id,
+                fingerprint,
+                status,
+                promptTemplateRef,
+                questionText,
+                severity,
+                source,
+                answers,
+                affectedPaths,
+                repeatCount + 1);
     }
 
     public UnresolvedItem withAppendedAnswer(String raw, String normalized) {
@@ -91,7 +134,16 @@ public final class UnresolvedItem {
         row.put("at", String.valueOf(System.currentTimeMillis()));
         next.add(Map.copyOf(row));
         return new UnresolvedItem(
-                id, fingerprint, status, promptTemplateRef, questionText, severity, source, next, affectedPaths);
+                id,
+                fingerprint,
+                status,
+                promptTemplateRef,
+                questionText,
+                severity,
+                source,
+                next,
+                affectedPaths,
+                repeatCount);
     }
 
     public Map<String, Object> toMap() {
@@ -105,6 +157,7 @@ public final class UnresolvedItem {
         m.put("source", new LinkedHashMap<>(source));
         m.put("answers", new ArrayList<>(answers));
         m.put("affectedPaths", new ArrayList<>(affectedPaths));
+        m.put("repeatCount", repeatCount);
         return m;
     }
 
@@ -156,6 +209,15 @@ public final class UnresolvedItem {
                 }
             }
         }
-        return new UnresolvedItem(id, fp, st, ptr, q, sev, src, ans, paths);
+        int repeat = 0;
+        Object rc = m.get("repeatCount");
+        if (rc != null) {
+            try {
+                repeat = Integer.parseInt(rc.toString().trim());
+            } catch (NumberFormatException ignored) {
+                repeat = 0;
+            }
+        }
+        return new UnresolvedItem(id, fp, st, ptr, q, sev, src, ans, paths, repeat);
     }
 }

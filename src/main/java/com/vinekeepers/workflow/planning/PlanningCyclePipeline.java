@@ -37,6 +37,24 @@ public final class PlanningCyclePipeline {
     private static final int MAX_BOT_INNER_ROUNDS = 3;
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** Partial-cycle YAML: aggregated follow-up strings between expansion / inner-round / finalize actions. */
+    public static final String PARTIAL_AGGREGATED_FOLLOWUPS_KEY = "planningPartialAggregatedFollowUpsJson";
+
+    public static final String PARTIAL_LAST_ROLE_SUMMARY_KEY = "planningPartialLastRoleRoundSummary";
+    public static final String PARTIAL_LAST_SYNTH_KEY = "planningPartialLastSynthLlmLine";
+    public static final String PARTIAL_DEPTH_OK_KEY = "planningPartialDepthOk";
+    public static final String PARTIAL_DEPTH_REASON_KEY = "planningPartialDepthReason";
+
+    private record LoadedCycle(
+            String contextId, FeaturePlanState plan, WorkProfileDefinition profile, Map<String, Object> work) {}
+
+    private record InnerRoundResult(
+            FeaturePlanState plan,
+            boolean depthOk,
+            String depthReason,
+            String lastRoleRoundSummary,
+            String lastSynthLlmLine) {}
+
     private final OpenAiChatClient openAiChatClient;
     private final FeaturePlanStateStore planStateStore;
     private final WorkProfileRegistry workProfileRegistry;
@@ -52,90 +70,38 @@ public final class PlanningCyclePipeline {
 
     public Map<String, Object> execute(Event event, Map<String, Object> state, Map<String, Object> bind) {
         Map<String, Object> spread = baseSpread();
-        if (planStateStore == null || workProfileRegistry == null) {
-            spread.put("planningRoomCycleError", "MISSING_DEPS");
+        LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
+        if (ctx == null) {
             finishProgressFingerprint(state, spread);
             return spread;
         }
-        String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
-        if (contextId == null || contextId.isBlank()) {
-            spread.put("planningRoomCycleError", "NO_CONTEXT");
-            finishProgressFingerprint(state, spread);
-            return spread;
-        }
-        FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
-        if (plan == null) {
-            spread.put("planningRoomCycleError", "NO_PLAN");
-            finishProgressFingerprint(state, spread);
-            return spread;
-        }
-        String profileId = plan.getProfileId();
-        WorkProfileDefinition profile = profileId != null && !profileId.isBlank()
-                ? workProfileRegistry.get(profileId).orElse(null)
-                : null;
-        if (profile == null || profile.findSection("request_exploration", "analysis").isEmpty()) {
-            spread.put("planningRoomCycleError", "PROFILE_NOT_V2");
-            finishProgressFingerprint(state, spread);
-            return spread;
-        }
+        String contextId = ctx.contextId();
+        WorkProfileDefinition profile = ctx.profile();
+        Map<String, Object> work = ctx.work();
+        FeaturePlanState plan = ctx.plan();
 
         int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0);
         cycleIteration++;
         spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
 
-        spread.put("planningPhase", "REQUEST_EXPANSION");
         List<String> aggregatedFollowUps = new ArrayList<>();
-        Map<String, Object> work = new LinkedHashMap<>();
-        if (state != null) {
-            work.putAll(state);
-        }
-        Object expansionObj = new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry)
-                .run(event, work, bind);
-        if (expansionObj instanceof Map<?, ?> expMap) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> exp = (Map<String, Object>) expMap;
-            mergeSpreadIntoWorkAndOuter(exp, work, spread);
-        }
-        mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
+        runExpansionPhase(event, work, spread, bind, aggregatedFollowUps);
 
-        new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
         String depthReason = "";
         boolean depthOk = false;
         String lastRoleRoundSummary = "";
         String lastSynthLlmLine = "";
+        FeaturePlanState planPtr = plan;
 
         for (int inner = 0; inner < MAX_BOT_INNER_ROUNDS; inner++) {
-            spread.put("planningPhase", "DRAFTING");
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-            List<String> roleTags = new ArrayList<>();
-            runRole(PlanningRole.ARCHITECT, plan, profile, event, work, spread, aggregatedFollowUps, roleTags);
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.AUDITOR, plan, profile, event, work, spread, aggregatedFollowUps, roleTags);
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.SCRIBE, plan, profile, event, work, spread, aggregatedFollowUps, roleTags);
-            lastRoleRoundSummary = summarizeRoleRound(roleTags);
-
-            new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
-
-            Object synthObj =
-                    new RunLlmPlanningSynthesisAction(openAiChatClient, planStateStore, workProfileRegistry)
-                            .run(event, work, bind);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> synthSpread =
-                    synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-            mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
-            mergeSynthFollowUps(spread, aggregatedFollowUps);
-            lastSynthLlmLine = pickSynthLlmLine(synthSpread, lastSynthLlmLine);
-
-            new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
-
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-            PlanningPacketDepthEvaluator.DepthResult dr = PlanningPacketDepthEvaluator.evaluate(plan);
-            depthOk = dr.ok();
-            depthReason = dr.reason() != null ? dr.reason() : "";
-            spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
-            spread.put("planningPacketDepthReason", depthReason);
-            spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
+            InnerRoundResult round =
+                    runSingleInnerRound(
+                            event, contextId, profile, work, spread, bind, aggregatedFollowUps, planPtr, lastSynthLlmLine);
+            planPtr = round.plan();
+            depthOk = round.depthOk();
+            depthReason = round.depthReason();
+            lastRoleRoundSummary = round.lastRoleRoundSummary();
+            lastSynthLlmLine = round.lastSynthLlmLine();
             if (depthOk) {
                 break;
             }
@@ -144,7 +110,7 @@ public final class PlanningCyclePipeline {
         spread.put("planningCycleRolePassSummary", lastRoleRoundSummary);
         spread.put("planningCycleSynthesisLlmNote", lastSynthLlmLine);
 
-        plan = planStateStore.getByContextId(contextId).orElse(plan);
+        plan = planStateStore.getByContextId(contextId).orElse(planPtr);
         RankedClarification ranked = PlanningQuestionRankingPolicy.rank(plan, aggregatedFollowUps, 3);
         for (String assumption : ranked.assumptionsToRecord()) {
             plan = appendAssumption(plan, assumption);
@@ -224,6 +190,293 @@ public final class PlanningCyclePipeline {
 
         finishProgressFingerprint(state, spread);
         return spread;
+    }
+
+    /**
+     * Partial cycle: request expansion LLM + build request exploration. Resets {@link #PARTIAL_AGGREGATED_FOLLOWUPS_KEY}
+     * in the returned spread (merge into session before inner rounds). Bumps {@code planningRoomCycleIteration}.
+     */
+    public Map<String, Object> runExpansionPhaseOnly(Event event, Map<String, Object> state, Map<String, Object> bind) {
+        Map<String, Object> spread = baseSpread();
+        LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
+        if (ctx == null) {
+            finishProgressFingerprint(state, spread);
+            return spread;
+        }
+        int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0) + 1;
+        spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
+        List<String> aggregatedFollowUps = new ArrayList<>();
+        runExpansionPhase(event, ctx.work(), spread, bind, aggregatedFollowUps);
+        putAggregatedJson(spread, aggregatedFollowUps);
+        return spread;
+    }
+
+    /**
+     * Partial cycle: one architect/auditor/scribe round, expand drafts, synthesis, pre-critique, depth check.
+     * Reads/writes {@link #PARTIAL_AGGREGATED_FOLLOWUPS_KEY} via state (after merge) and returned spread.
+     */
+    public Map<String, Object> runInnerRoundOnce(Event event, Map<String, Object> state, Map<String, Object> bind) {
+        Map<String, Object> spread = baseSpread();
+        LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
+        if (ctx == null) {
+            finishProgressFingerprint(state, spread);
+            return spread;
+        }
+        String contextId = ctx.contextId();
+        List<String> aggregatedFollowUps = readAggregatedFromState(state);
+        String prevSynth = getString(state, PARTIAL_LAST_SYNTH_KEY);
+        FeaturePlanState plan = ctx.plan();
+        InnerRoundResult round =
+                runSingleInnerRound(
+                        event,
+                        contextId,
+                        ctx.profile(),
+                        ctx.work(),
+                        spread,
+                        bind,
+                        aggregatedFollowUps,
+                        plan,
+                        prevSynth != null ? prevSynth : "");
+        putAggregatedJson(spread, aggregatedFollowUps);
+        spread.put(PARTIAL_LAST_ROLE_SUMMARY_KEY, round.lastRoleRoundSummary());
+        spread.put(PARTIAL_LAST_SYNTH_KEY, round.lastSynthLlmLine());
+        spread.put(PARTIAL_DEPTH_OK_KEY, round.depthOk() ? "true" : "false");
+        spread.put(PARTIAL_DEPTH_REASON_KEY, round.depthReason() != null ? round.depthReason() : "");
+        return spread;
+    }
+
+    /**
+     * Partial cycle: rank clarifications, orchestrator summary, progress fingerprint — after expansion + inner round(s).
+     */
+    public Map<String, Object> finalizePlanningCycleSpread(Event event, Map<String, Object> state, Map<String, Object> bind) {
+        Map<String, Object> spread = baseSpread();
+        LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
+        if (ctx == null) {
+            finishProgressFingerprint(state, spread);
+            return spread;
+        }
+        String contextId = ctx.contextId();
+        int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0);
+        List<String> aggregatedFollowUps = readAggregatedFromState(state);
+        boolean depthOk = "true".equalsIgnoreCase(getString(state, PARTIAL_DEPTH_OK_KEY));
+        String depthReason = getString(state, PARTIAL_DEPTH_REASON_KEY);
+        if (depthReason == null) {
+            depthReason = "";
+        }
+        String lastRoleRoundSummary = getString(state, PARTIAL_LAST_ROLE_SUMMARY_KEY);
+        if (lastRoleRoundSummary == null) {
+            lastRoleRoundSummary = "";
+        }
+        String lastSynthLlmLine = getString(state, PARTIAL_LAST_SYNTH_KEY);
+        if (lastSynthLlmLine == null) {
+            lastSynthLlmLine = "";
+        }
+
+        spread.put("planningCycleRolePassSummary", lastRoleRoundSummary);
+        spread.put("planningCycleSynthesisLlmNote", lastSynthLlmLine);
+        spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
+        spread.put("planningPacketDepthReason", depthReason);
+        spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
+
+        FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
+        RankedClarification ranked = PlanningQuestionRankingPolicy.rank(plan, aggregatedFollowUps, 3);
+        for (String assumption : ranked.assumptionsToRecord()) {
+            plan = appendAssumption(plan, assumption);
+        }
+        planStateStore.update(plan);
+
+        spread.put("planningQuestionsAskedThisRound", ranked.userInputRequired() ? "1" : "0");
+        spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
+        spread.put("planningUserInputRequired", ranked.userInputRequired() ? "true" : "false");
+        spread.put("planningClarificationChoicesJson", ranked.choicesJson());
+        spread.put("planningClarificationMetaJson", ranked.metaJson());
+        spread.put("planningClarificationUseStructuredChoices", ranked.useStructuredChoices() ? "true" : "false");
+        spread.put("planningClarificationQuestionText", ranked.questionText() != null ? ranked.questionText() : "");
+        spread.put(
+                "planningClarificationOrchestratorPrompt",
+                ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
+        boolean readyToPost = depthOk && !ranked.userInputRequired();
+        applyClarificationStuck(state, spread, ranked);
+
+        boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
+        String stuckHint = getString(spread, "planningClarificationStuckHint");
+        spread.put(
+                "planningOrchestratorRoundSummary",
+                buildOrchestratorSummary(
+                        plan,
+                        depthOk,
+                        depthReason,
+                        ranked,
+                        cycleIteration,
+                        readyToPost,
+                        clarificationStuck,
+                        stuckHint != null ? stuckHint : ""));
+        spread.put(
+                "planningRevisionNeeded",
+                (!depthOk || ranked.userInputRequired()) ? "true" : "false");
+
+        spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
+        spread.put(
+                "planningPhase",
+                ranked.userInputRequired()
+                        ? "WAITING_FOR_CLARIFICATION"
+                        : (readyToPost ? "READY_FOR_APPROVAL" : "REVISING"));
+        spread.put("planningAssumptionsUsed", String.valueOf(ranked.assumptionsToRecord().size()));
+
+        if (!readyToPost && !ranked.userInputRequired() && cycleIteration >= 4) {
+            spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
+        }
+        String rolePassErr =
+                spread.get("planningRolePassLastError") != null
+                        ? spread.get("planningRolePassLastError").toString()
+                        : "";
+        String llmErr = firstNonBlank(getString(spread, "planningLlmError"), "");
+        spread.put(
+                "planningCycleUserVisibleFailure",
+                buildUserVisibleFailure(
+                        spread.get("planningRoomCycleError") != null
+                                ? spread.get("planningRoomCycleError").toString()
+                                : "",
+                        llmErr));
+
+        spread.put(
+                "planningCycleProgressSummary",
+                buildCycleProgressSummary(
+                        cycleIteration,
+                        depthOk,
+                        depthReason,
+                        ranked,
+                        spread.get("planningRoomCycleError") != null
+                                ? spread.get("planningRoomCycleError").toString()
+                                : "",
+                        rolePassErr,
+                        lastRoleRoundSummary,
+                        lastSynthLlmLine,
+                        llmErr,
+                        getString(spread, "planningExpansionFallbackUsed"),
+                        getString(spread, "planningLlmSkipReason")));
+
+        finishProgressFingerprint(state, spread);
+        return spread;
+    }
+
+    private LoadedCycle loadCycleOrAbort(
+            Event event, Map<String, Object> state, Map<String, Object> bind, Map<String, Object> spread) {
+        if (planStateStore == null || workProfileRegistry == null) {
+            spread.put("planningRoomCycleError", "MISSING_DEPS");
+            return null;
+        }
+        String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
+        if (contextId == null || contextId.isBlank()) {
+            spread.put("planningRoomCycleError", "NO_CONTEXT");
+            return null;
+        }
+        FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
+        if (plan == null) {
+            spread.put("planningRoomCycleError", "NO_PLAN");
+            return null;
+        }
+        String profileId = plan.getProfileId();
+        WorkProfileDefinition profile =
+                profileId != null && !profileId.isBlank()
+                        ? workProfileRegistry.get(profileId).orElse(null)
+                        : null;
+        if (profile == null || profile.findSection("request_exploration", "analysis").isEmpty()) {
+            spread.put("planningRoomCycleError", "PROFILE_NOT_V2");
+            return null;
+        }
+        Map<String, Object> work = new LinkedHashMap<>();
+        if (state != null) {
+            work.putAll(state);
+        }
+        return new LoadedCycle(contextId, plan, profile, work);
+    }
+
+    private void runExpansionPhase(
+            Event event,
+            Map<String, Object> work,
+            Map<String, Object> spread,
+            Map<String, Object> bind,
+            List<String> aggregatedFollowUps) {
+        spread.put("planningPhase", "REQUEST_EXPANSION");
+        Object expansionObj =
+                new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry).run(event, work, bind);
+        if (expansionObj instanceof Map<?, ?> expMap) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> exp = (Map<String, Object>) expMap;
+            mergeSpreadIntoWorkAndOuter(exp, work, spread);
+        }
+        mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
+        new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
+    }
+
+    private InnerRoundResult runSingleInnerRound(
+            Event event,
+            String contextId,
+            WorkProfileDefinition profile,
+            Map<String, Object> work,
+            Map<String, Object> spread,
+            Map<String, Object> bind,
+            List<String> aggregatedFollowUps,
+            FeaturePlanState plan,
+            String previousSynthLine) {
+        spread.put("planningPhase", "DRAFTING");
+        FeaturePlanState planPtr = planStateStore.getByContextId(contextId).orElse(plan);
+        List<String> roleTags = new ArrayList<>();
+        runRole(PlanningRole.ARCHITECT, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
+        planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
+        runRole(PlanningRole.AUDITOR, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
+        planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
+        runRole(PlanningRole.SCRIBE, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
+        String lastRoleRoundSummary = summarizeRoleRound(roleTags);
+
+        new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
+
+        Object synthObj =
+                new RunLlmPlanningSynthesisAction(openAiChatClient, planStateStore, workProfileRegistry)
+                        .run(event, work, bind);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> synthSpread = synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
+        mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
+        mergeSynthFollowUps(spread, aggregatedFollowUps);
+        String lastSynthLlmLine = pickSynthLlmLine(synthSpread, previousSynthLine);
+
+        new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
+
+        planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
+        PlanningPacketDepthEvaluator.DepthResult dr = PlanningPacketDepthEvaluator.evaluate(planPtr, profile);
+        boolean depthOk = dr.ok();
+        String depthReason = dr.reason() != null ? dr.reason() : "";
+        spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
+        spread.put("planningPacketDepthReason", depthReason);
+        spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
+        return new InnerRoundResult(planPtr, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
+    }
+
+    private static List<String> readAggregatedFromState(Map<String, Object> state) {
+        if (state == null) {
+            return new ArrayList<>();
+        }
+        Object raw = state.get(PARTIAL_AGGREGATED_FOLLOWUPS_KEY);
+        if (raw == null || raw.toString().isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            List<String> list = JSON.readValue(raw.toString(), new TypeReference<>() {});
+            return list != null ? new ArrayList<>(list) : new ArrayList<>();
+        } catch (JsonProcessingException e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static void putAggregatedJson(Map<String, Object> spread, List<String> aggregatedFollowUps) {
+        try {
+            spread.put(
+                    PARTIAL_AGGREGATED_FOLLOWUPS_KEY,
+                    JSON.writeValueAsString(aggregatedFollowUps != null ? aggregatedFollowUps : List.of()));
+        } catch (JsonProcessingException e) {
+            spread.put(PARTIAL_AGGREGATED_FOLLOWUPS_KEY, "[]");
+        }
     }
 
     private static void mergeSpreadIntoWorkAndOuter(

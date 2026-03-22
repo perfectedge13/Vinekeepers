@@ -14,8 +14,14 @@ public final class WorkProfileDefinition {
     private final String profileId;
     private final String title;
     private final Map<String, ArtifactDefinition> artifactsById;
+    private final List<ReadinessAnyOfGroup> readinessAnyOfGroups;
 
     public WorkProfileDefinition(String profileId, String title, List<ArtifactDefinition> artifacts) {
+        this(profileId, title, artifacts, List.of());
+    }
+
+    public WorkProfileDefinition(
+            String profileId, String title, List<ArtifactDefinition> artifacts, List<ReadinessAnyOfGroup> readinessAnyOfGroups) {
         this.profileId = Objects.requireNonNull(profileId, "profileId").trim();
         this.title = title != null ? title : "";
         Map<String, ArtifactDefinition> m = new LinkedHashMap<>();
@@ -25,6 +31,7 @@ public final class WorkProfileDefinition {
             }
         }
         this.artifactsById = Map.copyOf(m);
+        this.readinessAnyOfGroups = readinessAnyOfGroups != null ? List.copyOf(readinessAnyOfGroups) : List.of();
     }
 
     public String getProfileId() {
@@ -53,5 +60,25 @@ public final class WorkProfileDefinition {
             }
             return a.getSections().stream().filter(s -> s.getSectionId().equals(sectionId)).findFirst();
         });
+    }
+
+    public List<ReadinessAnyOfGroup> getReadinessAnyOfGroups() {
+        return readinessAnyOfGroups;
+    }
+
+    public boolean hasDeclarativeReadiness() {
+        if (!readinessAnyOfGroups.isEmpty()) {
+            return true;
+        }
+        for (ArtifactDefinition a : artifactsById.values()) {
+            for (SectionDefinition sec : a.getSections()) {
+                for (FieldDefinition f : sec.getFields()) {
+                    if (f.hasReadinessConstraints()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

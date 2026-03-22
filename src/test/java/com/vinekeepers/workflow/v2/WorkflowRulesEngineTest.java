@@ -56,4 +56,32 @@ class WorkflowRulesEngineTest {
                                 List.of(Map.of("transition", "clarify"))));
         assertEquals("clarify", WorkflowRulesEngine.firstMatchingTransition(state, rules).orElseThrow());
     }
+
+    @Test
+    void ledgerMaxOpenRepeatGteMatches() {
+        Map<String, Object> state = new LinkedHashMap<>();
+        UnresolvedItemLedger ledger =
+                UnresolvedItemLedger.empty()
+                        .withAdded(
+                                new UnresolvedItem(
+                                        "i",
+                                        "f",
+                                        UnresolvedItemStatus.OPEN,
+                                        "",
+                                        "q",
+                                        "",
+                                        Map.of(),
+                                        List.of(),
+                                        List.of(),
+                                        3));
+        ledger.putInto(state);
+        List<Map<String, Object>> rules =
+                List.of(
+                        Map.of(
+                                "when",
+                                Map.of("ledgerMaxOpenRepeatGte", Map.of("gte", 2)),
+                                "then",
+                                List.of(Map.of("transition", "escalate"))));
+        assertEquals("escalate", WorkflowRulesEngine.firstMatchingTransition(state, rules).orElseThrow());
+    }
 }

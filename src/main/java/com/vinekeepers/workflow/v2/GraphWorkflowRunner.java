@@ -12,6 +12,7 @@ import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunResult;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.steps.CallActionStep;
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
     private final WorkflowActionRegistry actionRegistry;
     private final ToolRunner toolRunner;
     private final ToolPolicy toolPolicy;
+    private final WorkflowTemplatePolicy templatePolicy;
 
     public GraphWorkflowRunner(
             WorkflowV2Model model,
@@ -47,12 +49,15 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             ToolPolicy toolPolicy,
             ConversationMode conversationMode,
             String sessionKeyStrategyName) {
-        this.model = model != null ? model : new WorkflowV2Model("", "", Map.of(), Map.of(), Map.of(), Map.of());
+        WorkflowV2Model resolved = model != null ? model : new WorkflowV2Model("", "", Map.of(), Map.of(), Map.of(),
+                Map.of(), WorkflowTemplatePolicy.LEGACY_FULL_STATE);
+        this.model = resolved;
         this.actionRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.toolRunner = toolRunner;
         this.toolPolicy = toolPolicy != null ? toolPolicy : ToolPolicy.allowAll();
         this.conversationMode = conversationMode != null ? conversationMode : ConversationMode.SINGLE_EVENT;
         this.sessionKeyStrategyName = sessionKeyStrategyName;
+        this.templatePolicy = resolved.getTemplatePolicy();
     }
 
     @Override
@@ -79,6 +84,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
         }
 
         applyWorkflowLlmDefaults(state);
+        templatePolicy.writeIntoState(state);
 
         String phaseId = state.get(PHASE_KEY) != null ? state.get(PHASE_KEY).toString().trim() : "";
         if (phaseId.isBlank()) {

@@ -5,19 +5,17 @@ import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 
 import java.util.Map;
 
-/**
- * Workflow action facade for one planning-room cycle; delegates to {@link PlanningCyclePipeline}.
- */
-public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.workflow.WorkflowAction {
+/** Partial planning-room cycle: expansion LLM + request exploration only. */
+public final class PlanningRunExpansionPhaseAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final PlanningCyclePipeline pipeline;
 
-    public ExecutePlanningRoomCycleAction(PlanningCyclePipeline pipeline) {
+    public PlanningRunExpansionPhaseAction(PlanningCyclePipeline pipeline) {
         this.pipeline = pipeline != null ? pipeline : new PlanningCyclePipeline(null, null, null);
     }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return pipeline.execute(event, state, bind);
+        return pipeline.runExpansionPhaseOnly(event, state, bind);
     }
 }

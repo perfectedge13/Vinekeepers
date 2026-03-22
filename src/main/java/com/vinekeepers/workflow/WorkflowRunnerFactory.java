@@ -4,6 +4,7 @@ import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
 import com.vinekeepers.workflow.v2.GraphWorkflowRunner;
 import com.vinekeepers.workflow.v2.WorkflowV2Loader;
 
@@ -109,14 +110,16 @@ public final class WorkflowRunnerFactory {
                             ref,
                             (List<Map<String, Object>>) list,
                             WorkflowDefinition.copyLlmMap(wMap.get("llm")),
-                            schemaFromMap(wMap));
+                            schemaFromMap(wMap),
+                            WorkflowTemplatePolicy.fromYaml(wMap.get("templates")));
                 }
                 if ("v2".equalsIgnoreCase(schemaFromMap(wMap)) && wMap.get("phases") instanceof Map<?, ?>) {
                     return new WorkflowDefinition(
                             ref,
                             List.of(),
                             WorkflowDefinition.copyLlmMap(wMap.get("llm")),
-                            "v2");
+                            "v2",
+                            WorkflowTemplatePolicy.fromYaml(wMap.get("templates")));
                 }
             }
         }
@@ -125,7 +128,8 @@ public final class WorkflowRunnerFactory {
                     "inline",
                     (List<Map<String, Object>>) list,
                     WorkflowDefinition.copyLlmMap(params.get("llm")),
-                    schemaFromMap(params));
+                    schemaFromMap(params),
+                    WorkflowTemplatePolicy.fromYaml(params.get("templates")));
         }
         return new WorkflowDefinition("", List.of());
     }

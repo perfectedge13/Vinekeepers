@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-21T12:00:00Z"
+  updated_utc: "2026-03-22T04:20:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -87,6 +87,7 @@ assets:
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, spread_plan_workspace_signals,
       evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
+      planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
       post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
@@ -234,7 +235,9 @@ assets:
   - id: ASSET-WORKFLOW-RUNNER-FACTORY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowRunnerFactory.java
-    role: Create WorkflowRunner from workflow type, params, and bot runtime options from config; when workflowSchema v2 and phases exist, yields GraphWorkflowRunner
+    role: >-
+      Create WorkflowRunner from workflow type, params, and bot runtime options from config; parses optional templates map into
+      WorkflowTemplatePolicy; when workflowSchema v2 and phases exist, yields GraphWorkflowRunner
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -243,7 +246,9 @@ assets:
   - id: ASSET-GRAPH-WORKFLOW-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/GraphWorkflowRunner.java
-    role: Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action capabilities)
+    role: >-
+      Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action capabilities); applies workflow
+      template policy to state each run
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -251,7 +256,7 @@ assets:
   - id: ASSET-WORKFLOW-V2-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/WorkflowV2Loader.java
-    role: Parse workflow YAML map into WorkflowV2Model (phases, capabilities, rulesets)
+    role: Parse workflow YAML map into WorkflowV2Model (phases, capabilities, rulesets, optional templates)
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -259,7 +264,9 @@ assets:
   - id: ASSET-WORKFLOW-RULES-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/WorkflowRulesEngine.java
-    role: Ordered rule evaluation with ANDed when predicates and transition effects for v2 convergence
+    role: >-
+      Ordered rule evaluation with ANDed when predicates and transition effects for v2 convergence; predicates include
+      ledgerMaxOpenRepeatGte (max repeatCount among OPEN UnresolvedItem entries)
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -289,10 +296,32 @@ assets:
       - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW
+  - id: ASSET-WORKFLOW-TEMPLATE-POLICY
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/template/WorkflowTemplatePolicy.java
+    role: >-
+      Workflow YAML templates block (exposeInternal default true; optional allowedKeys); writes __workflowTemplatesExposeInternal
+      and __workflowTemplatesAllowedKeys into session state for post_channel_message and other consumers
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-WORKFLOW-TEMPLATE-INTERPOLATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/template/WorkflowTemplateInterpolator.java
+    role: >-
+      Interpolates {{key}} using full state (legacy) or WorkflowSafeTemplateRenderer + UserCopyContext when exposeInternal is false
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
   - id: ASSET-PLANNING-CYCLE-PIPELINE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningCyclePipeline.java
-    role: Composable planning-room cycle logic invoked by execute_planning_room_cycle action facade
+    role: >-
+      Composable planning-room cycle logic invoked by execute_planning_room_cycle; exposes partial phases
+      runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
+      planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -388,7 +417,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java
     role: >-
       Workflow definition from config (id, list of step configs, optional workflow-level llm map provider/model/timeoutMs
-      merged into state as workflowLlmProvider, workflowLlmModel, workflowLlmTimeoutMs); optional workflowSchema (e.g. v2)
+      merged into state as workflowLlmProvider, workflowLlmModel, workflowLlmTimeoutMs); optional workflowSchema (e.g. v2);
+      optional templates map (exposeInternal, allowedKeys) for WorkflowTemplatePolicy
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1165,22 +1195,55 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningPacketDepthEvaluator.java
     role: >-
-      Planning packet depth gate: word counts, placeholder/anti-echo checks, code-backed components_impacted when repo workspace
-      exists, open-questions and validation feature-specific heuristics
+      Planning packet depth gate: when WorkProfileDefinition has declarative readiness (readiness.anyOfGroups and/or field
+      richness keys), runs GenericReadinessEvaluator then supplemental checks (workspace/components, open questions, validation
+      specificity); otherwise legacy all-in-one heuristics (word counts, placeholder/anti-echo, etc.)
     requires:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
       - REQ-STATE-001
+      - REQ-CONFIG-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-GENERIC-READINESS-EVALUATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/readiness/GenericReadinessEvaluator.java
+    role: >-
+      Declarative readiness over work profile paths: anyOf groups, per-field minWords, readinessChecks (placeholder,
+      hollow_exploration), optional maxEchoOverlapWithRequest with echoWordSlack
+    requires:
+      - REQ-WORKFLOW-002
+      - REQ-CONFIG-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-VISIBLE-DELTA-TRACKER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/convergence/VisibleDeltaTracker.java
+    role: SHA-256 fingerprint of a keyed slice of workflow state for user-visible delta detection (generic anti-spam)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-USER-COPY-CONTEXT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/viewmodel/UserCopyContext.java
+    role: Default coordinator-facing allowlisted keys for user template slicing (generic UX boundary)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
   - id: ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningPacketDepthAction.java
     role: >-
-      Workflow action evaluate_planning_packet_depth — storeSpread planningPacketDepthOk, planningPacketDepthReason,
+      Workflow action evaluate_planning_packet_depth — resolves WorkProfileDefinition from plan profileId and
+      PlanningPacketDepthEvaluator.evaluate(plan, profile); storeSpread planningPacketDepthOk, planningPacketDepthReason,
       planningPacketDepthRetryRecommended; run before post_planning_packet_thread in YAML
     requires:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+      - REQ-CONFIG-001
       - REQ-LUNA-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
@@ -1224,6 +1287,36 @@ assets:
       planningRoomCycleIteration, planningProgressPostWorthy, planningProgressPostFingerprint, planningCycleRolePassSummary,
       planningClarificationStuck, planningClarificationStuckHint, planningPreviousClarificationQuestionText (from merge),
       planningCycleUserVisibleFailure, etc.
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-RUN-EXPANSION-PHASE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PlanningRunExpansionPhaseAction.java
+    role: Workflow action planning_cycle_run_expansion — PlanningCyclePipeline.runExpansionPhaseOnly (partial cycle)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-RUN-INNER-ROUND-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PlanningRunInnerRoundAction.java
+    role: Workflow action planning_cycle_run_inner_round — one drafting inner round (partial cycle)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-FINALIZE-PLANNING-CYCLE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PlanningFinalizePlanningCycleAction.java
+    role: Workflow action planning_cycle_finalize — rank clarifications and progress fingerprint (partial cycle)
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1484,6 +1577,7 @@ requirements:
         - >-
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, spread_plan_workspace_signals,
           evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
+          planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
           post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
@@ -1861,8 +1955,14 @@ requirements:
         - ProgressDedupeHelper provides normalize + fingerprint + isPostWorthy for generic progress dedupe
         - post_planning_progress_if_changed supports optional bind keys progressPostWorthyKey, progressPostFingerprintKey, lastProgressPostHashKey
         - Bootstrap registers v2_noop for tests and graph capability demos
-        - PlanningCyclePipeline executes planning cycle; ExecutePlanningRoomCycleAction is a thin facade
+        - PlanningCyclePipeline executes planning cycle; ExecutePlanningRoomCycleAction is a thin facade; planning_cycle_run_expansion,
+          planning_cycle_run_inner_round, planning_cycle_finalize split the same pipeline for v2 YAML
         - StructuredLlmArtifactUpsertPass executes generic artifact upsert LLM pass for role-derived prompts
+        - >-
+          Work profiles may declare readiness.anyOfGroups and field-level minWords/readinessChecks; GenericReadinessEvaluator
+          applies declarative depth before supplemental packet checks
+        - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
+        - Staging workflow arrietty_room_v2 (workflowSchema v2) wraps execute_planning_room_cycle for gradual cutover
       examples: []
     traceability:
       assets:
@@ -1874,8 +1974,15 @@ requirements:
         - ASSET-UNRESOLVED-ITEM-STATUS
         - ASSET-PROGRESS-DEDUPE-HELPER
         - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
+        - ASSET-WORKFLOW-TEMPLATE-POLICY
+        - ASSET-WORKFLOW-TEMPLATE-INTERPOLATOR
         - ASSET-PLANNING-CYCLE-PIPELINE
         - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
+        - ASSET-GENERIC-READINESS-EVALUATOR
+        - ASSET-VISIBLE-DELTA-TRACKER
+        - ASSET-USER-COPY-CONTEXT
+        - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
+        - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
       symbols: []
     validation:
       tests:
@@ -1891,7 +1998,7 @@ requirements:
           preconditions: []
         - id: UNIT-WORKFLOW-RULES-ENGINE
           title: WorkflowRulesEngineTest
-          intent: Verify truthy and hasOpenUnresolved rule matching and transition extraction
+          intent: Verify truthy, hasOpenUnresolved, and ledgerMaxOpenRepeatGte rule matching and transition extraction
           testClass: com.vinekeepers.workflow.v2.WorkflowRulesEngineTest
           preconditions: []
         - id: UNIT-GRAPH-WORKFLOW-RUNNER
@@ -1914,6 +2021,11 @@ requirements:
           intent: Verify allowlisted keys only are substituted
           testClass: com.vinekeepers.workflow.template.WorkflowSafeTemplateRendererTest
           preconditions: []
+        - id: UNIT-WORKFLOW-TEMPLATE-INTERPOLATOR
+          title: WorkflowTemplateInterpolatorTest
+          intent: Verify legacy vs safe template interpolation paths
+          testClass: com.vinekeepers.workflow.template.WorkflowTemplateInterpolatorTest
+          preconditions: []
         - id: UNIT-WORKFLOW-RUNNER-FACTORY-V2
           title: WorkflowRunnerFactoryTest
           intent: Verify configured workflow with workflowSchema v2 yields GraphWorkflowRunner
@@ -1925,6 +2037,16 @@ requirements:
           intent: Verify WorkflowDefinition workflowSchema v2 flag
           testClass: com.vinekeepers.workflow.WorkflowDefinitionTest
           testMethod: workflowSchemaV2
+          preconditions: []
+        - id: UNIT-GENERIC-READINESS-EVALUATOR
+          title: GenericReadinessEvaluatorTest
+          intent: Verify declarative readiness from software_feature_planning_v2 profile
+          testClass: com.vinekeepers.workflow.readiness.GenericReadinessEvaluatorTest
+          preconditions: []
+        - id: UNIT-VISIBLE-DELTA-TRACKER
+          title: VisibleDeltaTrackerTest
+          intent: Verify UX slice fingerprint changes when coordinator-facing fields change
+          testClass: com.vinekeepers.workflow.convergence.VisibleDeltaTrackerTest
           preconditions: []
   - id: REQ-LUNA-001
     title: Luna bot ΓÇö Discord mention trigger, multi-turn gather, Cursor Cloud API, lifecycle room Phase 1
@@ -2505,6 +2627,8 @@ features:
       - ASSET-UNRESOLVED-ITEM-LEDGER
       - ASSET-PROGRESS-DEDUPE-HELPER
       - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
+      - ASSET-VISIBLE-DELTA-TRACKER
+      - ASSET-USER-COPY-CONTEXT
     status: active
   - id: FEAT-WORKFLOW-STEPS
     slug: workflow-steps
@@ -2534,7 +2658,13 @@ features:
       - ASSET-EXTRACT-EVENT-FIELDS-STEP
       - ASSET-WORKFLOW-CAPABILITY-SUPPORT
       - ASSET-PLANNING-CYCLE-PIPELINE
+      - ASSET-PLANNING-RUN-EXPANSION-PHASE-ACTION
+      - ASSET-PLANNING-RUN-INNER-ROUND-ACTION
+      - ASSET-PLANNING-FINALIZE-PLANNING-CYCLE-ACTION
       - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
+      - ASSET-GENERIC-READINESS-EVALUATOR
+      - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
+      - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
     status: active
   - id: FEAT-CURSOR-GATHERING
     slug: cursor-gathering

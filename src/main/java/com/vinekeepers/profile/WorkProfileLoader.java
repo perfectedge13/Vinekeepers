@@ -78,7 +78,83 @@ public final class WorkProfileLoader {
                 }
             }
         }
-        return new WorkProfileDefinition(profileId, title, artifacts);
+        List<ReadinessAnyOfGroup> readiness = parseReadinessAnyOfGroups(raw.get("readiness"));
+        return new WorkProfileDefinition(profileId, title, artifacts, readiness);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<ReadinessAnyOfGroup> parseReadinessAnyOfGroups(Object readinessNode) {
+        if (!(readinessNode instanceof Map<?, ?> rm)) {
+            return List.of();
+        }
+        Object groups = rm.get("anyOfGroups");
+        if (!(groups instanceof List<?> list)) {
+            return List.of();
+        }
+        List<ReadinessAnyOfGroup> out = new ArrayList<>();
+        for (Object gObj : list) {
+            if (!(gObj instanceof Map<?, ?> gm)) {
+                continue;
+            }
+            Object rulesObj = ((Map<String, Object>) gm).get("rules");
+            if (!(rulesObj instanceof List<?> rlist)) {
+                continue;
+            }
+            List<ReadinessPathRule> rules = new ArrayList<>();
+            for (Object ro : rlist) {
+                if (ro instanceof Map<?, ?> rm2) {
+                    ReadinessPathRule r = parseReadinessPathRule((Map<String, Object>) rm2);
+                    if (r != null) {
+                        rules.add(r);
+                    }
+                }
+            }
+            if (!rules.isEmpty()) {
+                out.add(new ReadinessAnyOfGroup(rules));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static ReadinessPathRule parseReadinessPathRule(Map<String, Object> raw) {
+        if (raw == null) {
+            return null;
+        }
+        String artifactId = stringVal(raw.get("artifactId"));
+        String sectionId = stringVal(raw.get("sectionId"));
+        String fieldId = stringVal(raw.get("fieldId"));
+        if (artifactId.isBlank() || sectionId.isBlank() || fieldId.isBlank()) {
+            return null;
+        }
+        Integer minWords = intObject(raw.get("minWords"));
+        Double maxEcho = doubleObject(raw.get("maxEchoOverlapWithRequest"));
+        Integer echoSlack = intObject(raw.get("echoWordSlack"));
+        boolean skipIfBlank = booleanVal(raw.get("skipIfBlank"));
+        List<String> checks = stringList(raw.get("readinessChecks"));
+        return new ReadinessPathRule(
+                artifactId, sectionId, fieldId, minWords, maxEcho, echoSlack, skipIfBlank, checks);
+    }
+
+    private static Integer intObject(Object o) {
+        if (o == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(o.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Double doubleObject(Object o) {
+        if (o == null) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(o.toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -150,7 +226,13 @@ public final class WorkProfileLoader {
         }
         boolean required = booleanVal(raw.get("required"));
         String hint = stringVal(raw.get("promptHint"));
-        return new FieldDefinition(fieldId, label, type, required, hint);
+        Integer minWords = intObject(raw.get("minWords"));
+        Double maxEcho = doubleObject(raw.get("maxEchoOverlapWithRequest"));
+        Integer echoSlack = intObject(raw.get("echoWordSlack"));
+        boolean skipIfBlank = booleanVal(raw.get("skipReadinessIfBlank"));
+        List<String> checks = stringList(raw.get("readinessChecks"));
+        return new FieldDefinition(
+                fieldId, label, type, required, hint, minWords, maxEcho, echoSlack, skipIfBlank, checks);
     }
 
     private static String stringVal(Object o) {

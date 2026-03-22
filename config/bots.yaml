@@ -775,6 +775,28 @@ workflows:
         target: thread
     - type: done
       message: '{{launchMessage}}'
+  # Staging: v2 phase graph wrapping legacy execute_planning_room_cycle (parity tests / gradual cutover).
+  # Switch bot workflowRef from arrietty_room to arrietty_room_v2 when ready; do not change default here.
+  arrietty_room_v2:
+    workflowSchema: v2
+    llm:
+      provider: openai
+      model: gpt-4o-mini
+      timeoutMs: 120000
+    entryPhase: cycle
+    phases:
+      cycle:
+        pipeline: [cap_run_planning_cycle]
+        defaultNextPhase: done
+      done:
+        pipeline: []
+        terminal: true
+    capabilities:
+      cap_run_planning_cycle:
+        kind: legacy_action
+        action: execute_planning_room_cycle
+        storeSpread: true
+    rulesets: {}
   simple_echo:
     steps:
     - type: ask_input

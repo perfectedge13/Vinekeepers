@@ -1,5 +1,7 @@
 package com.vinekeepers.workflow.v2;
 
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +15,7 @@ public final class WorkflowV2Model {
     private final Map<String, WorkflowV2CapabilityModel> capabilities;
     private final Map<String, List<Map<String, Object>>> rulesets;
     private final Map<String, Object> llm;
+    private final WorkflowTemplatePolicy templatePolicy;
 
     public WorkflowV2Model(
             String id,
@@ -20,13 +23,15 @@ public final class WorkflowV2Model {
             Map<String, WorkflowV2PhaseModel> phases,
             Map<String, WorkflowV2CapabilityModel> capabilities,
             Map<String, List<Map<String, Object>>> rulesets,
-            Map<String, Object> llm) {
+            Map<String, Object> llm,
+            WorkflowTemplatePolicy templatePolicy) {
         this.id = id != null ? id : "";
         this.entryPhase = entryPhase != null ? entryPhase : "";
         this.phases = phases != null && !phases.isEmpty() ? Map.copyOf(phases) : Map.of();
         this.capabilities = capabilities != null && !capabilities.isEmpty() ? Map.copyOf(capabilities) : Map.of();
         this.rulesets = rulesets != null && !rulesets.isEmpty() ? Map.copyOf(rulesets) : Map.of();
         this.llm = llm != null && !llm.isEmpty() ? Map.copyOf(llm) : Map.of();
+        this.templatePolicy = templatePolicy != null ? templatePolicy : WorkflowTemplatePolicy.LEGACY_FULL_STATE;
     }
 
     public String getId() {
@@ -51,5 +56,9 @@ public final class WorkflowV2Model {
 
     public Map<String, Object> getLlm() {
         return llm;
+    }
+
+    public WorkflowTemplatePolicy getTemplatePolicy() {
+        return templatePolicy;
     }
 }

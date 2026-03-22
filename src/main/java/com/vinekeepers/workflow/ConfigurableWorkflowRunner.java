@@ -5,6 +5,7 @@ import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +29,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     private final ConversationMode conversationMode;
     private final List<WorkflowStep> steps;
     private final Map<String, Object> workflowLlmDefaults;
+    private final WorkflowTemplatePolicy templatePolicy;
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry) {
         this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null);
@@ -48,6 +50,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         this.sessionKeyStrategyName = sessionKeyStrategyName;
         this.conversationMode = conversationMode != null ? conversationMode : ConversationMode.SINGLE_EVENT;
         this.workflowLlmDefaults = resolvedDefinition.getLlm();
+        this.templatePolicy = resolvedDefinition.getTemplatePolicy();
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
                 toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
     }
@@ -77,6 +80,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             state.put("__botId", botId);
         }
         applyWorkflowLlmDefaults(state);
+        templatePolicy.writeIntoState(state);
 
         int maxSteps = 100;
         for (int i = 0; i < maxSteps; i++) {
@@ -156,6 +160,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     private static List<WorkflowStep> buildSteps(WorkflowDefinition definition, WorkflowActionRegistry registry,
                                                  ToolRunner toolRunner, ToolPolicy toolPolicy,
                                                  DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        WorkflowTemplatePolicy policy = definition.getTemplatePolicy();
         List<WorkflowStep> out = new ArrayList<>();
         for (Map<String, Object> stepMap : definition.getSteps()) {
             String type = (String) stepMap.get("type");
@@ -184,7 +189,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                             (String) stepMap.get("cancelLabel"),
                             (List<Map<String, Object>>) stepMap.get("fields"),
                             provider,
-                            controlMode));
+                            controlMode,
+                            policy));
                 }
                 case "capture_field" -> {
                     Boolean trimAndLower = stepMap.get("trimAndLower") instanceof Boolean b ? b
@@ -218,7 +224,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(
-                        (String) stepMap.get("message")));
+                        (String) stepMap.get("message"), policy));
                 default -> out.add(new com.vinekeepers.workflow.steps.DoneStep("Unknown step type: " + type));
             }
         }

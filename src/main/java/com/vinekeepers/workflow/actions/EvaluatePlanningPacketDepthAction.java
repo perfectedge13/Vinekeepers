@@ -1,6 +1,8 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
+import com.vinekeepers.profile.WorkProfileDefinition;
+import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
@@ -15,9 +17,11 @@ import java.util.Map;
 public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final FeaturePlanStateStore planStateStore;
+    private final WorkProfileRegistry workProfileRegistry;
 
-    public EvaluatePlanningPacketDepthAction(FeaturePlanStateStore planStateStore) {
+    public EvaluatePlanningPacketDepthAction(FeaturePlanStateStore planStateStore, WorkProfileRegistry workProfileRegistry) {
         this.planStateStore = planStateStore;
+        this.workProfileRegistry = workProfileRegistry;
     }
 
     @Override
@@ -35,7 +39,11 @@ public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.
             return spread;
         }
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
-        PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
+        WorkProfileDefinition profile = null;
+        if (workProfileRegistry != null && plan != null && plan.getProfileId() != null && !plan.getProfileId().isBlank()) {
+            profile = workProfileRegistry.get(plan.getProfileId()).orElse(null);
+        }
+        PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan, profile);
         spread.put("planningPacketDepthOk", r.ok() ? "true" : "false");
         spread.put("planningPacketDepthReason", r.reason() != null ? r.reason() : "");
         spread.put("planningPacketDepthRetryRecommended", r.ok() ? "false" : "true");

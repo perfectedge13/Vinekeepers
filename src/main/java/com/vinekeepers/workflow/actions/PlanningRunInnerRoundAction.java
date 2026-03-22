@@ -5,19 +5,17 @@ import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 
 import java.util.Map;
 
-/**
- * Workflow action facade for one planning-room cycle; delegates to {@link PlanningCyclePipeline}.
- */
-public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.workflow.WorkflowAction {
+/** Partial planning-room cycle: one drafting inner round (roles + expand + synth + depth). */
+public final class PlanningRunInnerRoundAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final PlanningCyclePipeline pipeline;
 
-    public ExecutePlanningRoomCycleAction(PlanningCyclePipeline pipeline) {
+    public PlanningRunInnerRoundAction(PlanningCyclePipeline pipeline) {
         this.pipeline = pipeline != null ? pipeline : new PlanningCyclePipeline(null, null, null);
     }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return pipeline.execute(event, state, bind);
+        return pipeline.runInnerRoundOnce(event, state, bind);
     }
 }

@@ -2,10 +2,13 @@ package com.vinekeepers.workflow;
 
 import org.junit.jupiter.api.Test;
 
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
+
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkflowDefinitionTest {
@@ -56,5 +59,18 @@ class WorkflowDefinitionTest {
                         Map.of(),
                         "v2");
         assertTrue(def.isWorkflowSchemaV2());
+    }
+
+    @Test
+    void templatePolicyDefaultsToLegacyFullState() {
+        WorkflowDefinition def = new WorkflowDefinition("t", List.of(Map.of("type", "done")));
+        assertSame(WorkflowTemplatePolicy.LEGACY_FULL_STATE, def.getTemplatePolicy());
+    }
+
+    @Test
+    void templatePolicyFromFiveArgConstructor() {
+        WorkflowTemplatePolicy pol = WorkflowTemplatePolicy.fromYaml(Map.of("exposeInternal", false));
+        WorkflowDefinition def = new WorkflowDefinition("t", List.of(), Map.of(), null, pol);
+        assertSame(pol, def.getTemplatePolicy());
     }
 }

@@ -1,7 +1,9 @@
 package com.vinekeepers.workflow.planreview;
 
+import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.workflow.planning.PlanningPlaceholderDetection;
+import com.vinekeepers.workflow.readiness.GenericReadinessEvaluator;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,9 +33,29 @@ public final class PlanningPacketDepthEvaluator {
     public record DepthResult(boolean ok, String reason) {}
 
     public static DepthResult evaluate(FeaturePlanState plan) {
+        return evaluate(plan, null);
+    }
+
+    /**
+     * When {@code profile} has declarative readiness ({@link WorkProfileDefinition#hasDeclarativeReadiness()}),
+     * runs {@link GenericReadinessEvaluator} first, then supplemental checks (workspace, open questions, validation).
+     * Otherwise runs the legacy all-in-one depth gate (v1 profiles).
+     */
+    public static DepthResult evaluate(FeaturePlanState plan, WorkProfileDefinition profile) {
         if (plan == null) {
             return new DepthResult(false, "No plan loaded.");
         }
+        if (profile != null && profile.hasDeclarativeReadiness()) {
+            DepthResult declarative = GenericReadinessEvaluator.evaluate(profile, plan);
+            if (!declarative.ok()) {
+                return declarative;
+            }
+            return supplementalAfterDeclarative(plan);
+        }
+        return evaluateLegacy(plan);
+    }
+
+    private static DepthResult evaluateLegacy(FeaturePlanState plan) {
         String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         Set<String> requestTokens = significantTokens(request);
 
@@ -78,6 +100,39 @@ public final class PlanningPacketDepthEvaluator {
         if (tokenOverlapRatio(request, exploration) >= MAX_ECHO_OVERLAP && exWords < MIN_EXPLORATION_WORDS + 15) {
             return new DepthResult(false, "Exploration mostly repeats the request (anti-echo).");
         }
+
+        boolean workspaceReady = repoWorkspaceReady(plan);
+        if (workspaceReady && !componentsLookCodeBacked(comps)) {
+            return new DepthResult(
+                    false,
+                    "Architecture components_impacted needs concrete code paths or extensions (repo workspace is ready).");
+        }
+
+        if (!openQ.isBlank() && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
+            return new DepthResult(false, "Open questions list is too short or template-like.");
+        }
+        if (!openQ.isBlank() && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
+            return new DepthResult(false, "Open questions still look like starter template text.");
+        }
+
+        if (!validationLooksFeatureSpecific(validation, requestTokens, request)) {
+            return new DepthResult(
+                    false,
+                    "Validation strategy must reference the feature or concrete paths, not only generic build commands.");
+        }
+
+        return new DepthResult(true, "Depth OK (exploration " + exWords + " words).");
+    }
+
+    /** Supplemental checks after declarative profile rules pass (workspace, open questions, validation specificity). */
+    private static DepthResult supplementalAfterDeclarative(FeaturePlanState plan) {
+        String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
+        Set<String> requestTokens = significantTokens(request);
+        String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
+        String openQ = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
+        String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
+        String exploration = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
+        int exWords = wordCount(exploration);
 
         boolean workspaceReady = repoWorkspaceReady(plan);
         if (workspaceReady && !componentsLookCodeBacked(comps)) {
@@ -157,7 +212,7 @@ public final class PlanningPacketDepthEvaluator {
         return !genericBoilerplate;
     }
 
-    static int wordCount(String text) {
+    public static int wordCount(String text) {
         if (text == null || text.isBlank()) {
             return 0;
         }

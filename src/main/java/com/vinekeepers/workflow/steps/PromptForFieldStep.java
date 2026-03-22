@@ -9,6 +9,8 @@ import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.DynamicChoiceProvider;
 import com.vinekeepers.workflow.StepResult;
 import com.vinekeepers.workflow.WorkflowStep;
+import com.vinekeepers.workflow.template.WorkflowTemplateInterpolator;
+import com.vinekeepers.workflow.template.WorkflowTemplatePolicy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,27 +35,39 @@ public final class PromptForFieldStep implements WorkflowStep {
     private final DynamicChoiceProvider choiceProvider;
     /** e.g. {@code plain_text} — force text-only wait even if intent/choiceProvider would add components. */
     private final String controlMode;
+    private final WorkflowTemplatePolicy templatePolicy;
 
     public PromptForFieldStep(String prompt, String storeIn) {
-        this(prompt, storeIn, null, null, null, null, null, null, null);
+        this(prompt, storeIn, null, null, null, null, null, null, null, WorkflowTemplatePolicy.LEGACY_FULL_STATE);
     }
 
     public PromptForFieldStep(String prompt, String storeIn, String intent,
                              List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
                              List<Map<String, Object>> fields) {
-        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, null, null);
+        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, null, null,
+                WorkflowTemplatePolicy.LEGACY_FULL_STATE);
     }
 
     public PromptForFieldStep(String prompt, String storeIn, String intent,
                              List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
                              List<Map<String, Object>> fields, DynamicChoiceProvider choiceProvider) {
-        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, choiceProvider, null);
+        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, choiceProvider, null,
+                WorkflowTemplatePolicy.LEGACY_FULL_STATE);
     }
 
     public PromptForFieldStep(String prompt, String storeIn, String intent,
                              List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
                              List<Map<String, Object>> fields, DynamicChoiceProvider choiceProvider,
                              String controlMode) {
+        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, choiceProvider, controlMode,
+                WorkflowTemplatePolicy.LEGACY_FULL_STATE);
+    }
+
+    public PromptForFieldStep(String prompt, String storeIn, String intent,
+                             List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
+                             List<Map<String, Object>> fields, DynamicChoiceProvider choiceProvider,
+                             String controlMode,
+                             WorkflowTemplatePolicy templatePolicy) {
         this.prompt = prompt != null ? prompt : "";
         this.storeIn = storeIn != null ? storeIn : "input";
         this.intent = intent;
@@ -63,6 +77,7 @@ public final class PromptForFieldStep implements WorkflowStep {
         this.fields = fields != null ? List.copyOf(fields) : List.of();
         this.choiceProvider = choiceProvider;
         this.controlMode = controlMode != null && !controlMode.isBlank() ? controlMode.trim() : null;
+        this.templatePolicy = templatePolicy != null ? templatePolicy : WorkflowTemplatePolicy.LEGACY_FULL_STATE;
     }
 
     @Override
@@ -74,27 +89,12 @@ public final class PromptForFieldStep implements WorkflowStep {
         if (existing != null && !"__custom__".equals(existing.toString())) {
             return StepResult.advance(null, null);
         }
-        String resolvedPrompt = interpolatePrompt(prompt, state);
+        String resolvedPrompt = WorkflowTemplateInterpolator.interpolate(prompt, state, templatePolicy);
         OutboundResponse richReply = buildRichReply(event, state, resolvedPrompt);
         if (richReply != null) {
             return StepResult.waiting(resolvedPrompt, storeIn, richReply);
         }
         return StepResult.waiting(resolvedPrompt, storeIn);
-    }
-
-    private static String interpolatePrompt(String template, ConfigurableWorkflowState state) {
-        if (template == null || template.isBlank() || state == null || state.getData() == null) {
-            return template != null ? template : "";
-        }
-        String result = template;
-        for (String key : state.getData().keySet()) {
-            Object v = state.get(key);
-            String placeholder = "{{" + key + "}}";
-            if (result.contains(placeholder)) {
-                result = result.replace(placeholder, v != null ? v.toString() : "");
-            }
-        }
-        return result;
     }
 
     private OutboundResponse buildRichReply(Event event, ConfigurableWorkflowState state, String resolvedPrompt) {

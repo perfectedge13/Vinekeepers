@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-21T23:00:00Z"
+  updated_utc: "2026-03-22T04:20:00Z"
 
 project:
   id: vinekeepers
@@ -157,7 +157,7 @@ assets:
   - id: ASSET-UNRESOLVED-ITEM
     kind: source
     path: src/main/java/com/vinekeepers/state/workflow/UnresolvedItem.java
-    role: Generic unresolved-item DTO for workflow clarification ledger (id, fingerprint, status, paths, answers)
+    role: Generic unresolved-item DTO for workflow clarification ledger (id, fingerprint, status, paths, answers, repeatCount)
     requires: [REQ-STATE-001, REQ-WORKFLOW-002]
     feature_ids: [FEAT-STATE]
   - id: ASSET-UNRESOLVED-ITEM-STATUS

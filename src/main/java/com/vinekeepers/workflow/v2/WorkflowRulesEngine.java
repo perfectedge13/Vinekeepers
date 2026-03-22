@@ -100,6 +100,13 @@ public final class WorkflowRulesEngine {
                 }
                 yield false;
             }
+            case "ledgerMaxOpenRepeatGte" -> {
+                if (value instanceof Map<?, ?> m) {
+                    int need = parseInt(m.get("gte"), 1);
+                    yield UnresolvedItemLedger.readFrom(state).maxOpenItemRepeatCount() >= need;
+                }
+                yield false;
+            }
             default -> false;
         };
     }
