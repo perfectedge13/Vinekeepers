@@ -119,4 +119,55 @@ class GraphWorkflowRunnerTest {
         assertTrue(st.isPresent());
         assertEquals("true", st.get().get("linearDelegateRan"));
     }
+
+    @Test
+    void linearWorkflowRefForwardsNonEmptyDoneMessageInsteadOfDroppingToEmptyOuterCompletion() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+
+        Map<String, Object> linear = new LinkedHashMap<>();
+        linear.put(
+                "steps",
+                List.of(Map.of("type", "done", "message", "Planning rejected; not launching.")));
+
+        Map<String, Object> workflows = new LinkedHashMap<>();
+        workflows.put("inner_linear", linear);
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "p");
+        Map<String, Object> phases = new LinkedHashMap<>();
+        phases.put("p", Map.of("pipeline", List.of("cap1"), "defaultNextPhase", "done"));
+        phases.put("done", Map.of("pipeline", List.of(), "terminal", true));
+        wf.put("phases", phases);
+        wf.put(
+                "capabilities",
+                Map.of("cap1", Map.of("kind", "linear_workflow_ref", "workflowRef", "inner_linear")));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("t", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model,
+                        reg,
+                        null,
+                        ToolPolicy.allowAll(),
+                        ConversationMode.SINGLE_EVENT,
+                        "channel",
+                        workflows,
+                        null);
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "hi"));
+
+        StateStore store = new StateStore();
+        WorkflowRunResult res = runner.runResult(event, store, "b");
+        assertTrue(res.isCompleted());
+        assertEquals("Planning rejected; not launching.", res.getReplyMessage());
+        String key = "bot:b:conv:ch1";
+        var st = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class);
+        assertTrue(st.isPresent());
+        assertEquals("__v2_done", st.get().get(GraphWorkflowRunner.PHASE_KEY));
+    }
 }

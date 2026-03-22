@@ -3,6 +3,7 @@ package com.vinekeepers.workflow.v2;
 import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.interactions.OutboundResponse;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.ToolRunner;
 import com.vinekeepers.workflow.ConfigurableWorkflowRunner;
@@ -150,6 +151,12 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
 
         int maxMicroSteps = 100;
         for (int guard = 0; guard < maxMicroSteps; guard++) {
+            Object phaseObj = state.get(PHASE_KEY);
+            if (phaseObj != null && !phaseObj.toString().isBlank()) {
+                phaseId = phaseObj.toString().trim();
+            }
+            pipeIdx = parseInt(state.get(PIPELINE_INDEX_KEY), pipeIdx);
+
             WorkflowV2PhaseModel phase = model.getPhases().get(phaseId);
             if (phase == null) {
                 state.markError();
@@ -183,6 +190,17 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
                     state.put(PIPELINE_INDEX_KEY, String.valueOf(pipeIdx));
                     state.markActive();
                     stateStore.put(stateKey, state);
+                    if (delegated.isCompleted()
+                            && completedRunHasUserVisibleOutcome(delegated)
+                            && pipeIdx >= pipeline.size()) {
+                        WorkflowRunResult forwarded =
+                                collapseThroughEmptyTerminalPhases(
+                                        stateKey, state, phaseId, pipeIdx, delegated, stateStore);
+                        if (forwarded != null) {
+                            return forwarded;
+                        }
+                        state = stateStore.get(stateKey, ConfigurableWorkflowState.class).orElse(state);
+                    }
                     continue;
                 }
                 if (!"legacy_action".equalsIgnoreCase(capKind)) {
@@ -247,17 +265,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             }
 
             // Pipeline finished for this phase
-            String nextPhase = null;
-            if (phase.getRulesRef() != null && !phase.getRulesRef().isBlank()) {
-                List<Map<String, Object>> rules = model.getRulesets().get(phase.getRulesRef());
-                Optional<String> tr = WorkflowRulesEngine.firstMatchingTransition(state.getData(), rules);
-                if (tr.isPresent()) {
-                    nextPhase = tr.get();
-                }
-            }
-            if (nextPhase == null && phase.getDefaultNextPhase() != null && !phase.getDefaultNextPhase().isBlank()) {
-                nextPhase = phase.getDefaultNextPhase();
-            }
+            String nextPhase = resolveNextPhaseAfterPipelineExhausted(phase, state.getData());
             if (nextPhase != null) {
                 phaseId = nextPhase;
                 pipeIdx = 0;
@@ -355,6 +363,87 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             return Integer.parseInt(o.toString().trim());
         } catch (NumberFormatException e) {
             return dflt;
+        }
+    }
+
+    /**
+     * True when a completed linear delegation carries text or a rich reply (intent/components) the engine should not drop.
+     */
+    static boolean completedRunHasUserVisibleOutcome(WorkflowRunResult r) {
+        if (r == null || !r.isCompleted()) {
+            return false;
+        }
+        if (r.getReplyMessage() != null && !r.getReplyMessage().isBlank()) {
+            return true;
+        }
+        Optional<OutboundResponse> rich = r.getRichReply();
+        return rich.map(or -> or.getText().isPresent() || or.getIntent().isPresent()).orElse(false);
+    }
+
+    private String resolveNextPhaseAfterPipelineExhausted(WorkflowV2PhaseModel phase, Map<String, Object> data) {
+        String nextPhase = null;
+        if (phase.getRulesRef() != null && !phase.getRulesRef().isBlank()) {
+            List<Map<String, Object>> rules = model.getRulesets().get(phase.getRulesRef());
+            Optional<String> tr = WorkflowRulesEngine.firstMatchingTransition(data, rules);
+            if (tr.isPresent()) {
+                nextPhase = tr.get();
+            }
+        }
+        if (nextPhase == null && phase.getDefaultNextPhase() != null && !phase.getDefaultNextPhase().isBlank()) {
+            nextPhase = phase.getDefaultNextPhase();
+        }
+        return nextPhase;
+    }
+
+    /**
+     * When the current phase pipeline is already exhausted ({@code pipeIdx >= size}), walk default/terminal phases that
+     * would end in {@code completed("")} and instead return the delegated linear result (preserves {@code done} text).
+     *
+     * @return {@code delegated} if the v2 graph was collapsed to {@code __v2_done}; {@code null} if more capability
+     *         work remains in a subsequent phase (state updated for the outer loop).
+     */
+    private WorkflowRunResult collapseThroughEmptyTerminalPhases(
+            String stateKey,
+            ConfigurableWorkflowState state,
+            String startPhaseId,
+            int pipeIdxAfterLinear,
+            WorkflowRunResult delegated,
+            StateStore stateStore) {
+        String pid = startPhaseId;
+        int pdx = pipeIdxAfterLinear;
+        while (true) {
+            WorkflowV2PhaseModel ph = model.getPhases().get(pid);
+            if (ph == null) {
+                return null;
+            }
+            List<String> pip = ph.getPipeline();
+            if (pdx < pip.size()) {
+                state.put(PHASE_KEY, pid);
+                state.put(PIPELINE_INDEX_KEY, String.valueOf(pdx));
+                state.markActive();
+                stateStore.put(stateKey, state);
+                return null;
+            }
+            String nextPhase = resolveNextPhaseAfterPipelineExhausted(ph, state.getData());
+            if (nextPhase != null && !nextPhase.isBlank()) {
+                pid = nextPhase.trim();
+                pdx = 0;
+                state.put(PHASE_KEY, pid);
+                state.put(PIPELINE_INDEX_KEY, "0");
+                state.markActive();
+                stateStore.put(stateKey, state);
+                continue;
+            }
+            if (ph.isTerminal() || pip.isEmpty()) {
+                state.put(PHASE_KEY, "__v2_done");
+                state.markCompleted();
+                stateStore.put(stateKey, state);
+                return delegated;
+            }
+            state.put(PHASE_KEY, "__v2_done");
+            state.markCompleted();
+            stateStore.put(stateKey, state);
+            return delegated;
         }
     }
 }

@@ -2185,6 +2185,15 @@ requirements:
           Production Arrietty uses arrietty_room_v2 (workflowSchema v2) with linear_workflow_ref to arrietty_room_legacy (full linear
           coordinator graph); rollback is switching workflowRef back to arrietty_room_legacy with type configured
         - >-
+          arrietty_room_legacy branch next targets must not jump to terminal done steps (launch/done inserts shift indices);
+          coordinatorKickoff, post-optional-scope text, draft-blocked recovery, and invalid intakeChoice else route to discovery
+          kickoff post_channel_message (stable index 79) or intake re-prompt prompt_for_field (80); ArriettyRoomWorkflowYamlTest
+          guards branch-to-done and coordinator entry anchors
+        - >-
+          GraphWorkflowRunner when linear_workflow_ref completes with user-visible text (reply or rich intent) and the phase
+          pipeline is exhausted collapses through default/terminal v2 phases and returns that delegated result instead of
+          discarding it for an empty outer completed("")
+        - >-
           PlanningDeliberationLedgerSync keeps workflowUnresolvedItemsJson aligned with clarification rank/merge; suppresses new OPEN
           when a MERGED planning item is semantically similar (paraphrase) to the candidate question; stores topicKey on new items;
           ProgressEventLog records deduped progress lines; work profiles may set deliberation.boundedClarificationChoices and optional
@@ -2246,7 +2255,9 @@ requirements:
           preconditions: []
         - id: UNIT-GRAPH-WORKFLOW-RUNNER
           title: GraphWorkflowRunnerTest
-          intent: Verify v2 pipeline runs legacy_action and linear_workflow_ref capabilities and completes
+          intent: >-
+            Verify v2 pipeline runs legacy_action and linear_workflow_ref capabilities and completes; linear_workflow_ref
+            completion with non-empty done message is forwarded through terminal v2 phases (not replaced by empty outer completion)
           testClass: com.vinekeepers.workflow.v2.GraphWorkflowRunnerTest
           preconditions: []
         - id: UNIT-WORKFLOW-V2-LOADER

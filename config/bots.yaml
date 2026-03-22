@@ -140,7 +140,7 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 76
+        next: 79
       - when:
           key: planningIntakeThread
           value: 'true'
@@ -445,7 +445,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 76
+        next: 79
     - type: call_action
       action: post_channel_message
       bind:
@@ -658,7 +658,7 @@ workflows:
           value: clarify_questions
         next: 19
       - when: else
-        next: 76
+        next: 80
         clear:
         - intakeChoice
     - type: call_action
@@ -692,7 +692,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 76
+        next: 79
         clear:
         - intakeChoice
         - discoveryAnswerRaw

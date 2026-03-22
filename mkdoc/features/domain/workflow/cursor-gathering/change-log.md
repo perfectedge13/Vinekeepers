@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-22
+
+- **Coordinator intake branch indices + v2 delegation:** `arrietty_room_legacy` fixes stale `branch` `next` targets that pointed at terminal `done` steps after launch/done rows were inserted ahead of the discovery-kickoff block (optional scope text, `coordinatorKickoff`, draft-blocked recovery, invalid menu choice now route to discovery `post_channel_message` or intake re-prompt). **`GraphWorkflowRunner`** forwards non-empty `linear_workflow_ref` completion through terminal v2 phases so `done`-step text is not dropped. Tests: **ArriettyRoomWorkflowYamlTest** (branch-to-done guard, coordinator entry anchors), **GraphWorkflowRunnerTest**. Specs: **workflow-registry**.
+
 ## 2026-03-20
 
 - **Staged coordinator intake (Arrietty room):** Synthetic **`start_coordinator_planning`** kickoff sets payload **`coordinatorKickoff=true`**; **`hydrate_planning_session`** spreads it so **`arrietty_room`** branches first into coordinator **discovery** (prompt/capture, **`capture_and_apply_discovery_answer`**, classify, **`recompute_plan_progress`**, **`mark_intake_discovery_complete`**) before re-entering the main planning path (kickoff keys cleared). **`run_plan_critique_and_readiness`** prepends a **MUST_FIX** (**`INTAKE_DISCOVERY_INCOMPLETE`**) when workflow state lacks **`humanDiscoveryCompleted=true`**; **`acknowledge_readiness_human_decision`** with bind **`humanReadinessProceedAck=true`** re-runs critique and forces **READY** spread/persistence after **NEEDS_HUMAN_DECISION** proceed. **`launch_cursor_run`** returns spread **`launchMessage`**, **`launchSucceeded`**, **`launchAgentId`** for YAML branching and thread copy; **`CursorCloudAdapterImpl`** honors optional **`CURSOR_HTTP_CONNECT_TIMEOUT_MS`** / **`CURSOR_HTTP_REQUEST_TIMEOUT_MS`**; **`CursorCloudRunMonitor`** isolates per-run poll failures. **`build_role_planning_thread_messages`** fills role thread bodies from plan artifacts for **`post_channel_message`** **`asRole`**. **`work-profiles.yaml`**: optional **`scope_summary`**; **`acceptance_criteria`** required. Specs: workflow-registry; **`.env.example`** documents HTTP timeout keys.
