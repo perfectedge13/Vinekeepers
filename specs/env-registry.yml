@@ -75,6 +75,9 @@ requirements:
         - >-
           Optional OpenAI-compatible planning keys (OPENAI_API_KEY, OPENAI_BASE_URL or OPENAI_API_BASE_URL,
           OPENAI_PLANNING_TIMEOUT_MS or OPENAI_HTTP_REQUEST_TIMEOUT_MS, OPENAI_PLANNING_MODEL) are read via Env in OpenAiChatClient
+        - >-
+          Optional engine event executor keys (VINEKEEPERS_ENGINE_EVENT_THREADS default 1,
+          VINEKEEPERS_ENGINE_EVENT_QUEUE_CAPACITY default 8000) are read via Env in EngineEventExecutorFactory
       examples: []
     traceability:
       assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]

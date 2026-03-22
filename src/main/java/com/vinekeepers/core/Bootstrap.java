@@ -22,6 +22,8 @@ import com.vinekeepers.core.cursor.CursorCloudAdapterImpl;
 import com.vinekeepers.core.cursor.CursorCloudRunMonitor;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.env.HealthServer;
+import com.vinekeepers.events.AsyncEngineEventSubscriber;
+import com.vinekeepers.events.EngineEventExecutorFactory;
 import com.vinekeepers.events.EventBus;
 import com.vinekeepers.reasoner.StubReasoner;
 import com.vinekeepers.state.LifecycleContextStore;
@@ -118,6 +120,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Wires EventBus, Engine, Router, connectors, and optional YAML config.
@@ -127,6 +130,7 @@ public final class Bootstrap {
     private static final Logger log = LoggerFactory.getLogger(Bootstrap.class);
 
     private final EventBus eventBus;
+    private final ExecutorService engineEventExecutor;
     private final VinekeepersEngine engine;
     private final Router router;
     private final StateStore stateStore;
@@ -179,8 +183,9 @@ public final class Bootstrap {
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
         this.router = new Router(lifecycleContextStore, featureRoomStateStore);
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
+        this.engineEventExecutor = EngineEventExecutorFactory.create();
         actionRegistry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
-        eventBus.subscribe(engine);
+        eventBus.subscribe(new AsyncEngineEventSubscriber(engine, engineEventExecutor));
         registerTools(toolRegistry);
         cursorCloudRunMonitor.start();
     }
@@ -414,6 +419,7 @@ public final class Bootstrap {
             }
         }
         if (githubSource != null) githubSource.stop();
+        EngineEventExecutorFactory.shutdownQuietly(engineEventExecutor);
         cursorCloudRunMonitor.close();
     }
 

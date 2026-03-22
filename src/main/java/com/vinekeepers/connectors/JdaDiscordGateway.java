@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -46,12 +47,17 @@ public final class JdaDiscordGateway implements DiscordGateway {
 
     private static final Logger log = LoggerFactory.getLogger(JdaDiscordGateway.class);
 
-    /** Timeout for createTextChannel submit().get() — safe from callback threads. */
+    /**
+     * Timeout for REST submit().get() on channel/thread operations. Blocking wait — must not run on a JDA gateway
+     * listener thread; safe only after application work is on a worker thread (see async engine dispatch).
+     */
     private static final int CREATE_CHANNEL_TIMEOUT_SECONDS = 15;
 
     private final String token;
     private final DiscordIngressModes ingressModes;
     private final DiscordOwnedSpacePredicate ownedSpacePredicate;
+    /** Bot id this gateway instance serves (for logs and {@code ingestBotId} on events); null for shared/default gateways. */
+    private final String logicalBotId;
     private volatile JDA jda;
     private volatile boolean connected;
     private volatile Consumer<Event> publisher;
@@ -59,16 +65,19 @@ public final class JdaDiscordGateway implements DiscordGateway {
     private final Map<String, net.dv8tion.jda.api.interactions.InteractionHook> tokenToHook = new ConcurrentHashMap<>();
 
     public JdaDiscordGateway(String token) {
-        this(token, DiscordIngressModes.routedFull(), null);
+        this(token, DiscordIngressModes.routedFull(), null, null);
     }
 
     /**
      * @param outboundOnly when true, do not add event listeners (gateway is used for outbound only, e.g. non-routed bots).
      */
     public JdaDiscordGateway(String token, boolean outboundOnly) {
-        this(token, outboundOnly
-                ? new DiscordIngressModes(DiscordMessageIngressMode.NONE, DiscordInteractionIngressMode.NONE)
-                : DiscordIngressModes.routedFull(),
+        this(
+                token,
+                outboundOnly
+                        ? new DiscordIngressModes(DiscordMessageIngressMode.NONE, DiscordInteractionIngressMode.NONE)
+                        : DiscordIngressModes.routedFull(),
+                null,
                 null);
     }
 
@@ -77,11 +86,23 @@ public final class JdaDiscordGateway implements DiscordGateway {
      * @param ownedSpacePredicate required when a mode uses OWNED_SPACES; may be null if unused.
      */
     public JdaDiscordGateway(String token, DiscordIngressModes ingressModes, DiscordOwnedSpacePredicate ownedSpacePredicate) {
+        this(token, ingressModes, ownedSpacePredicate, null);
+    }
+
+    /**
+     * @param logicalBotId optional; when set, included in connect logs and as {@code ingestBotId} on published events.
+     */
+    public JdaDiscordGateway(
+            String token,
+            DiscordIngressModes ingressModes,
+            DiscordOwnedSpacePredicate ownedSpacePredicate,
+            String logicalBotId) {
         this.token = token != null ? token.trim() : "";
         this.ingressModes = ingressModes != null
                 ? ingressModes
                 : new DiscordIngressModes(DiscordMessageIngressMode.NONE, DiscordInteractionIngressMode.NONE);
         this.ownedSpacePredicate = ownedSpacePredicate;
+        this.logicalBotId = logicalBotId != null && !logicalBotId.isBlank() ? logicalBotId.trim() : null;
     }
 
     @Override
@@ -111,6 +132,12 @@ public final class JdaDiscordGateway implements DiscordGateway {
                                 return;
                             }
                         }
+                        log.debug(
+                                "Discord message ingress botId={} thread={} channelId={} messageId={}",
+                                logicalBotId != null ? logicalBotId : "(default)",
+                                Thread.currentThread().getName(),
+                                event.getChannel().getId(),
+                                event.getMessage().getId());
                         JdaDiscordGateway.this.publisher.accept(toEvent(event));
                     }
 
@@ -132,9 +159,14 @@ public final class JdaDiscordGateway implements DiscordGateway {
             }
             jda = builder.build().awaitReady();
             connected = true;
-            log.info("Discord gateway connected"
-                    + (ingressModes.isOutboundOnly() ? " (outbound-only)" : " (ingress: messages=" + ingressModes.messageMode()
-                    + ", interactions=" + ingressModes.interactionMode() + ")"));
+            String botLabel = logicalBotId != null ? logicalBotId : "(default-shared)";
+            log.info(
+                    "Discord gateway connected botId={}{}",
+                    botLabel,
+                    ingressModes.isOutboundOnly()
+                            ? " (outbound-only)"
+                            : " (ingress: messages=" + ingressModes.messageMode()
+                                    + ", interactions=" + ingressModes.interactionMode() + ")");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             connected = false;
@@ -175,7 +207,12 @@ public final class JdaDiscordGateway implements DiscordGateway {
                     try {
                         String tok = event.getInteraction().getToken();
                         tokenToHook.put(tok, replyCallback.getHook());
-                        Event ev = toInteractionEvent(event);
+                        log.debug(
+                                "Discord interaction ingress botId={} thread={} interactionId={}",
+                                logicalBotId != null ? logicalBotId : "(default)",
+                                Thread.currentThread().getName(),
+                                event.getInteraction().getId());
+                        Event ev = JdaDiscordGateway.this.toInteractionEvent(event);
                         if (publisher != null) {
                             publisher.accept(ev);
                         }
@@ -187,7 +224,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         );
     }
 
-    private static Event toInteractionEvent(GenericInteractionCreateEvent event) {
+    private Event toInteractionEvent(GenericInteractionCreateEvent event) {
         net.dv8tion.jda.api.interactions.Interaction interaction = event.getInteraction();
         Guild guild = interaction.getGuild();
         String sourceId = guild != null ? "discord:" + guild.getId() : "discord:dm";
@@ -212,18 +249,21 @@ public final class JdaDiscordGateway implements DiscordGateway {
                 values = Map.of("values", selectEvent.getValues());
             }
         }
-        return new Event(sourceId, "interaction", Map.of(
-                "channelId", channelId,
-                "threadId", threadId,
-                "messageId", messageId,
-                "authorId", authorId,
-                "author", author,
-                "interactionId", interaction.getId(),
-                "token", interaction.getToken(),
-                "deferred", true,
-                "customId", customId != null ? customId : "",
-                "values", values
-        ));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("channelId", channelId);
+        payload.put("threadId", threadId);
+        payload.put("messageId", messageId);
+        payload.put("authorId", authorId);
+        payload.put("author", author);
+        payload.put("interactionId", interaction.getId());
+        payload.put("token", interaction.getToken());
+        payload.put("deferred", true);
+        payload.put("customId", customId != null ? customId : "");
+        payload.put("values", values);
+        if (logicalBotId != null) {
+            payload.put("ingestBotId", logicalBotId);
+        }
+        return new Event(sourceId, "interaction", payload);
     }
 
     @Override
@@ -449,7 +489,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
                 log.warn("Discord guild {} not found for createTextChannel", guildId);
                 return null;
             }
-            // submit().get(timeout) is safe from callback threads; complete() is not.
+            // submit().get(timeout) avoids JDA's synchronous complete(); still blocks the calling thread until done.
             TextChannel channel = guild.createTextChannel(name)
                     .submit()
                     .get(CREATE_CHANNEL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -511,7 +551,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         }
     }
 
-    private static Event toEvent(MessageReceivedEvent event) {
+    private Event toEvent(MessageReceivedEvent event) {
         Message message = event.getMessage();
         Guild guild = event.getGuild();
         String sourceId = guild != null ? "discord:" + guild.getId() : "discord:dm";
@@ -527,16 +567,19 @@ public final class JdaDiscordGateway implements DiscordGateway {
                 collectMentionToken(mentions, member.getEffectiveName());
             }
         }
-        return new Event(sourceId, "message", Map.of(
-                "channelId", event.getChannel().getId(),
-                "threadId", threadId != null ? threadId : "",
-                "authorId", event.getAuthor().getId(),
-                "author", event.getAuthor().getName() != null ? event.getAuthor().getName() : "",
-                "messageId", message.getId(),
-                "content", message.getContentRaw(),
-                "text", message.getContentRaw(),
-                "mentions", mentions.stream().toList()
-        ));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("channelId", event.getChannel().getId());
+        payload.put("threadId", threadId != null ? threadId : "");
+        payload.put("authorId", event.getAuthor().getId());
+        payload.put("author", event.getAuthor().getName() != null ? event.getAuthor().getName() : "");
+        payload.put("messageId", message.getId());
+        payload.put("content", message.getContentRaw());
+        payload.put("text", message.getContentRaw());
+        payload.put("mentions", mentions.stream().toList());
+        if (logicalBotId != null) {
+            payload.put("ingestBotId", logicalBotId);
+        }
+        return new Event(sourceId, "message", payload);
     }
 
     private static void collectMentionToken(Set<String> mentions, String value) {

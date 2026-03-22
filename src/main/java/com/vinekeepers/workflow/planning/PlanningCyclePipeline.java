@@ -47,6 +47,9 @@ public final class PlanningCyclePipeline {
     /** Partial-cycle YAML: aggregated follow-up strings between expansion / inner-round / finalize actions. */
     public static final String PARTIAL_AGGREGATED_FOLLOWUPS_KEY = "planningPartialAggregatedFollowUpsJson";
 
+    /** Spread flag {@code "true"} when an OpenAI role pass returned an interrupt-style error (e.g. {@code ERROR: interrupted}). */
+    public static final String PLANNING_PASS_INTERRUPTED_KEY = "planningPassInterrupted";
+
     public static final String PARTIAL_LAST_ROLE_SUMMARY_KEY = "planningPartialLastRoleRoundSummary";
     public static final String PARTIAL_LAST_SYNTH_KEY = "planningPartialLastSynthLlmLine";
     public static final String PARTIAL_DEPTH_OK_KEY = "planningPartialDepthOk";
@@ -234,7 +237,8 @@ public final class PlanningCyclePipeline {
                         llmErr,
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
-                        getString(spread, "planningSelectiveRerunNote")));
+                        getString(spread, "planningSelectiveRerunNote"),
+                        "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY))));
         spread.put(
                 "userCopyCoordinatorProgress",
                 spread.get("planningCycleProgressSummary") != null
@@ -427,7 +431,8 @@ public final class PlanningCyclePipeline {
                         llmErr,
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
-                        ""));
+                        "",
+                        "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY))));
         spread.put(
                 "userCopyCoordinatorProgress",
                 spread.get("planningCycleProgressSummary") != null
@@ -1009,6 +1014,10 @@ public final class PlanningCyclePipeline {
             String reason = r.error() != null ? r.error() : "skipped";
             roleRoundTags.add("SKIP_OTHER:" + label + ": " + truncateOneLine(reason, 80));
             spread.put("planningRolePassLastError", label + ": skipped (" + truncateOneLine(reason, 100) + ")");
+        } else if (r.error() != null && looksLikeInterruptedLlmError(r.error())) {
+            roleRoundTags.add("INTERRUPTED:" + label);
+            spread.put(PLANNING_PASS_INTERRUPTED_KEY, "true");
+            spread.put("planningRolePassLastError", label + ": interrupted");
         } else if (r.error() != null && !r.error().isBlank()) {
             spread.put("planningRolePassLastError", role.name() + ": " + r.error());
             roleRoundTags.add("ERR:" + label + ": " + truncateOneLine(r.error(), 100));
@@ -1032,6 +1041,8 @@ public final class PlanningCyclePipeline {
                 parts.add(who + " skipped (no API key)");
             } else if (t != null && t.startsWith("SKIP_OTHER:")) {
                 parts.add(t.substring("SKIP_OTHER:".length()).trim());
+            } else if (t != null && t.startsWith("INTERRUPTED:")) {
+                parts.add(t.substring("INTERRUPTED:".length()).trim() + " interrupted");
             } else if (t != null && t.startsWith("ERR:")) {
                 parts.add(t.substring(4).trim());
             } else if (t != null && t.startsWith("OK:")) {
@@ -1072,10 +1083,14 @@ public final class PlanningCyclePipeline {
             String planningLlmError,
             String expansionFallbackUsed,
             String planningLlmSkipReason,
-            String selectiveRerunNote) {
+            String selectiveRerunNote,
+            boolean planningPassInterrupted) {
         StringBuilder sb = new StringBuilder();
         if (selectiveRerunNote != null && !selectiveRerunNote.isBlank()) {
             sb.append(selectiveRerunNote.trim()).append(' ');
+        }
+        if (planningPassInterrupted) {
+            sb.append("A coordinator LLM call was interrupted; retry when ready. ");
         }
         sb.append(truncateOneLine(roleRoundSummary != null ? roleRoundSummary : "", 200)).append(' ');
         if (synthesisNote != null && !synthesisNote.isBlank()) {
@@ -1106,6 +1121,18 @@ public final class PlanningCyclePipeline {
             sb.append(" Issue: ").append(truncateOneLine(cycleError, 120));
         }
         return sb.toString().trim();
+    }
+
+    private static boolean looksLikeInterruptedLlmError(String error) {
+        if (error == null || error.isBlank()) {
+            return false;
+        }
+        String t = error.trim();
+        if ("ERROR: interrupted".equalsIgnoreCase(t)) {
+            return true;
+        }
+        String lower = t.toLowerCase();
+        return lower.contains("interruptedexception") || lower.contains("thread was interrupted");
     }
 
     private static String truncateOneLine(String s, int max) {
@@ -1236,6 +1263,7 @@ public final class PlanningCyclePipeline {
         m.put("planningBlockingQuestionCount", "0");
         m.put("planningAssumptionsUsed", "0");
         m.put("planningRolePassLastError", "");
+        m.put(PLANNING_PASS_INTERRUPTED_KEY, "false");
         m.put("planningClarificationUseStructuredChoices", "false");
         m.put("planningClarificationQuestionText", "");
         m.put("planningClarificationOrchestratorPrompt", "");

@@ -27,6 +27,7 @@ import com.vinekeepers.workflow.WorkflowRunResult;
 import com.vinekeepers.workflow.WorkflowRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -187,13 +188,67 @@ public final class VinekeepersEngine implements EventSubscriber {
             log.debug("Skipping duplicate Discord event within dedupe window: {} {}", event.getSourceId(), event.getKind());
             return;
         }
-        List<String> botIds = router.route(event);
-        if (isDiscordMessage(event)) {
-            addBotsWithWaitingSessionForDiscordMessage(event, botIds);
+        Map<String, Object> payload = event.getPayload();
+        String correlationId = extractCorrelationId(payload, event.getKind());
+        MDC.put("vk_correlationId", correlationId);
+        MDC.put("vk_sourceId", event.getSourceId());
+        MDC.put("vk_eventKind", event.getKind());
+        if (payload != null) {
+            Object ingest = payload.get("ingestBotId");
+            if (ingest != null && !ingest.toString().isBlank()) {
+                MDC.put("vk_ingestBotId", ingest.toString());
+            }
         }
-        for (String botId : botIds) {
-            handleEventForBot(event, botId);
+        long t0 = System.nanoTime();
+        try {
+            log.info(
+                    "Engine handling event thread={} sourceId={} kind={} correlationId={}",
+                    Thread.currentThread().getName(),
+                    event.getSourceId(),
+                    event.getKind(),
+                    correlationId);
+            List<String> botIds = router.route(event);
+            if (isDiscordMessage(event)) {
+                addBotsWithWaitingSessionForDiscordMessage(event, botIds);
+            }
+            for (String botId : botIds) {
+                MDC.put("vk_routeBotId", botId);
+                handleEventForBot(event, botId);
+                MDC.remove("vk_routeBotId");
+            }
+            long ms = (System.nanoTime() - t0) / 1_000_000L;
+            if (ms > 2_000L) {
+                log.warn(
+                        "Engine event slow: {}ms thread={} correlationId={} kind={}",
+                        ms,
+                        Thread.currentThread().getName(),
+                        correlationId,
+                        event.getKind());
+            } else {
+                log.debug("Engine event finished: {}ms correlationId={}", ms, correlationId);
+            }
+        } finally {
+            MDC.remove("vk_correlationId");
+            MDC.remove("vk_sourceId");
+            MDC.remove("vk_eventKind");
+            MDC.remove("vk_ingestBotId");
+            MDC.remove("vk_routeBotId");
         }
+    }
+
+    private static String extractCorrelationId(Map<String, Object> payload, String kind) {
+        if (payload == null) {
+            return "n/a";
+        }
+        if ("message".equals(kind)) {
+            Object mid = payload.get("messageId");
+            return mid != null && !mid.toString().isBlank() ? mid.toString() : "n/a";
+        }
+        if ("interaction".equals(kind)) {
+            Object iid = payload.get("interactionId");
+            return iid != null && !iid.toString().isBlank() ? iid.toString() : "n/a";
+        }
+        return "n/a";
     }
 
     private static boolean isDiscordMessage(Event event) {
@@ -281,8 +336,16 @@ public final class VinekeepersEngine implements EventSubscriber {
             return;
         }
 
-        auditRecorder.record(AuditLog.fromEvent(event, botId, "received", ""));
-        runWorkflowReasonerAndDeliver(event, bot, botId);
+        String sessionKey =
+                SessionKeyStrategies.resolve(bot.getSessionKeyStrategy(), event)
+                        .resolveSessionKey(botId, event);
+        MDC.put("vk_sessionKey", sessionKey);
+        try {
+            auditRecorder.record(AuditLog.fromEvent(event, botId, "received", ""));
+            runWorkflowReasonerAndDeliver(event, bot, botId);
+        } finally {
+            MDC.remove("vk_sessionKey");
+        }
     }
 
     private void runWorkflowReasonerAndDeliver(Event event, BotDefinition bot, String botId) {

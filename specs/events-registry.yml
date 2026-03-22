@@ -57,11 +57,26 @@ assets:
     role: Event subscriber interface
     requires: [REQ-EVENTS-001]
     feature_ids: [FEAT-EVENTS]
+  - id: ASSET-ASYNC-ENGINE-EVENT-SUBSCRIBER
+    kind: source
+    path: src/main/java/com/vinekeepers/events/AsyncEngineEventSubscriber.java
+    role: Wraps EventSubscriber; runs delegate on a dedicated executor so connector listener threads return quickly after publish
+    requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
+  - id: ASSET-ENGINE-EVENT-EXECUTOR-FACTORY
+    kind: source
+    path: src/main/java/com/vinekeepers/events/EngineEventExecutorFactory.java
+    role: Builds named ThreadPoolExecutor for engine event handling; optional env thread count and queue capacity
+    requires: [REQ-EVENTS-001]
+    feature_ids: [FEAT-EVENTS]
 
 requirements:
   - id: REQ-EVENTS-001
     title: Event bus publish and subscribe
-    statement: EventBus allows event sources to publish events and subscribers to receive them; Event carries sourceId, kind, payload; EventSource and EventSubscriber are the interfaces.
+    statement: >-
+      EventBus allows event sources to publish events and subscribers to receive them; Event carries sourceId, kind,
+      payload; EventSource and EventSubscriber are the interfaces. Bootstrap subscribes the engine via AsyncEngineEventSubscriber
+      on a dedicated executor so heavy work (workflows, HTTP) does not run on JDA listener threads.
     status: active
     priority: high
     type: functional
@@ -75,9 +90,16 @@ requirements:
       criteria:
         - EventBus.publish and subscribe work; subscribers receive published events
         - Event has sourceId, kind, and payload
+        - Engine handling runs off connector listener threads (AsyncEngineEventSubscriber + executor from EngineEventExecutorFactory)
       examples: []
     traceability:
-      assets: [ASSET-EVENT-BUS, ASSET-EVENT, ASSET-EVENT-SOURCE, ASSET-EVENT-SUBSCRIBER]
+      assets:
+        - ASSET-EVENT-BUS
+        - ASSET-EVENT
+        - ASSET-EVENT-SOURCE
+        - ASSET-EVENT-SUBSCRIBER
+        - ASSET-ASYNC-ENGINE-EVENT-SUBSCRIBER
+        - ASSET-ENGINE-EVENT-EXECUTOR-FACTORY
       symbols: []
     validation:
       tests:
@@ -85,6 +107,11 @@ requirements:
           title: EventBusTest
           intent: Verify publish/subscribe and event delivery
           testClass: com.vinekeepers.events.EventBusTest
+          preconditions: []
+        - id: UNIT-ASYNC-ENGINE-EVENT-SUBSCRIBER
+          title: AsyncEngineEventSubscriberTest
+          intent: Verify engine delegate runs on executor thread, not the publish caller thread
+          testClass: com.vinekeepers.events.AsyncEngineEventSubscriberTest
           preconditions: []
 
 features:
@@ -95,5 +122,11 @@ features:
     doc_path: features/domain/events/events.md
     summary: EventBus allows publish and subscribe; Event carries sourceId, kind, payload.
     requirement_ids: [REQ-EVENTS-001]
-    asset_ids: [ASSET-EVENT-BUS, ASSET-EVENT, ASSET-EVENT-SOURCE, ASSET-EVENT-SUBSCRIBER]
+    asset_ids:
+      - ASSET-EVENT-BUS
+      - ASSET-EVENT
+      - ASSET-EVENT-SOURCE
+      - ASSET-EVENT-SUBSCRIBER
+      - ASSET-ASYNC-ENGINE-EVENT-SUBSCRIBER
+      - ASSET-ENGINE-EVENT-EXECUTOR-FACTORY
     status: active

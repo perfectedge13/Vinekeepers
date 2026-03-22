@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Event bus publish and subscribe (REQ-EVENTS-001). EventBus allows sources to publish and subscribers to receive; Event carries sourceId, kind, payload; EventSource and EventSubscriber interfaces.
+Event bus publish and subscribe (REQ-EVENTS-001). EventBus allows sources to publish and subscribers to receive; Event carries sourceId, kind, payload; EventSource and EventSubscriber interfaces. Bootstrap wraps the engine in AsyncEngineEventSubscriber so connector listener threads return immediately after synchronous publish delivery to the bus.
 
 # Key assets
 
@@ -16,6 +16,8 @@ Event bus publish and subscribe (REQ-EVENTS-001). EventBus allows sources to pub
 | ASSET-EVENT | Event payload and metadata | src/main/java/com/vinekeepers/events/Event.java |
 | ASSET-EVENT-SOURCE | Event source interface | src/main/java/com/vinekeepers/events/EventSource.java |
 | ASSET-EVENT-SUBSCRIBER | Event subscriber interface | src/main/java/com/vinekeepers/events/EventSubscriber.java |
+| ASSET-ASYNC-ENGINE-EVENT-SUBSCRIBER | Async delegate on dedicated executor | src/main/java/com/vinekeepers/events/AsyncEngineEventSubscriber.java |
+| ASSET-ENGINE-EVENT-EXECUTOR-FACTORY | Named pool + queue for engine events | src/main/java/com/vinekeepers/events/EngineEventExecutorFactory.java |
 
 # Sub-pages
 

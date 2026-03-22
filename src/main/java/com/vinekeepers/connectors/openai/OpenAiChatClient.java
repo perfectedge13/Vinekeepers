@@ -99,6 +99,7 @@ public final class OpenAiChatClient {
         if (!isConfigured()) {
             return "ERROR: OPENAI_API_KEY not set.";
         }
+        long startNs = System.nanoTime();
         try {
             long requestMs = timeoutMsOverride != null && timeoutMsOverride > 0
                     ? timeoutMsOverride
@@ -132,9 +133,24 @@ public final class OpenAiChatClient {
             if (content.isBlank()) {
                 return "ERROR: blank assistant content";
             }
+            long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
+            log.debug("OpenAI complete ok durationMs={} model={}", durationMs, useModel);
             return content;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
+            log.warn(
+                    "OpenAI request interrupted durationMs={} thread={}",
+                    durationMs,
+                    Thread.currentThread().getName());
+            return "ERROR: interrupted";
         } catch (Exception e) {
-            log.warn("OpenAI request failed: {} — {}", e.getClass().getName(), formatExceptionChain(e));
+            long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
+            log.warn(
+                    "OpenAI request failed after {}ms: {} — {}",
+                    durationMs,
+                    e.getClass().getName(),
+                    formatExceptionChain(e));
             String detail =
                     e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
             return "ERROR: " + detail;

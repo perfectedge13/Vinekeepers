@@ -62,7 +62,7 @@ public final class DiscordConnectorAdapter implements ConnectorAdapter {
                         modes = modes.fallbackWithoutStores();
                     }
                 }
-                JdaDiscordGateway gateway = new JdaDiscordGateway(token, modes, ownedPredicate);
+                JdaDiscordGateway gateway = new JdaDiscordGateway(token, modes, ownedPredicate, bot.getId());
                 DiscordEventSource source = new DiscordEventSource(gateway);
                 router.registerSender(bot.getId(), source, gateway);
                 if (router.getDefaultGateway() == null) {
