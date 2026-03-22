@@ -8,6 +8,7 @@ import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanningRole;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -95,6 +96,14 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         boolean forceRepost = truthy(getString(bind, "forceRepost"));
         String lastFp = getString(state, "planningPacketLastPostedFingerprint");
         if (!forceRepost && fingerprint.equals(lastFp)) {
+            if (plan.getPacketPostedAt() == null) {
+                planStore.update(
+                        plan.withPacketPosted(
+                                Instant.now(),
+                                "",
+                                fingerprint,
+                                Math.max(1, parsePostedVersion(state))));
+            }
             spread.put("planningPacketPostedVersion", String.valueOf(parsePostedVersion(state)));
             spread.put("planningPacketSkippedDuplicate", "true");
             spread.put("planningPacketLastPostedFingerprint", lastFp);
@@ -117,6 +126,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                 return spread;
             }
         }
+        planStore.update(plan.withPacketPosted(Instant.now(), "", fingerprint, chunks.size()));
         spread.put("planningPacketPosted", "true");
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));
         spread.put("planningPacketSkippedDuplicate", "false");

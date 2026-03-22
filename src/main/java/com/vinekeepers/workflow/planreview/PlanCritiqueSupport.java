@@ -291,13 +291,33 @@ public final class PlanCritiqueSupport {
             case "REQUIRED_FIELD" -> "COVERAGE";
             default -> "COVERAGE";
         };
+        String ref = gapRefPath(g);
+        List<String> keys = ref.isBlank() ? List.of() : List.of(ref);
         return new PlanCritiqueFinding(
                 "crit-gap-" + n,
                 cat,
                 sev,
                 "DISCOVERY_GAP_" + (g.getKind() != null ? g.getKind() : "UNKNOWN"),
                 g.getReason() != null ? g.getReason() : "",
-                g.getArtifactId() + "." + g.getSectionId() + "." + g.getFieldId());
+                ref,
+                PlanCritiqueFinding.defaultBlocksApproval(sev),
+                keys);
+    }
+
+    private static String gapRefPath(DiscoveryGap g) {
+        String a = g.getArtifactId() != null ? g.getArtifactId() : "";
+        String s = g.getSectionId() != null ? g.getSectionId() : "";
+        String f = g.getFieldId() != null ? g.getFieldId() : "";
+        if (a.isBlank()) {
+            return "";
+        }
+        if (s.isBlank()) {
+            return a;
+        }
+        if (f.isBlank()) {
+            return a + "." + s;
+        }
+        return a + "." + s + "." + f;
     }
 
     private static String mapGapSeverityToCritique(String gapSeverity) {

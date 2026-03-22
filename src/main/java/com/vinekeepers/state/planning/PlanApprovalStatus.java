@@ -10,6 +10,7 @@ public final class PlanApprovalStatus {
     public static final String APPROVE_WITH_RISKS = "APPROVE_WITH_RISKS";
     public static final String REVISE = "REVISE";
     public static final String REJECT = "REJECT";
+    public static final String NEEDS_DISCOVERY = "NEEDS_DISCOVERY";
 
     private PlanApprovalStatus() {}
 

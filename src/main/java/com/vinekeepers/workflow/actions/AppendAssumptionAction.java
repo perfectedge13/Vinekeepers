@@ -1,7 +1,7 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
-import com.vinekeepers.state.planning.AssumptionEntry;
+import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 
@@ -36,7 +36,7 @@ public final class AppendAssumptionAction implements com.vinekeepers.workflow.Wo
         final String entryId = id;
         return planStateStore.getByContextId(contextId)
                 .map(p -> {
-                    FeaturePlanState next = p.withAppendedAssumption(new AssumptionEntry(entryId, text, null));
+                    FeaturePlanState next = p.withAppendedAssumption(PlanAssumption.fromLegacyText(entryId, text, null));
                     planStateStore.update(next);
                     return "OK";
                 })

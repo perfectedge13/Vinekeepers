@@ -5,15 +5,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.state.planning.AssumptionEntry;
+import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.state.planning.IssueEntry;
+import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
+import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
+import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.workflow.discovery.StructuredDiscoverySupport;
+import com.vinekeepers.workflow.planreview.PlanCritiqueRubric;
 import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
 import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
 
@@ -83,23 +86,49 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                         ""));
             }
             Instant now = Instant.now();
-            PlanCritiqueSnapshot snapshot = new PlanCritiqueSnapshot(now, PlanCritiqueSupport.SOURCE_RULES_V1, findings);
-            PlanConfidence confidence = PlanReadinessEvaluator.evaluate(plan, gaps, findings, now);
+            int blockingFc =
+                    (int) findings.stream().filter(PlanCritiqueFinding::isBlocksApproval).count();
+            var rubric = PlanCritiqueRubric.compute(plan, findings, blockingFc);
+            List<String> revisions =
+                    findings.stream()
+                            .filter(PlanCritiqueFinding::isBlocksApproval)
+                            .map(PlanCritiqueFinding::getId)
+                            .toList();
+            PlanCritiqueSnapshot snapshot =
+                    new PlanCritiqueSnapshot(
+                            now,
+                            PlanCritiqueSupport.SOURCE_RULES_V1,
+                            findings,
+                            PlanCritiqueLifecycleStatus.COMPLETE,
+                            rubric,
+                            blockingFc,
+                            revisions);
+            PlanConfidence confidence = PlanReadinessEvaluator.evaluate(plan, gaps, findings, now, state);
             if ("true".equalsIgnoreCase(String.valueOf(bind != null ? bind.get("humanReadinessProceedAck") : null))) {
-                confidence = new PlanConfidence(
-                        confidence.getLevel(),
-                        "Human acknowledged warnings; proceeding to approval. "
-                                + (confidence.getNotes() != null ? confidence.getNotes() : ""),
-                        com.vinekeepers.state.planning.PlanReadinessStatus.READY,
-                        now);
+                confidence =
+                        new PlanConfidence(
+                                confidence.getLevel(),
+                                "Human acknowledged warnings; proceeding to approval. "
+                                        + (confidence.getNotes() != null ? confidence.getNotes() : ""),
+                                PlanReadinessStatus.READY,
+                                now,
+                                confidence.getConfidenceScore(),
+                                confidence.getConfidenceReasons());
             }
             FeaturePlanState next = plan.withPlanCritiqueSnapshot(snapshot).withPlanConfidence(confidence);
             planStateStore.update(next);
 
             Map<String, Object> spread = new LinkedHashMap<>();
             spread.put("planCritiqueError", "");
-            spread.put("planReadinessStatus", confidence.getReadinessStatus() != null ? confidence.getReadinessStatus() : "");
+            spread.put(
+                    "planReadinessStatus",
+                    PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus()));
             spread.put("planConfidenceLevel", confidence.getLevel() != null ? confidence.getLevel() : "");
+            spread.put(
+                    "planConfidenceScore",
+                    confidence.getConfidenceScore() >= 0
+                            ? String.format(java.util.Locale.ROOT, "%.3f", confidence.getConfidenceScore())
+                            : "");
             spread.put("planReadinessSummary", confidence.getNotes() != null ? confidence.getNotes() : "");
             spread.put("planCritiqueFindingsJson", JSON.writeValueAsString(findings));
             spread.put("planCritiqueSummary", formatCritiqueSummary(findings));
@@ -137,10 +166,10 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         }
         String joined = entries.stream()
                 .map(e -> {
-                    if (e instanceof AssumptionEntry a) {
-                        return a.getText();
+                    if (e instanceof PlanAssumption a) {
+                        return a.getStatement();
                     }
-                    if (e instanceof IssueEntry i) {
+                    if (e instanceof PlanIssue i) {
                         return i.getText();
                     }
                     return e != null ? e.toString() : "";

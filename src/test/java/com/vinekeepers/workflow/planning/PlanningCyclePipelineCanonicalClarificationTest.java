@@ -90,6 +90,14 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         "software_feature_planning",
                         Map.of(),
                         null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         null);
         RankedClarification ranked =
                 new RankedClarification(true, "", "[]", "{}", 1, List.of(), false, "Which API version?");
@@ -131,6 +139,14 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         null,
                         "software_feature_planning",
                         Map.of(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         null,
                         null);
         RankedClarification rankedNoAsk =

@@ -32,7 +32,7 @@ class PlanCritiqueSupportTest {
         List<PlanCritiqueFinding> f = PlanCritiqueSupport.buildFindings(plan, profile, List.of());
         assertTrue(f.stream().anyMatch(x -> "INSUFFICIENT_REQUEST_SUMMARY".equals(x.getCode())));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(plan, List.of(), f, T);
-        assertEquals(PlanReadinessStatus.NEEDS_REVISION, c.getReadinessStatus());
+        assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
     }
 
     @Test
@@ -84,6 +84,14 @@ class PlanCritiqueSupportTest {
                 null,
                 "software_feature_planning",
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null);
     }

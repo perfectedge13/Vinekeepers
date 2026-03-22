@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T04:20:00Z"
+  updated_utc: "2026-03-22T12:30:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -86,7 +86,7 @@ assets:
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, spread_plan_workspace_signals,
-      evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
+      derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
       planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
       post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
@@ -1252,8 +1252,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanReadinessEvaluator.java
     role: >-
-      Maps gaps and findings to PlanConfidence readiness (Phase C); PlanConfidence notes omit duplicate readiness label
-      (status is planReadinessStatus separately)
+      Facade for packet-posted inference and legacy entry points; delegates evidence-based readiness/confidence to
+      PlanReadinessCalculator (gaps, blocking issues/findings, rubric mean, packet-on-plan)
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1264,10 +1264,12 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/RunPlanCritiqueAndReadinessAction.java
     role: >-
-      Workflow action run_plan_critique_and_readiness — persists PlanCritiqueSnapshot and PlanConfidence; storeSpread
-      keys planReadinessStatus, planConfidenceLevel, planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary;
-      adds MUST_FIX when workflow state humanDiscoveryCompleted is not true; bind humanReadinessProceedAck forces READY
-      spread and persistence for NEEDS_HUMAN_DECISION proceed path
+      Workflow action run_plan_critique_and_readiness — builds findings, PlanCritiqueRubric rollup, PlanReadinessCalculator
+      output; persists PlanCritiqueSnapshot (rubric, blocking counts, required revisions), PlanConfidence (readiness,
+      confidenceScore, confidenceReasons), critiqueLifecycleStatus COMPLETE; storeSpread planReadinessStatus (legacy spread
+      via PlanReadinessStatus.legacySpreadValue where applicable), planConfidenceScore, planConfidenceLevel,
+      planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary; MUST_FIX when humanDiscoveryCompleted is not true;
+      bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1348,12 +1350,97 @@ assets:
       Workflow action evaluate_planning_packet_depth — resolves WorkProfileDefinition from plan profileId and
       PlanningPacketDepthEvaluator.evaluate(plan, profile); storeSpread planningPacketDepthOk, planningPacketDepthReason,
       planningPacketDepthRetryRecommended, planningReviewReady/reviewReady aligned with depth + no pending clarification;
-      run before post_planning_packet_thread in YAML
+      derive_plan_governance runs before this step in YAML so depth/post see merged governance lists
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
       - REQ-CONFIG-001
       - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/DerivePlanGovernanceAction.java
+    role: >-
+      Workflow action derive_plan_governance — merges discovery gaps and artifacts into PlanIssue / PlanRisk / PlanDecision /
+      unresolved questions on FeaturePlanState (contextId); invoked before packet depth/post in coordinator YAML
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLAN-GOVERNANCE-DERIVER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanGovernanceDeriver.java
+    role: >-
+      Deterministic merge of StructuredDiscoverySupport gaps and artifact snippets into canonical governance lists;
+      PlanningCyclePipeline calls derive before planningReadyToPostPacket
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLAN-CRITIQUE-RUBRIC
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanCritiqueRubric.java
+    role: >-
+      Rollup of critique findings and workspace signals into PlanCritiqueRubricScores (dimension scores 0–1, governance
+      assumption penalty helper)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLAN-READINESS-CALCULATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanReadinessCalculator.java
+    role: >-
+      Evidence-based PlanConfidence (readiness NOT_READY / CONDITIONALLY_READY / READY / BLOCKED, confidenceScore,
+      reasons) from gaps, blocking issues, blocking findings, rubric mean, packetPostedOnPlan; APPROVAL_CONFIDENCE_THRESHOLD
+      for gates
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-APPROVAL-GATE-SUPPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanningApprovalGateSupport.java
+    role: Shared validateApproveAllowed and persist status mapping for evaluate_planning_approval_gate and persist_plan_approval
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-THREAD-PACKET-FORMATTER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanningThreadPacketFormatter.java
+    role: >-
+      Builds full planning packet body from FeaturePlanState including canonical assumptions, issues, risks, decisions,
+      open questions, and post-critique readiness snapshot
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-POST-PLANNING-PACKET-THREAD-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PostPlanningPacketThreadAction.java
+    role: >-
+      Workflow action post_planning_packet_thread — posts packet chunks; on success updates FeaturePlanState with
+      packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+      - REQ-STATE-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
@@ -1517,7 +1604,9 @@ assets:
   - id: ASSET-PERSIST-PLAN-APPROVAL-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PersistPlanApprovalAction.java
-    role: Workflow action persist_plan_approval — writes PlanApproval from planApprovalDecision and event authorId
+    role: >-
+      Workflow action persist_plan_approval — writes PlanApproval from planApprovalDecision and event authorId; fail-closed
+      (error spread, no write) for approve / approve_with_risks when PlanningApprovalGateSupport rejects the plan
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1689,7 +1778,7 @@ requirements:
           merges entries into workflow state before advancing (StepResult.advanceSpread)
         - >-
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, spread_plan_workspace_signals,
-          evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
+          derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
           planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
           post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
@@ -1721,12 +1810,14 @@ requirements:
           discoveryApplyMode, applies discoveryAnswerRaw into plan artifacts (upsert semantics); BUNDLED applies parsed
           sections to multiple targets
         - >-
-          post_planning_packet_thread builds the planning packet from FeaturePlanState, splits for Discord size limits,
-          posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount;
-          default gate allows post when planningPacketDepthOk is true OR reviewReady/planningReviewReady is true; bind
-          planningPostCompatLegacyDepthOnly true restores depth-only legacy behavior; skips duplicate sends when
-          planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full packet body
-          unless bind forceRepost is true, spreading planningPacketSkippedDuplicate and a short planningPacketSkipReason for thread UX
+          post_planning_packet_thread builds the planning packet from FeaturePlanState (PlanningThreadPacketFormatter includes
+          canonical governance sections), splits for Discord size limits, posts orchestrator messages to the intake/spec thread,
+          spreads planningPacketPosted / planningPacketChunkCount, and persists packetPostedAt / fingerprint / chunk count on
+          FeaturePlanState when the send succeeds; default gate allows post when planningPacketDepthOk is true OR
+          reviewReady/planningReviewReady is true; bind planningPostCompatLegacyDepthOnly true restores depth-only legacy
+          behavior; skips duplicate sends when planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full
+          packet body unless bind forceRepost is true, spreading planningPacketSkippedDuplicate and a short
+          planningPacketSkipReason for thread UX
         - >-
           build_request_exploration writes the request_exploration artifact (v2 profile) from request and repo hints before synthesis
         - >-
@@ -1734,7 +1825,8 @@ requirements:
         - >-
           spread_plan_workspace_signals spreads repoWorkspaceReady and related keys from FeaturePlanState after ensure_repo_workspace
         - >-
-          evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator heuristics
+          derive_plan_governance merges gaps and artifacts into plan governance lists before evaluate_planning_packet_depth;
+          evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator
         - >-
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
           on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely
@@ -1808,6 +1900,13 @@ requirements:
         - ASSET-SPREAD-PLAN-WORKSPACE-SIGNALS-ACTION
         - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
+        - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
+        - ASSET-PLAN-GOVERNANCE-DERIVER
+        - ASSET-PLAN-CRITIQUE-RUBRIC
+        - ASSET-PLAN-READINESS-CALCULATOR
+        - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
+        - ASSET-PLANNING-THREAD-PACKET-FORMATTER
+        - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
         - ASSET-RUN-LLM-PLANNING-SYNTHESIS-ACTION
         - ASSET-PERSIST-PLAN-APPROVAL-ACTION
         - ASSET-APPEND-PLAN-REQUIREMENT-ACTION
@@ -2115,6 +2214,13 @@ requirements:
         - ASSET-USER-COPY-CONTEXT
         - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
+        - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
+        - ASSET-PLAN-GOVERNANCE-DERIVER
+        - ASSET-PLAN-CRITIQUE-RUBRIC
+        - ASSET-PLAN-READINESS-CALCULATOR
+        - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
+        - ASSET-PLANNING-THREAD-PACKET-FORMATTER
+        - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
       symbols: []
     validation:
       tests:
@@ -2295,7 +2401,7 @@ requirements:
         - >-
           arrietty_room_legacy runs ensure_repo_workspace and spread_plan_workspace_signals immediately after hydrate_planning_session;
           execute_planning_room_cycle runs run_request_expansion_llm (optional) then build_request_exploration; optional
-          run_llm_planning_synthesis when OPENAI_API_KEY is set; evaluate_planning_packet_depth runs before post_planning_packet_thread in YAML
+          run_llm_planning_synthesis when OPENAI_API_KEY is set; derive_plan_governance and evaluate_planning_packet_depth run before post_planning_packet_thread in YAML
       examples: []
     traceability:
       assets:
@@ -2625,6 +2731,21 @@ requirements:
           intent: Verify MUST_FIX substance findings block readiness until request/outline/validation meet minimums
           testClass: com.vinekeepers.workflow.planreview.PlanCritiqueSupportTest
           preconditions: []
+        - id: UNIT-PLAN-GOVERNANCE-DERIVER
+          title: PlanGovernanceDeriverTest
+          intent: Verify gap-derived blocking issues and idempotent merge by stable gap id
+          testClass: com.vinekeepers.workflow.planning.PlanGovernanceDeriverTest
+          preconditions: []
+        - id: UNIT-PLAN-READINESS-CALCULATOR
+          title: PlanReadinessCalculatorTest
+          intent: Verify blocking issues and blocking critique findings force NOT_READY when packet is posted
+          testClass: com.vinekeepers.workflow.planreview.PlanReadinessCalculatorTest
+          preconditions: []
+        - id: UNIT-EVALUATE-PLANNING-APPROVAL-GATE-ACTION
+          title: EvaluatePlanningApprovalGateActionTest
+          intent: Verify approval gate opens only when workflow and canonical FeaturePlanState checks pass
+          testClass: com.vinekeepers.workflow.actions.EvaluatePlanningApprovalGateActionTest
+          preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
       - Storing secrets in state
@@ -2818,6 +2939,14 @@ features:
       - ASSET-GENERIC-READINESS-EVALUATOR
       - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
       - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
+      - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
+      - ASSET-PLAN-GOVERNANCE-DERIVER
+      - ASSET-PLAN-CRITIQUE-RUBRIC
+      - ASSET-PLAN-READINESS-CALCULATOR
+      - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
+      - ASSET-PLANNING-THREAD-PACKET-FORMATTER
+      - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
+      - ASSET-EVALUATE-PLANNING-APPROVAL-GATE-ACTION
     status: active
   - id: FEAT-CURSOR-GATHERING
     slug: cursor-gathering
@@ -2870,6 +2999,14 @@ features:
       - ASSET-PLAN-CRITIQUE-SUPPORT
       - ASSET-PLAN-READINESS-EVALUATOR
       - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
+      - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
+      - ASSET-PLAN-GOVERNANCE-DERIVER
+      - ASSET-PLAN-CRITIQUE-RUBRIC
+      - ASSET-PLAN-READINESS-CALCULATOR
+      - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
+      - ASSET-PLANNING-THREAD-PACKET-FORMATTER
+      - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
+      - ASSET-EVALUATE-PLANNING-APPROVAL-GATE-ACTION
       - ASSET-PERSIST-PLAN-APPROVAL-ACTION
       - ASSET-LAUNCH-CURSOR-RUN-ACTION
       - ASSET-SPACE-OPERATIONS

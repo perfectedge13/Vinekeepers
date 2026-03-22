@@ -133,6 +133,14 @@ public final class InitializeFeaturePlanStateAction implements com.vinekeepers.w
                 profileId,
                 ArtifactStateFactory.emptyArtifacts(profileDef),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         planStateStore.put(plan);
         return "OK";

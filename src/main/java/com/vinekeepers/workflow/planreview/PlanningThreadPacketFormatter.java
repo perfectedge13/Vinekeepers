@@ -1,10 +1,17 @@
 package com.vinekeepers.workflow.planreview;
 
-import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.PlanAssumption;
+import com.vinekeepers.state.planning.PlanDecision;
+import com.vinekeepers.state.planning.PlanIssue;
+import com.vinekeepers.state.planning.PlanIssueStatus;
+import com.vinekeepers.state.planning.PlanRisk;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
+
 /**
  * Builds the human-readable planning packet for thread review and splits it for Discord size limits.
  */
@@ -39,9 +46,9 @@ public final class PlanningThreadPacketFormatter {
         String context = truncate(PlanningArtifactTexts.artifactField(plan, "project_context", "context", "context_summary"), SECTION_SOFT_MAX);
         String arch = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary"), SECTION_SOFT_MAX);
         String comps = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted"), SECTION_SOFT_MAX);
-        String risks = truncate(PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary"), SECTION_SOFT_MAX);
+        String risksArt = truncate(PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary"), SECTION_SOFT_MAX);
         String openQ = truncate(PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"), SECTION_SOFT_MAX);
-        String decisions = truncate(PlanningArtifactTexts.allRepeatableFieldLines(plan, "decision_log", "decisions", "decision_text"), SECTION_SOFT_MAX * 2);
+        String decisionsArt = truncate(PlanningArtifactTexts.allRepeatableFieldLines(plan, "decision_log", "decisions", "decision_text"), SECTION_SOFT_MAX * 2);
 
         StringBuilder sb = new StringBuilder();
         appendSection(sb, "**Request**", request);
@@ -71,20 +78,133 @@ public final class PlanningThreadPacketFormatter {
                     "**Architecture & impacted components**",
                     (comps.isBlank() ? "" : "**Components:** " + comps + "\n\n") + (arch.isBlank() ? orPlaceholder("") : arch));
         }
-        appendSection(sb, "**Risks & mitigations**", orPlaceholder(risks));
+        appendSection(sb, "**Assumptions (tracked)**", formatAssumptionsSection(plan));
+        appendSection(sb, "**Issues (tracked)**", formatIssuesSection(plan));
+        appendSection(sb, "**Risks (tracked)**", formatRisksSection(plan, risksArt));
         appendSection(
                 sb,
                 "**Rollout / fallback**",
-                risks != null && risks.length() > 40
+                risksArt != null && risksArt.length() > 40
                         ? "_See risks above for mitigations; prefer staged enablement and a documented revert path._"
                         : "_Plan staged rollout, monitoring, and a revert path before wide release._");
-        appendSection(sb, "**Open questions**", orPlaceholder(openQ));
-        if (!decisions.isBlank()) {
-            appendSection(sb, "**Decision log**", decisions);
-        }
+        appendSection(sb, "**Open questions**", formatOpenQuestionsSection(plan, openQ));
+        appendSection(sb, "**Decisions (tracked)**", formatDecisionsSection(plan, decisionsArt));
         appendSection(sb, "**Validation strategy**", orPlaceholder(validation));
         appendSection(sb, "**Project context**", orPlaceholder(context));
+        appendSection(sb, "**Readiness snapshot**", formatReadinessSection(plan));
         return sb.toString().trim();
+    }
+
+    private static String formatAssumptionsSection(FeaturePlanState plan) {
+        if (plan.getAssumptions().isEmpty()) {
+            return "_None recorded._";
+        }
+        return plan.getAssumptions().stream()
+                .map(PlanningThreadPacketFormatter::formatAssumptionLine)
+                .collect(Collectors.joining("\n"));
+    }
+
+    private static String formatAssumptionLine(PlanAssumption a) {
+        return "• [" + a.getStatus() + "/" + a.getSeverity() + "] " + a.getStatement().trim();
+    }
+
+    private static String formatIssuesSection(FeaturePlanState plan) {
+        if (plan.getIssues().isEmpty()) {
+            return "_None recorded._";
+        }
+        List<PlanIssue> sorted = new ArrayList<>(plan.getIssues());
+        sorted.sort(
+                Comparator.comparing((PlanIssue i) -> !PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()))
+                        .thenComparing(PlanIssue::getId));
+        return sorted.stream().map(PlanningThreadPacketFormatter::formatIssueLine).collect(Collectors.joining("\n"));
+    }
+
+    private static String formatIssueLine(PlanIssue i) {
+        String head = PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()) ? "**BLOCKING** " : "";
+        String title = i.getTitle() != null ? i.getTitle().trim() : "";
+        String det = i.getDetail() != null ? i.getDetail().trim() : "";
+        if (!det.isBlank() && !det.equals(title)) {
+            return "• " + head + "[" + i.getStatus() + "/" + i.getSeverity() + "] " + title + " — " + det;
+        }
+        return "• " + head + "[" + i.getStatus() + "/" + i.getSeverity() + "] " + (title.isBlank() ? i.getText() : title);
+    }
+
+    private static String formatRisksSection(FeaturePlanState plan, String artifactFallback) {
+        if (!plan.getRisks().isEmpty()) {
+            return plan.getRisks().stream()
+                    .map(
+                            r -> "• [" + r.getStatus() + "] " + r.getStatement().trim()
+                                    + (r.getImpact().isBlank() ? "" : " (impact: " + r.getImpact() + ")"))
+                    .collect(Collectors.joining("\n"));
+        }
+        if (artifactFallback != null && !artifactFallback.isBlank()) {
+            return artifactFallback;
+        }
+        return "_None recorded._";
+    }
+
+    private static String formatDecisionsSection(FeaturePlanState plan, String artifactFallback) {
+        if (!plan.getDecisions().isEmpty()) {
+            return plan.getDecisions().stream()
+                    .map(d -> "• [" + d.getStatus() + "] " + d.getDecision().trim())
+                    .collect(Collectors.joining("\n"));
+        }
+        if (artifactFallback != null && !artifactFallback.isBlank()) {
+            return artifactFallback;
+        }
+        return "_None recorded._";
+    }
+
+    private static String formatOpenQuestionsSection(FeaturePlanState plan, String artifactFallback) {
+        if (!plan.getUnresolvedQuestions().isEmpty()) {
+            return plan.getUnresolvedQuestions().stream()
+                    .map(q -> "• " + q.trim())
+                    .collect(Collectors.joining("\n"));
+        }
+        return orPlaceholder(artifactFallback);
+    }
+
+    private static String formatReadinessSection(FeaturePlanState plan) {
+        var c = plan.getPlanConfidence();
+        var snap = plan.getPlanCritiqueSnapshot();
+        if (snap == null) {
+            return "_Critique not run yet for this draft — see the pre-approval review message after critique runs._";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (c != null) {
+            sb.append("**Readiness:** ")
+                    .append(c.getReadinessStatus() != null ? c.getReadinessStatus() : "unknown")
+                    .append("\n");
+            if (c.getConfidenceScore() >= 0) {
+                sb.append("**Confidence score:** ")
+                        .append(String.format(java.util.Locale.ROOT, "%.2f", c.getConfidenceScore()))
+                        .append("\n");
+            }
+            if (c.getLevel() != null && !c.getLevel().isBlank()) {
+                sb.append("**Level:** ").append(c.getLevel()).append("\n");
+            }
+            if (c.getConfidenceReasons() != null && !c.getConfidenceReasons().isEmpty()) {
+                sb.append("**Reasons:**\n");
+                for (String r : c.getConfidenceReasons()) {
+                    sb.append("• ").append(r).append("\n");
+                }
+            }
+        }
+        if (snap.getRubricScores() != null) {
+            var rs = snap.getRubricScores();
+            sb.append("**Rubric (0–1):** completeness ")
+                    .append(fmt(rs.getCompleteness()))
+                    .append(", repo alignment ")
+                    .append(fmt(rs.getRepoAlignment()))
+                    .append(", approval ")
+                    .append(fmt(rs.getApprovalReadiness()));
+        }
+        String out = sb.toString().trim();
+        return out.isBlank() ? "_No readiness summary._" : out;
+    }
+
+    private static String fmt(double d) {
+        return String.format(java.util.Locale.ROOT, "%.2f", d);
     }
 
     /**

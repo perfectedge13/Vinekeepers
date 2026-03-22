@@ -245,6 +245,14 @@ class LaunchCursorRunActionTest {
                 null,
                 java.util.Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
     }
 

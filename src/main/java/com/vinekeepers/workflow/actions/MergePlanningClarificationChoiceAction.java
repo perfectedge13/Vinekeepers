@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.state.planning.AssumptionEntry;
+import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
@@ -73,33 +73,33 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             if ("planning_clarify_default".equals(choice)) {
                 decisionLine = "Decision (user selected default): " + (defaultText.isBlank() ? "Use recommended baseline." : defaultText);
                 if (!defaultText.isBlank()) {
-                    plan = plan.withAppendedAssumption(new AssumptionEntry(
+                    plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                             "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                             defaultText,
                             null));
                 }
             } else if ("planning_clarify_opt_a".equals(choice)) {
                 decisionLine = "Decision (user choice A): " + (optA.isBlank() ? "Option A" : optA);
-                plan = plan.withAppendedAssumption(new AssumptionEntry(
+                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));
             } else if ("planning_clarify_opt_b".equals(choice)) {
                 decisionLine = "Decision (user choice B): " + (optB.isBlank() ? "Option B" : optB);
-                plan = plan.withAppendedAssumption(new AssumptionEntry(
+                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));
             } else if ("planning_clarify_opt_c".equals(choice)) {
                 String optC = text(meta, "optC");
                 decisionLine = "Decision (user choice C): " + (optC.isBlank() ? "Option C" : optC);
-                plan = plan.withAppendedAssumption(new AssumptionEntry(
+                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));
             } else {
                 decisionLine = "Decision (user selection): " + choice + (q.isBlank() ? "" : " regarding: " + q);
-                plan = plan.withAppendedAssumption(new AssumptionEntry(
+                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));

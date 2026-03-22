@@ -133,6 +133,14 @@ class PlanningPacketDepthEvaluatorTest {
                 "software_feature_planning",
                 Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         return empty.withArtifacts(arts);
     }
@@ -204,6 +212,14 @@ class PlanningPacketDepthEvaluatorTest {
                 null,
                 "software_feature_planning_v2",
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null);
         return empty.withArtifacts(arts);

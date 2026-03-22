@@ -366,6 +366,9 @@ workflows:
       - when: else
         next: 57
     - type: call_action
+      action: derive_plan_governance
+      storeSpread: true
+    - type: call_action
       action: evaluate_planning_packet_depth
       storeSpread: true
     - type: call_action

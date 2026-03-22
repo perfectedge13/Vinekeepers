@@ -42,6 +42,14 @@ class ExecutePlanningRoomCycleActionSummaryTest {
                 "software_feature_planning",
                 Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         var ranked =
                 PlanningQuestionRankingPolicy.rank(

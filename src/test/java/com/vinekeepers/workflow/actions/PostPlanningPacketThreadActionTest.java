@@ -180,6 +180,14 @@ class PostPlanningPacketThreadActionTest {
                 "software_feature_planning",
                 Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
     }
 }

@@ -66,6 +66,14 @@ class EnsureRepoWorkspaceActionTest {
                 null,
                 java.util.Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         plans.put(plan);
 
@@ -142,6 +150,14 @@ class EnsureRepoWorkspaceActionTest {
                 null,
                 null,
                 java.util.Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null);
         plans.put(plan);

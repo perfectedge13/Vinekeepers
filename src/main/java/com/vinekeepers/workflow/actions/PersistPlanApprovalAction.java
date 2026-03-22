@@ -4,10 +4,9 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanApproval;
-import com.vinekeepers.state.planning.PlanApprovalStatus;
+import com.vinekeepers.workflow.planreview.PlanningApprovalGateSupport;
 
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -34,13 +33,20 @@ public final class PersistPlanApprovalAction implements com.vinekeepers.workflow
         if (raw == null || raw.isBlank()) {
             return "Missing planApprovalDecision.";
         }
-        String status = mapDecision(raw.trim());
+        String status = PlanningApprovalGateSupport.mapPersistStatus(raw.trim());
         if (status == null) {
             return "Unknown planApprovalDecision: " + raw;
         }
+        if (PlanningApprovalGateSupport.isApproveDecision(raw.trim())) {
+            FeaturePlanState current = planStateStore.getByContextId(contextId).orElse(null);
+            String block = PlanningApprovalGateSupport.validateApproveAllowed(current, state);
+            if (block != null) {
+                return block;
+            }
+        }
         String actorId = resolveActorId(bind, state);
         Instant at = Instant.now();
-        PlanApproval approval = new PlanApproval(status, actorId, at);
+        PlanApproval approval = new PlanApproval(status, actorId, at, "");
         return planStateStore.getByContextId(contextId)
                 .map(p -> {
                     FeaturePlanState next = p.withPlanApproval(approval);
@@ -48,17 +54,6 @@ public final class PersistPlanApprovalAction implements com.vinekeepers.workflow
                     return "OK";
                 })
                 .orElse("No FeaturePlanState for contextId: " + contextId);
-    }
-
-    private static String mapDecision(String id) {
-        String n = id.toLowerCase(Locale.ROOT);
-        return switch (n) {
-            case "approve" -> PlanApprovalStatus.APPROVE;
-            case "approve_with_risks" -> PlanApprovalStatus.APPROVE_WITH_RISKS;
-            case "revise" -> PlanApprovalStatus.REVISE;
-            case "reject" -> PlanApprovalStatus.REJECT;
-            default -> null;
-        };
     }
 
     private static String resolveActorId(Map<String, Object> bind, Map<String, Object> state) {

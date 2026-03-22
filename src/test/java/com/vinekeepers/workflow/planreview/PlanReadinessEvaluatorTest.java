@@ -2,7 +2,7 @@ package com.vinekeepers.workflow.planreview;
 
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
-import com.vinekeepers.state.planning.IssueEntry;
+import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
@@ -31,14 +31,14 @@ class PlanReadinessEvaluatorTest {
         List<DiscoveryGap> gaps = List.of(new DiscoveryGap(
                 "g1", "REQUIRED_FIELD", "a", "s", "f", "missing", "HIGH", "OPEN", "", ""));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(minPlan(), gaps, List.of(), T);
-        assertEquals(PlanReadinessStatus.NEEDS_REVISION, c.getReadinessStatus());
+        assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
     }
 
     @Test
     void needsHumanWhenIssuesPresent() {
-        FeaturePlanState p = minPlan().withAppendedIssue(new IssueEntry("i1", "risk", T));
+        FeaturePlanState p = minPlan().withAppendedIssue(PlanIssue.fromLegacyText("i1", "risk", T));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(p, List.of(), List.of(), T);
-        assertEquals(PlanReadinessStatus.NEEDS_HUMAN_DECISION, c.getReadinessStatus());
+        assertEquals(PlanReadinessStatus.CONDITIONALLY_READY, c.getReadinessStatus());
     }
 
     @Test
@@ -53,7 +53,7 @@ class PlanReadinessEvaluatorTest {
         List<PlanCritiqueFinding> f = List.of(new PlanCritiqueFinding(
                 "1", "PROCESS", "MUST_FIX", "X", "fix profile", ""));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(minPlan(), List.of(), f, T);
-        assertEquals(PlanReadinessStatus.NEEDS_REVISION, c.getReadinessStatus());
+        assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
     }
 
     private static FeaturePlanState minPlan() {
@@ -84,6 +84,14 @@ class PlanReadinessEvaluatorTest {
                 null,
                 "software_feature_planning",
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null);
     }

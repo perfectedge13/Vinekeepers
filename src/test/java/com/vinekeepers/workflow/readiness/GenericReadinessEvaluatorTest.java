@@ -84,6 +84,14 @@ class GenericReadinessEvaluatorTest {
                 "software_feature_planning_v2",
                 Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         return empty.withArtifacts(arts);
     }

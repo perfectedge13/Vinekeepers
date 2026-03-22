@@ -2,7 +2,7 @@ package com.vinekeepers.workflow.planning;
 
 import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
-import com.vinekeepers.state.planning.AssumptionEntry;
+import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 
@@ -60,7 +60,7 @@ public final class CoordinatorClarificationGapEvaluator {
         if (req != null && !req.isBlank()) {
             sb.append(req.trim()).append('\n');
         }
-        for (AssumptionEntry a : plan.getAssumptions()) {
+        for (PlanAssumption a : plan.getAssumptions()) {
             if (a.getText() != null && !a.getText().isBlank()) {
                 sb.append(a.getText().trim()).append('\n');
             }

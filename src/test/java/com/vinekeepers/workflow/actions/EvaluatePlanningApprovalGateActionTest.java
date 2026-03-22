@@ -1,9 +1,18 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanConfidence;
+import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
+import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
+import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
+import com.vinekeepers.state.planning.PlanReadinessStatus;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,15 +21,22 @@ class EvaluatePlanningApprovalGateActionTest {
 
     @Test
     void gateOpenWhenAllSignalsTrue() {
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        Instant t = Instant.now();
+        FeaturePlanState p = approvalReadyPlan("c1", t);
+        store.put(p);
+
         Map<String, Object> state = new HashMap<>();
+        state.put("contextId", "c1");
         state.put("planningPacketPostedVersion", "1");
         state.put("planningPacketDepthOk", "true");
         state.put("planReadinessStatus", "READY");
         state.put("humanDiscoveryCompleted", "true");
         state.put("planningUserInputRequired", "false");
         @SuppressWarnings("unchecked")
-        Map<String, Object> spread = (Map<String, Object>) new EvaluatePlanningApprovalGateAction()
-                .run(new Event("x", "m", Map.of()), state, Map.of());
+        Map<String, Object> spread =
+                (Map<String, Object>) new EvaluatePlanningApprovalGateAction(store)
+                        .run(new Event("x", "m", Map.of()), state, Map.of());
         assertEquals("true", spread.get("planningReadyForApproval"));
         assertEquals("true", spread.get("approvalReady"));
         assertEquals("true", spread.get("planningReviewReady"));
@@ -28,16 +44,78 @@ class EvaluatePlanningApprovalGateActionTest {
 
     @Test
     void gateClosedWhenDepthFails() {
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        Instant t = Instant.now();
+        store.put(approvalReadyPlan("c2", t));
+
         Map<String, Object> state = new HashMap<>();
+        state.put("contextId", "c2");
         state.put("planningPacketPostedVersion", "1");
         state.put("planningPacketDepthOk", "false");
         state.put("planReadinessStatus", "READY");
         state.put("humanDiscoveryCompleted", "true");
         state.put("planningUserInputRequired", "false");
         @SuppressWarnings("unchecked")
-        Map<String, Object> spread = (Map<String, Object>) new EvaluatePlanningApprovalGateAction()
-                .run(new Event("x", "m", Map.of()), state, Map.of());
+        Map<String, Object> spread =
+                (Map<String, Object>) new EvaluatePlanningApprovalGateAction(store)
+                        .run(new Event("x", "m", Map.of()), state, Map.of());
         assertEquals("false", spread.get("planningReadyForApproval"));
         assertEquals("false", spread.get("planningReviewReady"));
+    }
+
+    private static FeaturePlanState approvalReadyPlan(String contextId, Instant t) {
+        PlanCritiqueRubricScores rubric =
+                new PlanCritiqueRubricScores(0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9);
+        PlanCritiqueSnapshot snap =
+                new PlanCritiqueSnapshot(
+                        t,
+                        "RULES_V1",
+                        List.of(),
+                        PlanCritiqueLifecycleStatus.COMPLETE,
+                        rubric,
+                        0,
+                        List.of());
+        PlanConfidence conf =
+                new PlanConfidence("HIGH", "ok", PlanReadinessStatus.READY, t, 0.9, List.of());
+        FeaturePlanState base =
+                new FeaturePlanState(
+                        contextId,
+                        "f",
+                        "s",
+                        "room",
+                        null,
+                        null,
+                        "t",
+                        "1234567890123456789012345678901234567890",
+                        "PLANNING",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        FeaturePlanState.initialSectionStatuses(),
+                        conf,
+                        null,
+                        snap,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "software_feature_planning",
+                        Map.of(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        t,
+                        t);
+        return base.withPacketPosted(t, "", "fp", 1)
+                .withCritiqueLifecycleStatus(PlanCritiqueLifecycleStatus.COMPLETE);
     }
 }

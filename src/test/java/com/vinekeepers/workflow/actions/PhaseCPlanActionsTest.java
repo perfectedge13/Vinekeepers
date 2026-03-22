@@ -7,9 +7,16 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import com.vinekeepers.state.planning.PlanApprovalStatus;
+import com.vinekeepers.state.planning.PlanConfidence;
+import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
+import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
+import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
+import com.vinekeepers.state.planning.PlanReadinessStatus;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,10 +126,37 @@ class PhaseCPlanActionsTest {
                 null,
                 Map.of("contextId", "c2", "channelId", "r2"),
                 Map.of("profileId", "software_feature_planning"));
+        Instant t = Instant.now();
+        PlanCritiqueRubricScores rubric =
+                new PlanCritiqueRubricScores(0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9);
+        PlanCritiqueSnapshot snap =
+                new PlanCritiqueSnapshot(
+                        t,
+                        "RULES_V1",
+                        List.of(),
+                        PlanCritiqueLifecycleStatus.COMPLETE,
+                        rubric,
+                        0,
+                        List.of());
+        PlanConfidence conf =
+                new PlanConfidence("HIGH", "", PlanReadinessStatus.READY, t, 0.9, List.of());
+        FeaturePlanState gated =
+                store.getByContextId("c2")
+                        .orElseThrow()
+                        .withPacketPosted(t, "", "fp", 1)
+                        .withPlanCritiqueSnapshot(snap)
+                        .withPlanConfidence(conf);
+        store.update(gated);
         var action = new PersistPlanApprovalAction(store);
         Object r = action.run(
                 new Event("discord", "message", Map.of()),
-                Map.of("contextId", "c2", "planApprovalDecision", "approve"),
+                Map.of(
+                        "contextId",
+                        "c2",
+                        "planApprovalDecision",
+                        "approve",
+                        "planningPacketPostedVersion",
+                        "1"),
                 Map.of("__event", Map.of("authorId", "u9")));
         assertEquals("OK", r);
         assertEquals(PlanApprovalStatus.APPROVE, store.getByContextId("c2").orElseThrow().getPlanApproval().getStatus());

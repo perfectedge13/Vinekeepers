@@ -1,18 +1,25 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
+import com.vinekeepers.workflow.planreview.PlanningApprovalGateSupport;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Sets {@code planningReadyForApproval} when the posted packet, depth, and critique readiness align.
- * Dual-writes {@code approvalReady} / {@code planningApprovalReady} and refreshes {@code reviewReady} for the posted
- * packet view (weaker than approval).
+ * Sets {@code planningReadyForApproval} when the posted packet, depth, critique readiness, and canonical plan gates align.
  */
 public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers.workflow.WorkflowAction {
+
+    private final FeaturePlanStateStore planStateStore;
+
+    public EvaluatePlanningApprovalGateAction(FeaturePlanStateStore planStateStore) {
+        this.planStateStore = planStateStore;
+    }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
@@ -25,10 +32,19 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
             spread.put("planningApprovalGateReason", "No workflow state is loaded yet, so we cannot check approval readiness.");
             return spread;
         }
+        String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
+        FeaturePlanState plan =
+                planStateStore != null && contextId != null && !contextId.isBlank()
+                        ? planStateStore.getByContextId(contextId).orElse(null)
+                        : null;
+
         boolean posted = parseInt(getString(state, "planningPacketPostedVersion"), 0) > 0;
+        if (plan != null && plan.getPacketPostedAt() != null) {
+            posted = true;
+        }
         boolean depthOk = "true".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
-        String readiness = getString(state, "planReadinessStatus");
-        boolean ready = PlanReadinessStatus.READY.equals(readiness);
+        String readinessSpread = getString(state, "planReadinessStatus");
+        boolean ready = PlanReadinessStatus.READY.equals(readinessSpread);
         boolean humanOk = "true".equalsIgnoreCase(String.valueOf(state.get("humanDiscoveryCompleted")));
         boolean noPendingClarification = !"true".equalsIgnoreCase(String.valueOf(state.get("planningUserInputRequired")));
 
@@ -66,7 +82,7 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         if (!ready) {
             reason.append(
                     "Critique readiness is not READY yet (current status: "
-                            + (readiness != null ? readiness : "unknown")
+                            + (readinessSpread != null ? readinessSpread : "unknown")
                             + "). ");
         }
         if (!humanOk) {
@@ -75,7 +91,18 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         if (!noPendingClarification) {
             reason.append("Finish or merge the open clarification before approving launch. ");
         }
-        boolean ok = posted && depthOk && ready && humanOk && noPendingClarification;
+        String canonicalBlock = PlanningApprovalGateSupport.validateApproveAllowed(plan, state);
+        if (canonicalBlock != null) {
+            reason.append(canonicalBlock).append(' ');
+        }
+
+        boolean ok =
+                posted
+                        && depthOk
+                        && ready
+                        && humanOk
+                        && noPendingClarification
+                        && canonicalBlock == null;
         spread.put("planningReadyForApproval", ok ? "true" : "false");
         spread.put("planningApprovalReady", ok ? "true" : "false");
         spread.put("approvalReady", ok ? "true" : "false");
@@ -107,5 +134,9 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
     private static String getString(Map<String, Object> map, String key) {
         Object v = map.get(key);
         return v != null ? v.toString() : null;
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
     }
 }

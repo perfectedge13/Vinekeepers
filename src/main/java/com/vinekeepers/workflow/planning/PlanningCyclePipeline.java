@@ -9,7 +9,7 @@ import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.state.planning.AssumptionEntry;
+import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.ProgressDedupeHelper;
@@ -154,6 +154,9 @@ public final class PlanningCyclePipeline {
                 PlanningGapEvaluator.effectiveRanked(plan, upsert.ledger(), rankedLlm, profile, coord);
         boolean userInputRequired =
                 resolvePlanningUserInputRequired(coord.isCanonicalV1(), clr.canonicalClarificationPending(), upsert.ledger());
+
+        PlanGovernanceDeriver.deriveAndPersist(planStateStore, contextId, profile);
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
 
         spread.put("planningCanonicalUserInputRequired", clr.canonicalClarificationPending() ? "true" : "false");
         spread.put("planningLlmUserInputSuggested", clr.llmUserInputSuggested() ? "true" : "false");
@@ -1053,7 +1056,7 @@ public final class PlanningCyclePipeline {
             return plan;
         }
         String id = "asm-auto-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
-        return plan.withAppendedAssumption(new AssumptionEntry(id, text.trim(), null));
+        return plan.withAppendedAssumption(PlanAssumption.fromLegacyText(id, text.trim(), null));
     }
 
     private static String buildCycleProgressSummary(

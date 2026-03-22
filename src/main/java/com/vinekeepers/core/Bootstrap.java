@@ -66,6 +66,7 @@ import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
 import com.vinekeepers.workflow.actions.DeployResolveProjectAction;
+import com.vinekeepers.workflow.actions.DerivePlanGovernanceAction;
 import com.vinekeepers.workflow.actions.EvaluatePlanningApprovalGateAction;
 import com.vinekeepers.workflow.actions.EvaluatePlanningPacketDepthAction;
 import com.vinekeepers.workflow.actions.ExecutePlanningRoomCycleAction;
@@ -345,6 +346,7 @@ public final class Bootstrap {
         registry.register("acknowledge_readiness_human_decision", new AcknowledgeReadinessHumanDecisionAction(
                 featurePlanStateStore, workProfileRegistry));
         registry.register("build_role_planning_thread_messages", new BuildRolePlanningThreadMessagesAction(featurePlanStateStore));
+        registry.register("derive_plan_governance", new DerivePlanGovernanceAction(featurePlanStateStore, workProfileRegistry));
         registry.register("run_plan_critique_and_readiness", new RunPlanCritiqueAndReadinessAction(featurePlanStateStore, workProfileRegistry));
         registry.register("build_planning_thread_review_body", new BuildPlanningThreadReviewBodyAction(featurePlanStateStore));
         registry.register(
@@ -365,7 +367,7 @@ public final class Bootstrap {
         registry.register(
                 "evaluate_planning_packet_depth",
                 new EvaluatePlanningPacketDepthAction(featurePlanStateStore, workProfileRegistry));
-        registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction());
+        registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction(featurePlanStateStore));
         registry.register("execute_planning_room_cycle", new ExecutePlanningRoomCycleAction(planningCyclePipeline));
         PlanningRunExpansionPhaseAction planningExpansion = new PlanningRunExpansionPhaseAction(planningCyclePipeline);
         PlanningRunInnerRoundAction planningInnerRound = new PlanningRunInnerRoundAction(planningCyclePipeline);

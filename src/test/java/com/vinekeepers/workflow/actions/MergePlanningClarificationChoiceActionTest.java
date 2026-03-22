@@ -107,6 +107,14 @@ class MergePlanningClarificationChoiceActionTest {
                 null,
                 profileId,
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 Instant.now(),
                 Instant.now());
     }

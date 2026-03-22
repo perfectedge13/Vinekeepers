@@ -26,8 +26,8 @@ public final class FeaturePlanState {
     private final String initialRequest;
     private final String planStatus;
     private final List<RequirementEntry> requirements;
-    private final List<AssumptionEntry> assumptions;
-    private final List<IssueEntry> issues;
+    private final List<PlanAssumption> assumptions;
+    private final List<PlanIssue> issues;
     private final List<ValidationEntry> validationNotes;
     private final SolutionOutline solutionOutline;
     private final TraceabilityPlaceholder traceability;
@@ -42,6 +42,14 @@ public final class FeaturePlanState {
     private final String repoAccessNotes;
     private final String profileId;
     private final Map<String, ArtifactState> artifacts;
+    private final List<PlanRisk> risks;
+    private final List<PlanDecision> decisions;
+    private final List<String> unresolvedQuestions;
+    private final String critiqueLifecycleStatus;
+    private final Instant packetPostedAt;
+    private final String packetMessageRef;
+    private final String packetPostedFingerprint;
+    private final int packetPostedChunkCount;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -56,8 +64,8 @@ public final class FeaturePlanState {
             String initialRequest,
             String planStatus,
             List<RequirementEntry> requirements,
-            List<AssumptionEntry> assumptions,
-            List<IssueEntry> issues,
+            List<PlanAssumption> assumptions,
+            List<PlanIssue> issues,
             List<ValidationEntry> validationNotes,
             SolutionOutline solutionOutline,
             TraceabilityPlaceholder traceability,
@@ -72,6 +80,14 @@ public final class FeaturePlanState {
             String repoAccessNotes,
             String profileId,
             Map<String, ArtifactState> artifacts,
+            List<PlanRisk> risks,
+            List<PlanDecision> decisions,
+            List<String> unresolvedQuestions,
+            String critiqueLifecycleStatus,
+            Instant packetPostedAt,
+            String packetMessageRef,
+            String packetPostedFingerprint,
+            Integer packetPostedChunkCount,
             Instant createdAt,
             Instant updatedAt) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
@@ -100,6 +116,17 @@ public final class FeaturePlanState {
         this.repoAccessNotes = repoAccessNotes;
         this.profileId = profileId;
         this.artifacts = copyArtifacts(artifacts);
+        this.risks = risks != null ? List.copyOf(risks) : List.of();
+        this.decisions = decisions != null ? List.copyOf(decisions) : List.of();
+        this.unresolvedQuestions = unresolvedQuestions != null ? List.copyOf(unresolvedQuestions) : List.of();
+        this.critiqueLifecycleStatus =
+                critiqueLifecycleStatus != null && !critiqueLifecycleStatus.isBlank()
+                        ? critiqueLifecycleStatus
+                        : PlanCritiqueLifecycleStatus.NONE;
+        this.packetPostedAt = packetPostedAt;
+        this.packetMessageRef = packetMessageRef != null ? packetMessageRef : "";
+        this.packetPostedFingerprint = packetPostedFingerprint != null ? packetPostedFingerprint : "";
+        this.packetPostedChunkCount = packetPostedChunkCount != null ? packetPostedChunkCount : 0;
         this.createdAt = createdAt != null ? createdAt : Instant.now();
         this.updatedAt = updatedAt != null ? updatedAt : this.createdAt;
     }
@@ -135,32 +162,23 @@ public final class FeaturePlanState {
         n.add(Objects.requireNonNull(e));
         EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
         sm.put(PlanSectionKey.REQUIREMENTS, PlanSectionStatus.DRAFT);
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, n, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+        return copy(sm, n, assumptions, issues, validationNotes, solutionOutline, Instant.now());
     }
 
-    public FeaturePlanState withAppendedAssumption(AssumptionEntry e) {
-        List<AssumptionEntry> n = new ArrayList<>(assumptions);
+    public FeaturePlanState withAppendedAssumption(PlanAssumption e) {
+        List<PlanAssumption> n = new ArrayList<>(assumptions);
         n.add(Objects.requireNonNull(e));
         EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
         sm.put(PlanSectionKey.ASSUMPTIONS, PlanSectionStatus.DRAFT);
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, n, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+        return copy(sm, requirements, n, issues, validationNotes, solutionOutline, Instant.now());
     }
 
-    public FeaturePlanState withAppendedIssue(IssueEntry e) {
-        List<IssueEntry> n = new ArrayList<>(issues);
+    public FeaturePlanState withAppendedIssue(PlanIssue e) {
+        List<PlanIssue> n = new ArrayList<>(issues);
         n.add(Objects.requireNonNull(e));
         EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
         sm.put(PlanSectionKey.ISSUES, PlanSectionStatus.DRAFT);
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, n, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+        return copy(sm, requirements, assumptions, n, validationNotes, solutionOutline, Instant.now());
     }
 
     public FeaturePlanState withAppendedValidationNote(ValidationEntry e) {
@@ -168,19 +186,13 @@ public final class FeaturePlanState {
         n.add(Objects.requireNonNull(e));
         EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
         sm.put(PlanSectionKey.VALIDATION_NOTES, PlanSectionStatus.DRAFT);
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, n, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+        return copy(sm, requirements, assumptions, issues, n, solutionOutline, Instant.now());
     }
 
     public FeaturePlanState withSectionStatus(PlanSectionKey key, PlanSectionStatus status) {
         EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
         sm.put(Objects.requireNonNull(key), Objects.requireNonNull(status));
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot, repoWorkspaceId,
-                repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts, createdAt, Instant.now());
+        return copy(sm, requirements, assumptions, issues, validationNotes, solutionOutline, Instant.now());
     }
 
     public FeaturePlanState withSolutionOutline(SolutionOutline outline) {
@@ -188,11 +200,7 @@ public final class FeaturePlanState {
         if (outline != null && !outline.getSummary().isBlank()) {
             sm.put(PlanSectionKey.SOLUTION_OUTLINE, PlanSectionStatus.DRAFT);
         }
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes,
-                outline, traceability, projectContext, sm, planConfidence, planApproval, planCritiqueSnapshot,
-                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
-                createdAt, Instant.now());
+        return copy(sm, requirements, assumptions, issues, validationNotes, outline, Instant.now());
     }
 
     public FeaturePlanState withWorkspaceLinkage(
@@ -200,45 +208,387 @@ public final class FeaturePlanState {
             String workspaceStatusName,
             String localPath,
             String accessNotes) {
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, planConfidence, planApproval, planCritiqueSnapshot,
-                workspaceId, workspaceStatusName, localPath, accessNotes, profileId, artifacts, createdAt, Instant.now());
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                workspaceId,
+                workspaceStatusName,
+                localPath,
+                accessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
     }
 
     /**
      * Replace generic artifact map (e.g. after profile-scoped section upsert).
      */
     public FeaturePlanState withArtifacts(Map<String, ArtifactState> newArtifacts) {
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, planConfidence, planApproval, planCritiqueSnapshot,
-                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, newArtifacts,
-                createdAt, Instant.now());
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                newArtifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
     }
 
     public FeaturePlanState withPlanConfidence(PlanConfidence confidence) {
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, confidence, planApproval, planCritiqueSnapshot,
-                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
-                createdAt, Instant.now());
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                confidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
     }
 
     public FeaturePlanState withPlanApproval(PlanApproval approval) {
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, planConfidence, approval, planCritiqueSnapshot,
-                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
-                createdAt, Instant.now());
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                approval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
     }
 
     public FeaturePlanState withPlanCritiqueSnapshot(PlanCritiqueSnapshot snapshot) {
-        return new FeaturePlanState(contextId, featureId, featureSlug, roomChannelId, intakeThreadId, repoRef,
-                title, initialRequest, planStatus, requirements, assumptions, issues, validationNotes, solutionOutline,
-                traceability, projectContext, sectionStatuses, planConfidence, planApproval, snapshot,
-                repoWorkspaceId, repoWorkspaceStatus, repoLocalPath, repoAccessNotes, profileId, artifacts,
-                createdAt, Instant.now());
+        String nextCritique =
+                snapshot != null ? PlanCritiqueLifecycleStatus.COMPLETE : critiqueLifecycleStatus;
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                snapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                nextCritique,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
+    }
+
+    public FeaturePlanState withCritiqueLifecycleStatus(String status) {
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                status,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
+    }
+
+    public FeaturePlanState withPacketPosted(
+            Instant postedAt,
+            String messageRef,
+            String fingerprint,
+            int chunkCount) {
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                postedAt,
+                messageRef != null ? messageRef : "",
+                fingerprint != null ? fingerprint : "",
+                chunkCount,
+                createdAt,
+                Instant.now());
+    }
+
+    /**
+     * Replace governance lists after deterministic merge (e.g. {@link com.vinekeepers.workflow.planning.PlanGovernanceDeriver}).
+     */
+    public FeaturePlanState withGovernanceRecords(
+            List<PlanAssumption> nextAssumptions,
+            List<PlanIssue> nextIssues,
+            List<PlanRisk> nextRisks,
+            List<PlanDecision> nextDecisions,
+            List<String> nextUnresolvedQuestions) {
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                nextAssumptions,
+                nextIssues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                nextRisks,
+                nextDecisions,
+                nextUnresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now());
+    }
+
+    private FeaturePlanState copy(
+            EnumMap<PlanSectionKey, PlanSectionStatus> sm,
+            List<RequirementEntry> req,
+            List<PlanAssumption> asm,
+            List<PlanIssue> iss,
+            List<ValidationEntry> val,
+            SolutionOutline outline,
+            Instant updated) {
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                req,
+                asm,
+                iss,
+                val,
+                outline,
+                traceability,
+                projectContext,
+                Map.copyOf(sm),
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                updated);
     }
 
     public String getContextId() {
@@ -281,11 +631,11 @@ public final class FeaturePlanState {
         return requirements;
     }
 
-    public List<AssumptionEntry> getAssumptions() {
+    public List<PlanAssumption> getAssumptions() {
         return assumptions;
     }
 
-    public List<IssueEntry> getIssues() {
+    public List<PlanIssue> getIssues() {
         return issues;
     }
 
@@ -345,11 +695,53 @@ public final class FeaturePlanState {
         return artifacts;
     }
 
+    public List<PlanRisk> getRisks() {
+        return risks;
+    }
+
+    public List<PlanDecision> getDecisions() {
+        return decisions;
+    }
+
+    public List<String> getUnresolvedQuestions() {
+        return unresolvedQuestions;
+    }
+
+    public String getCritiqueLifecycleStatus() {
+        return critiqueLifecycleStatus;
+    }
+
+    public Instant getPacketPostedAt() {
+        return packetPostedAt;
+    }
+
+    public String getPacketMessageRef() {
+        return packetMessageRef;
+    }
+
+    public String getPacketPostedFingerprint() {
+        return packetPostedFingerprint;
+    }
+
+    public int getPacketPostedChunkCount() {
+        return packetPostedChunkCount;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public int countBlockingIssues() {
+        int n = 0;
+        for (PlanIssue i : issues) {
+            if (i.isBlocking()) {
+                n++;
+            }
+        }
+        return n;
     }
 }

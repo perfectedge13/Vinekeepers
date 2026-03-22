@@ -3,7 +3,7 @@ package com.vinekeepers.workflow.actions;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.state.planning.IssueEntry;
+import com.vinekeepers.state.planning.PlanIssue;
 
 import java.util.Map;
 import java.util.UUID;
@@ -36,7 +36,7 @@ public final class AppendIssueAction implements com.vinekeepers.workflow.Workflo
         final String entryId = id;
         return planStateStore.getByContextId(contextId)
                 .map(p -> {
-                    FeaturePlanState next = p.withAppendedIssue(new IssueEntry(entryId, text, null));
+                    FeaturePlanState next = p.withAppendedIssue(PlanIssue.fromLegacyText(entryId, text, null));
                     planStateStore.update(next);
                     return "OK";
                 })

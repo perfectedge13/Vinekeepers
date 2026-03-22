@@ -47,6 +47,14 @@ class FeaturePlanStateStoreTest {
                 null,
                 Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         store.put(p);
         assertTrue(store.getByContextId("ctx-1").isPresent());
@@ -86,6 +94,14 @@ class FeaturePlanStateStoreTest {
                 null,
                 Map.of(),
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null);
         store.put(p);
         FeaturePlanState p2 = new FeaturePlanState(
@@ -115,6 +131,14 @@ class FeaturePlanStateStoreTest {
                 null,
                 null,
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null);
         store.update(p2);

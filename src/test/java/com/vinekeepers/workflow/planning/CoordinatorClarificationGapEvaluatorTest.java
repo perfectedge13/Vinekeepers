@@ -3,8 +3,8 @@ package com.vinekeepers.workflow.planning;
 import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationMode;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
-import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.PlanAssumption;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -52,7 +52,7 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         List.of("config-driven"))));
         FeaturePlanState plan =
                 minimalPlan("ctx", "x")
-                        .withAppendedAssumption(new AssumptionEntry("a1", "We go config-driven for this feature.", Instant.now()));
+                        .withAppendedAssumption(PlanAssumption.fromLegacyText("a1", "We go config-driven for this feature.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
                 CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
                         plan, settings, List.of("config versus runtime?"));
@@ -75,7 +75,7 @@ class CoordinatorClarificationGapEvaluatorTest {
         FeaturePlanState plan =
                 minimalPlan("ctx", "req")
                         .withAppendedAssumption(
-                                new AssumptionEntry("a1", "Decision (user choice A): config only", Instant.now()));
+                                PlanAssumption.fromLegacyText("a1", "Decision (user choice A): config only", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
                 CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
                         plan,
@@ -105,7 +105,7 @@ class CoordinatorClarificationGapEvaluatorTest {
         FeaturePlanState plan =
                 minimalPlan("ctx", "x")
                         .withAppendedAssumption(
-                                new AssumptionEntry("a1", "Static is fine for this piece.", Instant.now()));
+                                PlanAssumption.fromLegacyText("a1", "Static is fine for this piece.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
                 CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
                         plan, settings, List.of("config versus runtime?"));
@@ -134,7 +134,7 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         List.of("yaml", "bootstrap"))));
         FeaturePlanState plan =
                 minimalPlan("ctx", "x")
-                        .withAppendedAssumption(new AssumptionEntry("a1", "User chose both config and runtime.", Instant.now()));
+                        .withAppendedAssumption(PlanAssumption.fromLegacyText("a1", "User chose both config and runtime.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
                 CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings, List.of());
         assertEquals(1, open.size());
@@ -169,6 +169,14 @@ class CoordinatorClarificationGapEvaluatorTest {
                 null,
                 "software_feature_planning_v2",
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 Instant.now(),
                 Instant.now());
     }
