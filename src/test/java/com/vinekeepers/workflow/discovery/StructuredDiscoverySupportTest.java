@@ -69,4 +69,71 @@ class StructuredDiscoverySupportTest {
         List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
         assertTrue(gaps.isEmpty());
     }
+
+    @Test
+    void workspaceBlockersOnly_skipsRequiredFieldGapsWhenWorkspaceUnset() throws Exception {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        init.run(
+                null,
+                Map.of("contextId", "preAuto", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
+        var plan = store.getByContextId("preAuto").orElseThrow();
+        var profile = reg.get(plan.getProfileId()).orElseThrow();
+
+        List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile, true);
+        assertTrue(gaps.isEmpty());
+
+        var spread = StructuredDiscoverySupport.spreadFromGaps(gaps);
+        assertEquals("false", spread.get("discoveryHasOpenGaps"));
+        assertEquals("false", spread.get("discoveryBlockingIssueMode"));
+    }
+
+    @Test
+    void workspaceBlockersOnly_stillCollectsWorkspaceBlocker() {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        init.run(
+                null,
+                Map.of("contextId", "wsBlock", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
+        var plan = store.getByContextId("wsBlock").orElseThrow();
+        store.update(plan.withWorkspaceLinkage("w1", "FAILED", "", "clone failed"));
+        plan = store.getByContextId("wsBlock").orElseThrow();
+        var profile = reg.get(plan.getProfileId()).orElseThrow();
+
+        List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile, true);
+        assertEquals(1, gaps.size());
+        assertEquals("WORKSPACE", gaps.get(0).getKind());
+        assertEquals("BLOCKER", gaps.get(0).getSeverity());
+    }
+
+    @Test
+    void repeatableSection_rowsMissingSameRequiredField_consolidatesToOneGap() {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        init.run(
+                null,
+                Map.of("contextId", "rep", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
+        var upsert = new UpsertArtifactSectionDataAction(store, reg);
+        upsert.run(
+                null,
+                Map.of("contextId", "rep"),
+                Map.of("artifactId", "decision_log", "sectionId", "decisions", "data", Map.of(), "mode", "replace"));
+        upsert.run(
+                null,
+                Map.of("contextId", "rep"),
+                Map.of("artifactId", "decision_log", "sectionId", "decisions", "data", Map.of(), "mode", "append"));
+        var plan = store.getByContextId("rep").orElseThrow();
+        var profile = reg.get(plan.getProfileId()).orElseThrow();
+
+        List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
+        long decisionTextGaps =
+                gaps.stream().filter(g -> "decision_text".equals(g.getFieldId())).count();
+        assertEquals(1, decisionTextGaps);
+    }
 }

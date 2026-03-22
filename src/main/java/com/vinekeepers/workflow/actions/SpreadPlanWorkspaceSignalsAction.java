@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
@@ -13,6 +14,8 @@ import java.util.Map;
  * {@link EnsureRepoWorkspaceAction}.
  */
 public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.workflow.WorkflowAction {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final FeaturePlanStateStore planStateStore;
 
@@ -57,6 +60,18 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
             sb.append(" Notes: ").append(truncate(notes, 280));
         }
         out.put("repoWorkspaceStatusSummary", sb.toString());
+        try {
+            Map<String, Object> evidence = new LinkedHashMap<>();
+            evidence.put("workspaceStatus", statusName.isBlank() ? "unknown" : statusName);
+            evidence.put("localPathPresent", pathOk);
+            evidence.put("repoRef", plan.getRepoRef() != null ? plan.getRepoRef() : "");
+            if (!notes.isBlank()) {
+                evidence.put("accessNotes", notes);
+            }
+            out.put("planningRepoEvidenceJson", JSON.writeValueAsString(evidence));
+        } catch (Exception e) {
+            out.put("planningRepoEvidenceJson", "{}");
+        }
         return out;
     }
 

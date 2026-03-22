@@ -279,7 +279,7 @@ public final class PlanCritiqueSupport {
                     "COVERAGE",
                     "MUST_FIX",
                     "PLACEHOLDER_PLANNING_FIELD",
-                    "Planning field still looks like a template or thin placeholder: " + path + ". Add detail in-thread or use **Add scope / must-haves / risks** so drafts can expand.",
+                    "Planning field still looks like a template or thin placeholder: " + path + ". Add concrete detail in this thread so drafts can expand.",
                     path));
         }
     }

@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-22
+
+- **Coordinator-only intake thread (messages + interactions):** When **FeatureRoomState** matches the intake/spec thread and a primary coordinator id resolves, **Router** returns that coordinator only for both **message** and **interaction** events (single planning ingress). Participant list fallback remains when coordinator id is missing. Tests: `routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly`. **Documentation:** feature summary, **how-it-works**, **contracts**, and **architecture** runtime flow aligned with `Router.route()`.
+
 ## 2026-03-19
 
 - **Feature room response policy (room vs thread):** Router returns the primary coordinator bot id only for the feature **room** channel; for the **intake/spec thread** id it returns all four participant configuredBotIds in role order for **messages**, and the **coordinator only** for **component interactions**. Tests: `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder`, `routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly`.

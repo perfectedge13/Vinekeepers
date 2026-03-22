@@ -16,7 +16,7 @@ import java.util.Optional;
 
 /**
  * Idempotent coordinator kickoff post for intake threads, updates {@link FeaturePlanState} intake kickoff
- * fingerprint/version, and marks discovery complete for critique gates — replaces a non-idempotent
+ * fingerprint/version, and advances {@link PlanningIntakeStage} to drafting — replaces a non-idempotent
  * {@code post_channel_message} + button menu block.
  */
 public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.workflow.WorkflowAction {
@@ -33,7 +33,6 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
         Map<String, Object> spread = new LinkedHashMap<>();
-        spread.put("humanDiscoveryCompleted", "true");
         spread.put("intakeKickoffPostedSkipped", "false");
         spread.put("intakeKickoffPostedError", "");
         if (outboundDeliveryRouter == null || planStore == null) {
@@ -86,10 +85,9 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
                 + escapeTicks(project)
                 + "`\n\n\n\n**Request:** "
                 + codeChange
-                + "\n\n\n\nI will explore what this request means, expand drafts from repo context, and post the planning "
-                + "packet in this thread when it is ready to read. I will only ask questions if something **blocks** a "
-                + "solid plan. Reply in plain text anytime to add scope, must-haves, or risks — otherwise I continue "
-                + "drafting automatically.";
+                + "\n\n\n\nI am continuing to draft in this thread from your request and repo context, and I will post "
+                + "the planning packet when it is ready. I only pause with a **single plain-text question** if something "
+                + "**blocks** a solid plan.";
     }
 
     private static String escapeTicks(String s) {

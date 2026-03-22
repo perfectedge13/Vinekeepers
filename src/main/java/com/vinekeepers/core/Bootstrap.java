@@ -406,7 +406,6 @@ public final class Bootstrap {
                 "run_request_expansion_llm",
                 new RunRequestExpansionLlmAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
         registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore, featurePlanStateStore));
-        registry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
     }
 
     private void registerTools(ToolRegistry registry) {

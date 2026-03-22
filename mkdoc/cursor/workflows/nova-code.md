@@ -2,7 +2,7 @@
 
 ## Summary
 
-Spec-driven implementation workflow. Discovery → gates → execution loop (plan_change, implement, update_tests, update_specs, post_schema, traceability, run_tests, build_check, reconcile, mk, output). Branch removal_rename when plan_change sets removal_or_rename.
+Spec-driven implementation workflow. Discovery → gates → execution loop (plan_change through reconcile, then mk, docs_gate, output). Branch `removal_rename_sequence` when `plan_change` sets `removal_or_rename`.
 
 ## Sequence
 
@@ -22,19 +22,30 @@ Spec-driven implementation workflow. Discovery → gates → execution loop (pla
 14. build_check  
 15. reconcile  
 16. mk  
-17. output  
+17. docs_gate  
+18. output  
 
 ## Diagram
 
 ```mermaid
 flowchart TB
-  A[discovery] --> C[schema_gate]
-  C --> D[drift_gate]
-  D --> E[plan_change]
-  E --> F[implement]
-  F --> G[update_tests]
-  G --> H[mk]
-  H --> I[output]
+  discovery --> schema_gate
+  schema_gate --> drift_gate
+  drift_gate --> plan_change
+  plan_change --> branch_removal_rename
+  branch_removal_rename --> pre_change_lock
+  pre_change_lock --> implement
+  implement --> update_tests
+  update_tests --> update_specs
+  update_specs --> update_readme
+  update_readme --> post_schema
+  post_schema --> traceability
+  traceability --> run_tests
+  run_tests --> build_check
+  build_check --> reconcile
+  reconcile --> mk
+  mk --> docs_gate
+  docs_gate --> output
 ```
 
 

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T12:30:00Z"
+  updated_utc: "2026-03-22T20:45:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -90,7 +90,8 @@ assets:
       planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
       post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
-      get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
+      get_profile_missing_fields, structured discovery and plan actions, coordinator_intake_bootstrap,
+      mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
       append/set plan actions; register resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose;
@@ -131,7 +132,8 @@ assets:
     role: >-
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
-      workflowRef arrietty_room_v2 (delegating to arrietty_room_legacy linear graph), handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
+      workflowRef arrietty_room_v2 whose planning phase runs hydrate_planning_session, ensure_repo_workspace, and
+      spread_plan_workspace_signals before linear_workflow_ref to arrietty_room_legacy, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
       blank/empty; operator bot (e.g. id gadget) with workflowRef devops_deploy, routing discordMention and discordChannels allowlist
       ops channel id in discordChannels (see comment block top of config/bots.yaml); Luna routing optional discordChannelsExclude
       for that ops channel id
@@ -359,12 +361,12 @@ assets:
       and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); canonical coordinator questions use
       plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
       post_planning_progress_if_changed; legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering;
-      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode; planningOrchestratorRoundSummary and
+      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;       planningOrchestratorRoundSummary and
       planningCycleProgressSummary branch on the same resolved planningUserInputRequired gate as workflow YAML (not ranked
       userInputRequired alone); when canonical gaps remain open but the question ranker drops the template, ensureRankedForOpenCanonicalGap
       synthesizes a non-empty RankedClarification before upsert so ledger and prompts stay consistent; spread keys
       planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
-      planningUserInputRequired
+      planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1034,7 +1036,8 @@ assets:
     role: >-
       Workflow action hydrate_planning_session — when event channel is a feature-room intake thread id, storeSpread
       planningIntakeThread, contextId, channelId, deliveryChannelId, project, codeChange from FeatureRoomState and FeaturePlanState;
-      spreads coordinatorKickoff from synthetic kickoff payload when present; when workflow state has
+      spreads coordinatorKickoff from synthetic kickoff payload when present; spreads planningIngressMode from event payload when
+      set, else SYNTHETIC_KICKOFF when coordinatorKickoff, else USER_MESSAGE on intake thread, else empty; when workflow state has
       planningWorkflowStepLimitReached=true, persists FeaturePlanState.withPlanningOrchestrationFailure once and clears the flag
       via spread; spreads canonicalPlanningIntakeStage from FeaturePlanState when plan exists
     requires:
@@ -1063,8 +1066,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/MarkIntakeDiscoveryCompleteAction.java
     role: >-
-      Workflow action mark_intake_discovery_complete — spreads humanDiscoveryCompleted=true after coordinator discovery
-      kickoff reply; gates run_plan_critique_and_readiness until set
+      Workflow action mark_intake_discovery_complete — spreads humanDiscoveryCompleted=true after Phase B discovery
+      converges on the linear intake path when coordinator_intake_bootstrap did not run (e.g. planningIntakeThread branch);
+      coordinator_intake_bootstrap sets the same spread on synthetic kickoff; gates run_plan_critique_and_readiness until set
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1198,7 +1202,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/discovery/StructuredDiscoverySupport.java
     role: >-
-      Collects structured DiscoveryGap list from FeaturePlanState and work profile, builds DiscoveryAgenda/questions,
+      Collects structured DiscoveryGap list from FeaturePlanState and work profile (optional workspaceBlockersOnly mode omits
+      REQUIRED_FIELD gaps so repo BLOCKER workspace gaps still surface before the first autonomous planning pass); for repeatable
+      sections consolidates missing required fields to one gap per field id across rows; builds DiscoveryAgenda/questions,
       serializes branch flags for workflow state, projects PlanSectionKey statuses from artifact completeness
     requires:
       - REQ-WORKFLOW-001
@@ -1209,7 +1215,10 @@ assets:
   - id: ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/GetStructuredDiscoveryGapsAction.java
-    role: Workflow action get_structured_discovery_gaps — returns map for storeSpread (gaps JSON, discoveryHasOpenGaps, discoveryBlockingIssueMode)
+    role: >-
+      Workflow action get_structured_discovery_gaps — returns map for storeSpread (gaps JSON, discoveryHasOpenGaps,
+      discoveryBlockingIssueMode); when planningAutonomousFirstPassCompleted is not true, collects workspace BLOCKER gaps only;
+      after a successful execute_planning_room_cycle spread sets that flag, full REQUIRED_FIELD gaps are included
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1223,6 +1232,30 @@ assets:
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-BUILD-INSIGHT-DISCOVERY-AGENDA-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/BuildInsightDiscoveryAgendaAction.java
+    role: >-
+      Workflow action build_insight_discovery_agenda — intake path selects at most one BLOCKER/HIGH gap with canonical
+      userFacingDetail via StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CLARIFICATION-PROMPT-QUALITY-GATE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/discovery/ClarificationPromptQualityGate.java
+    role: >-
+      Rejects generic flesh-out clarification copy; used on the intake blocking clarification path inside
+      StructuredDiscoverySupport
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
@@ -1259,7 +1292,9 @@ assets:
   - id: ASSET-PLAN-CRITIQUE-SUPPORT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanCritiqueSupport.java
-    role: Rule-based critique findings from gaps and plan lists (Phase C)
+    role: >-
+      Rule-based critique findings from gaps and plan lists (Phase C); maps StructuredDiscoverySupport gaps via fromGap and
+      combines plan substance, v2 packet, exploration, and placeholder heuristics
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1286,8 +1321,9 @@ assets:
       output; persists PlanCritiqueSnapshot (rubric, blocking counts, required revisions), PlanConfidence (readiness,
       confidenceScore, confidenceReasons), critiqueLifecycleStatus COMPLETE; storeSpread planReadinessStatus (legacy spread
       via PlanReadinessStatus.legacySpreadValue where applicable), planConfidenceScore, planConfidenceLevel,
-      planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary; MUST_FIX when humanDiscoveryCompleted is not true;
-      bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path;
+      planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary; adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
+      FeaturePlanState PlanningIntakeStage is GATHERING_CONTEXT and humanDiscoveryCompleted is not true (complements canonical
+      intake stage with legacy spread); bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path;
       planningCritiqueAutoRevisionCount tracks NEEDS_REVISION-driven full replan attempts; after threshold spreads NEEDS_HUMAN_DECISION
       and persists PlanConfidence with the same status so auto critique→replan loops stop without silent storms
     requires:
@@ -1313,7 +1349,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/SpreadPlanWorkspaceSignalsAction.java
     role: >-
       Workflow action spread_plan_workspace_signals — reads FeaturePlanState workspace linkage after ensure_repo_workspace;
-      storeSpread repoWorkspaceReady, repoLocalPathPresent, repoWorkspaceStatusSummary for branching
+      storeSpread repoWorkspaceReady, repoLocalPathPresent, repoWorkspaceStatusSummary, planningRepoEvidenceJson (workspace status,
+      local path flag, repo ref, optional access notes) for branching and templates
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1563,8 +1600,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningApprovalGateAction.java
     role: >-
       Workflow action evaluate_planning_approval_gate — storeSpread planningReadyForApproval / planningApprovalReady / approvalReady
-      when packet posted version, depth, READY readiness, humanDiscoveryCompleted, and no pending clarification; refreshes
-      planningReviewReady/reviewReady for posted packet view with human-readable gate reasons
+      when packet posted version, depth, READY readiness, intake discovery complete (humanDiscoveryCompleted true OR
+      FeaturePlanState planningIntakeStage past GATHERING_CONTEXT), no pending clarification, and PlanningApprovalGateSupport
+      canonical checks pass; refreshes planningReviewReady/reviewReady (dual legacy signals) for posted packet view with human-readable gate reasons
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1799,15 +1837,17 @@ requirements:
           call_action step may set storeSpread true; when the invoked action returns a Map, ConfigurableWorkflowRunner
           merges entries into workflow state before advancing (StepResult.advanceSpread)
         - >-
-          Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, spread_plan_workspace_signals,
+          Bootstrap registers workflow actions initialize_feature_plan_state, hydrate_planning_session, start_coordinator_planning,
+          ensure_repo_workspace, spread_plan_workspace_signals,
           derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
           planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
           post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
-          resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
+          resolve_proposal_confirmation, synthesize_plan_drafts,           get_structured_discovery_gaps, build_discovery_agenda,
+          build_insight_discovery_agenda,
           capture_and_apply_discovery_answer,
-          classify_assumption_or_issue, recompute_plan_progress, run_plan_critique_and_readiness,
+          classify_assumption_or_issue, recompute_plan_progress, coordinator_intake_bootstrap, run_plan_critique_and_readiness,
           build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
           append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
@@ -1818,19 +1858,20 @@ requirements:
           drive confirm-before-record for CONFIRM proposals using discoveryAnswerRaw
         - >-
           get_structured_discovery_gaps spreads discoveryHasOpenGaps false and discoveryScanError when contextId is missing;
-          after initialize_feature_plan_state with a new plan, spreads discoveryGapsJson containing REQUIRED_FIELD gaps when
-          required profile fields are still empty
+          until planningAutonomousFirstPassCompleted is true, discoveryGapsJson omits non-workspace REQUIRED_FIELD gaps while
+          still emitting repo workspace BLOCKER gaps when workspace resolution failed; after a successful execute_planning_room_cycle,
+          spreads include full REQUIRED_FIELD gaps for empty required profile fields; repeatable-section required fields consolidate
+          to one gap per missing field id across rows
         - >-
           build_discovery_agenda spreads discoveryAgendaError when discoveryGapsJson is missing; when state includes gap
           spread from get_structured_discovery_gaps, spreads discoveryCurrentQuestionPrompt and discoveryApplyKind (e.g.
           REQUIRED_FIELD)
         - >-
-          capture_and_apply_discovery_answer returns OK_SKIP_APPLY when discoveryApplyKind is not REQUIRED_FIELD/BUNDLED
+          capture_and_apply_discovery_answer returns OK_SKIP_APPLY when discoveryApplyKind is not REQUIRED_FIELD
           and the message is not a lightweight consent token; lightweight consent replies (ok, continue, proceed, etc.)
           run expand_planning_drafts and return OK; when kind
           is REQUIRED_FIELD with discoveryApplyArtifactId, discoveryApplySectionId, discoveryApplyFieldId, and
-          discoveryApplyMode, applies discoveryAnswerRaw into plan artifacts (upsert semantics); BUNDLED applies parsed
-          sections to multiple targets
+          discoveryApplyMode, applies discoveryAnswerRaw into plan artifacts (upsert semantics)
         - >-
           post_planning_packet_thread builds the planning packet from FeaturePlanState (PlanningThreadPacketFormatter includes
           canonical governance sections), splits for Discord size limits, posts orchestrator messages to the intake/spec thread,
@@ -1845,7 +1886,18 @@ requirements:
         - >-
           expand_planning_drafts replaces placeholder-heavy artifact fields with request- and repo-grounded drafts
         - >-
-          spread_plan_workspace_signals spreads repoWorkspaceReady and related keys from FeaturePlanState after ensure_repo_workspace
+          spread_plan_workspace_signals spreads repoWorkspaceReady, repoLocalPathPresent, repoWorkspaceStatusSummary, and
+          planningRepoEvidenceJson from FeaturePlanState after ensure_repo_workspace
+        - >-
+          execute_planning_room_cycle (PlanningCyclePipeline) spreads planningAutonomousFirstPassCompleted true when the cycle
+          completes without planningRoomCycleError
+        - >-
+          run_plan_critique_and_readiness prepends a MUST_FIX intake finding when PlanningIntakeStage is GATHERING_CONTEXT and
+          humanDiscoveryCompleted is not true; PlanCritiqueSupport still maps structured discovery gaps into critique findings
+        - >-
+          evaluate_planning_approval_gate treats coordinator discovery as satisfied when humanDiscoveryCompleted is true or
+          planningIntakeStage on FeaturePlanState is not GATHERING_CONTEXT, alongside posted packet, depth, READY readiness,
+          no pending clarification, and PlanningApprovalGateSupport.validateApproveAllowed
         - >-
           derive_plan_governance merges gaps and artifacts into plan governance lists before evaluate_planning_packet_depth;
           evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator
@@ -1853,7 +1905,8 @@ requirements:
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
           on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely
         - >-
-          build_insight_discovery_agenda merges planningFollowUpQuestionsJson from synthesis into bundled insight context when present
+          build_insight_discovery_agenda selects at most one BLOCKER/HIGH discovery gap, uses canonical userFacingDetail with
+          ClarificationPromptQualityGate (no bundled Planning check-in prompts; discoveryBundledApplyJson stays empty on the intake path)
         - >-
           recompute_plan_progress spreads discoveryHasOpenGaps false and discoveryRecomputeError when contextId is missing;
           when plan has artifacts, persists projected section statuses and returns a refreshed gap spread map
@@ -1913,6 +1966,8 @@ requirements:
         - ASSET-STRUCTURED-DISCOVERY-SUPPORT
         - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
         - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
+        - ASSET-BUILD-INSIGHT-DISCOVERY-AGENDA-ACTION
+        - ASSET-CLARIFICATION-PROMPT-QUALITY-GATE
         - ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
         - ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
         - ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION
@@ -2027,6 +2082,13 @@ requirements:
           title: StructuredDiscoverySupportTest
           intent: Verify structured gaps, agenda spread, and empty state when required profile fields filled
           testClass: com.vinekeepers.workflow.discovery.StructuredDiscoverySupportTest
+          preconditions: []
+        - id: UNIT-INTAKE-BLOCKING-CLARIFICATION
+          title: IntakeBlockingClarificationTest
+          intent: >-
+            Verify intake blocking clarification: one HIGH/BLOCKER question from canonical gap text, quality gate rejects
+            generic flesh-out copy, LOW-only gaps yield no prompt, BuildInsightDiscoveryAgendaAction matches intake path
+          testClass: com.vinekeepers.workflow.discovery.IntakeBlockingClarificationTest
           preconditions: []
         - id: UNIT-DISCOVERY-WORKFLOW-ACTIONS
           title: DiscoveryWorkflowActionsTest
@@ -2169,7 +2231,8 @@ requirements:
     title: Config-driven workflow v2 graph, ledger, rules, and safe templates
     statement: >-
       Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge, linear_workflow_ref delegate), and rulesets;
-      WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
+      coordinator workflows such as arrietty_room_v2 may run hydrate/ensure/spread ingress capabilities in the entry phase before
+      delegating to a linear_workflow_ref submodule. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; OPEN ledger items after upsert drive
@@ -2202,13 +2265,15 @@ requirements:
           applies declarative depth before supplemental packet checks
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
         - >-
-          Production Arrietty uses arrietty_room_v2 (workflowSchema v2) with linear_workflow_ref to arrietty_room_legacy (full linear
-          coordinator graph); rollback is switching workflowRef back to arrietty_room_legacy with type configured
+          Production Arrietty uses arrietty_room_v2 (workflowSchema v2) whose planning phase pipeline runs hydrate_planning_session,
+          ensure_repo_workspace, spread_plan_workspace_signals, then linear_workflow_ref to arrietty_room_legacy (full linear coordinator
+          graph); v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted, planningRepoEvidenceJson,
+          canonicalPlanningIntakeStage among user-facing keys; rollback is switching workflowRef back to arrietty_room_legacy with type configured
         - >-
           arrietty_room_legacy branch next targets must not jump to terminal done steps (launch/done inserts shift indices);
-          coordinatorKickoff routes to stable index 79 coordinator_intake_bootstrap then branch to main planning; draft-blocked
+          coordinatorKickoff routes to stable index 73 coordinator_intake_bootstrap then branch to main planning; draft-blocked
           recovery runs another planning round (not kickoff loop); clarification uses plain-text path only; ArriettyRoomWorkflowYamlTest
-          guards branch-to-done and coordinator entry anchors (79=bootstrap, 80=branch to execute_planning_room_cycle index 5)
+          guards branch-to-done and coordinator entry anchors (73=bootstrap, 74=branch; execute_planning_room_cycle at step index 26)
         - >-
           GraphWorkflowRunner when linear_workflow_ref completes with user-visible text (reply or rich intent) and the phase
           pipeline is exhausted collapses through default/terminal v2 phases and returns that delegated result instead of
@@ -2497,6 +2562,8 @@ requirements:
         - ASSET-STRUCTURED-DISCOVERY-SUPPORT
         - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
         - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
+        - ASSET-BUILD-INSIGHT-DISCOVERY-AGENDA-ACTION
+        - ASSET-CLARIFICATION-PROMPT-QUALITY-GATE
         - ASSET-CAPTURE-APPLY-DISCOVERY-ANSWER-ACTION
         - ASSET-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION
         - ASSET-RECOMPUTE-PLAN-PROGRESS-ACTION

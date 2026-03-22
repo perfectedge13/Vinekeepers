@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-19T12:00:00Z"
+  updated_utc: "2026-03-22T20:45:00Z"
 
 project:
   id: vinekeepers
@@ -39,7 +39,8 @@ assets:
     role: >-
       Match events to bots by routing rules and ownership; depends on LifecycleContextStore and optional
       FeatureRoomStateStore; feature room routing runs before lifecycle single-owner; intake thread id returns the
-      primary coordinator configuredBotId for Discord messages and interactions (single planning ingress); room channel
+      primary coordinator configuredBotId for Discord messages and interactions (single planning ingress; coordinator bots
+      may use workflowRef arrietty_room_v2 with submodule arrietty_room_legacy); room channel
       returns coordinator only; lifecycle resolved by channelId then getByDeliveryTargetId(channelId); when lifecycle
       context exists and owner has handlesOwnedSpaces, single-owner precedence; setHandlesOwnedSpacesByBotId(map);
       discordAuthors match by actorId or actorUsername; Discord mention and trigger apply only to message events;

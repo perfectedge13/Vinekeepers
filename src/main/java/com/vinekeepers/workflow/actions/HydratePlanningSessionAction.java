@@ -91,6 +91,17 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
         } else {
             out.put("coordinatorKickoff", "false");
         }
+        Object ingress =
+                event != null && event.getPayload() != null ? event.getPayload().get("planningIngressMode") : null;
+        if (ingress != null && !ingress.toString().isBlank()) {
+            out.put("planningIngressMode", ingress.toString().trim());
+        } else if ("true".equalsIgnoreCase(String.valueOf(out.get("coordinatorKickoff")))) {
+            out.put("planningIngressMode", "SYNTHETIC_KICKOFF");
+        } else if ("true".equalsIgnoreCase(String.valueOf(out.get("planningIntakeThread")))) {
+            out.put("planningIngressMode", "USER_MESSAGE");
+        } else {
+            out.put("planningIngressMode", "");
+        }
         return out;
     }
 

@@ -267,6 +267,10 @@ public final class PlanningCyclePipeline {
         spread.put("planningJustMergedClarification", "false");
         spread.put("planningSelectiveRerunActive", "false");
         finishProgressFingerprint(state, spread);
+        String cycleErr = getString(spread, "planningRoomCycleError");
+        if (cycleErr == null || cycleErr.isBlank()) {
+            spread.put("planningAutonomousFirstPassCompleted", "true");
+        }
         return spread;
     }
 

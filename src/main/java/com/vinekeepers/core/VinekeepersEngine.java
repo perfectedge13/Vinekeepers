@@ -6,7 +6,6 @@ import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.NormalizedEventContext;
 import com.vinekeepers.bot.Router;
 import com.vinekeepers.connectors.ReplyTargetResolver;
-import com.vinekeepers.debug.AgentDebugLog;
 import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.events.EventSubscriber;
@@ -30,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -467,10 +465,10 @@ public final class VinekeepersEngine implements EventSubscriber {
         return DEFERRED_INTERACTION_ACK;
     }
 
-    /** True when the bot runs the Arrietty coordinator planning workflow (linear legacy, v2 delegate, or legacy type string). */
+    /** True when the bot runs the Arrietty coordinator planning workflow (configured ref {@code arrietty_room_*} or legacy type string). */
     private static boolean usesArriettyPlanningCoordinatorWorkflow(BotDefinition b) {
         if ("arrietty_room".equalsIgnoreCase(b.getWorkflowType())) {
-            return true;
+            return true; // legacy YAML workflow type, if present
         }
         if (!"configured".equalsIgnoreCase(b.getWorkflowType()) || b.getWorkflowParams() == null) {
             return false;

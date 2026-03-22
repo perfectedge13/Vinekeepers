@@ -4,6 +4,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planreview.PlanningApprovalGateSupport;
 
@@ -45,7 +46,7 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         boolean depthOk = "true".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
         String readinessSpread = getString(state, "planReadinessStatus");
         boolean ready = PlanReadinessStatus.READY.equals(readinessSpread);
-        boolean humanOk = "true".equalsIgnoreCase(String.valueOf(state.get("humanDiscoveryCompleted")));
+        boolean humanOk = intakeDiscoveryCompleteForApproval(plan, state);
         boolean noPendingClarification = !"true".equalsIgnoreCase(String.valueOf(state.get("planningUserInputRequired")));
 
         boolean reviewSignal = posted && depthOk && noPendingClarification;
@@ -118,6 +119,20 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         }
         DeliberationEngine.applyDerivedDeliberationSpread(spread);
         return spread;
+    }
+
+    /**
+     * Coordinator synthetic kickoff advances {@link PlanningIntakeStage} to drafting; manual threads rely on
+     * {@code humanDiscoveryCompleted} after structured discovery.
+     */
+    private static boolean intakeDiscoveryCompleteForApproval(FeaturePlanState plan, Map<String, Object> state) {
+        if ("true".equalsIgnoreCase(String.valueOf(state.get("humanDiscoveryCompleted")))) {
+            return true;
+        }
+        if (plan == null) {
+            return false;
+        }
+        return plan.getPlanningIntakeStage() != PlanningIntakeStage.GATHERING_CONTEXT;
     }
 
     private static int parseInt(String s, int dflt) {

@@ -15,6 +15,7 @@ import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.discovery.StructuredDiscoverySupport;
 import com.vinekeepers.workflow.planreview.PlanCritiqueRubric;
 import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
@@ -78,7 +79,9 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         try {
             List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
             List<PlanCritiqueFinding> findings = new ArrayList<>(PlanCritiqueSupport.buildFindings(plan, profile, gaps));
-            if (!"true".equalsIgnoreCase(String.valueOf(state != null ? state.get("humanDiscoveryCompleted") : null))) {
+            boolean discoveryDone =
+                    "true".equalsIgnoreCase(String.valueOf(state != null ? state.get("humanDiscoveryCompleted") : null));
+            if (plan.getPlanningIntakeStage() == PlanningIntakeStage.GATHERING_CONTEXT && !discoveryDone) {
                 findings.add(0, new PlanCritiqueFinding(
                         "crit-intake-disc-1",
                         "PROCESS",

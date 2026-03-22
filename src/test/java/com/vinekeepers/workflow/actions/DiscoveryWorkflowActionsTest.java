@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -37,9 +38,45 @@ class DiscoveryWorkflowActionsTest {
         assertEquals("OK", init.run(null, Map.of("contextId", "dg", "channelId", "ch"), Map.of()));
         var action = new GetStructuredDiscoveryGapsAction(store, reg);
         @SuppressWarnings("unchecked")
-        Map<String, Object> out = (Map<String, Object>) action.run(null, Map.of("contextId", "dg"), Map.of());
+        Map<String, Object> out =
+                (Map<String, Object>)
+                        action.run(
+                                null,
+                                Map.of("contextId", "dg", "planningAutonomousFirstPassCompleted", "true"),
+                                Map.of());
         assertEquals("true", out.get("discoveryHasOpenGaps"));
         assertTrue(((String) out.get("discoveryGapsJson")).contains("REQUIRED_FIELD"));
+    }
+
+    @Test
+    void getStructuredDiscoveryGaps_beforeAutonomousPass_omitsRequiredGapsWhenWorkspaceOk() {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        assertEquals("OK", init.run(null, Map.of("contextId", "kick", "channelId", "ch"), Map.of()));
+        var action = new GetStructuredDiscoveryGapsAction(store, reg);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out =
+                (Map<String, Object>) action.run(null, Map.of("contextId", "kick"), Map.of());
+        assertEquals("false", out.get("discoveryHasOpenGaps"));
+        assertEquals("false", out.get("discoveryBlockingIssueMode"));
+        assertFalse(((String) out.get("discoveryGapsJson")).contains("REQUIRED_FIELD"));
+    }
+
+    @Test
+    void getStructuredDiscoveryGaps_beforeAutonomousPass_reportsWorkspaceBlocker() {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        assertEquals("OK", init.run(null, Map.of("contextId", "ws", "channelId", "ch"), Map.of()));
+        var plan = store.getByContextId("ws").orElseThrow();
+        store.update(plan.withWorkspaceLinkage("w1", "UNAVAILABLE", "", "offline"));
+        var action = new GetStructuredDiscoveryGapsAction(store, reg);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = (Map<String, Object>) action.run(null, Map.of("contextId", "ws"), Map.of());
+        assertEquals("true", out.get("discoveryHasOpenGaps"));
+        assertEquals("true", out.get("discoveryBlockingIssueMode"));
+        assertTrue(((String) out.get("discoveryGapsJson")).contains("WORKSPACE"));
     }
 
     @Test
@@ -61,7 +98,12 @@ class DiscoveryWorkflowActionsTest {
                 Map.of("profileId", "software_feature_planning"));
         var gapsAction = new GetStructuredDiscoveryGapsAction(store, reg);
         @SuppressWarnings("unchecked")
-        Map<String, Object> spread = (Map<String, Object>) gapsAction.run(null, Map.of("contextId", "ag"), Map.of());
+        Map<String, Object> spread =
+                (Map<String, Object>)
+                        gapsAction.run(
+                                null,
+                                Map.of("contextId", "ag", "planningAutonomousFirstPassCompleted", "true"),
+                                Map.of());
         var agendaAction = new BuildDiscoveryAgendaAction();
         @SuppressWarnings("unchecked")
         Map<String, Object> agenda = (Map<String, Object>) agendaAction.run(null, spread, Map.of());
@@ -149,5 +191,13 @@ class DiscoveryWorkflowActionsTest {
         assertInstanceOf(Map.class, spread);
         var plan = store.getByContextId("rc").orElseThrow();
         assertEquals(PlanSectionStatus.DRAFT, plan.getSectionStatuses().get(PlanSectionKey.REQUIREMENTS));
+    }
+
+    @Test
+    void markIntakeDiscoveryComplete_setsHumanFlag() {
+        var action = new MarkIntakeDiscoveryCompleteAction();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = (Map<String, Object>) action.run(null, Map.of(), Map.of());
+        assertEquals("true", out.get("humanDiscoveryCompleted"));
     }
 }

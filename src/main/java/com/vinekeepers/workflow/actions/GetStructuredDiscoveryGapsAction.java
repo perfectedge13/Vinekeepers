@@ -68,7 +68,10 @@ public final class GetStructuredDiscoveryGapsAction implements com.vinekeepers.w
             return err;
         }
         try {
-            List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
+            boolean firstAutonomousDone =
+                    "true".equalsIgnoreCase(getString(state, "planningAutonomousFirstPassCompleted"));
+            List<DiscoveryGap> gaps =
+                    StructuredDiscoverySupport.collectGaps(plan, profile, !firstAutonomousDone);
             return StructuredDiscoverySupport.spreadFromGaps(gaps);
         } catch (Exception e) {
             err.put("discoveryGapsJson", "[]");

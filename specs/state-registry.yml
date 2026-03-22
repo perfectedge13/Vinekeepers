@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T12:30:00Z"
+  updated_utc: "2026-03-22T20:45:00Z"
 
 project:
   id: vinekeepers
@@ -70,10 +70,11 @@ assets:
       Canonical structured planning state for a feature room; requirements, PlanAssumption / PlanIssue lists, validation,
       solution/traceability/context, sectionStatuses, repo workspace linkage, profileId, artifacts map, PlanRisk /
       PlanDecision, unresolvedQuestions, critiqueLifecycleStatus, packet delivery fields (packetPostedAt, optional
-      packetMessageRef, packetPostedFingerprint, chunk count), PlanCritiqueSnapshot, PlanConfidence (readiness, level,
+      packetMessageRef,       packetPostedFingerprint, chunk count), PlanCritiqueSnapshot, PlanConfidence (readiness, level,
       notes, confidenceScore, confidenceReasons, computedAt), PlanApproval (status, actorId, at, optional rationale);
       durable PlanningIntakeStage with stageEnteredAt, intakeKickoffPostedVersion / intakeKickoffPostedFingerprint for
-      idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED
+      idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED; repo workspace fields
+      (repoWorkspaceStatus, repoLocalPath, repoRef, repoAccessNotes) feed spread_plan_workspace_signals and JSON evidence spreads in workflow state
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLANNING-INTAKE-STAGE
@@ -305,11 +306,15 @@ requirements:
           Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, DiscoveryFinding, and PlanningProposal models
           for structured discovery and proposal-driven planning (JSON-serializable; workflow state for proposals until confirm or auto-apply)
         - >-
+          Structured discovery over repeatable sections consolidates required-field gaps to one DiscoveryGap per missing field id
+          across rows; workflow session flag planningAutonomousFirstPassCompleted (set after a successful planning room cycle) gates
+          whether REQUIRED_FIELD gaps are emitted alongside workspace BLOCKER gaps
+        - >-
           state.workflow package holds generic UnresolvedItem / UnresolvedItemStatus models for config-driven clarification ledgers
           (used by workflow engine features; JSON-serializable)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-PLANNING-INTAKE-STAGE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-PLANNING-INTAKE-STAGE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
       symbols: []
     validation:
       tests:

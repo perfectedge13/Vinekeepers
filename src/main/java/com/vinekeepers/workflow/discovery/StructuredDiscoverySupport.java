@@ -22,8 +22,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -37,12 +39,23 @@ public final class StructuredDiscoverySupport {
     private StructuredDiscoverySupport() {}
 
     public static List<DiscoveryGap> collectGaps(FeaturePlanState plan, WorkProfileDefinition profile) {
+        return collectGaps(plan, profile, false);
+    }
+
+    /**
+     * When {@code workspaceBlockersOnly} is true, emit only repo workspace BLOCKER gaps (no required-field gaps).
+     * Used before the first successful autonomous planning pass so drafting can fill profile fields first.
+     */
+    public static List<DiscoveryGap> collectGaps(
+            FeaturePlanState plan, WorkProfileDefinition profile, boolean workspaceBlockersOnly) {
         List<DiscoveryGap> gaps = new ArrayList<>();
         AtomicInteger seq = new AtomicInteger(1);
         if (plan == null || profile == null) {
             return gaps;
         }
-        collectRequiredFieldGaps(plan, profile, gaps, seq);
+        if (!workspaceBlockersOnly) {
+            collectRequiredFieldGaps(plan, profile, gaps, seq);
+        }
         collectWorkspaceGap(plan, gaps, seq);
         // Assumptions/issues are surfaced via classify_assumption_or_issue and legacy plan lists;
         // they are not emitted as discovery gaps here (no resolution signal — would loop forever).
@@ -70,28 +83,35 @@ public final class StructuredDiscoverySupport {
                                 sec.isRequired() ? "HIGH" : "LOW",
                                 PlanningPromptFormatter.repeatableSectionEmptyPrompt(art, sec)));
                     }
-                    if (secState != null) {
+                    if (secState != null && !secState.getEntries().isEmpty()) {
+                        Set<String> missingFieldIds = new LinkedHashSet<>();
                         for (int i = 0; i < secState.getEntries().size(); i++) {
                             Map<String, Object> row = secState.getEntries().get(i);
                             for (FieldDefinition f : sec.getFields()) {
                                 if (f.isRequired() && isMissing(row.get(f.getFieldId()))) {
-                                    gaps.add(requiredGap(
-                                            seq,
-                                            art.getArtifactId(),
-                                            sec.getSectionId(),
-                                            f.getFieldId(),
-                                            "Missing required field "
-                                                    + art.getArtifactId()
-                                                    + "."
-                                                    + sec.getSectionId()
-                                                    + "["
-                                                    + i
-                                                    + "]."
-                                                    + f.getFieldId(),
-                                            "HIGH",
-                                            PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, i)));
+                                    missingFieldIds.add(f.getFieldId());
                                 }
                             }
+                        }
+                        for (String fieldId : missingFieldIds) {
+                            FieldDefinition f = fieldById(sec, fieldId);
+                            if (f == null || !f.isRequired()) {
+                                continue;
+                            }
+                            int firstRow = firstRowMissingField(secState, fieldId);
+                            gaps.add(requiredGap(
+                                    seq,
+                                    art.getArtifactId(),
+                                    sec.getSectionId(),
+                                    fieldId,
+                                    "Missing required field "
+                                            + art.getArtifactId()
+                                            + "."
+                                            + sec.getSectionId()
+                                            + "[*]."
+                                            + fieldId,
+                                    "HIGH",
+                                    PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, firstRow)));
                         }
                     }
                 } else {
@@ -200,6 +220,28 @@ public final class StructuredDiscoverySupport {
         return false;
     }
 
+    private static FieldDefinition fieldById(SectionDefinition sec, String fieldId) {
+        if (sec == null || fieldId == null || fieldId.isBlank()) {
+            return null;
+        }
+        for (FieldDefinition f : sec.getFields()) {
+            if (fieldId.equals(f.getFieldId())) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private static int firstRowMissingField(SectionState secState, String fieldId) {
+        for (int i = 0; i < secState.getEntries().size(); i++) {
+            Map<String, Object> row = secState.getEntries().get(i);
+            if (isMissing(row.get(fieldId))) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
     public static Map<String, Object> spreadFromGaps(List<DiscoveryGap> gaps) throws JsonProcessingException {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("discoveryGapsJson", JSON.writeValueAsString(gaps));
@@ -247,6 +289,107 @@ public final class StructuredDiscoverySupport {
         }
         m.putIfAbsent("discoveryBundledApplyJson", "[]");
         return m;
+    }
+
+    /**
+     * Intake planning clarification: at most one question, only {@code BLOCKER}/{@code HIGH} profile/workspace gaps,
+     * never bundled menus. Prompts are canonical {@link DiscoveryGap#getUserFacingDetail()} (or gated synthesis).
+     */
+    public static Map<String, Object> buildIntakeBlockingClarificationSpread(String gapsJson) throws JsonProcessingException {
+        List<DiscoveryGap> gaps = parseGapsJson(gapsJson);
+        List<DiscoveryGap> blocking = new ArrayList<>();
+        for (DiscoveryGap g : gaps) {
+            if (!isBlockingDiscoverySeverity(g.getSeverity())) {
+                continue;
+            }
+            String k = g.getKind() != null ? g.getKind() : "";
+            if (!"REQUIRED_FIELD".equalsIgnoreCase(k) && !"WORKSPACE".equalsIgnoreCase(k)) {
+                continue;
+            }
+            blocking.add(g);
+        }
+        blocking.sort(GAP_COMPARATOR);
+        if (blocking.isEmpty()) {
+            return emptyDiscoveryPromptSpread();
+        }
+        DiscoveryGap chosen = blocking.get(0);
+        String raw = discoveryPromptBody(chosen);
+        String prompt = ClarificationPromptQualityGate.sanitizeBlockingQuestion(raw, chosen);
+        if (prompt.isBlank()) {
+            return emptyDiscoveryPromptSpread();
+        }
+        DiscoveryQuestion first = toQuestionWithPrompt(chosen, prompt, 1);
+        List<DiscoveryQuestion> questions = List.of(first);
+        DiscoveryAgenda agenda = new DiscoveryAgenda(questions, gaps.size(), first.getQuestionId(), Instant.now().toString());
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("discoveryAgendaJson", JSON.writeValueAsString(agenda));
+        m.put("discoveryCurrentQuestionPrompt", first.getPrompt());
+        m.put("discoveryCurrentQuestionId", first.getQuestionId());
+        m.put("discoveryApplyKind", first.getApplyKind());
+        m.put("discoveryApplyArtifactId", first.getArtifactId());
+        m.put("discoveryApplySectionId", first.getSectionId());
+        m.put("discoveryApplyFieldId", first.getFieldId());
+        m.put("discoveryApplyMode", first.getApplyMode());
+        m.put("discoveryBundledApplyJson", "[]");
+        return m;
+    }
+
+    private static Map<String, Object> emptyDiscoveryPromptSpread() throws JsonProcessingException {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("discoveryAgendaJson", JSON.writeValueAsString(new DiscoveryAgenda(List.of(), 0, "", Instant.now().toString())));
+        m.put("discoveryCurrentQuestionPrompt", "");
+        m.put("discoveryCurrentQuestionId", "");
+        m.put("discoveryApplyKind", "NONE");
+        m.put("discoveryApplyArtifactId", "");
+        m.put("discoveryApplySectionId", "");
+        m.put("discoveryApplyFieldId", "");
+        m.put("discoveryApplyMode", "replace");
+        m.put("discoveryBundledApplyJson", "[]");
+        return m;
+    }
+
+    private static boolean isBlockingDiscoverySeverity(String severity) {
+        String s = severity != null ? severity.toUpperCase() : "MEDIUM";
+        return "BLOCKER".equals(s) || "HIGH".equals(s);
+    }
+
+    private static DiscoveryQuestion toQuestionWithPrompt(DiscoveryGap g, String prompt, int index) {
+        String qid = "q-" + g.getGapId() + "-" + index;
+        return switch (g.getKind() != null ? g.getKind() : "") {
+            case "REQUIRED_FIELD" -> new DiscoveryQuestion(
+                    qid,
+                    g.getGapId(),
+                    "orchestrator",
+                    g.getSeverity(),
+                    prompt,
+                    "REQUIRED_FIELD",
+                    g.getArtifactId(),
+                    g.getSectionId(),
+                    g.getFieldId(),
+                    "replace");
+            case "WORKSPACE" -> new DiscoveryQuestion(
+                    qid,
+                    g.getGapId(),
+                    "orchestrator",
+                    g.getSeverity(),
+                    prompt,
+                    "NONE",
+                    "",
+                    "",
+                    "",
+                    "replace");
+            default -> new DiscoveryQuestion(
+                    qid,
+                    g.getGapId(),
+                    "orchestrator",
+                    g.getSeverity(),
+                    prompt,
+                    "NONE",
+                    "",
+                    "",
+                    "",
+                    "replace");
+        };
     }
 
     /** Exposed for insight/bundled discovery ordering. */

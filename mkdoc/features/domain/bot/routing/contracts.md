@@ -10,7 +10,7 @@ None. Routing is an internal runtime capability consumed by the engine.
 
 # Interfaces
 
-- **`Router`:** collects matching `botId`s from all routing rules, then for Discord channels applies **feature-room** overrides (intake thread **messages** → participant bot ids in role order; intake thread **interactions** → primary coordinator only; room channel → coordinator only) before **lifecycle** single-owner precedence; if no override applies, returns deduped filter matches. Depends on **LifecycleContextStore**, optional **FeatureRoomStateStore**, and a per-bot `handlesOwnedSpaces` map (from config).
+- **`Router`:** collects matching `botId`s from all routing rules, then for Discord channels applies **feature-room** overrides (intake thread **messages** and **interactions** → primary coordinator when resolved; else participant bot ids in role order; room channel → coordinator only) before **lifecycle** single-owner precedence; if no override applies, returns deduped filter matches. Depends on **LifecycleContextStore**, optional **FeatureRoomStateStore**, and a per-bot `handlesOwnedSpaces` map (from config).
 - **`EventFilter`:** contract for evaluating an event against routing criteria.
 - **`RoutingFilter`:** built-in filter implementation for configured predicates.
 - **`NormalizedEventContext`:** normalized view of connector payload fields used for routing and session decisions.

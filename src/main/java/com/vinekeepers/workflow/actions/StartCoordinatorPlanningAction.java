@@ -57,6 +57,7 @@ public final class StartCoordinatorPlanningAction implements com.vinekeepers.wor
         payload.put("channelId", intakeThreadId);
         payload.put("threadId", intakeThreadId);
         payload.put("coordinatorKickoff", "true");
+        payload.put("planningIngressMode", "SYNTHETIC_KICKOFF");
         if (!authorId.isBlank()) {
             payload.put("authorId", authorId);
         }

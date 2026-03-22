@@ -6,8 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Marks that the user completed the coordinator discovery kickoff (reply after Luna synthetic handoff).
- * Workflow state key {@code humanDiscoveryCompleted} gates {@link RunPlanCritiqueAndReadinessAction}.
+ * Marks that the user completed structured discovery for manual intake paths.
+ * Workflow state key {@code humanDiscoveryCompleted} complements {@link com.vinekeepers.state.planning.PlanningIntakeStage}
+ * for critique and approval gates.
  */
 public final class MarkIntakeDiscoveryCompleteAction implements com.vinekeepers.workflow.WorkflowAction {
 
