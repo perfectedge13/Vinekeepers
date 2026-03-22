@@ -144,12 +144,19 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         spread.put("planningUserInputRequired", ranked.userInputRequired() ? "true" : "false");
         spread.put("planningClarificationChoicesJson", ranked.choicesJson());
         spread.put("planningClarificationMetaJson", ranked.metaJson());
-        spread.put("planningOrchestratorRoundSummary", buildOrchestratorSummary(plan, depthOk, depthReason, ranked, cycleIteration));
+        spread.put("planningClarificationUseStructuredChoices", ranked.useStructuredChoices() ? "true" : "false");
+        spread.put("planningClarificationQuestionText", ranked.questionText() != null ? ranked.questionText() : "");
+        spread.put(
+                "planningClarificationOrchestratorPrompt",
+                ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
+        boolean readyToPost = depthOk && !ranked.userInputRequired();
+        spread.put(
+                "planningOrchestratorRoundSummary",
+                buildOrchestratorSummary(plan, depthOk, depthReason, ranked, cycleIteration, readyToPost));
         spread.put(
                 "planningRevisionNeeded",
                 (!depthOk || ranked.userInputRequired()) ? "true" : "false");
 
-        boolean readyToPost = depthOk && !ranked.userInputRequired();
         spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
         spread.put("planningPhase", ranked.userInputRequired() ? "WAITING_FOR_CLARIFICATION" : (readyToPost ? "READY_FOR_APPROVAL" : "REVISING"));
         spread.put("planningAssumptionsUsed", String.valueOf(ranked.assumptionsToRecord().size()));
@@ -227,39 +234,101 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         return plan.withAppendedAssumption(new AssumptionEntry(id, text.trim(), null));
     }
 
-    private static String buildOrchestratorSummary(
+    /**
+     * User-visible planning round summary: understanding, draft status, assumptions, and optional clarification blocks.
+     */
+    static String buildOrchestratorSummary(
             FeaturePlanState plan,
             boolean depthOk,
             String depthReason,
             RankedClarification ranked,
-            int cycleIteration) {
+            int cycleIteration,
+            boolean readyToPostPacket) {
         String req = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         String gist = req.length() > 200 ? req.substring(0, 199) + "…" : req;
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
         StringBuilder sb = new StringBuilder();
-        sb.append("**Planning round ").append(cycleIteration).append("** — ");
+        sb.append("**Planning round ").append(cycleIteration).append("**\n\n");
+        sb.append("**What we're working from:** ");
         if (gist.isBlank()) {
-            sb.append("Working from your feature request in context.");
+            sb.append("Your feature request from this thread (no separate summary text on file).");
         } else {
-            sb.append("Working from: ").append(gist);
+            sb.append(gist);
         }
-        sb.append("\n\n");
-        sb.append("Architect, auditor, and scribe passes have run on the draft (see the packet when posted). ");
-        if (!arch.isBlank()) {
-            sb.append("Likely touchpoints start with: ").append(arch.length() > 160 ? arch.substring(0, 159) + "…" : arch).append(" ");
-        }
+        sb.append(workspaceSummaryLine(plan));
+
+        sb.append("\n\n**Draft status:** ");
         if (ranked.userInputRequired()) {
-            sb.append("\n\nWe need one quick decision from you before we freeze the packet.");
+            sb.append(
+                    "The coordinator passes have run on the current draft, but we are **not** posting the planning packet yet until we resolve the clarification below.");
+        } else if (readyToPostPacket) {
+            sb.append("Depth check passed; the planning packet is ready to post in this thread for review.");
         } else if (depthOk) {
-            sb.append("\n\nDepth check passed; we can post the planning packet for final review.");
+            sb.append("Depth check passed; the next steps will post or refine the packet.");
         } else {
-            sb.append("\n\nStill strengthening the draft (").append(depthReason).append("). ");
-            sb.append("We will retry automatically or ask if something only you can decide.");
+            sb.append("Still strengthening the draft (").append(depthReason).append("). ");
+            sb.append("We will retry automatically inside this round or ask you only when something needs a human decision.");
         }
+        if (!arch.isBlank()) {
+            sb.append("\n\n**Likely touchpoints:** ")
+                    .append(arch.length() > 200 ? arch.substring(0, 199) + "…" : arch);
+        }
+
         if (!ranked.assumptionsToRecord().isEmpty()) {
-            sb.append("\n\n_Recorded ").append(ranked.assumptionsToRecord().size()).append(" baseline assumption(s) so we do not overload you with low-risk questions._");
+            sb.append("\n\n**Assumptions recorded this round (auto):**\n");
+            for (String a : ranked.assumptionsToRecord()) {
+                sb.append("- ").append(a).append("\n");
+            }
+        }
+
+        if (ranked.userInputRequired()) {
+            String q = ranked.questionText() != null ? ranked.questionText().trim() : "";
+            sb.append("\n**Clarification**\n\n");
+            if (!q.isBlank()) {
+                sb.append(q).append("\n\n");
+            }
+            sb.append("**Why this matters:** ");
+            if (ranked.blockingQuestionCount() > 0) {
+                sb.append(
+                        "Your answer affects compatibility, security, migrations, or validation — getting it wrong would be expensive to unwind during implementation.\n\n");
+            } else {
+                sb.append(
+                        "This shapes scope and design choices in the packet so implementation matches what you expect.\n\n");
+            }
+            sb.append(
+                    "**What happens next:** After you answer, we refresh the draft, re-run depth checks, update the planning packet in this thread when ready, and run critique/readiness again **before** any approval step.\n");
+            if (ranked.useStructuredChoices()) {
+                sb.append(
+                        "\nChoose an option below, or pick **Use recommended default** to record our baseline and continue.");
+            } else {
+                sb.append("\n**Reply in plain text** with your answer. You can give examples or edge cases — no need to match a fixed list.");
+            }
         }
         return sb.toString().trim();
+    }
+
+    private static String workspaceSummaryLine(FeaturePlanState plan) {
+        if (plan == null) {
+            return "";
+        }
+        String path = plan.getRepoLocalPath() != null ? plan.getRepoLocalPath().trim() : "";
+        String st = plan.getRepoWorkspaceStatus() != null ? plan.getRepoWorkspaceStatus().trim() : "";
+        if (path.isBlank() && st.isBlank()) {
+            return "";
+        }
+        StringBuilder w = new StringBuilder();
+        w.append("\n**Workspace:** ");
+        if (!st.isBlank()) {
+            w.append("status ").append(st);
+        }
+        if (!path.isBlank()) {
+            if (!st.isBlank()) {
+                w.append("; ");
+            }
+            w.append("local path `").append(path.length() > 120 ? path.substring(0, 119) + "…" : path).append("`");
+        }
+        w.append(".");
+        return w.toString();
     }
 
     private static Map<String, Object> baseSpread() {
@@ -279,6 +348,9 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         m.put("planningBlockingQuestionCount", "0");
         m.put("planningAssumptionsUsed", "0");
         m.put("planningRolePassLastError", "");
+        m.put("planningClarificationUseStructuredChoices", "false");
+        m.put("planningClarificationQuestionText", "");
+        m.put("planningClarificationOrchestratorPrompt", "");
         return m;
     }
 

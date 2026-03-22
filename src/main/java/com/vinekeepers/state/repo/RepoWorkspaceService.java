@@ -48,7 +48,7 @@ public final class RepoWorkspaceService {
      * Ensure a workspace for the given context and raw repo input. Does not persist to store.
      */
     public RepoWorkspaceState ensure(String contextId, String rawRepoInput) {
-        return ensure(contextId, rawRepoInput, null);
+        return ensure(contextId, rawRepoInput, null, null);
     }
 
     /**
@@ -57,6 +57,19 @@ public final class RepoWorkspaceService {
      * @param progress optional milestone callback (e.g. Discord thread updates)
      */
     public RepoWorkspaceState ensure(String contextId, String rawRepoInput, RepoWorkspaceProgressCallback progress) {
+        return ensure(contextId, rawRepoInput, progress, null);
+    }
+
+    /**
+     * @param reuseCandidate prior workspace state for this context; when the resolved ref still matches and the local path
+     *                       is a valid git tree, reuse it (no re-clone). Set env {@code VINEKEEPERS_REPO_WORKSPACE_FORCE_REFRESH=true}
+     *                       to skip reuse.
+     */
+    public RepoWorkspaceState ensure(
+            String contextId,
+            String rawRepoInput,
+            RepoWorkspaceProgressCallback progress,
+            RepoWorkspaceState reuseCandidate) {
         Objects.requireNonNull(contextId, "contextId");
         Instant now = Instant.now();
         String repoRef = resolver.resolve(rawRepoInput);
@@ -77,10 +90,14 @@ public final class RepoWorkspaceService {
                     now,
                     now);
         }
+        String workspaceId = shortWorkspaceId(contextId, repoRef);
+        RepoWorkspaceState reused =
+                tryReuseMaterialized(contextId, rawRepoInput, repoRef, workspaceId, reuseCandidate, now);
+        if (reused != null) {
+            return reused;
+        }
         notify(progress, RepoWorkspaceProgressPhase.RESOLVED_REF, repoRef);
         log.info("Repo workspace [{}]: resolved ref {}", contextId, safeRefForLog(repoRef));
-
-        String workspaceId = shortWorkspaceId(contextId, repoRef);
 
         if (repoRef.startsWith("local:")) {
             return ensureLocal(contextId, rawRepoInput, repoRef, workspaceId, progress, now);
@@ -188,6 +205,60 @@ public final class RepoWorkspaceService {
                 RepoWorkspaceStatus.MATERIALIZED,
                 null,
                 now,
+                now);
+    }
+
+    /**
+     * When the same context already has a successful workspace for the same resolved ref and the directory is still valid,
+     * return refreshed state without deleting/re-cloning. No progress callbacks (avoids duplicate chat lines).
+     */
+    private RepoWorkspaceState tryReuseMaterialized(
+            String contextId,
+            String rawRepoInput,
+            String repoRef,
+            String workspaceId,
+            RepoWorkspaceState reuseCandidate,
+            Instant now) {
+        if (Boolean.parseBoolean(Env.get("VINEKEEPERS_REPO_WORKSPACE_FORCE_REFRESH", "false"))) {
+            return null;
+        }
+        if (reuseCandidate == null || repoRef == null || repoRef.isBlank()) {
+            return null;
+        }
+        if (!Objects.equals(repoRef, reuseCandidate.getRepoRef())
+                || !Objects.equals(workspaceId, reuseCandidate.getWorkspaceId())) {
+            return null;
+        }
+        RepoWorkspaceStatus st = reuseCandidate.getStatus();
+        if (st != RepoWorkspaceStatus.MATERIALIZED && st != RepoWorkspaceStatus.RESOLVED_LOCAL) {
+            return null;
+        }
+        String local = reuseCandidate.getLocalPath();
+        if (local == null || local.isBlank()) {
+            return null;
+        }
+        Path p = Path.of(local.trim());
+        if (!Files.isDirectory(p)) {
+            return null;
+        }
+        GitInfo info = readGitInfo(p);
+        if (info == null) {
+            return null;
+        }
+        log.info("Repo workspace [{}]: reusing existing checkout at {}", contextId, p);
+        String abs = p.normalize().toAbsolutePath().toString().replace('\\', '/');
+        return new RepoWorkspaceState(
+                contextId,
+                repoRef,
+                rawRepoInput,
+                workspaceId,
+                abs,
+                info.branch,
+                info.commit,
+                reuseCandidate.getMaterializationMode(),
+                st,
+                null,
+                reuseCandidate.getCreatedAt(),
                 now);
     }
 

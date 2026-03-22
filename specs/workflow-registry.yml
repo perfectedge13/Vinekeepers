@@ -763,9 +763,10 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/EnsureRepoWorkspaceAction.java
     role: >-
       Workflow action to resolve/materialize repo workspace via RepoWorkspaceService (with optional RepoWorkspaceProgressCallback), persist RepoWorkspaceState, and
-      update FeaturePlanState workspace linkage when plan exists; when OutboundDeliveryRouter is wired, posts short progress lines
-      to the lifecycle thread as bot arrietty using the same send-target rules as post_channel_message (deliveryChannelId with
-      THREAD_CREATE_FAILED fallback to channelId)
+      update FeaturePlanState workspace linkage when plan exists; passes prior RepoWorkspaceState from the store so RepoWorkspaceService can reuse a
+      MATERIALIZED/RESOLVED_LOCAL checkout for the same context+ref without recloning (unless VINEKEEPERS_REPO_WORKSPACE_FORCE_REFRESH is true); when
+      OutboundDeliveryRouter is wired, posts short progress lines to the lifecycle thread as bot arrietty using the same send-target rules as
+      post_channel_message (deliveryChannelId with THREAD_CREATE_FAILED fallback to channelId)
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -1133,8 +1134,9 @@ assets:
       Workflow action execute_planning_room_cycle — iterative planning room: run_request_expansion_llm (optional) then
       build_request_exploration, architect/auditor/scribe LLM passes (OpenAI-compatible), expand_planning_drafts +
       run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; PlanningQuestionRankingPolicy for defaults
-      vs at most one clarification round; storeSpread planningPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
-      planningClarificationChoicesJson/MetaJson, planningReadyToPostPacket, planningRoomCycleIteration, etc.
+      vs at most one clarification round;       storeSpread planningPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
+      planningClarificationChoicesJson/MetaJson, planningClarificationUseStructuredChoices, planningClarificationQuestionText,
+      planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningReadyToPostPacket, planningRoomCycleIteration, etc.
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1422,7 +1424,9 @@ requirements:
           sections to multiple targets
         - >-
           post_planning_packet_thread builds the planning packet from FeaturePlanState, splits for Discord size limits,
-          posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount
+          posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount;
+          skips duplicate sends when planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full packet body
+          unless bind forceRepost is true, spreading planningPacketSkippedDuplicate
         - >-
           build_request_exploration writes the request_exploration artifact (v2 profile) from request and repo hints before synthesis
         - >-

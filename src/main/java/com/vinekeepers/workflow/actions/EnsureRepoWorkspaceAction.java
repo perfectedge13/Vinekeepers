@@ -86,13 +86,14 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
 
         Map<String, Object> st = state != null ? state : Map.of();
         Map<String, Object> bd = bind != null ? bind : Map.of();
+        RepoWorkspaceState prior = repoWorkspaceStateStore.getByContextId(contextId).orElse(null);
         RepoWorkspaceState ensured = repoWorkspaceService.ensure(contextId, rawRepo, (phase, detail) -> {
             String line = formatProgressChatLine(phase, detail);
             if (line == null) {
                 return;
             }
             postArrietty(st, bd, line);
-        });
+        }, prior);
         repoWorkspaceStateStore.put(ensured);
 
         if (planStateStore != null) {

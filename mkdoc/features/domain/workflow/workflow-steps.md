@@ -40,7 +40,9 @@ Workflow step DSL and branching actions (REQ-WORKFLOW-001). `WorkflowDefinition`
 | ASSET-SPACE-OPERATIONS-REGISTRY | Thread-safe registry of SpaceOperations by connector id (source prefix); register(connectorId, ops), get(connectorId) | src/main/java/com/vinekeepers/connectors/SpaceOperationsRegistry.java |
 | ASSET-LAUNCH-CURSOR-RUN-ACTION | Workflow action to launch a Cursor cloud run and register run record | src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java |
 | ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION | Create FeaturePlanState with default profileId and empty artifacts from registry | src/main/java/com/vinekeepers/workflow/actions/InitializeFeaturePlanStateAction.java |
-| ASSET-ENSURE-REPO-WORKSPACE-ACTION | Resolve repo workspace and link plan state | src/main/java/com/vinekeepers/workflow/actions/EnsureRepoWorkspaceAction.java |
+| ASSET-ENSURE-REPO-WORKSPACE-ACTION | Resolve repo workspace and link plan state; reuses prior MATERIALIZED/RESOLVED_LOCAL checkout when context+ref match (VINEKEEPERS_REPO_WORKSPACE_FORCE_REFRESH bypasses reuse) | src/main/java/com/vinekeepers/workflow/actions/EnsureRepoWorkspaceAction.java |
+| ASSET-POST-PLANNING-PACKET-THREAD-ACTION | post_planning_packet_thread — posts planning packet chunks; skips duplicate body via SHA-256 fingerprint unless bind forceRepost | src/main/java/com/vinekeepers/workflow/actions/PostPlanningPacketThreadAction.java |
+| ASSET-MERGE-PLANNING-CLARIFICATION-CHOICE-ACTION | merge_planning_clarification_choice — assumptions, decision_log, exploration_body append; clears clarification scratch keys | src/main/java/com/vinekeepers/workflow/actions/MergePlanningClarificationChoiceAction.java |
 | ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION | upsert_artifact_section_data — merge section data into plan artifacts | src/main/java/com/vinekeepers/workflow/actions/UpsertArtifactSectionDataAction.java |
 | ASSET-GET-PROFILE-MISSING-FIELDS-ACTION | get_profile_missing_fields — missing-required summary to storeIn | src/main/java/com/vinekeepers/workflow/actions/GetProfileMissingFieldsAction.java |
 

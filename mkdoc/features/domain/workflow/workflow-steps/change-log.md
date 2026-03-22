@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-21
+
+- **Planning room UX (arrietty_room):** Open-ended clarifications use plain text by default (`planningClarificationUseStructuredChoices` false); explicit **or**-split bounded questions still use `present_choices` + `planningClarification`. **execute_planning_room_cycle** spreads richer **planningOrchestratorRoundSummary** and clarification helper keys. **merge_planning_clarification_choice** appends Q/A into **request_exploration.analysis.exploration_body** when the profile supports it and clears scratch keys. **RepoWorkspaceService** reuses a valid MATERIALIZED/RESOLVED_LOCAL checkout for the same context+ref (no progress callbacks on reuse; **VINEKEEPERS_REPO_WORKSPACE_FORCE_REFRESH** forces refresh). **post_planning_packet_thread** dedupes identical packet bodies via **planningPacketLastPostedFingerprint** (SHA-256) unless bind **forceRepost** is true (**planningPacketSkippedDuplicate**). Tests: PlanningQuestionRankingPolicyTest, ExecutePlanningRoomCycleActionSummaryTest, PostPlanningPacketThreadActionTest, RepoWorkspaceServiceTest.
+
 ## 2026-03-18
 
 - **Work-profile artifact actions:** **upsert_artifact_section_data** (UpsertArtifactSectionDataAction) and **get_profile_missing_fields** (GetProfileMissingFieldsAction); Bootstrap registration; Luna `luna_cursor` may call after **ensure_repo_workspace**. Tests: UpsertArtifactSectionDataActionTest, GetProfileMissingFieldsActionTest. Specs: workflow-registry.

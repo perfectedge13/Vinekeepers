@@ -86,4 +86,28 @@ class RepoWorkspaceServiceTest {
         assertEquals(RepoWorkspaceStatus.UNAVAILABLE, s.getStatus());
         assertNotNull(s.getFailureReason());
     }
+
+    @Test
+    void ensureLocalReusesPriorStateWithoutProgress(@TempDir Path tmp) throws Exception {
+        Assumptions.assumeTrue(gitAvailable());
+        Path repo = tmp.resolve("reuse-repo");
+        Files.createDirectories(repo);
+        git(repo, "init");
+        git(repo, "config", "user.email", "t@t.c");
+        git(repo, "config", "user.name", "T");
+        Files.writeString(repo.resolve("f.txt"), "x");
+        git(repo, "add", "f.txt");
+        git(repo, "commit", "-m", "init");
+
+        List<RepoWorkspaceProgressPhase> phases = new ArrayList<>();
+        RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("work"), false, new DefaultRepoRefResolver());
+        String raw = repo.toAbsolutePath().toString();
+        RepoWorkspaceState first = svc.ensure("ctx-reuse", raw, (phase, detail) -> phases.add(phase));
+        assertEquals(RepoWorkspaceStatus.RESOLVED_LOCAL, first.getStatus());
+        assertFalse(phases.isEmpty());
+        phases.clear();
+        RepoWorkspaceState second = svc.ensure("ctx-reuse", raw, (phase, detail) -> phases.add(phase), first);
+        assertEquals(first.getCommit(), second.getCommit());
+        assertTrue(phases.isEmpty(), "Reuse path should not emit progress callbacks");
+    }
 }

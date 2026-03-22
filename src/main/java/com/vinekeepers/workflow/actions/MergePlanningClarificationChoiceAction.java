@@ -96,6 +96,8 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                         null));
             }
 
+            planStateStore.update(plan);
+
             UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
             Map<String, Object> base = new LinkedHashMap<>();
             if (state != null) {
@@ -115,16 +117,52 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                             "data",
                             Map.of("decision_text", decisionLine)));
 
-            planStateStore.update(plan);
+            appendCoordinatorClarificationToExploration(event, base, upsert, q, choice);
             spread.put("planningClarificationMerged", "true");
             spread.put("planningClarificationChoicesJson", "[]");
             spread.put("planningClarificationMetaJson", "{}");
             spread.put("planningUserInputRequired", "false");
             spread.put("planningPhase", "REVISING");
+            spread.put("planningClarificationRaw", "");
             return spread;
         } catch (Exception e) {
             spread.put("planningClarificationMergeError", e.getMessage() != null ? e.getMessage() : "merge failed");
             return spread;
+        }
+    }
+
+    private static void appendCoordinatorClarificationToExploration(
+            Event event,
+            Map<String, Object> base,
+            UpsertArtifactSectionDataAction upsert,
+            String questionText,
+            String userAnswer) {
+        String q = questionText != null ? questionText.trim() : "";
+        String a = userAnswer != null ? userAnswer.trim() : "";
+        if (a.length() > 4000) {
+            a = a.substring(0, 3999) + "…";
+        }
+        StringBuilder block = new StringBuilder();
+        block.append("\n\n### Coordinator clarification (user)\n\n");
+        if (!q.isBlank()) {
+            block.append("**Question:** ").append(q).append("\n\n");
+        }
+        block.append("**Your answer:** ").append(a.isBlank() ? "(empty)" : a).append("\n");
+        Object r =
+                upsert.run(
+                        event,
+                        base,
+                        Map.of(
+                                "artifactId",
+                                "request_exploration",
+                                "sectionId",
+                                "analysis",
+                                "mode",
+                                "append",
+                                "data",
+                                Map.of("exploration_body", block.toString())));
+        if (!"OK".equals(String.valueOf(r))) {
+            // Profile may omit request_exploration; drafting still has assumptions + decision_log.
         }
     }
 
