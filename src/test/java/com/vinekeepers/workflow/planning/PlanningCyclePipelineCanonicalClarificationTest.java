@@ -102,7 +102,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         RankedClarification ranked =
                 new RankedClarification(true, "", "[]", "{}", 1, List.of(), false, "Which API version?");
         String summary =
-                PlanningCyclePipeline.buildOrchestratorSummary(plan, true, "", ranked, 2, false, false, "", true);
+                PlanningCyclePipeline.buildOrchestratorSummary(plan, true, "", ranked, 2, false, false, "", true, false);
         assertFalse(summary.contains("Planning update"));
         assertFalse(summary.contains("Depth check passed"));
         assertFalse(summary.contains("planning packet"));
@@ -153,7 +153,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                 new RankedClarification(false, "", "[]", "{}", 0, List.of(), false, "");
         String waiting =
                 PlanningCyclePipeline.buildOrchestratorSummary(
-                        plan, true, "", rankedNoAsk, 1, false, false, "", true);
+                        plan, true, "", rankedNoAsk, 1, false, false, "", true, false);
         assertTrue(waiting.contains("holding the thread"));
         assertFalse(waiting.contains("keep going"));
 
@@ -161,7 +161,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                 new RankedClarification(true, "", "[]", "{}", 1, List.of(), false, "Which version?");
         String moving =
                 PlanningCyclePipeline.buildOrchestratorSummary(
-                        plan, true, "", rankedAsk, 1, false, false, "", false);
+                        plan, true, "", rankedAsk, 1, false, false, "", false, false);
         assertFalse(moving.contains("holding the thread"));
     }
 

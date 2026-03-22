@@ -1269,7 +1269,9 @@ assets:
       confidenceScore, confidenceReasons), critiqueLifecycleStatus COMPLETE; storeSpread planReadinessStatus (legacy spread
       via PlanReadinessStatus.legacySpreadValue where applicable), planConfidenceScore, planConfidenceLevel,
       planReadinessSummary, planCritiqueFindingsJson, planCritiqueSummary; MUST_FIX when humanDiscoveryCompleted is not true;
-      bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path
+      bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path;
+      planningCritiqueAutoRevisionCount tracks NEEDS_REVISION-driven full replan attempts; after threshold spreads NEEDS_HUMAN_DECISION
+      and persists PlanConfidence with the same status so auto critique→replan loops stop without silent storms
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1482,7 +1484,8 @@ assets:
       planningClarificationChoicesJson/MetaJson, planningClarificationUseStructuredChoices, planningClarificationQuestionText,
       planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningCycleProgressSummary, planningReadyToPostPacket,
       planningRoomCycleIteration, planningProgressPostWorthy, planningProgressPostFingerprint, planningCycleRolePassSummary,
-      planningClarificationStuck, planningClarificationStuckHint, planningPreviousClarificationQuestionText (from merge),
+      planningStructuredPassParseFailed (when structured role JSON fails parse after optional repair), interim planningCycleProgressSummary
+      updates after each inner depth round, planningClarificationStuck, planningClarificationStuckHint, planningPreviousClarificationQuestionText (from merge),
       planningCycleUserVisibleFailure, etc.
     requires:
       - REQ-WORKFLOW-001

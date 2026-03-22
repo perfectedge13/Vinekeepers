@@ -238,7 +238,7 @@ requirements:
         - Engine registers reply senders and sinks by connector id (setReplySender(connectorId, sender), registerSink(sourcePrefix, sink)); delivery uses sink for event's source prefix when present, else fallback to reply sender for that source prefix; no connector literal (e.g. no "discord") in engine
         - Engine delivers replies via sink registry and lifecycle methods (respondImmediately, sendFollowUp, updateMessage, openModal); sink exposes getCapabilities; no defer in engine
         - Engine uses ReplyTargetResolver registered by connector id to obtain ReplyTarget; when no resolver is registered for the source prefix or resolver returns empty, engine does not deliver reply (fail closed)
-        - For Discord message and interaction events, engine applies a short TTL dedupe on (sourceId, kind, messageId or interactionId) so duplicate bus publications do not run workflows twice
+        - For Discord message and interaction events, engine applies a ~180s TTL dedupe on (sourceId, kind, messageId or interactionId) so duplicate bus publications do not run workflows twice during slow planning handling
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:

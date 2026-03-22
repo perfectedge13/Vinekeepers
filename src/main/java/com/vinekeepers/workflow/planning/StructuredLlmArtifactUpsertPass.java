@@ -24,6 +24,13 @@ public final class StructuredLlmArtifactUpsertPass {
 
     private static final Logger log = LoggerFactory.getLogger(StructuredLlmArtifactUpsertPass.class);
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** Prefix on {@link RolePassResult#error()} when assistant output could not be parsed as structured JSON. */
+    public static final String STRUCTURED_JSON_PARSE_PREFIX = "STRUCTURED_JSON_PARSE:";
+    private static final int REPAIR_USER_SNIPPET_MAX = 14_000;
+
+    private static final String JSON_REPAIR_SYSTEM =
+            "You fix JSON. Reply with a single valid JSON object only: no markdown fences, no explanation. "
+                    + "Arrays must use [ ]. Objects must use { }. No trailing commas.";
 
     private StructuredLlmArtifactUpsertPass() {}
 
@@ -59,15 +66,69 @@ public final class StructuredLlmArtifactUpsertPass {
             return new RolePassResult(0, List.of(), raw, false);
         }
         try {
-            String json = PlanningLlmJsonSupport.extractJsonObject(raw);
-            JsonNode root = JSON.readTree(json);
-            int applied = PlanningLlmJsonSupport.applyUpserts(root, event, state, contextId, planStore, profileRegistry);
-            List<String> followUps = PlanningLlmJsonSupport.readFollowUpQuestions(root);
-            return new RolePassResult(applied, followUps, "", false);
+            return parseAndApplyUpserts(raw, event, state, contextId, planStore, profileRegistry, roleNameForPayload);
         } catch (Exception e) {
             log.warn("{} pass parse failed: {}", roleNameForPayload, e.getMessage());
-            return new RolePassResult(0, List.of(), e.getMessage() != null ? e.getMessage() : "parse failed", false);
+            String repaired = tryRepairJson(client, raw, roleNameForPayload);
+            if (repaired != null) {
+                try {
+                    return parseAndApplyUpserts(
+                            repaired, event, state, contextId, planStore, profileRegistry, roleNameForPayload);
+                } catch (Exception e2) {
+                    log.warn("{} pass parse failed after repair: {}", roleNameForPayload, e2.getMessage());
+                }
+            }
+            String brief = e.getMessage() != null ? truncateOneLine(e.getMessage(), 400) : "parse failed";
+            return new RolePassResult(0, List.of(), STRUCTURED_JSON_PARSE_PREFIX + brief, false);
         }
+    }
+
+    private static RolePassResult parseAndApplyUpserts(
+            String raw,
+            Event event,
+            Map<String, Object> state,
+            String contextId,
+            FeaturePlanStateStore planStore,
+            WorkProfileRegistry profileRegistry,
+            String roleNameForPayload)
+            throws Exception {
+        String json = PlanningLlmJsonSupport.extractJsonObject(raw);
+        JsonNode root = JSON.readTree(json);
+        int applied = PlanningLlmJsonSupport.applyUpserts(root, event, state, contextId, planStore, profileRegistry);
+        List<String> followUps = PlanningLlmJsonSupport.readFollowUpQuestions(root);
+        return new RolePassResult(applied, followUps, "", false);
+    }
+
+    private static String tryRepairJson(OpenAiChatClient client, String rawAssistant, String roleNameForPayload) {
+        if (client == null || !client.isConfigured()) {
+            return null;
+        }
+        String snippet = rawAssistant != null && rawAssistant.length() > REPAIR_USER_SNIPPET_MAX
+                ? rawAssistant.substring(0, REPAIR_USER_SNIPPET_MAX) + "…"
+                : rawAssistant;
+        String user =
+                "The following text was meant to be one JSON object but is invalid. "
+                        + "Return only corrected JSON (same keys/shape intent: upserts array, follow_up_questions array).\n\n"
+                        + snippet;
+        String out;
+        try {
+            out = client.complete(JSON_REPAIR_SYSTEM, user, "gpt-4o-mini", null);
+        } catch (Exception e) {
+            log.debug("{} JSON repair call failed: {}", roleNameForPayload, e.getMessage());
+            return null;
+        }
+        if (out == null || out.startsWith("ERROR:")) {
+            return null;
+        }
+        return out;
+    }
+
+    private static String truncateOneLine(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.replace("\r\n", " ").replace("\n", " ").trim();
+        return t.length() <= max ? t : t.substring(0, max - 1) + "…";
     }
 
     private static String buildUserPayload(

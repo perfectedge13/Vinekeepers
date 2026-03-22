@@ -59,11 +59,59 @@ class ExecutePlanningRoomCycleActionSummaryTest {
         assertTrue(ranked.userInputRequired());
         String summary =
                 com.vinekeepers.workflow.planning.PlanningCyclePipeline.buildOrchestratorSummary(
-                        plan, true, "", ranked, 1, false, false, "", true);
+                        plan, true, "", ranked, 1, false, false, "", true, false);
         assertTrue(summary.contains("exponential backoff"));
         assertTrue(summary.contains("What I'm tracking"));
         assertTrue(summary.contains("One thing I need from you"));
         assertTrue(summary.contains("plain text"));
         assertFalse(ranked.useStructuredChoices());
+    }
+
+    @Test
+    void orchestratorSummaryMentionsInvalidJsonWhenStructuredParseFailed() {
+        FeaturePlanState plan = new FeaturePlanState(
+                "c",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "Ship dark mode",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning",
+                Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        var ranked =
+                PlanningQuestionRankingPolicy.rank(null, List.of(), 3);
+        String summary =
+                com.vinekeepers.workflow.planning.PlanningCyclePipeline.buildOrchestratorSummary(
+                        plan, true, "", ranked, 1, false, false, "", false, true);
+        assertTrue(summary.contains("invalid JSON"));
+        assertFalse(summary.contains("In good shape"));
     }
 }

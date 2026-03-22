@@ -11,7 +11,8 @@ public enum PlanningCoordinatorRole {
 
     String systemPromptBlock() {
         String schema = """
-                Reply with a single JSON object only, no markdown fences.
+                Reply with a single JSON object only, no markdown fences, no commentary before or after.
+                Syntax rules: use [ ] for arrays and { } for objects only; do not close an array with }; no trailing commas.
                 Schema:
                 {
                   "upserts": [

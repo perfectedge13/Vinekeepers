@@ -50,6 +50,12 @@ public final class PlanningCyclePipeline {
     /** Spread flag {@code "true"} when an OpenAI role pass returned an interrupt-style error (e.g. {@code ERROR: interrupted}). */
     public static final String PLANNING_PASS_INTERRUPTED_KEY = "planningPassInterrupted";
 
+    /**
+     * Spread flag {@code "true"} when a structured coordinator pass (Architect/Auditor/Scribe) returned output that failed
+     * JSON parse (after optional repair), so readiness/posting must not claim a solid structured draft.
+     */
+    public static final String PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY = "planningStructuredPassParseFailed";
+
     public static final String PARTIAL_LAST_ROLE_SUMMARY_KEY = "planningPartialLastRoleRoundSummary";
     public static final String PARTIAL_LAST_SYNTH_KEY = "planningPartialLastSynthLlmLine";
     public static final String PARTIAL_DEPTH_OK_KEY = "planningPartialDepthOk";
@@ -136,6 +142,11 @@ public final class PlanningCyclePipeline {
             depthReason = round.depthReason();
             lastRoleRoundSummary = round.lastRoleRoundSummary();
             lastSynthLlmLine = round.lastSynthLlmLine();
+            spread.put(
+                    "planningCycleProgressSummary",
+                    buildInnerRoundProgressSummary(inner + 1, innerRounds, depthOk, lastRoleRoundSummary));
+            enrichUserCopyAndProgressLog(work, spread);
+            finishProgressFingerprint(work, spread);
             if (depthOk) {
                 break;
             }
@@ -173,7 +184,12 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningClarificationOrchestratorPrompt",
                 ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
-        boolean readyToPost = depthOk && !userInputRequired;
+        boolean structuredParseFailed =
+                "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
+        boolean readyToPost = depthOk && !userInputRequired && !structuredParseFailed;
+        if (structuredParseFailed) {
+            spread.put("planningPacketDepthRetryRecommended", "true");
+        }
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
         boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
@@ -189,10 +205,11 @@ public final class PlanningCyclePipeline {
                         readyToPost,
                         clarificationStuck,
                         stuckHint != null ? stuckHint : "",
-                        userInputRequired));
+                        userInputRequired,
+                        structuredParseFailed));
         spread.put(
                 "planningRevisionNeeded",
-                (!depthOk || userInputRequired) ? "true" : "false");
+                (!depthOk || userInputRequired || structuredParseFailed) ? "true" : "false");
 
         spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
         spread.put(
@@ -238,7 +255,8 @@ public final class PlanningCyclePipeline {
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
                         getString(spread, "planningSelectiveRerunNote"),
-                        "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY))));
+                        "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY)),
+                        structuredParseFailed));
         spread.put(
                 "userCopyCoordinatorProgress",
                 spread.get("planningCycleProgressSummary") != null
@@ -367,7 +385,15 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningClarificationOrchestratorPrompt",
                 ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
-        boolean readyToPost = depthOk && !userInputRequired;
+        boolean structuredParseFailedFinalize =
+                "true".equalsIgnoreCase(getString(state, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY))
+                        || "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
+        spread.put(
+                PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY, structuredParseFailedFinalize ? "true" : "false");
+        boolean readyToPost = depthOk && !userInputRequired && !structuredParseFailedFinalize;
+        if (structuredParseFailedFinalize) {
+            spread.put("planningPacketDepthRetryRecommended", "true");
+        }
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
         boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
@@ -383,10 +409,11 @@ public final class PlanningCyclePipeline {
                         readyToPost,
                         clarificationStuck,
                         stuckHint != null ? stuckHint : "",
-                        userInputRequired));
+                        userInputRequired,
+                        structuredParseFailedFinalize));
         spread.put(
                 "planningRevisionNeeded",
-                (!depthOk || userInputRequired) ? "true" : "false");
+                (!depthOk || userInputRequired || structuredParseFailedFinalize) ? "true" : "false");
 
         spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
         spread.put(
@@ -432,7 +459,8 @@ public final class PlanningCyclePipeline {
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
                         "",
-                        "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY))));
+                        "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY)),
+                        structuredParseFailedFinalize));
         spread.put(
                 "userCopyCoordinatorProgress",
                 spread.get("planningCycleProgressSummary") != null
@@ -1018,6 +1046,17 @@ public final class PlanningCyclePipeline {
             roleRoundTags.add("INTERRUPTED:" + label);
             spread.put(PLANNING_PASS_INTERRUPTED_KEY, "true");
             spread.put("planningRolePassLastError", label + ": interrupted");
+        } else if (r.error() != null
+                && r.error().startsWith(StructuredLlmArtifactUpsertPass.STRUCTURED_JSON_PARSE_PREFIX)) {
+            roleRoundTags.add("PARSE_ERR:" + label);
+            spread.put(PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY, "true");
+            String detail =
+                    r.error()
+                            .substring(StructuredLlmArtifactUpsertPass.STRUCTURED_JSON_PARSE_PREFIX.length())
+                            .trim();
+            spread.put(
+                    "planningRolePassLastError",
+                    label + ": invalid structured JSON — " + truncateOneLine(detail, 120));
         } else if (r.error() != null && !r.error().isBlank()) {
             spread.put("planningRolePassLastError", role.name() + ": " + r.error());
             roleRoundTags.add("ERR:" + label + ": " + truncateOneLine(r.error(), 100));
@@ -1043,6 +1082,8 @@ public final class PlanningCyclePipeline {
                 parts.add(t.substring("SKIP_OTHER:".length()).trim());
             } else if (t != null && t.startsWith("INTERRUPTED:")) {
                 parts.add(t.substring("INTERRUPTED:".length()).trim() + " interrupted");
+            } else if (t != null && t.startsWith("PARSE_ERR:")) {
+                parts.add(t.substring("PARSE_ERR:".length()).trim() + " invalid JSON");
             } else if (t != null && t.startsWith("ERR:")) {
                 parts.add(t.substring(4).trim());
             } else if (t != null && t.startsWith("OK:")) {
@@ -1070,6 +1111,19 @@ public final class PlanningCyclePipeline {
         return plan.withAppendedAssumption(PlanAssumption.fromLegacyText(id, text.trim(), null));
     }
 
+    private static String buildInnerRoundProgressSummary(
+            int oneBased, int total, boolean depthOk, String roleRoundSummary) {
+        String rs = truncateOneLine(roleRoundSummary != null ? roleRoundSummary : "", 100);
+        String tail = depthOk ? "depth gate passed." : "tightening draft.";
+        return "Planning inner round "
+                + oneBased
+                + "/"
+                + total
+                + " — "
+                + tail
+                + (rs.isBlank() ? "" : " " + rs);
+    }
+
     private static String buildCycleProgressSummary(
             int cycleIteration,
             boolean depthOk,
@@ -1084,13 +1138,17 @@ public final class PlanningCyclePipeline {
             String expansionFallbackUsed,
             String planningLlmSkipReason,
             String selectiveRerunNote,
-            boolean planningPassInterrupted) {
+            boolean planningPassInterrupted,
+            boolean structuredParseFailed) {
         StringBuilder sb = new StringBuilder();
         if (selectiveRerunNote != null && !selectiveRerunNote.isBlank()) {
             sb.append(selectiveRerunNote.trim()).append(' ');
         }
         if (planningPassInterrupted) {
             sb.append("A coordinator LLM call was interrupted; retry when ready. ");
+        }
+        if (structuredParseFailed) {
+            sb.append("Structured coordinator output was not valid JSON; another pass may help. ");
         }
         sb.append(truncateOneLine(roleRoundSummary != null ? roleRoundSummary : "", 200)).append(' ');
         if (synthesisNote != null && !synthesisNote.isBlank()) {
@@ -1111,6 +1169,8 @@ public final class PlanningCyclePipeline {
         }
         if (userInputRequired) {
             sb.append("Waiting on your reply to one open question before I wrap the draft.");
+        } else if (structuredParseFailed) {
+            sb.append("Holding until coordinator roles return valid structured JSON for this pass.");
         } else if (depthOk) {
             sb.append("Draft looks solid enough to move forward.");
         } else {
@@ -1152,7 +1212,8 @@ public final class PlanningCyclePipeline {
             boolean readyToPostPacket,
             boolean clarificationStuck,
             String stuckHint,
-            boolean userInputRequired) {
+            boolean userInputRequired,
+            boolean structuredParseFailed) {
         String req = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         String gist = req.length() > 200 ? req.substring(0, 199) + "…" : req;
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
@@ -1173,6 +1234,9 @@ public final class PlanningCyclePipeline {
             sb.append("I'm holding the thread here until we clear one detail — see below.");
         } else if (readyToPostPacket) {
             sb.append("Ready to drop the full write-up in this thread for your review.");
+        } else if (structuredParseFailed) {
+            sb.append(
+                    "The last structured planner pass returned invalid JSON; I need a clean pass before treating the draft as reliable.");
         } else if (depthOk) {
             sb.append("In good shape; I'll keep going or post when the next step runs.");
         } else {
@@ -1264,6 +1328,7 @@ public final class PlanningCyclePipeline {
         m.put("planningAssumptionsUsed", "0");
         m.put("planningRolePassLastError", "");
         m.put(PLANNING_PASS_INTERRUPTED_KEY, "false");
+        m.put(PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY, "false");
         m.put("planningClarificationUseStructuredChoices", "false");
         m.put("planningClarificationQuestionText", "");
         m.put("planningClarificationOrchestratorPrompt", "");

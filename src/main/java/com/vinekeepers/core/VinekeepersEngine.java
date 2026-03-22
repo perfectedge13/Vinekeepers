@@ -60,7 +60,8 @@ public final class VinekeepersEngine implements EventSubscriber {
     private final Map<String, ReplyTargetResolver> resolversByConnectorId = new ConcurrentHashMap<>();
     /** Short-lived dedupe for duplicate Discord publishes (same message/interaction id). */
     private final ConcurrentHashMap<String, Long> discordEventDedupe = new ConcurrentHashMap<>();
-    private static final long DISCORD_DEDUPE_TTL_MS = 45_000L;
+    /** Covers slow engine work so the same Discord snowflake is not processed twice if a second gateway publish arrives late. */
+    private static final long DISCORD_DEDUPE_TTL_MS = 180_000L;
 
     public VinekeepersEngine(Router router, StateStore stateStore, AuditRecorder auditRecorder) {
         this(router, stateStore, auditRecorder, new ToolRunner(new ToolRegistry()));

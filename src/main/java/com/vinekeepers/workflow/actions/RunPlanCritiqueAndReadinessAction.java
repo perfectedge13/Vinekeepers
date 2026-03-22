@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
 public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** Max automatic NEEDS_REVISION → full replan loops per session before forcing human decision. */
+    private static final int MAX_PLANNING_AUTO_REVISION_AFTER_CRITIQUE = 2;
 
     private final FeaturePlanStateStore planStateStore;
     private final WorkProfileRegistry workProfileRegistry;
@@ -115,21 +117,50 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                 confidence.getConfidenceScore(),
                                 confidence.getConfidenceReasons());
             }
-            FeaturePlanState next = plan.withPlanCritiqueSnapshot(snapshot).withPlanConfidence(confidence);
+            String legacyStatus = PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus());
+            String summaryForSpread = confidence.getNotes() != null ? confidence.getNotes() : "";
+            String prevCtr = getString(state, "planningCritiqueAutoRevisionCount");
+            int prevRevision = parseNonNegativeInt(prevCtr, 0);
+            PlanConfidence confidenceForStore = confidence;
+            boolean critiqueAutoReplansCapped = false;
+            if (PlanReadinessStatus.NEEDS_REVISION.equals(legacyStatus)
+                    && prevRevision >= MAX_PLANNING_AUTO_REVISION_AFTER_CRITIQUE) {
+                critiqueAutoReplansCapped = true;
+                legacyStatus = PlanReadinessStatus.NEEDS_HUMAN_DECISION;
+                summaryForSpread =
+                        summaryForSpread
+                                + "\n\n(Automatic full replanning after critique is limited. Use the coordinator menu or **Revise plan first** to continue.)";
+                confidenceForStore =
+                        new PlanConfidence(
+                                confidence.getLevel(),
+                                summaryForSpread,
+                                PlanReadinessStatus.NEEDS_HUMAN_DECISION,
+                                now,
+                                confidence.getConfidenceScore(),
+                                confidence.getConfidenceReasons());
+            }
+            FeaturePlanState next = plan.withPlanCritiqueSnapshot(snapshot).withPlanConfidence(confidenceForStore);
             planStateStore.update(next);
 
             Map<String, Object> spread = new LinkedHashMap<>();
             spread.put("planCritiqueError", "");
-            spread.put(
-                    "planReadinessStatus",
-                    PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus()));
-            spread.put("planConfidenceLevel", confidence.getLevel() != null ? confidence.getLevel() : "");
+            if (PlanReadinessStatus.READY.equals(legacyStatus)) {
+                spread.put("planningCritiqueAutoRevisionCount", "0");
+            } else if (critiqueAutoReplansCapped) {
+                spread.put("planningCritiqueAutoRevisionCount", "0");
+            } else if (PlanReadinessStatus.NEEDS_REVISION.equals(legacyStatus)) {
+                spread.put("planningCritiqueAutoRevisionCount", String.valueOf(prevRevision + 1));
+            } else if (prevCtr != null && !prevCtr.isBlank()) {
+                spread.put("planningCritiqueAutoRevisionCount", prevCtr);
+            }
+            spread.put("planReadinessStatus", legacyStatus);
+            spread.put("planConfidenceLevel", confidenceForStore.getLevel() != null ? confidenceForStore.getLevel() : "");
             spread.put(
                     "planConfidenceScore",
-                    confidence.getConfidenceScore() >= 0
-                            ? String.format(java.util.Locale.ROOT, "%.3f", confidence.getConfidenceScore())
+                    confidenceForStore.getConfidenceScore() >= 0
+                            ? String.format(java.util.Locale.ROOT, "%.3f", confidenceForStore.getConfidenceScore())
                             : "");
-            spread.put("planReadinessSummary", confidence.getNotes() != null ? confidence.getNotes() : "");
+            spread.put("planReadinessSummary", summaryForSpread);
             spread.put("planCritiqueFindingsJson", JSON.writeValueAsString(findings));
             spread.put("planCritiqueSummary", formatCritiqueSummary(findings));
             putAssumptionIssueSummaries(spread, next);
@@ -230,5 +261,17 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static int parseNonNegativeInt(String raw, int dflt) {
+        if (raw == null || raw.isBlank()) {
+            return dflt;
+        }
+        try {
+            int v = Integer.parseInt(raw.trim());
+            return v >= 0 ? v : dflt;
+        } catch (NumberFormatException e) {
+            return dflt;
+        }
     }
 }
