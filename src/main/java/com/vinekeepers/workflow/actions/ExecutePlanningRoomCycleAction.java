@@ -164,6 +164,16 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         if (!readyToPost && !ranked.userInputRequired() && cycleIteration >= 4) {
             spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
+        spread.put(
+                "planningCycleProgressSummary",
+                buildCycleProgressSummary(
+                        depthOk,
+                        depthReason,
+                        ranked,
+                        spread.get("planningRoomCycleError") != null ? spread.get("planningRoomCycleError").toString() : "",
+                        spread.get("planningRolePassLastError") != null
+                                ? spread.get("planningRolePassLastError").toString()
+                                : ""));
         return spread;
     }
 
@@ -232,6 +242,42 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         }
         String id = "asm-auto-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         return plan.withAppendedAssumption(new AssumptionEntry(id, text.trim(), null));
+    }
+
+    /**
+     * One short line for thread progress posts after a planning cycle (plain English).
+     */
+    private static String buildCycleProgressSummary(
+            boolean depthOk,
+            String depthReason,
+            RankedClarification ranked,
+            String cycleError,
+            String rolePassError) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Ran architect, auditor, and scribe passes; expanded drafts and synthesis. ");
+        if (rolePassError != null && !rolePassError.isBlank()) {
+            sb.append("Note: ").append(truncateOneLine(rolePassError, 120)).append(" ");
+        }
+        if (ranked.userInputRequired()) {
+            sb.append("A clarification is needed before posting the packet.");
+        } else if (depthOk) {
+            sb.append("Depth check passed.");
+        } else {
+            sb.append("Draft still being strengthened: ")
+                    .append(truncateOneLine(depthReason != null ? depthReason : "details pending", 140));
+        }
+        if (cycleError != null && !cycleError.isBlank()) {
+            sb.append(" Issue: ").append(truncateOneLine(cycleError, 120));
+        }
+        return sb.toString().trim();
+    }
+
+    private static String truncateOneLine(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.replace("\r\n", " ").replace("\n", " ").trim();
+        return t.length() <= max ? t : t.substring(0, max - 1) + "…";
     }
 
     /**
@@ -351,6 +397,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         m.put("planningClarificationUseStructuredChoices", "false");
         m.put("planningClarificationQuestionText", "");
         m.put("planningClarificationOrchestratorPrompt", "");
+        m.put("planningCycleProgressSummary", "");
         return m;
     }
 

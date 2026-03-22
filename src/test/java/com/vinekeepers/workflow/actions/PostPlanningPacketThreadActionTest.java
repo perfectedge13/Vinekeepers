@@ -66,6 +66,10 @@ class PostPlanningPacketThreadActionTest {
         assertEquals("true", spread2.get("planningPacketSkippedDuplicate"));
         assertEquals(spread1.get("planningPacketPostedVersion"), spread2.get("planningPacketPostedVersion"));
         assertEquals(chunks, sends.get());
+        String skipReason = String.valueOf(spread2.get("planningPacketSkipReason"));
+        assertTrue(
+                skipReason.contains("unchanged"),
+                "expected user-visible skip reason, got: " + skipReason);
     }
 
     @Test

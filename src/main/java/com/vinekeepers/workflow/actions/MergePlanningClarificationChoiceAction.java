@@ -34,6 +34,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
         Map<String, Object> spread = new LinkedHashMap<>();
         spread.put("planningClarificationMerged", "false");
         spread.put("planningClarificationMergeError", "");
+        spread.put("planningClarificationMergeOk", "false");
         if (planStateStore == null || workProfileRegistry == null) {
             spread.put("planningClarificationMergeError", "MISSING_DEPS");
             return spread;
@@ -124,6 +125,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             spread.put("planningUserInputRequired", "false");
             spread.put("planningPhase", "REVISING");
             spread.put("planningClarificationRaw", "");
+            spread.put("planningClarificationMergeOk", "true");
             return spread;
         } catch (Exception e) {
             spread.put("planningClarificationMergeError", e.getMessage() != null ? e.getMessage() : "merge failed");

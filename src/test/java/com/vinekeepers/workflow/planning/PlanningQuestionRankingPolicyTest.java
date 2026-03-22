@@ -51,4 +51,16 @@ class PlanningQuestionRankingPolicyTest {
         assertTrue(r.choicesJson().contains("planning_clarify_default"));
         assertTrue(r.choicesJson().contains("planning_clarify_opt_a"));
     }
+
+    @Test
+    void commaClauseWithOrStaysOpenTextNotStructuredChoices() {
+        var r = PlanningQuestionRankingPolicy.rank(
+                null,
+                List.of(
+                        "Should we treat routing as config-driven at first, or must runtime context always win when both are present?"),
+                3);
+        assertTrue(r.userInputRequired());
+        assertFalse(r.useStructuredChoices());
+        assertEquals("[]", r.choicesJson());
+    }
 }

@@ -114,6 +114,7 @@ assets:
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
       fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine;
       when ReplyTarget is deferred InteractionTarget and outbound is null, send minimal text follow-up so Discord interaction completes
+      (bots with workflowType arrietty_room use a planning-specific line instead of the generic Recorded ack)
     requires:
       - REQ-CORE-003
       - REQ-REASONER-001
@@ -1136,7 +1137,8 @@ assets:
       run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; PlanningQuestionRankingPolicy for defaults
       vs at most one clarification round;       storeSpread planningPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
       planningClarificationChoicesJson/MetaJson, planningClarificationUseStructuredChoices, planningClarificationQuestionText,
-      planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningReadyToPostPacket, planningRoomCycleIteration, etc.
+      planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningCycleProgressSummary, planningReadyToPostPacket,
+      planningRoomCycleIteration, etc.
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1148,7 +1150,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/MergePlanningClarificationChoiceAction.java
     role: >-
       Workflow action merge_planning_clarification_choice — applies planningClarificationRaw to assumptions and decision_log;
-      clears planningClarificationChoicesJson; sets planningUserInputRequired false
+      clears planningClarificationChoicesJson; sets planningUserInputRequired false; spreads planningClarificationMergeOk true on success
+      and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE)
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1210,7 +1213,9 @@ assets:
   - id: ASSET-PLANNING-QUESTION-RANKING-POLICY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningQuestionRankingPolicy.java
-    role: Ranks LLM follow-ups, records safe defaults as assumptions, prepares at most one user clarification round with branchable choices
+    role: >-
+      Ranks LLM follow-ups, records safe defaults as assumptions, prepares at most one user clarification round; structured
+      present_choices only for short explicit A-or-B pairs (rejects comma-heavy clauses and multi-clause or splits)
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1426,7 +1431,7 @@ requirements:
           post_planning_packet_thread builds the planning packet from FeaturePlanState, splits for Discord size limits,
           posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount;
           skips duplicate sends when planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full packet body
-          unless bind forceRepost is true, spreading planningPacketSkippedDuplicate
+          unless bind forceRepost is true, spreading planningPacketSkippedDuplicate and a short planningPacketSkipReason for thread UX
         - >-
           build_request_exploration writes the request_exploration artifact (v2 profile) from request and repo hints before synthesis
         - >-

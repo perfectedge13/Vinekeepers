@@ -393,6 +393,16 @@ public final class VinekeepersEngine implements EventSubscriber {
     /** Discord deferred interactions must receive a follow-up; use when workflow/reasoner produce no outbound. */
     private static final OutboundResponse DEFERRED_INTERACTION_ACK = OutboundResponse.ofText("Recorded.");
 
+    private OutboundResponse deferredInteractionAck(String handlingBotId) {
+        if (handlingBotId != null && !handlingBotId.isBlank()) {
+            BotDefinition b = bots.get(handlingBotId);
+            if (b != null && "arrietty_room".equals(b.getWorkflowType())) {
+                return OutboundResponse.ofText("Working on your update…");
+            }
+        }
+        return DEFERRED_INTERACTION_ACK;
+    }
+
     private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target, String handlingBotId) {
         ReplyTarget resolved = target;
         if (handlingBotId != null && !handlingBotId.isBlank()
@@ -403,7 +413,7 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
         if (outbound == null) {
             if (resolved instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
-                outbound = DEFERRED_INTERACTION_ACK;
+                outbound = deferredInteractionAck(handlingBotId);
             } else {
                 return;
             }

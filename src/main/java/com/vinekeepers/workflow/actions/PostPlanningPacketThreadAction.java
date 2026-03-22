@@ -39,6 +39,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         spread.put("planningPacketPostError", "");
         spread.put("planningPacketPostedVersion", "0");
         spread.put("planningPacketSkippedDuplicate", "false");
+        spread.put("planningPacketSkipReason", "");
         if (replySender == null || planStore == null) {
             spread.put("planningPacketPostError", "Reply sender or plan store not available.");
             return spread;
@@ -83,6 +84,10 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             spread.put("planningPacketPostedVersion", String.valueOf(parsePostedVersion(state)));
             spread.put("planningPacketSkippedDuplicate", "true");
             spread.put("planningPacketLastPostedFingerprint", lastFp);
+            spread.put(
+                    "planningPacketSkipReason",
+                    "Planning packet body is unchanged since the last post in this thread, so no duplicate was sent. "
+                            + "Assumptions and exploration may still have been updated—see the latest summary above.");
             return spread;
         }
         List<String> chunks = PlanningThreadPacketFormatter.splitForDiscord(full);
@@ -101,6 +106,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         spread.put("planningPacketPosted", "true");
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));
         spread.put("planningPacketSkippedDuplicate", "false");
+        spread.put("planningPacketSkipReason", "");
         spread.put("planningPacketLastPostedFingerprint", fingerprint);
         int prev = parsePostedVersion(state);
         spread.put("planningPacketPostedVersion", String.valueOf(prev + 1));

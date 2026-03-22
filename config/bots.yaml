@@ -146,13 +146,13 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 65
+        next: 73
       - when:
           key: planningIntakeThread
           value: 'true'
         next: 5
       - when: else
-        next: 61
+        next: 69
     - type: call_action
       action: get_profile_missing_fields
       storeIn: profileMissingSummary
@@ -267,22 +267,28 @@ workflows:
     - type: call_action
       action: execute_planning_room_cycle
       storeSpread: true
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Planning cycle** — {{planningCycleProgressSummary}}'
+        asRole: orchestrator
+        target: thread
     - type: branch
       branches:
       - when:
           key: planningUserInputRequired
           value: 'true'
-        next: 31
+        next: 32
       - when: else
-        next: 44
+        next: 52
     - type: branch
       branches:
       - when:
           key: planningClarificationUseStructuredChoices
           value: 'true'
-        next: 32
+        next: 33
       - when: else
-        next: 35
+        next: 36
     - type: prompt_for_field
       prompt: '{{planningOrchestratorRoundSummary}}'
       storeIn: planningClarificationRaw
@@ -293,7 +299,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 38
+        next: 39
     - type: prompt_for_field
       prompt: '{{planningOrchestratorRoundSummary}}'
       storeIn: planningClarificationRaw
@@ -302,28 +308,77 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 38
+        next: 39
     - type: call_action
       action: merge_planning_clarification_choice
       storeSpread: true
     - type: branch
       branches:
+      - when:
+          key: planningClarificationMergeOk
+          value: 'true'
+        next: 41
+      - when: else
+        next: 43
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Recorded your answer** — updating the draft and rerunning the
+          full planning cycle (may take up to a minute). Another status line follows
+          when the cycle finishes.'
+        asRole: orchestrator
+        target: thread
+    - type: branch
+      branches:
       - when: else
         next: 29
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Could not apply your clarification** — {{planningClarificationMergeError}}
+
+
+          Please send a short plain-text answer again in this thread.'
+        asRole: orchestrator
+        target: thread
+    - type: branch
+      branches:
+      - when: else
+        next: 32
+        clear:
+        - planningClarificationRaw
     - type: branch
       branches:
       - when:
           key: planningReadyToPostPacket
           value: 'true'
-        next: 41
-      - when: else
         next: 46
+      - when: else
+        next: 54
     - type: call_action
       action: evaluate_planning_packet_depth
       storeSpread: true
     - type: call_action
       action: post_planning_packet_thread
       storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: planningPacketSkippedDuplicate
+          value: 'true'
+        next: 49
+      - when: else
+        next: 51
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '{{planningPacketSkipReason}}'
+        asRole: orchestrator
+        target: thread
+    - type: branch
+      branches:
+      - when: else
+        next: 51
     - type: call_action
       action: run_plan_critique_and_readiness
       storeSpread: true
@@ -332,7 +387,7 @@ workflows:
       - when:
           key: planReadinessStatus
           value: BLOCKED
-        next: 58
+        next: 66
       - when:
           key: planReadinessStatus
           value: NEEDS_REVISION
@@ -357,9 +412,9 @@ workflows:
       - when:
           key: planReadinessStatus
           value: NEEDS_HUMAN_DECISION
-        next: 76
+        next: 84
       - when: else
-        next: 48
+        next: 56
     - type: call_action
       action: post_channel_message
       bind:
@@ -378,7 +433,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 65
+        next: 73
     - type: call_action
       action: post_channel_message
       bind:
@@ -421,9 +476,9 @@ workflows:
       - when:
           key: planningReadyForApproval
           value: 'true'
-        next: 52
+        next: 60
       - when: else
-        next: 50
+        next: 58
     - type: call_action
       action: post_channel_message
       bind:
@@ -456,11 +511,11 @@ workflows:
       - when:
           key: planApprovalDecision
           value: approve
-        next: 55
+        next: 63
       - when:
           key: planApprovalDecision
           value: approve_with_risks
-        next: 55
+        next: 63
       - when:
           key: planApprovalDecision
           value: revise
@@ -486,9 +541,9 @@ workflows:
       - when:
           key: planApprovalDecision
           value: reject
-        next: 55
+        next: 63
       - when: else
-        next: 55
+        next: 63
     - type: call_action
       action: persist_plan_approval
     - type: call_action
@@ -521,9 +576,9 @@ workflows:
       - when:
           key: launchSucceeded
           value: 'false'
-        next: 58
+        next: 66
       - when: else
-        next: 85
+        next: 93
     - type: call_action
       action: post_channel_message
       bind:
@@ -582,19 +637,19 @@ workflows:
       - when:
           key: intakeChoice
           value: continue_planning
-        next: 68
+        next: 76
         clear:
         - discoveryAnswerRaw
       - when:
           key: intakeChoice
           value: add_details
-        next: 72
+        next: 80
       - when:
           key: intakeChoice
           value: clarify_questions
         next: 19
       - when: else
-        next: 65
+        next: 73
         clear:
         - intakeChoice
     - type: call_action
@@ -629,7 +684,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 65
+        next: 73
         clear:
         - intakeChoice
         - discoveryAnswerRaw
@@ -668,7 +723,7 @@ workflows:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 82
+        next: 90
       - when:
           key: readinessProceedRaw
           value: revise
@@ -689,14 +744,14 @@ workflows:
         - discoveryBundledApplyJson
         - intakeChoice
       - when: else
-        next: 70
+        next: 78
     - type: call_action
       action: acknowledge_readiness_human_decision
       storeSpread: true
     - type: branch
       branches:
       - when: else
-        next: 48
+        next: 56
     - type: call_action
       action: post_channel_message
       bind:

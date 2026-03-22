@@ -218,10 +218,19 @@ public final class PlanningQuestionRankingPolicy {
 
     /**
      * @return bounded options only for explicit {@code A or B} style questions with two substantive clauses; otherwise null (open text).
+     *     Rhetorical clarifications often contain {@code , or } or a third clause after a second {@code or}; those stay open-text.
      */
     private static ClarificationOptions inferBoundedOrOptions(String question) {
         String[] parts = OR_SPLIT.split(question, 3);
         if (parts.length < 2) {
+            return null;
+        }
+        String leftRaw = parts[0] != null ? parts[0].trim() : "";
+        String rightRaw = parts[1] != null ? parts[1].trim() : "";
+        if (parts.length >= 3 && parts[2] != null && !parts[2].isBlank()) {
+            return null;
+        }
+        if (leftRaw.contains(",") || rightRaw.contains(",")) {
             return null;
         }
         String a = cleanOption(parts[0]);
