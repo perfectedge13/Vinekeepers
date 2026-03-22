@@ -50,7 +50,7 @@ class ExecutePlanningRoomCycleActionSummaryTest {
                         3);
         assertTrue(ranked.userInputRequired());
         String summary =
-                ExecutePlanningRoomCycleAction.buildOrchestratorSummary(
+                com.vinekeepers.workflow.planning.PlanningCyclePipeline.buildOrchestratorSummary(
                         plan, true, "", ranked, 1, false, false, "");
         assertTrue(summary.contains("exponential backoff"));
         assertTrue(summary.contains("Next I'll"));

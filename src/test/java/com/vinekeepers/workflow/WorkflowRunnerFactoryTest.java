@@ -60,4 +60,19 @@ class WorkflowRunnerFactoryTest {
         assertNotNull(runner);
         assertTrue(runner instanceof ConfigurableWorkflowRunner);
     }
+
+    @Test
+    void createConfiguredWithWorkflowSchemaV2ReturnsGraphRunner() {
+        java.util.LinkedHashMap<String, Object> wf = new java.util.LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "done");
+        wf.put("phases", Map.of("done", Map.of("pipeline", List.of(), "terminal", true)));
+        wf.put("capabilities", Map.of());
+        Map<String, Object> workflows = Map.of("gv2", wf);
+        Map<String, Object> params = Map.of("workflowRef", "gv2");
+        WorkflowRunner runner =
+                WorkflowRunnerFactory.create("configured", params, workflows, new WorkflowActionRegistry());
+        assertNotNull(runner);
+        assertTrue(runner instanceof com.vinekeepers.workflow.v2.GraphWorkflowRunner);
+    }
 }

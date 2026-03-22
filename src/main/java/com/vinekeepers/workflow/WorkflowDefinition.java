@@ -13,15 +13,22 @@ public final class WorkflowDefinition {
     private final List<Map<String, Object>> steps;
     /** Keys typically {@code provider}, {@code model}, {@code timeoutMs} — merged into state as {@code workflowLlm*}. */
     private final Map<String, Object> llm;
+    /** When {@code v2}, {@link com.vinekeepers.workflow.v2.GraphWorkflowRunner} may be used when phases are present. */
+    private final String workflowSchema;
 
     public WorkflowDefinition(String id, List<Map<String, Object>> steps, Map<String, Object> llm) {
+        this(id, steps, llm, null);
+    }
+
+    public WorkflowDefinition(String id, List<Map<String, Object>> steps, Map<String, Object> llm, String workflowSchema) {
         this.id = id != null ? id : "";
         this.steps = steps != null ? List.copyOf(steps) : List.of();
         this.llm = llm != null && !llm.isEmpty() ? Map.copyOf(llm) : Map.of();
+        this.workflowSchema = workflowSchema != null && !workflowSchema.isBlank() ? workflowSchema.trim() : null;
     }
 
     public WorkflowDefinition(String id, List<Map<String, Object>> steps) {
-        this(id, steps, Map.of());
+        this(id, steps, Map.of(), null);
     }
 
     public String getId() {
@@ -34,6 +41,17 @@ public final class WorkflowDefinition {
 
     public Map<String, Object> getLlm() {
         return llm;
+    }
+
+    /**
+     * {@code v2} selects graph-style workflows when the YAML workflow map includes {@code phases}.
+     */
+    public String getWorkflowSchema() {
+        return workflowSchema;
+    }
+
+    public boolean isWorkflowSchemaV2() {
+        return "v2".equalsIgnoreCase(workflowSchema);
     }
 
     /**

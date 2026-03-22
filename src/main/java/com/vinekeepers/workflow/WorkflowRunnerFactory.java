@@ -4,6 +4,8 @@ import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.workflow.v2.GraphWorkflowRunner;
+import com.vinekeepers.workflow.v2.WorkflowV2Loader;
 
 import java.util.List;
 import java.util.Map;
@@ -71,8 +73,26 @@ public final class WorkflowRunnerFactory {
         return switch (type) {
             case "configured" -> {
                 WorkflowDefinition def = resolveWorkflowDefinition(workflowParams, workflows);
-                yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry(),
-                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry);
+                WorkflowActionRegistry reg = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
+                if (def.isWorkflowSchemaV2()
+                        && workflowParams != null
+                        && workflowParams.get("workflowRef") instanceof String ref
+                        && workflows != null) {
+                    Object rawW = workflows.get(ref);
+                    if (rawW instanceof Map<?, ?> wMap && wMap.get("phases") instanceof Map<?, ?>) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> wm = (Map<String, Object>) rawW;
+                        yield new GraphWorkflowRunner(
+                                WorkflowV2Loader.load(ref, wm),
+                                reg,
+                                toolRunner,
+                                toolPolicy,
+                                conversationMode,
+                                sessionKeyStrategy);
+                    }
+                }
+                yield new ConfigurableWorkflowRunner(
+                        def, reg, toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry);
             }
             default -> new StubWorkflowRunner();
         };
@@ -88,7 +108,15 @@ public final class WorkflowRunnerFactory {
                     return new WorkflowDefinition(
                             ref,
                             (List<Map<String, Object>>) list,
-                            WorkflowDefinition.copyLlmMap(wMap.get("llm")));
+                            WorkflowDefinition.copyLlmMap(wMap.get("llm")),
+                            schemaFromMap(wMap));
+                }
+                if ("v2".equalsIgnoreCase(schemaFromMap(wMap)) && wMap.get("phases") instanceof Map<?, ?>) {
+                    return new WorkflowDefinition(
+                            ref,
+                            List.of(),
+                            WorkflowDefinition.copyLlmMap(wMap.get("llm")),
+                            "v2");
                 }
             }
         }
@@ -96,8 +124,17 @@ public final class WorkflowRunnerFactory {
             return new WorkflowDefinition(
                     "inline",
                     (List<Map<String, Object>>) list,
-                    WorkflowDefinition.copyLlmMap(params.get("llm")));
+                    WorkflowDefinition.copyLlmMap(params.get("llm")),
+                    schemaFromMap(params));
         }
         return new WorkflowDefinition("", List.of());
+    }
+
+    private static String schemaFromMap(Map<?, ?> map) {
+        if (map == null) {
+            return null;
+        }
+        Object s = map.get("workflowSchema");
+        return s != null ? s.toString().trim() : null;
     }
 }

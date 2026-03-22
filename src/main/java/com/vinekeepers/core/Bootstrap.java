@@ -304,6 +304,9 @@ public final class Bootstrap {
 
     private void registerLifecycleActions(WorkflowActionRegistry registry) {
         OpenAiChatClient openAiChatClient = new OpenAiChatClient();
+        registry.register(
+                "v2_noop",
+                (event, state, bind) -> java.util.Map.of("v2NoopRan", "true"));
         registry.register("provision_bot_instance", new ProvisionBotInstanceAction(stateStore));
         registry.register("create_lifecycle_context", new CreateLifecycleContextAction(lifecycleContextStore));
         registry.register("provision_room_participants", new ProvisionRoomParticipantsAction(stateStore));

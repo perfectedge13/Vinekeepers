@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-19T12:00:00Z"
+  updated_utc: "2026-03-21T23:00:00Z"
 
 project:
   id: vinekeepers
@@ -30,7 +30,7 @@ dependencies:
       criticality: required
       spec: org.junit.jupiter:junit-jupiter
       install_hint: Maven test dependency
-      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-LUNA-001]
+      used_by_requirements: [REQ-CORE-001, REQ-ENV-001, REQ-CORE-002, REQ-CORE-003, REQ-CONFIG-001, REQ-BOT-001, REQ-BOT-002, REQ-EVENTS-001, REQ-STATE-001, REQ-TOOLS-001, REQ-REASONER-001, REQ-WORKFLOW-001, REQ-WORKFLOW-002, REQ-LUNA-001]
 
 assets:
   - id: ASSET-STATE-STORE
@@ -154,6 +154,18 @@ assets:
     role: In-memory store for FeaturePlanState; indexed by contextId, featureId, roomChannelId, intakeThreadId
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
+  - id: ASSET-UNRESOLVED-ITEM
+    kind: source
+    path: src/main/java/com/vinekeepers/state/workflow/UnresolvedItem.java
+    role: Generic unresolved-item DTO for workflow clarification ledger (id, fingerprint, status, paths, answers)
+    requires: [REQ-STATE-001, REQ-WORKFLOW-002]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-UNRESOLVED-ITEM-STATUS
+    kind: source
+    path: src/main/java/com/vinekeepers/state/workflow/UnresolvedItemStatus.java
+    role: Enum status values for unresolved workflow items
+    requires: [REQ-STATE-001, REQ-WORKFLOW-002]
+    feature_ids: [FEAT-STATE]
   - id: ASSET-REPO-WORKSPACE-STATE
     kind: source
     path: src/main/java/com/vinekeepers/state/repo/RepoWorkspaceState.java
@@ -228,9 +240,12 @@ requirements:
         - >-
           Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, DiscoveryFinding, and PlanningProposal models
           for structured discovery and proposal-driven planning (JSON-serializable; workflow state for proposals until confirm or auto-apply)
+        - >-
+          state.workflow package holds generic UnresolvedItem / UnresolvedItemStatus models for config-driven clarification ledgers
+          (used by workflow engine features; JSON-serializable)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
       symbols: []
     validation:
       tests:
@@ -348,7 +363,9 @@ features:
     title: State store for workflow state
     domain_slug: state
     doc_path: features/domain/state/state.md
-    summary: StateStore persists and loads per-bot, per-conversation workflow state.
+    summary: >-
+      StateStore persists and loads per-bot, per-conversation workflow state; state.workflow holds generic UnresolvedItem
+      models for config-driven clarification ledgers (REQ-WORKFLOW-002).
     requirement_ids: [REQ-STATE-001]
-    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
     status: active

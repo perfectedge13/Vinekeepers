@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
  * Conversational step that prompts once and pauses the workflow until a later event supplies the field.
  * Optional intent/choices/confirmLabel/cancelLabel/fields produce a rich OutboundResponse when supported.
  * When choiceProvider is set, dynamic choices are fetched and merged with static choices.
+ * Optional {@code control.mode} from YAML (e.g. {@code plain_text}) overrides rich controls for config-driven UX.
  */
 public final class PromptForFieldStep implements WorkflowStep {
 
@@ -30,20 +31,29 @@ public final class PromptForFieldStep implements WorkflowStep {
     private final String cancelLabel;
     private final List<Map<String, Object>> fields;
     private final DynamicChoiceProvider choiceProvider;
+    /** e.g. {@code plain_text} — force text-only wait even if intent/choiceProvider would add components. */
+    private final String controlMode;
 
     public PromptForFieldStep(String prompt, String storeIn) {
-        this(prompt, storeIn, null, null, null, null, null, null);
+        this(prompt, storeIn, null, null, null, null, null, null, null);
     }
 
     public PromptForFieldStep(String prompt, String storeIn, String intent,
                              List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
                              List<Map<String, Object>> fields) {
-        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, null);
+        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, null, null);
     }
 
     public PromptForFieldStep(String prompt, String storeIn, String intent,
                              List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
                              List<Map<String, Object>> fields, DynamicChoiceProvider choiceProvider) {
+        this(prompt, storeIn, intent, choices, confirmLabel, cancelLabel, fields, choiceProvider, null);
+    }
+
+    public PromptForFieldStep(String prompt, String storeIn, String intent,
+                             List<Map<String, Object>> choices, String confirmLabel, String cancelLabel,
+                             List<Map<String, Object>> fields, DynamicChoiceProvider choiceProvider,
+                             String controlMode) {
         this.prompt = prompt != null ? prompt : "";
         this.storeIn = storeIn != null ? storeIn : "input";
         this.intent = intent;
@@ -52,6 +62,7 @@ public final class PromptForFieldStep implements WorkflowStep {
         this.cancelLabel = cancelLabel;
         this.fields = fields != null ? List.copyOf(fields) : List.of();
         this.choiceProvider = choiceProvider;
+        this.controlMode = controlMode != null && !controlMode.isBlank() ? controlMode.trim() : null;
     }
 
     @Override
@@ -87,6 +98,9 @@ public final class PromptForFieldStep implements WorkflowStep {
     }
 
     private OutboundResponse buildRichReply(Event event, ConfigurableWorkflowState state, String resolvedPrompt) {
+        if ("plain_text".equalsIgnoreCase(controlMode)) {
+            return null;
+        }
         String text = resolvedPrompt != null ? resolvedPrompt : prompt;
         if (choiceProvider != null) {
             try {

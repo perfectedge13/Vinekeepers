@@ -73,6 +73,7 @@ dependencies:
         - REQ-TOOLS-001
         - REQ-REASONER-001
         - REQ-WORKFLOW-001
+        - REQ-WORKFLOW-002
         - REQ-LUNA-001
         - REQ-GADGET-001
 assets:
@@ -233,11 +234,77 @@ assets:
   - id: ASSET-WORKFLOW-RUNNER-FACTORY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowRunnerFactory.java
-    role: Create WorkflowRunner from workflow type, params, and bot runtime options from config
+    role: Create WorkflowRunner from workflow type, params, and bot runtime options from config; when workflowSchema v2 and phases exist, yields GraphWorkflowRunner
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-GRAPH-WORKFLOW-RUNNER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/v2/GraphWorkflowRunner.java
+    role: Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action capabilities)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-WORKFLOW-V2-LOADER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/v2/WorkflowV2Loader.java
+    role: Parse workflow YAML map into WorkflowV2Model (phases, capabilities, rulesets)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-WORKFLOW-RULES-ENGINE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/v2/WorkflowRulesEngine.java
+    role: Ordered rule evaluation with ANDed when predicates and transition effects for v2 convergence
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-UNRESOLVED-ITEM-LEDGER
+    kind: source
+    path: src/main/java/com/vinekeepers/state/workflow/UnresolvedItemLedger.java
+    role: Generic unresolved-item ledger JSON in workflow state (workflowUnresolvedItemsJson) for clarification lifecycle
+    requires:
+      - REQ-WORKFLOW-002
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PROGRESS-DEDUPE-HELPER
+    kind: source
+    path: src/main/java/com/vinekeepers/state/workflow/ProgressDedupeHelper.java
+    role: Normalize and SHA-256 fingerprint user-visible progress bodies for generic dedupe
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/template/WorkflowSafeTemplateRenderer.java
+    role: Allowlisted {{key}} template rendering to reduce internal state leakage in user copy
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-CYCLE-PIPELINE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningCyclePipeline.java
+    role: Composable planning-room cycle logic invoked by execute_planning_room_cycle action facade
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
-      - FEAT-WORKFLOW
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/StructuredLlmArtifactUpsertPass.java
+    role: Generic LLM JSON upsert pass over feature-plan artifacts; used by PlanningRolePassRunner
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-SESSION-KEY-STRATEGY
     kind: source
     path: src/main/java/com/vinekeepers/workflow/SessionKeyStrategy.java
@@ -321,9 +388,10 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java
     role: >-
       Workflow definition from config (id, list of step configs, optional workflow-level llm map provider/model/timeoutMs
-      merged into state as workflowLlmProvider, workflowLlmModel, workflowLlmTimeoutMs)
+      merged into state as workflowLlmProvider, workflowLlmModel, workflowLlmTimeoutMs); optional workflowSchema (e.g. v2)
     requires:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW-STEPS
   - id: ASSET-CONFIGURABLE-WORKFLOW-RUNNER
@@ -331,9 +399,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
     role: >-
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
-      intent, choices, confirmLabel, cancelLabel, fields, trimAndLower, transforms, and fromEvent for steps; registers
-      extract_event step; applies StepResult clearKeys to state before setStepIndex; merges workflow llm defaults into state
-      at session start; call_action passes merged llm overrides into LLM-capable actions only
+      intent, choices, confirmLabel, cancelLabel, fields, optional control.mode for prompt_for_field, trimAndLower, transforms,
+      and fromEvent for steps; registers extract_event step; applies StepResult clearKeys to state before setStepIndex;
+      merges workflow llm defaults into state at session start; call_action passes merged llm overrides into LLM-capable actions only
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -723,12 +791,14 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostPlanningProgressIfChangedAction.java
     role: >-
-      Workflow action post_planning_progress_if_changed — when planningProgressPostWorthy is true, delegates to
-      post_channel_message (same bind); on OK updates planningLastProgressPostHash from planningProgressPostFingerprint;
-      otherwise spreads planningProgressPostSkipped true without sending (idempotent progress line vs prior hash)
+      Workflow action post_planning_progress_if_changed — when planningProgressPostWorthy is true (or bind progressPostWorthyKey),
+      delegates to post_channel_message (same bind); on OK updates last hash key (default planningLastProgressPostHash) from
+      fingerprint key (default planningProgressPostFingerprint); optional bind keys progressPostSkippedKey, progressPostSendResultKey
+      for generic workflows; otherwise spreads skipped true without sending
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
@@ -1764,6 +1834,98 @@ requirements:
             - run: mvn compile -q
               expect:
                 - BUILD SUCCESS
+  - id: REQ-WORKFLOW-002
+    title: Config-driven workflow v2 graph, ledger, rules, and safe templates
+    statement: >-
+      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge), and rulesets;
+      WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
+      ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
+      evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
+      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; PlanningRolePassRunner delegates to
+      StructuredLlmArtifactUpsertPass.
+    status: active
+    priority: high
+    type: functional
+    behavior:
+      inputs: []
+      outputs: []
+      rules: []
+      defaults: []
+      errors: []
+    acceptance:
+      criteria:
+        - WorkflowDefinition carries optional workflowSchema; v2 resolves when YAML has phases without steps list
+        - GraphWorkflowRunner runs legacy_action capability pipeline and phase transitions via defaultNextPhase or rulesets
+        - WorkflowV2Loader parses phases, capabilities, rulesets, and llm from workflow map
+        - UnresolvedItemLedger serializes to workflowUnresolvedItemsJson; WorkflowRulesEngine hasOpenUnresolved predicate works
+        - ProgressDedupeHelper provides normalize + fingerprint + isPostWorthy for generic progress dedupe
+        - post_planning_progress_if_changed supports optional bind keys progressPostWorthyKey, progressPostFingerprintKey, lastProgressPostHashKey
+        - Bootstrap registers v2_noop for tests and graph capability demos
+        - PlanningCyclePipeline executes planning cycle; ExecutePlanningRoomCycleAction is a thin facade
+        - StructuredLlmArtifactUpsertPass executes generic artifact upsert LLM pass for role-derived prompts
+      examples: []
+    traceability:
+      assets:
+        - ASSET-GRAPH-WORKFLOW-RUNNER
+        - ASSET-WORKFLOW-V2-LOADER
+        - ASSET-WORKFLOW-RULES-ENGINE
+        - ASSET-UNRESOLVED-ITEM-LEDGER
+        - ASSET-UNRESOLVED-ITEM
+        - ASSET-UNRESOLVED-ITEM-STATUS
+        - ASSET-PROGRESS-DEDUPE-HELPER
+        - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
+        - ASSET-PLANNING-CYCLE-PIPELINE
+        - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
+      symbols: []
+    validation:
+      tests:
+        - id: UNIT-UNRESOLVED-ITEM-LEDGER
+          title: UnresolvedItemLedgerTest
+          intent: Verify ledger JSON round-trip, fingerprint lookup, hasOpenItems
+          testClass: com.vinekeepers.state.workflow.UnresolvedItemLedgerTest
+          preconditions: []
+        - id: UNIT-PROGRESS-DEDUPE-HELPER
+          title: ProgressDedupeHelperTest
+          intent: Verify progress body normalize and post-worthy fingerprint comparison
+          testClass: com.vinekeepers.state.workflow.ProgressDedupeHelperTest
+          preconditions: []
+        - id: UNIT-WORKFLOW-RULES-ENGINE
+          title: WorkflowRulesEngineTest
+          intent: Verify truthy and hasOpenUnresolved rule matching and transition extraction
+          testClass: com.vinekeepers.workflow.v2.WorkflowRulesEngineTest
+          preconditions: []
+        - id: UNIT-GRAPH-WORKFLOW-RUNNER
+          title: GraphWorkflowRunnerTest
+          intent: Verify v2 pipeline runs legacy_action capabilities and completes
+          testClass: com.vinekeepers.workflow.v2.GraphWorkflowRunnerTest
+          preconditions: []
+        - id: UNIT-WORKFLOW-V2-LOADER
+          title: WorkflowV2LoaderTest
+          intent: Verify loader extracts phases and capabilities
+          testClass: com.vinekeepers.workflow.v2.WorkflowV2LoaderTest
+          preconditions: []
+        - id: UNIT-PROMPT-FOR-FIELD-CONTROL-MODE
+          title: PromptForFieldStepTest
+          intent: Verify control.mode plain_text suppresses rich reply when intent would add choices
+          testClass: com.vinekeepers.workflow.steps.PromptForFieldStepTest
+          preconditions: []
+        - id: UNIT-WORKFLOW-SAFE-TEMPLATE-RENDERER
+          title: WorkflowSafeTemplateRendererTest
+          intent: Verify allowlisted keys only are substituted
+          testClass: com.vinekeepers.workflow.template.WorkflowSafeTemplateRendererTest
+          preconditions: []
+        - id: UNIT-WORKFLOW-RUNNER-FACTORY-V2
+          title: WorkflowRunnerFactoryTest
+          intent: Verify configured workflow with workflowSchema v2 yields GraphWorkflowRunner
+          testClass: com.vinekeepers.workflow.WorkflowRunnerFactoryTest
+          testMethod: createConfiguredWithWorkflowSchemaV2ReturnsGraphRunner
+          preconditions: []
+        - id: UNIT-WORKFLOW-DEFINITION-SCHEMA
+          title: WorkflowDefinitionTest
+          intent: Verify WorkflowDefinition workflowSchema v2 flag
+          testClass: com.vinekeepers.workflow.WorkflowDefinitionTest
+          testMethod: workflowSchemaV2
+          preconditions: []
   - id: REQ-LUNA-001
     title: Luna bot ΓÇö Discord mention trigger, multi-turn gather, Cursor Cloud API, lifecycle room Phase 1
     statement: >-
@@ -2319,9 +2481,10 @@ features:
     doc_path: features/domain/workflow/workflow.md
     summary: >-
       WorkflowRunner and ConfigurableWorkflowRunner execute configured or stub workflows with persisted conversational
-      state.
+      state; workflowSchema v2 selects GraphWorkflowRunner for phase graphs.
     requirement_ids:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     asset_ids:
       - ASSET-WORKFLOW
       - ASSET-WORKFLOW-RESULT
@@ -2336,6 +2499,12 @@ features:
       - ASSET-CONFIGURABLE-WORKFLOW-STATE
       - ASSET-CONFIGURABLE-WORKFLOW-RUNNER
       - ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
+      - ASSET-GRAPH-WORKFLOW-RUNNER
+      - ASSET-WORKFLOW-V2-LOADER
+      - ASSET-WORKFLOW-RULES-ENGINE
+      - ASSET-UNRESOLVED-ITEM-LEDGER
+      - ASSET-PROGRESS-DEDUPE-HELPER
+      - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
     status: active
   - id: FEAT-WORKFLOW-STEPS
     slug: workflow-steps
@@ -2345,6 +2514,7 @@ features:
     summary: WorkflowDefinition and step/action primitives define the configurable workflow DSL and branch execution rules.
     requirement_ids:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     asset_ids:
       - ASSET-STEP-RESULT
       - ASSET-STEP-OUTCOME
@@ -2363,6 +2533,8 @@ features:
       - ASSET-WORKFLOW-CONDITION-EVALUATOR
       - ASSET-EXTRACT-EVENT-FIELDS-STEP
       - ASSET-WORKFLOW-CAPABILITY-SUPPORT
+      - ASSET-PLANNING-CYCLE-PIPELINE
+      - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
     status: active
   - id: FEAT-CURSOR-GATHERING
     slug: cursor-gathering

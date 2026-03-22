@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Workflow state machine and config-driven runners (REQ-WORKFLOW-001). `Workflow<S>` remains the legacy state-machine contract, while `WorkflowRunner` is the engine-facing interface that loads session state, runs a configured or stub workflow, and returns `WorkflowRunResult`. `WorkflowRunnerFactory`, `ConfigurableWorkflowRunner`, `ConfigurableWorkflowState`, and session key strategies handle pause/resume lifecycle across conversational sessions. The step DSL is documented separately in the Workflow Steps feature.
+Workflow state machine and config-driven runners (REQ-WORKFLOW-001, REQ-WORKFLOW-002). `Workflow<S>` remains the legacy state-machine contract, while `WorkflowRunner` is the engine-facing interface that loads session state, runs a configured or stub workflow, and returns `WorkflowRunResult`. `WorkflowRunnerFactory`, `ConfigurableWorkflowRunner`, `ConfigurableWorkflowState`, and session key strategies handle pause/resume lifecycle across conversational sessions. Workflows may set `workflowSchema: v2` with a `phases` map to use `GraphWorkflowRunner` (phase graph, optional rules, legacy actions as capabilities). Generic clarification ledger types live under `com.vinekeepers.state.workflow`. The step DSL is documented separately in the Workflow Steps feature.
 
 # Key assets
 
@@ -22,6 +22,12 @@ Workflow state machine and config-driven runners (REQ-WORKFLOW-001). `Workflow<S
 | ASSET-SESSION-KEY-STRATEGIES | Built-in session key strategies for channel, channel_user, and thread conversations | src/main/java/com/vinekeepers/workflow/SessionKeyStrategies.java |
 | ASSET-CONFIGURABLE-WORKFLOW-STATE | Mutable state for configurable workflow including waiting, completed, and error lifecycle data | src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowState.java |
 | ASSET-CONFIGURABLE-WORKFLOW-RUNNER | Run workflow from `WorkflowDefinition` with conversational pause/resume, session keys, and tool-backed actions | src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java |
+| ASSET-GRAPH-WORKFLOW-RUNNER | Phase-graph runner for `workflowSchema: v2` | src/main/java/com/vinekeepers/workflow/v2/GraphWorkflowRunner.java |
+| ASSET-WORKFLOW-V2-LOADER | Loads v2 phase/capability/rules YAML into `WorkflowV2Model` | src/main/java/com/vinekeepers/workflow/v2/WorkflowV2Loader.java |
+| ASSET-WORKFLOW-RULES-ENGINE | Evaluates minimal `when`/`then` rules for v2 transitions | src/main/java/com/vinekeepers/workflow/v2/WorkflowRulesEngine.java |
+| ASSET-UNRESOLVED-ITEM-LEDGER | Serialize/deserialize generic unresolved items in session JSON | src/main/java/com/vinekeepers/state/workflow/UnresolvedItemLedger.java |
+| ASSET-PROGRESS-DEDUPE-HELPER | Normalize + hash text for progress post dedupe | src/main/java/com/vinekeepers/state/workflow/ProgressDedupeHelper.java |
+| ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER | Allowlisted `{{path}}` template rendering for user-facing copy | src/main/java/com/vinekeepers/workflow/template/WorkflowSafeTemplateRenderer.java |
 | ASSET-STUB-WORKFLOW | Stub workflow implementation | src/main/java/com/vinekeepers/workflow/StubWorkflow.java |
 | ASSET-STUB-STATE | Stub workflow state | src/main/java/com/vinekeepers/workflow/StubState.java |
 

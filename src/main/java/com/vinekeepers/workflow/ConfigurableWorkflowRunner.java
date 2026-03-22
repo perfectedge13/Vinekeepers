@@ -170,6 +170,11 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                     String choiceProviderId = (String) stepMap.get("choiceProvider");
                     DynamicChoiceProvider provider = choiceProviderRegistry != null && choiceProviderId != null
                             ? choiceProviderRegistry.get(choiceProviderId) : null;
+                    String controlMode = null;
+                    Object ctrl = stepMap.get("control");
+                    if (ctrl instanceof Map<?, ?> cMap && cMap.get("mode") != null) {
+                        controlMode = cMap.get("mode").toString();
+                    }
                     out.add(new com.vinekeepers.workflow.steps.PromptForFieldStep(
                             (String) stepMap.get("prompt"),
                             (String) stepMap.get("storeIn"),
@@ -178,7 +183,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                             (String) stepMap.get("confirmLabel"),
                             (String) stepMap.get("cancelLabel"),
                             (List<Map<String, Object>>) stepMap.get("fields"),
-                            provider));
+                            provider,
+                            controlMode));
                 }
                 case "capture_field" -> {
                     Boolean trimAndLower = stepMap.get("trimAndLower") instanceof Boolean b ? b

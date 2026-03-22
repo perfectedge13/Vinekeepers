@@ -46,4 +46,15 @@ class WorkflowDefinitionTest {
         assertEquals("m1", def.getLlm().get("model"));
         assertEquals(99L, def.getLlm().get("timeoutMs"));
     }
+
+    @Test
+    void workflowSchemaV2() {
+        WorkflowDefinition def =
+                new WorkflowDefinition(
+                        "g",
+                        List.of(),
+                        Map.of(),
+                        "v2");
+        assertTrue(def.isWorkflowSchemaV2());
+    }
 }
