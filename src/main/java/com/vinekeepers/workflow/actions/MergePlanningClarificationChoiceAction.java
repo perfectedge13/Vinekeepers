@@ -8,9 +8,12 @@ import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
+import com.vinekeepers.workflow.deliberation.DeliberationDirtyPassIndex;
+import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSync;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -135,6 +138,8 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             spread.put("planningClarificationMetaJson", "{}");
             spread.put("planningUserInputRequired", "false");
             spread.put("planningPhase", "REVISING");
+            DeliberationEngine.applyDerivedDeliberationSpread(spread);
+            DeliberationDirtyPassIndex.writeDirtyPassesSpread(spread, state, bind, List.of("clarification_merge"));
             spread.put("planningClarificationRaw", "");
             spread.put("planningClarificationMergeOk", "true");
             spread.put("planningClarificationRepeatCount", "0");

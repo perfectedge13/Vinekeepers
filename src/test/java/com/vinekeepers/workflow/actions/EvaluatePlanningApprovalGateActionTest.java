@@ -22,6 +22,8 @@ class EvaluatePlanningApprovalGateActionTest {
         Map<String, Object> spread = (Map<String, Object>) new EvaluatePlanningApprovalGateAction()
                 .run(new Event("x", "m", Map.of()), state, Map.of());
         assertEquals("true", spread.get("planningReadyForApproval"));
+        assertEquals("true", spread.get("approvalReady"));
+        assertEquals("true", spread.get("planningReviewReady"));
     }
 
     @Test
@@ -36,5 +38,6 @@ class EvaluatePlanningApprovalGateActionTest {
         Map<String, Object> spread = (Map<String, Object>) new EvaluatePlanningApprovalGateAction()
                 .run(new Event("x", "m", Map.of()), state, Map.of());
         assertEquals("false", spread.get("planningReadyForApproval"));
+        assertEquals("false", spread.get("planningReviewReady"));
     }
 }

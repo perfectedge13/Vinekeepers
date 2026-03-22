@@ -11,14 +11,17 @@ public final class WorkflowV2CapabilityModel {
     private final String id;
     private final String kind;
     private final String action;
+    /** Referenced linear workflow id from the bot YAML {@code workflows} map ({@code linear_workflow_ref}). */
+    private final String workflowRef;
     private final boolean storeSpread;
     private final Map<String, Object> bind;
 
     public WorkflowV2CapabilityModel(
-            String id, String kind, String action, boolean storeSpread, Map<String, Object> bind) {
+            String id, String kind, String action, String workflowRef, boolean storeSpread, Map<String, Object> bind) {
         this.id = id != null ? id : "";
         this.kind = kind != null ? kind : "";
         this.action = action != null ? action : "";
+        this.workflowRef = workflowRef != null ? workflowRef : "";
         this.storeSpread = storeSpread;
         this.bind = bind != null && !bind.isEmpty() ? Map.copyOf(bind) : Map.of();
     }
@@ -35,6 +38,10 @@ public final class WorkflowV2CapabilityModel {
         return action;
     }
 
+    public String getWorkflowRef() {
+        return workflowRef;
+    }
+
     public boolean isStoreSpread() {
         return storeSpread;
     }
@@ -46,10 +53,11 @@ public final class WorkflowV2CapabilityModel {
     @SuppressWarnings("unchecked")
     public static WorkflowV2CapabilityModel fromMap(String id, Map<String, Object> m) {
         if (m == null) {
-            return new WorkflowV2CapabilityModel(id, "", "", false, Map.of());
+            return new WorkflowV2CapabilityModel(id, "", "", "", false, Map.of());
         }
         String kind = m.get("kind") != null ? m.get("kind").toString() : "";
         String action = m.get("action") != null ? m.get("action").toString() : "";
+        String workflowRef = m.get("workflowRef") != null ? m.get("workflowRef").toString().trim() : "";
         boolean spread =
                 Boolean.TRUE.equals(m.get("storeSpread"))
                         || "true".equalsIgnoreCase(String.valueOf(m.get("storeSpread")));
@@ -62,6 +70,6 @@ public final class WorkflowV2CapabilityModel {
                 }
             }
         }
-        return new WorkflowV2CapabilityModel(id, kind, action, spread, bind);
+        return new WorkflowV2CapabilityModel(id, kind, action, workflowRef, spread, bind);
     }
 }

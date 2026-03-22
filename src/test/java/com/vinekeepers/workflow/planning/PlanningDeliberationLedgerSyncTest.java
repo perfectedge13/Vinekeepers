@@ -8,55 +8,44 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanningDeliberationLedgerSyncTest {
 
     @Test
-    void upsertThenMergeClosesItem() {
-        var ranked =
+    void upsertSkipsNewOpenWhenMergedItemIsSemanticallySimilar() {
+        String original =
+                "Should we implement runtime model resolution in Bootstrap while keeping YAML as the source of truth?";
+        String paraphrase =
+                "Should we implement runtime model resolution in Bootstrap while keeping yaml as the source of truth";
+        String fp = UnresolvedItemLedger.normalizeFingerprint(original);
+        UnresolvedItem merged =
+                new UnresolvedItem(
+                        "uq_m1",
+                        fp,
+                        UnresolvedItemStatus.MERGED,
+                        "",
+                        original,
+                        "blocking",
+                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL),
+                        List.of(Map.of("raw", "yes", "normalized", "yes")),
+                        List.of(),
+                        0);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(merged);
+
+        PlanningQuestionRankingPolicy.RankedClarification ranked =
                 new PlanningQuestionRankingPolicy.RankedClarification(
                         true,
                         "",
                         "[]",
-                        "{\"questionText\":\"What is the API base URL?\"}",
+                        "{}",
                         1,
                         List.of(),
                         false,
-                        "What is the API base URL?");
-        var up = PlanningDeliberationLedgerSync.upsertOpenQuestion(UnresolvedItemLedger.empty(), ranked);
-        assertTrue(up.activeItemId().isPresent());
-        UnresolvedItemLedger after = up.ledger();
-        assertTrue(after.hasOpenItems());
+                        paraphrase);
 
-        UnresolvedItemLedger merged =
-                PlanningDeliberationLedgerSync.mergeAnswerIntoLedger(
-                        after, up.activeItemId().get(), "What is the API base URL?", "https://api.example", "https://api.example");
-        assertTrue(merged.findByFingerprint(UnresolvedItemLedger.normalizeFingerprint("What is the API base URL?"))
-                .isPresent());
-        UnresolvedItem it =
-                merged.findByFingerprint(UnresolvedItemLedger.normalizeFingerprint("What is the API base URL?"))
-                        .orElseThrow();
-        assertEquals(UnresolvedItemStatus.MERGED, it.getStatus());
-        assertEquals(1, it.getAnswers().size());
-    }
-
-    @Test
-    void supersedeOpenPlanningQuestion() {
-        var r1 =
-                new PlanningQuestionRankingPolicy.RankedClarification(
-                        true, "", "[]", "{\"questionText\":\"Q1?\"}", 0, List.of(), false, "Q1?");
-        var u1 = PlanningDeliberationLedgerSync.upsertOpenQuestion(UnresolvedItemLedger.empty(), r1);
-        String id1 = u1.activeItemId().orElseThrow();
-
-        var r2 =
-                new PlanningQuestionRankingPolicy.RankedClarification(
-                        true, "", "[]", "{\"questionText\":\"Q2?\"}", 0, List.of(), false, "Q2?");
-        var u2 = PlanningDeliberationLedgerSync.upsertOpenQuestion(u1.ledger(), r2);
-        assertTrue(u2.activeItemId().isPresent());
-        UnresolvedItemLedger led = u2.ledger();
-        UnresolvedItem first = led.items().stream().filter(i -> i.getId().equals(id1)).findFirst().orElseThrow();
-        assertEquals(UnresolvedItemStatus.CANCELLED, first.getStatus());
+        PlanningDeliberationLedgerSync.UpsertResult out =
+                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, ranked);
+        assertTrue(out.activeItemId().isEmpty());
     }
 }

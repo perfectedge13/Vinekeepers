@@ -9,7 +9,7 @@
 1. Config defines each bot with optional `workflow.type`, `workflow.params`, and runtime options such as `sessionKeyStrategy`.
 2. `Bootstrap` builds a `WorkflowActionRegistry`, registers legacy workflow actions, wires `ToolRunner`, builds a `WorkflowRunner` per bot via `WorkflowRunnerFactory`, and registers it with the engine.
 3. On event, the engine gets the runner for a bot id and calls `runResult(event, stateStore, botId)`.
-4. `ConfigurableWorkflowRunner` (v1) resolves a session key, loads `ConfigurableWorkflowState`, executes steps in order, and returns `continue`, `waiting`, `completed`, or `error` state via `WorkflowRunResult`. `GraphWorkflowRunner` (v2) tracks `workflowV2Phase` and `workflowV2PipelineIndex` in the same state bag, runs ordered `call_action` steps per phase pipeline, applies optional rules for transitions, and completes when the phase id is `__v2_done`.
+4. `ConfigurableWorkflowRunner` (v1) resolves a session key, loads `ConfigurableWorkflowState`, executes steps in order, and returns `continue`, `waiting`, `completed`, or `error` state via `WorkflowRunResult`. `GraphWorkflowRunner` (v2) tracks `__v2_phaseId` and `__v2_pipelineIndex` in the same state bag, runs `legacy_action` (via `CallActionStep`) or `linear_workflow_ref` (nested `ConfigurableWorkflowRunner`) per phase pipeline, applies optional rules for transitions, and completes when the phase id is `__v2_done`.
 5. `PromptForFieldStep` pauses the workflow and advances the stored step index to the matching `capture_field` step so the next event resumes instead of re-prompting.
 6. `CallActionStep` executes registered tools through `ToolRunner` when possible and only falls back to `WorkflowActionRegistry` when no tool exists for the action id.
 

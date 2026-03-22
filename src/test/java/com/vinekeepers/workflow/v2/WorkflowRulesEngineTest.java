@@ -84,4 +84,45 @@ class WorkflowRulesEngineTest {
                                 List.of(Map.of("transition", "escalate"))));
         assertEquals("escalate", WorkflowRulesEngine.firstMatchingTransition(state, rules).orElseThrow());
     }
+
+    @Test
+    void reviewReadyPredicateUsesDualKeys() {
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("reviewReady", "true");
+        List<Map<String, Object>> rules =
+                List.of(
+                        Map.of(
+                                "when",
+                                Map.of("reviewReady", true),
+                                "then",
+                                List.of(Map.of("transition", "post_review"))));
+        assertEquals("post_review", WorkflowRulesEngine.firstMatchingTransition(state, rules).orElseThrow());
+    }
+
+    @Test
+    void ledgerHasBlockingOpenMatchesSeverity() {
+        Map<String, Object> state = new LinkedHashMap<>();
+        UnresolvedItemLedger ledger =
+                UnresolvedItemLedger.empty()
+                        .withAdded(
+                                new UnresolvedItem(
+                                        "i",
+                                        "f",
+                                        UnresolvedItemStatus.OPEN,
+                                        "",
+                                        "q",
+                                        "blocking",
+                                        Map.of(),
+                                        List.of(),
+                                        List.of()));
+        ledger.putInto(state);
+        List<Map<String, Object>> rules =
+                List.of(
+                        Map.of(
+                                "when",
+                                Map.of("ledgerHasBlockingOpen", true),
+                                "then",
+                                List.of(Map.of("transition", "clarify"))));
+        assertEquals("clarify", WorkflowRulesEngine.firstMatchingTransition(state, rules).orElseThrow());
+    }
 }

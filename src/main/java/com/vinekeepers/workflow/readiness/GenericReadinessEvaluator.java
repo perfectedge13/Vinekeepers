@@ -80,7 +80,52 @@ public final class GenericReadinessEvaluator {
             }
         }
 
+        PlanningPacketDepthEvaluator.DepthResult forbidden = checkPacketQualityForbiddenSubstrings(profile, plan);
+        if (!forbidden.ok()) {
+            return forbidden;
+        }
+
         return new PlanningPacketDepthEvaluator.DepthResult(true, "Declarative readiness OK.");
+    }
+
+    private static PlanningPacketDepthEvaluator.DepthResult checkPacketQualityForbiddenSubstrings(
+            WorkProfileDefinition profile, FeaturePlanState plan) {
+        if (profile == null || plan == null) {
+            return new PlanningPacketDepthEvaluator.DepthResult(true, "skip");
+        }
+        var forbidden = profile.getPacketQualityForbiddenSubstrings();
+        if (forbidden == null || forbidden.isEmpty()) {
+            return new PlanningPacketDepthEvaluator.DepthResult(true, "skip");
+        }
+        for (ArtifactDefinition art : profile.getArtifactsById().values()) {
+            for (SectionDefinition sec : art.getSections()) {
+                for (FieldDefinition field : sec.getFields()) {
+                    String text =
+                            PlanningArtifactTexts.artifactField(
+                                    plan, art.getArtifactId(), sec.getSectionId(), field.getFieldId());
+                    if (text == null || text.isBlank()) {
+                        continue;
+                    }
+                    String low = text.toLowerCase(Locale.ROOT);
+                    for (String pat : forbidden) {
+                        if (pat != null
+                                && !pat.isBlank()
+                                && low.contains(pat.toLowerCase(Locale.ROOT).trim())) {
+                            return new PlanningPacketDepthEvaluator.DepthResult(
+                                    false,
+                                    "Field "
+                                            + art.getArtifactId()
+                                            + "."
+                                            + sec.getSectionId()
+                                            + "."
+                                            + field.getFieldId()
+                                            + " contains disallowed placeholder text.");
+                        }
+                    }
+                }
+            }
+        }
+        return new PlanningPacketDepthEvaluator.DepthResult(true, "Packet substring rules OK.");
     }
 
     private static PlanningPacketDepthEvaluator.DepthResult checkPathRule(

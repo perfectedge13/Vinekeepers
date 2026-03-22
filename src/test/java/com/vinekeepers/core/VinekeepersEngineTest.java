@@ -367,8 +367,8 @@ class VinekeepersEngineTest {
                 new ModelProfile("stub", "stub"),
                 ToolPolicy.allowAll(),
                 new MemoryPolicy(4096),
-                "arrietty_room",
-                java.util.Map.of());
+                "configured",
+                java.util.Map.of("workflowRef", "arrietty_room_v2"));
         engine.registerBot(bot);
         AtomicReference<OutboundResponse> followUpPayload = new AtomicReference<>();
         AppReplySink mockSink = new AppReplySink() {

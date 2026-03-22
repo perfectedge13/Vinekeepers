@@ -396,11 +396,27 @@ public final class VinekeepersEngine implements EventSubscriber {
     private OutboundResponse deferredInteractionAck(String handlingBotId) {
         if (handlingBotId != null && !handlingBotId.isBlank()) {
             BotDefinition b = bots.get(handlingBotId);
-            if (b != null && "arrietty_room".equals(b.getWorkflowType())) {
+            if (b != null && usesArriettyPlanningCoordinatorWorkflow(b)) {
                 return OutboundResponse.ofText("Working on your update…");
             }
         }
         return DEFERRED_INTERACTION_ACK;
+    }
+
+    /** True when the bot runs the Arrietty coordinator planning workflow (linear legacy, v2 delegate, or legacy type string). */
+    private static boolean usesArriettyPlanningCoordinatorWorkflow(BotDefinition b) {
+        if ("arrietty_room".equalsIgnoreCase(b.getWorkflowType())) {
+            return true;
+        }
+        if (!"configured".equalsIgnoreCase(b.getWorkflowType()) || b.getWorkflowParams() == null) {
+            return false;
+        }
+        Object ref = b.getWorkflowParams().get("workflowRef");
+        if (ref == null) {
+            return false;
+        }
+        String r = ref.toString().trim();
+        return r.startsWith("arrietty_room");
     }
 
     private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target, String handlingBotId) {

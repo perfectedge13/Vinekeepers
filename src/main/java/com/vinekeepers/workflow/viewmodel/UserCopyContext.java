@@ -20,7 +20,13 @@ public final class UserCopyContext {
             "userCopyBlockerSummary",
             "userCopyClarificationLedgerId",
             "userCopyProgressDelta",
-            "userCopyProgressEventLatest");
+            "userCopyProgressEventLatest",
+            "userCopyProgressLine",
+            "reviewReady",
+            "reviewReadyReason",
+            "approvalReady",
+            "approvalReadyReason",
+            "deliberationPhase");
 
     private UserCopyContext() {}
 

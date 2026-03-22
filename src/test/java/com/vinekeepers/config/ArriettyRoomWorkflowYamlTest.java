@@ -13,9 +13,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Guards {@code arrietty_room} branch {@code next} indices against the compiled step list (repo YAML).
+ * Guards {@code arrietty_room_legacy} branch {@code next} indices against the compiled step list (repo YAML).
  */
 class ArriettyRoomWorkflowYamlTest {
+
+    private static final String ARRIETTY_LINEAR_ID = "arrietty_room_legacy";
 
     @Test
     void arriettyRoom_branchNextIndicesAreInRange() throws Exception {
@@ -25,12 +27,14 @@ class ArriettyRoomWorkflowYamlTest {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(yamlPath));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
-        assertTrue(workflows != null && workflows.containsKey("arrietty_room"), "arrietty_room workflow missing");
+        assertTrue(
+                workflows != null && workflows.containsKey(ARRIETTY_LINEAR_ID),
+                "arrietty_room_legacy workflow missing");
         @SuppressWarnings("unchecked")
-        Map<String, Object> room = (Map<String, Object>) workflows.get("arrietty_room");
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_LINEAR_ID);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) room.get("steps");
-        assertTrue(steps != null && !steps.isEmpty(), "arrietty_room has no steps");
+        assertTrue(steps != null && !steps.isEmpty(), "arrietty_room_legacy has no steps");
         int n = steps.size();
         for (int i = 0; i < steps.size(); i++) {
             Map<String, Object> step = steps.get(i);
@@ -63,10 +67,10 @@ class ArriettyRoomWorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
         @SuppressWarnings("unchecked")
-        Map<String, Object> room = (Map<String, Object>) workflows.get("arrietty_room");
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_LINEAR_ID);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) room.get("steps");
-        assertTrue(steps != null && !steps.isEmpty(), "arrietty_room has no steps");
+        assertTrue(steps != null && !steps.isEmpty(), "arrietty_room_legacy has no steps");
         for (int i = 0; i < steps.size(); i++) {
             Map<String, Object> step = steps.get(i);
             if (!"call_action".equals(String.valueOf(step.get("type")))) {

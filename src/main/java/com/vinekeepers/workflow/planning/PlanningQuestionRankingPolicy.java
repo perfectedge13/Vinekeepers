@@ -49,15 +49,12 @@ public final class PlanningQuestionRankingPolicy {
             FeaturePlanState plan,
             List<String> candidates,
             int maxQuestions) {
-        return rank(plan, candidates, maxQuestions, UnresolvedItemLedger.empty(), false);
+        return rank(plan, candidates, maxQuestions, UnresolvedItemLedger.empty(), false, false);
     }
 
     /**
-     * @param candidates   raw questions from LLM passes (deduped)
-     * @param maxQuestions budget for how many distinct topics we consider (selection still surfaces one round)
-     * @param ledger       items with merge-closed fingerprints are skipped so resolved questions are not re-asked
-     * @param allowBoundedChoiceUi when false, never emit button/dropdown clarification even if the text looks like A
-     *     or B
+     * Same as {@link #rank(FeaturePlanState, List, int, UnresolvedItemLedger, boolean, boolean)} with
+     * {@code applyOrTextHeuristic == allowBoundedChoiceUi} (legacy tests / callers).
      */
     public static RankedClarification rank(
             FeaturePlanState plan,
@@ -65,6 +62,24 @@ public final class PlanningQuestionRankingPolicy {
             int maxQuestions,
             UnresolvedItemLedger ledger,
             boolean allowBoundedChoiceUi) {
+        return rank(plan, candidates, maxQuestions, ledger, allowBoundedChoiceUi, allowBoundedChoiceUi);
+    }
+
+    /**
+     * @param candidates   raw questions from LLM passes (deduped)
+     * @param maxQuestions budget for how many distinct topics we consider (selection still surfaces one round)
+     * @param ledger       items with merge-closed fingerprints are skipped so resolved questions are not re-asked
+     * @param allowBoundedChoiceUi when false, never emit button/dropdown clarification from the OR heuristic path
+     * @param applyOrTextHeuristic when false, never infer A/B buttons from {@code or} in free text (even if bounded UI is
+     *     enabled for other paths)
+     */
+    public static RankedClarification rank(
+            FeaturePlanState plan,
+            List<String> candidates,
+            int maxQuestions,
+            UnresolvedItemLedger ledger,
+            boolean allowBoundedChoiceUi,
+            boolean applyOrTextHeuristic) {
         UnresolvedItemLedger led = ledger != null ? ledger : UnresolvedItemLedger.empty();
         List<String> assumptions = new ArrayList<>();
         List<String> pending = new ArrayList<>();
@@ -101,7 +116,8 @@ public final class PlanningQuestionRankingPolicy {
             return new RankedClarification(false, "", "[]", "{}", 0, assumptions, false, "");
         }
         String top = pending.get(0);
-        ClarificationOptions bounded = allowBoundedChoiceUi ? inferBoundedOrOptions(top) : null;
+        ClarificationOptions bounded =
+                allowBoundedChoiceUi && applyOrTextHeuristic ? inferBoundedOrOptions(top) : null;
         try {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("questionText", top);
@@ -167,6 +183,11 @@ public final class PlanningQuestionRankingPolicy {
             }
         }
         return out;
+    }
+
+    /** Similarity in [0,1] for paraphrase / duplicate detection (ledger gap evaluation). */
+    public static double clarificationSimilarity(String a, String b) {
+        return similarity(a, b);
     }
 
     private static double similarity(String a, String b) {

@@ -20,6 +20,14 @@ public final class WorkProfileDefinition {
      * Default false: plain-text clarification only unless the profile opts in.
      */
     private final boolean boundedClarificationChoices;
+    /**
+     * When true (and {@link #boundedClarificationChoices} is true), free-text questions containing {@code or} may be
+     * split into bounded button choices via heuristic. Default false: structured choices only when explicitly marked
+     * bounded in the ledger / gap flow.
+     */
+    private final boolean inferBoundedChoiceFromOrInText;
+    /** Substrings that must not appear in user-visible packet fields (declarative quality gate). */
+    private final List<String> packetQualityForbiddenSubstrings;
 
     public WorkProfileDefinition(String profileId, String title, List<ArtifactDefinition> artifacts) {
         this(profileId, title, artifacts, List.of(), false);
@@ -36,6 +44,34 @@ public final class WorkProfileDefinition {
             List<ArtifactDefinition> artifacts,
             List<ReadinessAnyOfGroup> readinessAnyOfGroups,
             boolean boundedClarificationChoices) {
+        this(profileId, title, artifacts, readinessAnyOfGroups, boundedClarificationChoices, List.of());
+    }
+
+    public WorkProfileDefinition(
+            String profileId,
+            String title,
+            List<ArtifactDefinition> artifacts,
+            List<ReadinessAnyOfGroup> readinessAnyOfGroups,
+            boolean boundedClarificationChoices,
+            List<String> packetQualityForbiddenSubstrings) {
+        this(
+                profileId,
+                title,
+                artifacts,
+                readinessAnyOfGroups,
+                boundedClarificationChoices,
+                false,
+                packetQualityForbiddenSubstrings);
+    }
+
+    public WorkProfileDefinition(
+            String profileId,
+            String title,
+            List<ArtifactDefinition> artifacts,
+            List<ReadinessAnyOfGroup> readinessAnyOfGroups,
+            boolean boundedClarificationChoices,
+            boolean inferBoundedChoiceFromOrInText,
+            List<String> packetQualityForbiddenSubstrings) {
         this.profileId = Objects.requireNonNull(profileId, "profileId").trim();
         this.title = title != null ? title : "";
         Map<String, ArtifactDefinition> m = new LinkedHashMap<>();
@@ -47,6 +83,9 @@ public final class WorkProfileDefinition {
         this.artifactsById = Map.copyOf(m);
         this.readinessAnyOfGroups = readinessAnyOfGroups != null ? List.copyOf(readinessAnyOfGroups) : List.of();
         this.boundedClarificationChoices = boundedClarificationChoices;
+        this.inferBoundedChoiceFromOrInText = inferBoundedChoiceFromOrInText;
+        this.packetQualityForbiddenSubstrings =
+                packetQualityForbiddenSubstrings != null ? List.copyOf(packetQualityForbiddenSubstrings) : List.of();
     }
 
     public String getProfileId() {
@@ -83,6 +122,14 @@ public final class WorkProfileDefinition {
 
     public boolean isBoundedClarificationChoicesEnabled() {
         return boundedClarificationChoices;
+    }
+
+    public boolean isInferBoundedChoiceFromOrInTextEnabled() {
+        return inferBoundedChoiceFromOrInText;
+    }
+
+    public List<String> getPacketQualityForbiddenSubstrings() {
+        return packetQualityForbiddenSubstrings;
     }
 
     public boolean hasDeclarativeReadiness() {

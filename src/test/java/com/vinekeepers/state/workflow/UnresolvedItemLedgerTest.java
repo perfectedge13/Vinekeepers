@@ -61,6 +61,34 @@ class UnresolvedItemLedgerTest {
     }
 
     @Test
+    void hasOpenBlockingSeverityOnlyWhenOpenAndBlocking() {
+        UnresolvedItem blocking =
+                new UnresolvedItem(
+                        "b",
+                        "f",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "q",
+                        "blocking",
+                        Map.of(),
+                        List.<Map<String, String>>of(),
+                        List.of());
+        assertTrue(new UnresolvedItemLedger(List.of(blocking)).hasOpenBlockingSeverity());
+        UnresolvedItem normal =
+                new UnresolvedItem(
+                        "n",
+                        "f2",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "q2",
+                        "normal",
+                        Map.of(),
+                        List.<Map<String, String>>of(),
+                        List.of());
+        assertFalse(new UnresolvedItemLedger(List.of(normal)).hasOpenBlockingSeverity());
+    }
+
+    @Test
     void allResolvedNoOpen() {
         UnresolvedItem closed =
                 new UnresolvedItem(

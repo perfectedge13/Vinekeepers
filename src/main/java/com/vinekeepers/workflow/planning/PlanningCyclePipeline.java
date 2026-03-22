@@ -20,8 +20,8 @@ import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
 import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
+import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
-import com.vinekeepers.workflow.planning.PlanningRolePassRunner.PlanningRole;
 import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
@@ -128,25 +128,31 @@ public final class PlanningCyclePipeline {
 
         plan = planStateStore.getByContextId(contextId).orElse(planPtr);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
-        RankedClarification ranked =
+        RankedClarification rankedLlm =
                 PlanningQuestionRankingPolicy.rank(
                         plan,
                         aggregatedFollowUps,
                         3,
                         ledger,
-                        profile.isBoundedClarificationChoicesEnabled());
-        for (String assumption : ranked.assumptionsToRecord()) {
+                        profile.isBoundedClarificationChoicesEnabled(),
+                        profile.isInferBoundedChoiceFromOrInTextEnabled());
+        for (String assumption : rankedLlm.assumptionsToRecord()) {
             plan = appendAssumption(plan, assumption);
         }
         planStateStore.update(plan);
 
-        PlanningDeliberationLedgerSync.UpsertResult upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, ranked);
+        PlanningDeliberationLedgerSync.UpsertResult upsert =
+                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsert.ledger());
         spread.put("planningClarificationLedgerItemId", upsert.activeItemId().orElse(""));
 
-        spread.put("planningQuestionsAskedThisRound", ranked.userInputRequired() ? "1" : "0");
+        RankedClarification ranked =
+                PlanningGapEvaluator.effectiveRanked(plan, upsert.ledger(), rankedLlm, profile);
+        boolean userInputRequired = PlanningGapEvaluator.requiresUserInputForPlanningClarification(upsert.ledger());
+
+        spread.put("planningQuestionsAskedThisRound", rankedLlm.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
-        spread.put("planningUserInputRequired", ranked.userInputRequired() ? "true" : "false");
+        spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
         spread.put("planningClarificationChoicesJson", ranked.choicesJson());
         spread.put("planningClarificationMetaJson", ranked.metaJson());
         spread.put("planningClarificationUseStructuredChoices", ranked.useStructuredChoices() ? "true" : "false");
@@ -154,7 +160,7 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningClarificationOrchestratorPrompt",
                 ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
-        boolean readyToPost = depthOk && !ranked.userInputRequired();
+        boolean readyToPost = depthOk && !userInputRequired;
         applyClarificationStuck(state, spread, ranked);
 
         boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
@@ -172,17 +178,19 @@ public final class PlanningCyclePipeline {
                         stuckHint != null ? stuckHint : ""));
         spread.put(
                 "planningRevisionNeeded",
-                (!depthOk || ranked.userInputRequired()) ? "true" : "false");
+                (!depthOk || userInputRequired) ? "true" : "false");
 
         spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
         spread.put(
                 "planningPhase",
-                ranked.userInputRequired()
+                userInputRequired
                         ? "WAITING_FOR_CLARIFICATION"
-                        : (readyToPost ? "READY_FOR_APPROVAL" : "REVISING"));
-        spread.put("planningAssumptionsUsed", String.valueOf(ranked.assumptionsToRecord().size()));
+                        : (readyToPost ? "READY_FOR_REVIEW" : "REVISING"));
+        PlanningReadinessSpread.applyCycleReadiness(spread, readyToPost, userInputRequired);
+        DeliberationEngine.applyDerivedDeliberationSpread(spread);
+        spread.put("planningAssumptionsUsed", String.valueOf(rankedLlm.assumptionsToRecord().size()));
 
-        if (!readyToPost && !ranked.userInputRequired() && cycleIteration >= 4) {
+        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
             spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
         String rolePassErr =
@@ -311,26 +319,32 @@ public final class PlanningCyclePipeline {
 
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
         UnresolvedItemLedger ledgerFin = UnresolvedItemLedger.readFrom(state);
-        RankedClarification ranked =
+        WorkProfileDefinition profileFin = ctx.profile();
+        RankedClarification rankedLlmFin =
                 PlanningQuestionRankingPolicy.rank(
                         plan,
                         aggregatedFollowUps,
                         3,
                         ledgerFin,
-                        ctx.profile().isBoundedClarificationChoicesEnabled());
-        for (String assumption : ranked.assumptionsToRecord()) {
+                        profileFin.isBoundedClarificationChoicesEnabled(),
+                        profileFin.isInferBoundedChoiceFromOrInTextEnabled());
+        for (String assumption : rankedLlmFin.assumptionsToRecord()) {
             plan = appendAssumption(plan, assumption);
         }
         planStateStore.update(plan);
 
         PlanningDeliberationLedgerSync.UpsertResult upsertFin =
-                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledgerFin, ranked);
+                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledgerFin, rankedLlmFin);
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsertFin.ledger());
         spread.put("planningClarificationLedgerItemId", upsertFin.activeItemId().orElse(""));
 
-        spread.put("planningQuestionsAskedThisRound", ranked.userInputRequired() ? "1" : "0");
+        RankedClarification ranked =
+                PlanningGapEvaluator.effectiveRanked(plan, upsertFin.ledger(), rankedLlmFin, profileFin);
+        boolean userInputRequired = PlanningGapEvaluator.requiresUserInputForPlanningClarification(upsertFin.ledger());
+
+        spread.put("planningQuestionsAskedThisRound", rankedLlmFin.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
-        spread.put("planningUserInputRequired", ranked.userInputRequired() ? "true" : "false");
+        spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
         spread.put("planningClarificationChoicesJson", ranked.choicesJson());
         spread.put("planningClarificationMetaJson", ranked.metaJson());
         spread.put("planningClarificationUseStructuredChoices", ranked.useStructuredChoices() ? "true" : "false");
@@ -338,7 +352,7 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningClarificationOrchestratorPrompt",
                 ranked.orchestratorPrompt() != null ? ranked.orchestratorPrompt() : "");
-        boolean readyToPost = depthOk && !ranked.userInputRequired();
+        boolean readyToPost = depthOk && !userInputRequired;
         applyClarificationStuck(state, spread, ranked);
 
         boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
@@ -356,17 +370,19 @@ public final class PlanningCyclePipeline {
                         stuckHint != null ? stuckHint : ""));
         spread.put(
                 "planningRevisionNeeded",
-                (!depthOk || ranked.userInputRequired()) ? "true" : "false");
+                (!depthOk || userInputRequired) ? "true" : "false");
 
         spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
         spread.put(
                 "planningPhase",
-                ranked.userInputRequired()
+                userInputRequired
                         ? "WAITING_FOR_CLARIFICATION"
-                        : (readyToPost ? "READY_FOR_APPROVAL" : "REVISING"));
-        spread.put("planningAssumptionsUsed", String.valueOf(ranked.assumptionsToRecord().size()));
+                        : (readyToPost ? "READY_FOR_REVIEW" : "REVISING"));
+        PlanningReadinessSpread.applyCycleReadiness(spread, readyToPost, userInputRequired);
+        DeliberationEngine.applyDerivedDeliberationSpread(spread);
+        spread.put("planningAssumptionsUsed", String.valueOf(rankedLlmFin.assumptionsToRecord().size()));
 
-        if (!readyToPost && !ranked.userInputRequired() && cycleIteration >= 4) {
+        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
             spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
         String rolePassErr =
@@ -468,12 +484,13 @@ public final class PlanningCyclePipeline {
         spread.put("planningPhase", "DRAFTING");
         FeaturePlanState planPtr = planStateStore.getByContextId(contextId).orElse(plan);
         List<String> roleTags = new ArrayList<>();
-        runRole(PlanningRole.ARCHITECT, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
-        planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
-        runRole(PlanningRole.AUDITOR, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
-        planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
-        runRole(PlanningRole.SCRIBE, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
-        String lastRoleRoundSummary = summarizeRoleRound(roleTags);
+        List<PlanningCoordinatorRole> passOrder = ConfigurablePassRunner.resolveOrder(work, bind);
+        spread.put("planningRolePassOrderResolved", passOrder.toString());
+        for (PlanningCoordinatorRole passRole : passOrder) {
+            runRole(passRole, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
+            planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
+        }
+        String lastRoleRoundSummary = summarizeRoleRound(passOrder, roleTags);
 
         new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
 
@@ -570,9 +587,15 @@ public final class PlanningCyclePipeline {
                         getString(spread, "planningSelectiveRerunNote"),
                         truncateOneLine(getString(spread, "planningCycleProgressSummary"), 300));
         if (line != null && !line.isBlank()) {
-            log = log.withAppendedIfChanged(line);
+            Map<String, String> refs = new LinkedHashMap<>();
+            String dphase = getString(spread, "deliberationPhase");
+            if (dphase != null && !dphase.isBlank()) {
+                refs.put("phase", dphase);
+            }
+            log = log.withAppendedTyped("pass_status", line, "info", refs);
         }
         ProgressEventLog.mergeIntoSpread(spread, log);
+        spread.put("userCopyProgressLine", log.latestMessage());
     }
 
     private static void finishProgressFingerprint(Map<String, Object> state, Map<String, Object> spread) {
@@ -681,7 +704,7 @@ public final class PlanningCyclePipeline {
     }
 
     private void runRole(
-            PlanningRole role,
+            PlanningCoordinatorRole role,
             FeaturePlanState plan,
             WorkProfileDefinition profile,
             Event event,
@@ -712,18 +735,17 @@ public final class PlanningCyclePipeline {
         }
     }
 
-    private static String summarizeRoleRound(List<String> tags) {
-        String[] labels = {"Architect", "Auditor", "Scribe"};
+    private static String summarizeRoleRound(List<PlanningCoordinatorRole> order, List<String> tags) {
         if (tags == null || tags.isEmpty()) {
             return "Role passes not run.";
         }
-        if (tags.size() == 3 && tags.stream().allMatch("SKIP_NO_KEY"::equals)) {
-            return "Architect, Auditor, and Scribe passes skipped (OpenAI API key not configured).";
+        if (tags.size() >= 3 && tags.stream().allMatch("SKIP_NO_KEY"::equals)) {
+            return "Coordinator passes skipped (OpenAI API key not configured).";
         }
         List<String> parts = new ArrayList<>();
         for (int i = 0; i < tags.size(); i++) {
             String t = tags.get(i);
-            String who = i < labels.length ? labels[i] : "Role";
+            String who = i < order.size() ? roleUserLabel(order.get(i)) : "Role";
             if ("SKIP_NO_KEY".equals(t)) {
                 parts.add(who + " skipped (no API key)");
             } else if (t != null && t.startsWith("SKIP_OTHER:")) {
@@ -739,7 +761,7 @@ public final class PlanningCyclePipeline {
         return String.join("; ", parts);
     }
 
-    private static String roleUserLabel(PlanningRole role) {
+    private static String roleUserLabel(PlanningCoordinatorRole role) {
         return switch (role) {
             case ARCHITECT -> "Architect";
             case AUDITOR -> "Auditor";
@@ -772,7 +794,7 @@ public final class PlanningCyclePipeline {
         if (selectiveRerunNote != null && !selectiveRerunNote.isBlank()) {
             sb.append(selectiveRerunNote.trim()).append(' ');
         }
-        sb.append("**Round ").append(cycleIteration).append(":** ");
+        sb.append("Status (cycle ").append(cycleIteration).append("): ");
         sb.append(roleRoundSummary != null ? roleRoundSummary : "").append(' ');
         if (synthesisNote != null && !synthesisNote.isBlank()) {
             sb.append("Synthesis: ").append(truncateOneLine(synthesisNote, 120)).append(' ');
@@ -828,7 +850,7 @@ public final class PlanningCyclePipeline {
         if (clarificationStuck && stuckHint != null && !stuckHint.isBlank()) {
             sb.append("**Heads up:** ").append(stuckHint).append("\n\n");
         }
-        sb.append("**Planning round ").append(cycleIteration).append("**\n\n");
+        sb.append("**Planning update (cycle ").append(cycleIteration).append(")**\n\n");
         sb.append("**Here's my current understanding:** ");
         if (gist.isBlank()) {
             sb.append("Your feature request from this thread (no separate summary text on file).");
@@ -955,6 +977,19 @@ public final class PlanningCyclePipeline {
         m.put("planningCycleUserVisibleFailure", "");
         m.put("planningLlmError", "");
         m.put("planningLlmSkipReason", "");
+        m.put("planningReviewReady", "false");
+        m.put("reviewReady", "false");
+        m.put("planningApprovalReady", "false");
+        m.put("approvalReady", "false");
+        m.put("planningReviewReadyReason", "");
+        m.put("reviewReadyReason", "");
+        m.put("planningApprovalReadyReason", "");
+        m.put("approvalReadyReason", "");
+        m.put("deliberationPhase", "");
+        m.put("planningRolePassOrderResolved", "");
+        m.put("planningDirtyPassesJson", "[]");
+        m.put("planningDirtyPassCount", "0");
+        m.put("userCopyProgressLine", "");
         return m;
     }
 

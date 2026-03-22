@@ -116,7 +116,7 @@ assets:
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
       fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine;
       when ReplyTarget is deferred InteractionTarget and outbound is null, send minimal text follow-up so Discord interaction completes
-      (bots with workflowType arrietty_room use a planning-specific line instead of the generic Recorded ack)
+      (bots whose configured workflowRef starts with arrietty_room use a planning-specific line instead of the generic Recorded ack)
     requires:
       - REQ-CORE-003
       - REQ-REASONER-001
@@ -131,7 +131,7 @@ assets:
     role: >-
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
-      workflowRef arrietty_room, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
+      workflowRef arrietty_room_v2 (delegating to arrietty_room_legacy linear graph), handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
       blank/empty; operator bot (e.g. id gadget) with workflowRef devops_deploy, routing discordMention and discordChannels allowlist
       ops channel id in discordChannels (see comment block top of config/bots.yaml); Luna routing optional discordChannelsExclude
       for that ops channel id
@@ -247,8 +247,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/GraphWorkflowRunner.java
     role: >-
-      Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action capabilities); applies workflow
-      template policy to state each run; when YAML includes deliberation map, writes workflowDeliberationMetaJson plus
+      Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action and linear_workflow_ref
+      capabilities); linear_workflow_ref runs a sibling linear workflow via ConfigurableWorkflowRunner on the same session store;
+      applies workflow template policy to state each run; when YAML includes deliberation map, writes workflowDeliberationMetaJson plus
       deliberationProfileHint and deliberationLabel when present
     requires:
       - REQ-WORKFLOW-002
@@ -267,7 +268,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/v2/WorkflowRulesEngine.java
     role: >-
       Ordered rule evaluation with ANDed when predicates and transition effects for v2 convergence; predicates include
-      ledgerMaxOpenRepeatGte (max repeatCount among OPEN UnresolvedItem entries)
+      truthy, equals, hasOpenUnresolved, allUnresolvedClosed, sameFingerprintRepeated, ledgerMaxOpenRepeatGte,
+      reviewReady / approvalReady (dual planningReviewReady / planningApprovalReady), ledgerHasBlockingOpen
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -275,7 +277,9 @@ assets:
   - id: ASSET-UNRESOLVED-ITEM-LEDGER
     kind: source
     path: src/main/java/com/vinekeepers/state/workflow/UnresolvedItemLedger.java
-    role: Generic unresolved-item ledger JSON in workflow state (workflowUnresolvedItemsJson) for clarification lifecycle
+    role: >-
+      Generic unresolved-item ledger JSON in workflow state (workflowUnresolvedItemsJson) for clarification lifecycle;
+      hasOpenItems, hasOpenBlockingSeverity (OPEN + severity blocking), fingerprint merge closure helpers
     requires:
       - REQ-WORKFLOW-002
       - REQ-STATE-001
@@ -293,8 +297,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/state/workflow/ProgressEventLog.java
     role: >-
-      Append-only workflowProgressEventsJson with coarse dedupe; PlanningCyclePipeline merges deltas into spread and exposes
-      userCopyProgressEventLatest for safe templates
+      Append-only workflowProgressEventsJson with coarse dedupe; events carry kind, message/body, severity, optional refs;
+      withAppendedTyped for deliberation progress; PlanningCyclePipeline merges deltas and exposes userCopyProgressEventLatest
+      and userCopyProgressLine for safe templates
     requires:
       - REQ-WORKFLOW-002
       - REQ-STATE-001
@@ -345,11 +350,67 @@ assets:
       Composable planning-room cycle logic invoked by execute_planning_room_cycle; exposes partial phases
       runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
       planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls; ranks clarifications with ledger fingerprint
-      filtering; optional selective rerun after merge (skips expansion, one inner round); enriches userCopy* keys and ProgressEventLog
+      filtering; optional selective rerun after merge (skips expansion, one inner round); ConfigurablePassRunner resolves
+      architect/auditor/scribe order from planningRolePassOrder bind; sets planningPhase READY_FOR_REVIEW when draft is
+      review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
+      derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; uses PlanningGapEvaluator for
+      ledger-backed planningUserInputRequired and effective RankedClarification when OPEN ledger items persist across cycles
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-GAP-EVALUATOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningGapEvaluator.java
+    role: >-
+      Ledger-first gap evaluation: requiresUserInputForPlanningClarification reads OPEN planning_clarification items;
+      effectiveRanked rehydrates UI fields from the ledger when the LLM ranker returns no question for the cycle
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-COORDINATOR-ROLE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningCoordinatorRole.java
+    role: Architect / Auditor / Scribe coordinator pass enum with LLM prompt blocks for StructuredLlmArtifactUpsertPass
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CONFIGURABLE-PASS-RUNNER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/ConfigurablePassRunner.java
+    role: >-
+      Parses planningRolePassOrder from bind/state (JSON array or comma list) into ordered PlanningCoordinatorRole list;
+      defaults to architect, auditor, scribe
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-READINESS-SPREAD
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningReadinessSpread.java
+    role: Dual-writes reviewReady / planningReviewReady and approval placeholders during planning cycle spreads
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-DELIBERATION-ENGINE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/deliberation/DeliberationEngine.java
+    role: Maps planningPhase to generic deliberationPhase for v2 rules and coordinator copy
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-DELIBERATION-DIRTY-PASS-INDEX
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/deliberation/DeliberationDirtyPassIndex.java
+    role: Conservative dirty-pass closure JSON after merge (planningDirtyPassesJson) until per-path invalidation is configured
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
   - id: ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/StructuredLlmArtifactUpsertPass.java
@@ -1235,7 +1296,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/readiness/GenericReadinessEvaluator.java
     role: >-
       Declarative readiness over work profile paths: anyOf groups, per-field minWords, readinessChecks (placeholder,
-      hollow_exploration), optional maxEchoOverlapWithRequest with echoWordSlack
+      hollow_exploration), optional maxEchoOverlapWithRequest with echoWordSlack; packetQuality.forbiddenSubstrings scan across
+      profile field bodies before declaring readiness OK
     requires:
       - REQ-WORKFLOW-002
       - REQ-CONFIG-001
@@ -1263,7 +1325,8 @@ assets:
     role: >-
       Workflow action evaluate_planning_packet_depth — resolves WorkProfileDefinition from plan profileId and
       PlanningPacketDepthEvaluator.evaluate(plan, profile); storeSpread planningPacketDepthOk, planningPacketDepthReason,
-      planningPacketDepthRetryRecommended; run before post_planning_packet_thread in YAML
+      planningPacketDepthRetryRecommended, planningReviewReady/reviewReady aligned with depth + no pending clarification;
+      run before post_planning_packet_thread in YAML
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1305,7 +1368,8 @@ assets:
       Workflow action execute_planning_room_cycle — iterative planning room: run_request_expansion_llm (optional) then
       build_request_exploration, architect/auditor/scribe LLM passes (OpenAI-compatible), expand_planning_drafts +
       run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; PlanningQuestionRankingPolicy for defaults
-      vs at most one clarification round;       storeSpread planningPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
+      vs at most one clarification round;       storeSpread planningPhase (READY_FOR_REVIEW when review-ready, not launch approval),
+      planningReviewReady/reviewReady, deliberationPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
       planningClarificationChoicesJson/MetaJson, planningClarificationUseStructuredChoices, planningClarificationQuestionText,
       planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningCycleProgressSummary, planningReadyToPostPacket,
       planningRoomCycleIteration, planningProgressPostWorthy, planningProgressPostFingerprint, planningCycleRolePassSummary,
@@ -1353,7 +1417,8 @@ assets:
     role: >-
       Workflow action merge_planning_clarification_choice — applies planningClarificationRaw to assumptions and decision_log;
       clears planningClarificationChoicesJson; sets planningUserInputRequired false; on success spreads planningPreviousClarificationQuestionText
-      (normalized) and resets planningClarificationRepeatCount; spreads planningClarificationMergeOk true on success
+      (normalized) and resets planningClarificationRepeatCount; DeliberationEngine + planningDirtyPassesJson from
+      DeliberationDirtyPassIndex; spreads planningClarificationMergeOk true on success
       and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE)
     requires:
       - REQ-WORKFLOW-001
@@ -1365,8 +1430,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningApprovalGateAction.java
     role: >-
-      Workflow action evaluate_planning_approval_gate — storeSpread planningReadyForApproval when packet posted version,
-      depth, READY readiness, humanDiscoveryCompleted, and no pending clarification
+      Workflow action evaluate_planning_approval_gate — storeSpread planningReadyForApproval / planningApprovalReady / approvalReady
+      when packet posted version, depth, READY readiness, humanDiscoveryCompleted, and no pending clarification; refreshes
+      planningReviewReady/reviewReady for posted packet view with human-readable gate reasons
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1634,7 +1700,9 @@ requirements:
         - >-
           post_planning_packet_thread builds the planning packet from FeaturePlanState, splits for Discord size limits,
           posts orchestrator messages to the intake/spec thread, and spreads planningPacketPosted / planningPacketChunkCount;
-          skips duplicate sends when planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full packet body
+          default gate allows post when planningPacketDepthOk is true OR reviewReady/planningReviewReady is true; bind
+          planningPostCompatLegacyDepthOnly true restores depth-only legacy behavior; skips duplicate sends when
+          planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full packet body
           unless bind forceRepost is true, spreading planningPacketSkippedDuplicate and a short planningPacketSkipReason for thread UX
         - >-
           build_request_exploration writes the request_exploration artifact (v2 profile) from request and repo hints before synthesis
@@ -1955,12 +2023,12 @@ requirements:
   - id: REQ-WORKFLOW-002
     title: Config-driven workflow v2 graph, ledger, rules, and safe templates
     statement: >-
-      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge), and rulesets;
+      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge, linear_workflow_ref delegate), and rulesets;
       WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
-      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; PlanningRolePassRunner delegates to
-      StructuredLlmArtifactUpsertPass.
+      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; PlanningGapEvaluator makes OPEN ledger items
+      authoritative for planningUserInputRequired; PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
     status: active
     priority: high
     type: functional
@@ -1973,23 +2041,28 @@ requirements:
     acceptance:
       criteria:
         - WorkflowDefinition carries optional workflowSchema; v2 resolves when YAML has phases without steps list
-        - GraphWorkflowRunner runs legacy_action capability pipeline and phase transitions via defaultNextPhase or rulesets
+        - GraphWorkflowRunner runs legacy_action and linear_workflow_ref capability pipeline and phase transitions via defaultNextPhase or rulesets
         - WorkflowV2Loader parses phases, capabilities, rulesets, llm, and optional deliberation map from workflow map
         - UnresolvedItemLedger serializes to workflowUnresolvedItemsJson; WorkflowRulesEngine hasOpenUnresolved predicate works
         - ProgressDedupeHelper provides normalize + fingerprint + isPostWorthy for generic progress dedupe
         - post_planning_progress_if_changed supports optional bind keys progressPostWorthyKey, progressPostFingerprintKey, lastProgressPostHashKey
         - Bootstrap registers v2_noop for tests and graph capability demos
         - PlanningCyclePipeline executes planning cycle; ExecutePlanningRoomCycleAction is a thin facade; planning_cycle_run_expansion,
-          planning_cycle_run_inner_round, planning_cycle_finalize split the same pipeline for v2 YAML
+          planning_cycle_run_inner_round, planning_cycle_finalize split the same pipeline for v2 YAML; Bootstrap also registers
+          planning_run_expansion, planning_run_inner_round, planning_finalize_cycle_spread aliases
         - StructuredLlmArtifactUpsertPass executes generic artifact upsert LLM pass for role-derived prompts
         - >-
           Work profiles may declare readiness.anyOfGroups and field-level minWords/readinessChecks; GenericReadinessEvaluator
           applies declarative depth before supplemental packet checks
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
-        - Staging workflow arrietty_room_v2 (workflowSchema v2) wraps execute_planning_room_cycle for gradual cutover
         - >-
-          PlanningDeliberationLedgerSync keeps workflowUnresolvedItemsJson aligned with clarification rank/merge; ProgressEventLog
-          records deduped progress lines; work profiles may set deliberation.boundedClarificationChoices for button-style clarifications
+          Production Arrietty uses arrietty_room_v2 (workflowSchema v2) with linear_workflow_ref to arrietty_room_legacy (full linear
+          coordinator graph); rollback is switching workflowRef back to arrietty_room_legacy with type configured
+        - >-
+          PlanningDeliberationLedgerSync keeps workflowUnresolvedItemsJson aligned with clarification rank/merge; suppresses new OPEN
+          when a MERGED planning item is semantically similar (paraphrase) to the candidate question; stores topicKey on new items;
+          ProgressEventLog records deduped progress lines; work profiles may set deliberation.boundedClarificationChoices and optional
+          deliberation.inferBoundedChoiceFromOrInText for OR-in-text bounded inference
       examples: []
     traceability:
       assets:
@@ -2002,10 +2075,16 @@ requirements:
         - ASSET-PROGRESS-DEDUPE-HELPER
         - ASSET-PROGRESS-EVENT-LOG
         - ASSET-PLANNING-DELIBERATION-LEDGER-SYNC
+        - ASSET-DELIBERATION-ENGINE
+        - ASSET-DELIBERATION-DIRTY-PASS-INDEX
+        - ASSET-PLANNING-COORDINATOR-ROLE
+        - ASSET-CONFIGURABLE-PASS-RUNNER
+        - ASSET-PLANNING-READINESS-SPREAD
         - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
         - ASSET-WORKFLOW-TEMPLATE-POLICY
         - ASSET-WORKFLOW-TEMPLATE-INTERPOLATOR
         - ASSET-PLANNING-CYCLE-PIPELINE
+        - ASSET-PLANNING-GAP-EVALUATOR
         - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
         - ASSET-GENERIC-READINESS-EVALUATOR
         - ASSET-VISIBLE-DELTA-TRACKER
@@ -2027,12 +2106,14 @@ requirements:
           preconditions: []
         - id: UNIT-WORKFLOW-RULES-ENGINE
           title: WorkflowRulesEngineTest
-          intent: Verify truthy, hasOpenUnresolved, and ledgerMaxOpenRepeatGte rule matching and transition extraction
+          intent: >-
+            Verify truthy, hasOpenUnresolved, ledgerMaxOpenRepeatGte, reviewReady, approvalReady, ledgerHasBlockingOpen rule
+            matching and transition extraction
           testClass: com.vinekeepers.workflow.v2.WorkflowRulesEngineTest
           preconditions: []
         - id: UNIT-GRAPH-WORKFLOW-RUNNER
           title: GraphWorkflowRunnerTest
-          intent: Verify v2 pipeline runs legacy_action capabilities and completes
+          intent: Verify v2 pipeline runs legacy_action and linear_workflow_ref capabilities and completes
           testClass: com.vinekeepers.workflow.v2.GraphWorkflowRunnerTest
           preconditions: []
         - id: UNIT-WORKFLOW-V2-LOADER
@@ -2047,7 +2128,7 @@ requirements:
           preconditions: []
         - id: UNIT-PLANNING-DELIBERATION-LEDGER-SYNC
           title: PlanningDeliberationLedgerSyncTest
-          intent: Verify ledger upsert on rank and merge closure on answer
+          intent: Verify ledger upsert on rank, merge closure on answer, and semantic suppression after MERGED paraphrase
           testClass: com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSyncTest
           preconditions: []
         - id: UNIT-PROMPT-FOR-FIELD-CONTROL-MODE
@@ -2122,8 +2203,8 @@ requirements:
           discordAuthors when configured
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
         - >-
-          Arrietty template bot (id arrietty) with workflowRef arrietty_room and handlesOwnedSpaces true for lifecycle
-          room; arrietty_room workflow may include create_thread step with storeIn deliveryChannelId and optional branch
+          Arrietty template bot (id arrietty) with workflowRef arrietty_room_v2 and handlesOwnedSpaces true for lifecycle
+          room; arrietty_room_legacy linear workflow may include create_thread step with storeIn deliveryChannelId and optional branch
           on THREAD_CREATE_FAILED; create_thread uses lifecycle owner gateway when channel has context; after success
           setDeliveryTargetId updates store when contextId present; LifecycleContext.withDeliveryChannelId and
           LifecycleContextStore.setDeliveryTargetId (ignores null/blank/sentinel); done step may use main-room redirect
@@ -2176,7 +2257,7 @@ requirements:
           coordinator workflow runs once in the thread without a user wake-up message, and completes in the main channel; Phase B/C
           (generate_planning_proposals, apply_auto_planning_proposals, confirm loop via build_proposal_confirm_prompt and
           resolve_proposal_confirmation, guided discovery, critique/readiness, approval choices, role posts,
-          launch_cursor_run; synthesize_plan_drafts remains for legacy YAML) run in arrietty_room from that kickoff and when the user messages the intake thread: hydrate_planning_session
+          launch_cursor_run; synthesize_plan_drafts remains for legacy YAML) run in arrietty_room_legacy (via v2 delegate) from that kickoff and when the user messages the intake thread: hydrate_planning_session
           (storeSpread) branches on planningIntakeThread; thread path uses session key bot:arrietty:conv:threadId with
           conversationMode conversational so the workflow does not reset after terminal launch; room channel path keeps
           the legacy capture_field room command branch
@@ -2188,7 +2269,7 @@ requirements:
           CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true; confirm cancel branches to cancelled done step; channel create failure
           branches to could-not-create-room done step
         - >-
-          arrietty_room runs ensure_repo_workspace and spread_plan_workspace_signals immediately after hydrate_planning_session;
+          arrietty_room_legacy runs ensure_repo_workspace and spread_plan_workspace_signals immediately after hydrate_planning_session;
           execute_planning_room_cycle runs run_request_expansion_llm (optional) then build_request_exploration; optional
           run_llm_planning_synthesis when OPENAI_API_KEY is set; evaluate_planning_packet_depth runs before post_planning_packet_thread in YAML
       examples: []
@@ -2664,10 +2745,15 @@ features:
       - ASSET-WORKFLOW-V2-LOADER
       - ASSET-WORKFLOW-RULES-ENGINE
       - ASSET-UNRESOLVED-ITEM-LEDGER
+      - ASSET-PROGRESS-EVENT-LOG
+      - ASSET-PLANNING-DELIBERATION-LEDGER-SYNC
+      - ASSET-DELIBERATION-ENGINE
+      - ASSET-DELIBERATION-DIRTY-PASS-INDEX
       - ASSET-PROGRESS-DEDUPE-HELPER
       - ASSET-WORKFLOW-SAFE-TEMPLATE-RENDERER
       - ASSET-VISIBLE-DELTA-TRACKER
       - ASSET-USER-COPY-CONTEXT
+      - ASSET-PLANNING-GAP-EVALUATOR
     status: active
   - id: FEAT-WORKFLOW-STEPS
     slug: workflow-steps
@@ -2697,6 +2783,10 @@ features:
       - ASSET-EXTRACT-EVENT-FIELDS-STEP
       - ASSET-WORKFLOW-CAPABILITY-SUPPORT
       - ASSET-PLANNING-CYCLE-PIPELINE
+      - ASSET-PLANNING-GAP-EVALUATOR
+      - ASSET-PLANNING-COORDINATOR-ROLE
+      - ASSET-CONFIGURABLE-PASS-RUNNER
+      - ASSET-PLANNING-READINESS-SPREAD
       - ASSET-PLANNING-RUN-EXPANSION-PHASE-ACTION
       - ASSET-PLANNING-RUN-INNER-ROUND-ACTION
       - ASSET-PLANNING-FINALIZE-PLANNING-CYCLE-ACTION

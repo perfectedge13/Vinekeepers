@@ -69,9 +69,23 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             spread.put("planningPacketPostError", "No plan for context.");
             return spread;
         }
-        if (state != null && "false".equals(String.valueOf(state.get("planningPacketDepthOk")))) {
-            spread.put("planningPacketPostError", "Depth gate not satisfied; packet post skipped.");
-            return spread;
+        boolean legacyDepthOnly = truthy(getString(bind, "planningPostCompatLegacyDepthOnly"));
+        boolean depthOk = !"false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
+        boolean reviewReady =
+                truthy(getString(state, "planningReviewReady")) || truthy(getString(state, "reviewReady"));
+        if (legacyDepthOnly) {
+            if (state != null && "false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")))) {
+                spread.put("planningPacketPostError", "Depth gate not satisfied; packet post skipped (legacy depth-only mode).");
+                return spread;
+            }
+        } else {
+            if (state != null && !depthOk && !reviewReady) {
+                spread.put(
+                        "planningPacketPostError",
+                        "Review readiness and depth gate both failed; packet post skipped. "
+                                + "Complete depth evaluation or set review-ready flags before posting.");
+                return spread;
+            }
         }
 
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));

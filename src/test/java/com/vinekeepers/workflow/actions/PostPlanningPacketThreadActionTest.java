@@ -73,6 +73,40 @@ class PostPlanningPacketThreadActionTest {
     }
 
     @Test
+    void postsWhenReviewReadyEvenIfDepthFlagFalse() {
+        AtomicInteger sends = new AtomicInteger();
+        FeatureRoomStateStore roomStore = new FeatureRoomStateStore();
+        roomStore.put(
+                new FeatureRoomState(
+                        "ctx3",
+                        "f3",
+                        "slug",
+                        "th3",
+                        "th3",
+                        "org/r",
+                        "Req",
+                        "ACTIVE",
+                        List.of(new RoomParticipant(PlanningRole.ORCHESTRATOR, "orch3", "ri", "O", true)),
+                        "u",
+                        Instant.now()));
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), roomStore);
+        router.registerSender("orch3", (ch, m, body) -> sends.incrementAndGet(), null);
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        planStore.put(minimalPlan("ctx3"));
+        PostPlanningPacketThreadAction action = new PostPlanningPacketThreadAction(router, planStore);
+        Event ev = new Event("t", "k", Map.of());
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("channelId", "th3");
+        state.put("contextId", "ctx3");
+        state.put("planningPacketDepthOk", "false");
+        state.put("reviewReady", "true");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread = (Map<String, Object>) action.run(ev, state, Map.of());
+        assertEquals("true", spread.get("planningPacketPosted"));
+        assertTrue(sends.get() > 0);
+    }
+
+    @Test
     void forceRepostSendsAgain() {
         AtomicInteger sends = new AtomicInteger();
         FeatureRoomStateStore roomStore = new FeatureRoomStateStore();

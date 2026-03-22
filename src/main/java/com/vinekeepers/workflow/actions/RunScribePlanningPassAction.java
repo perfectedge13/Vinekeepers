@@ -4,7 +4,7 @@ import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.workflow.planning.PlanningRolePassRunner.PlanningRole;
+import com.vinekeepers.workflow.planning.PlanningCoordinatorRole;
 
 import java.util.Map;
 
@@ -24,6 +24,7 @@ public final class RunScribePlanningPassAction implements com.vinekeepers.workfl
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return RunArchitectPlanningPassAction.runRole(PlanningRole.SCRIBE, client, planStore, profiles, event, state, bind);
+        return RunArchitectPlanningPassAction.runRole(
+                PlanningCoordinatorRole.SCRIBE, client, planStore, profiles, event, state, bind);
     }
 }

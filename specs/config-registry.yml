@@ -77,8 +77,9 @@ assets:
     kind: config
     path: config/work-profiles.yaml
     role: >-
-      Declarative work profiles (profiles map) defining artifacts, sections, required fields, optional readiness.anyOfGroups,
-      and field-level richness keys for GenericReadinessEvaluator; default profile software_feature_planning
+      Declarative work profiles (profiles map) defining artifacts, sections, required fields, optional or default readiness.anyOfGroups,
+      optional packetQuality.forbiddenSubstrings, and field-level richness keys for GenericReadinessEvaluator; default profile
+      software_feature_planning includes a readiness gate for review-packet substance
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-WORK-PROFILE-LOADER
@@ -86,7 +87,8 @@ assets:
     path: src/main/java/com/vinekeepers/profile/WorkProfileLoader.java
     role: >-
       Load work-profiles.yaml into WorkProfileRegistry; parses profile readiness.anyOfGroups, ReadinessPathRule rows,
-      and field-level minWords, maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks
+      packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText, and field-level minWords,
+      maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-READINESS-PATH-RULE

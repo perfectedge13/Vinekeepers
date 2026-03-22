@@ -5,6 +5,34 @@ profiles:
   software_feature_planning:
     profileId: software_feature_planning
     title: Software feature planning
+    # Review-packet substance gate (GenericReadinessEvaluator) for default coordinator profile.
+    readiness:
+      anyOfGroups:
+        - rules:
+            - artifactId: requirements_spec
+              sectionId: narrative
+              fieldId: feature_summary
+              minWords: 12
+              readinessChecks:
+                - placeholder
+            - artifactId: overall_plan
+              sectionId: outline
+              fieldId: plan_body
+              minWords: 18
+              readinessChecks:
+                - placeholder
+            - artifactId: validation_plan
+              sectionId: checks
+              fieldId: validation_notes
+              minWords: 12
+              readinessChecks:
+                - placeholder
+    packetQuality:
+      forbiddenSubstrings:
+        - 'tbd'
+        - 'todo:'
+        - '[placeholder]'
+        - 'lorem ipsum'
     artifacts:
       - artifactId: requirements_spec
         title: Requirements specification

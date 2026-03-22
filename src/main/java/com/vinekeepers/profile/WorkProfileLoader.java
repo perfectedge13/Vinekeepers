@@ -80,7 +80,18 @@ public final class WorkProfileLoader {
         }
         List<ReadinessAnyOfGroup> readiness = parseReadinessAnyOfGroups(raw.get("readiness"));
         boolean boundedChoices = parseBoundedClarificationChoices(raw.get("deliberation"));
-        return new WorkProfileDefinition(profileId, title, artifacts, readiness, boundedChoices);
+        boolean inferOrHeuristic = parseInferBoundedChoiceFromOrInText(raw.get("deliberation"));
+        List<String> forbidden = parsePacketQualityForbidden(raw.get("packetQuality"));
+        return new WorkProfileDefinition(
+                profileId, title, artifacts, readiness, boundedChoices, inferOrHeuristic, forbidden);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> parsePacketQualityForbidden(Object packetQualityNode) {
+        if (!(packetQualityNode instanceof Map<?, ?> pm)) {
+            return List.of();
+        }
+        return stringList(((Map<String, Object>) pm).get("forbiddenSubstrings"));
     }
 
     @SuppressWarnings("unchecked")
@@ -89,6 +100,15 @@ public final class WorkProfileLoader {
             return false;
         }
         Object v = ((Map<String, Object>) dm).get("boundedClarificationChoices");
+        return booleanVal(v);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean parseInferBoundedChoiceFromOrInText(Object deliberationNode) {
+        if (!(deliberationNode instanceof Map<?, ?> dm)) {
+            return false;
+        }
+        Object v = ((Map<String, Object>) dm).get("inferBoundedChoiceFromOrInText");
         return booleanVal(v);
     }
 

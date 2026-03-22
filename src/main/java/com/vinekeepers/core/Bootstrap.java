@@ -367,11 +367,15 @@ public final class Bootstrap {
                 new EvaluatePlanningPacketDepthAction(featurePlanStateStore, workProfileRegistry));
         registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction());
         registry.register("execute_planning_room_cycle", new ExecutePlanningRoomCycleAction(planningCyclePipeline));
-        registry.register(
-                "planning_cycle_run_expansion", new PlanningRunExpansionPhaseAction(planningCyclePipeline));
-        registry.register("planning_cycle_run_inner_round", new PlanningRunInnerRoundAction(planningCyclePipeline));
-        registry.register(
-                "planning_cycle_finalize", new PlanningFinalizePlanningCycleAction(planningCyclePipeline));
+        PlanningRunExpansionPhaseAction planningExpansion = new PlanningRunExpansionPhaseAction(planningCyclePipeline);
+        PlanningRunInnerRoundAction planningInnerRound = new PlanningRunInnerRoundAction(planningCyclePipeline);
+        PlanningFinalizePlanningCycleAction planningFinalize = new PlanningFinalizePlanningCycleAction(planningCyclePipeline);
+        registry.register("planning_cycle_run_expansion", planningExpansion);
+        registry.register("planning_run_expansion", planningExpansion);
+        registry.register("planning_cycle_run_inner_round", planningInnerRound);
+        registry.register("planning_run_inner_round", planningInnerRound);
+        registry.register("planning_cycle_finalize", planningFinalize);
+        registry.register("planning_finalize_cycle_spread", planningFinalize);
         registry.register(
                 "merge_planning_clarification_choice",
                 new MergePlanningClarificationChoiceAction(featurePlanStateStore, workProfileRegistry));

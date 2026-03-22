@@ -89,7 +89,9 @@ public final class WorkflowRunnerFactory {
                                 toolRunner,
                                 toolPolicy,
                                 conversationMode,
-                                sessionKeyStrategy);
+                                sessionKeyStrategy,
+                                workflows,
+                                choiceProviderRegistry);
                     }
                 }
                 yield new ConfigurableWorkflowRunner(

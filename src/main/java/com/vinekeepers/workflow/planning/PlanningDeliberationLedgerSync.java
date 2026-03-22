@@ -3,6 +3,8 @@ package com.vinekeepers.workflow.planning;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
+
+import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -30,13 +32,17 @@ public final class PlanningDeliberationLedgerSync {
         if (q.isBlank()) {
             return new UpsertResult(base, Optional.empty());
         }
+        if (mergedPlanningCoversSemanticallySimilarQuestion(base, q)) {
+            return new UpsertResult(base, Optional.empty());
+        }
         if (base.hasFingerprintMergeClosed(q)) {
             return new UpsertResult(base, Optional.empty());
         }
         String fp = UnresolvedItemLedger.normalizeFingerprint(q);
         String inputKind = ranked.useStructuredChoices() ? "bounded_choice" : "open";
         Map<String, String> source = new LinkedHashMap<>();
-        source.put("channel", "planning_clarification");
+        source.put("channel", PLANNING_CLARIFICATION_CHANNEL);
+        source.put("topicKey", fp);
         source.put("inputKind", inputKind);
         source.put("lastAskedAt", String.valueOf(System.currentTimeMillis()));
         String severity = ranked.blockingQuestionCount() > 0 ? "blocking" : "normal";
@@ -101,6 +107,33 @@ public final class PlanningDeliberationLedgerSync {
             }
         }
         return base;
+    }
+
+    /**
+     * If a MERGED planning-clarification item exists whose text is highly similar to {@code questionText}, do not open a
+     * new question (paraphrase after successful merge).
+     */
+    private static boolean mergedPlanningCoversSemanticallySimilarQuestion(
+            UnresolvedItemLedger ledger, String questionText) {
+        if (ledger == null || questionText == null || questionText.isBlank()) {
+            return false;
+        }
+        for (UnresolvedItem it : ledger.items()) {
+            if (it.getStatus() != UnresolvedItemStatus.MERGED) {
+                continue;
+            }
+            if (!PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"))) {
+                continue;
+            }
+            String prev = it.getQuestionText();
+            if (prev == null || prev.isBlank()) {
+                continue;
+            }
+            if (PlanningQuestionRankingPolicy.clarificationSimilarity(prev, questionText) >= 0.82) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static UnresolvedItemLedger replaceMerged(

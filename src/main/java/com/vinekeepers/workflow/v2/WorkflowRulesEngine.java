@@ -107,6 +107,16 @@ public final class WorkflowRulesEngine {
                 }
                 yield false;
             }
+            case "reviewReady" ->
+                    Boolean.TRUE.equals(value)
+                            && (truthy(getString(state, "reviewReady"))
+                                    || truthy(getString(state, "planningReviewReady")));
+            case "approvalReady" ->
+                    Boolean.TRUE.equals(value)
+                            && (truthy(getString(state, "approvalReady"))
+                                    || truthy(getString(state, "planningApprovalReady")));
+            case "ledgerHasBlockingOpen" ->
+                    Boolean.TRUE.equals(value) && UnresolvedItemLedger.readFrom(state).hasOpenBlockingSeverity();
             default -> false;
         };
     }

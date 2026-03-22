@@ -77,6 +77,20 @@ public final class UnresolvedItemLedger {
         return false;
     }
 
+    /** Open items the planner marked as blocking (see deliberation ledger sync). */
+    public boolean hasOpenBlockingSeverity() {
+        for (UnresolvedItem it : items) {
+            if (it.getStatus() != UnresolvedItemStatus.OPEN) {
+                continue;
+            }
+            String sev = it.getSeverity();
+            if (sev != null && "blocking".equalsIgnoreCase(sev.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * True if this fingerprint has been closed in a way that must not be re-asked until explicitly invalidated.
      * {@link UnresolvedItemStatus#INVALIDATED} does not block re-surfacing the same fingerprint.

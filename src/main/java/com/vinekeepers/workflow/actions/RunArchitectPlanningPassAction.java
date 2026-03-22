@@ -6,8 +6,8 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planning.PlanningCoordinatorRole;
 import com.vinekeepers.workflow.planning.PlanningRolePassRunner;
-import com.vinekeepers.workflow.planning.PlanningRolePassRunner.PlanningRole;
 import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 
 import java.util.LinkedHashMap;
@@ -29,11 +29,11 @@ public final class RunArchitectPlanningPassAction implements com.vinekeepers.wor
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return runRole(PlanningRole.ARCHITECT, client, planStore, profiles, event, state, bind);
+        return runRole(PlanningCoordinatorRole.ARCHITECT, client, planStore, profiles, event, state, bind);
     }
 
     static Map<String, Object> runRole(
-            PlanningRole role,
+            PlanningCoordinatorRole role,
             OpenAiChatClient client,
             FeaturePlanStateStore planStore,
             WorkProfileRegistry profiles,

@@ -25,7 +25,7 @@ bots:
   workflow:
     type: configured
     params:
-      workflowRef: arrietty_room
+      workflowRef: arrietty_room_v2
   identities:
     discord:
       handlesOwnedSpaces: true
@@ -113,7 +113,7 @@ workflows:
     steps:
     - type: done
       message: ''
-  arrietty_room:
+  arrietty_room_legacy:
     llm:
       provider: openai
       model: gpt-4o-mini
@@ -249,9 +249,12 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Repo workspace** — {{repoWorkspaceStatusSummary}}
+        content: '**Workspace** — {{repoWorkspaceStatusSummary}}
 
-          Planning will continue from your request text; local file snippets may be limited until a workspace is available.'
+          Thanks — I am pulling repo context where available and drafting requirements, architecture notes, and a validation
+          plan from your request. I will only pause you if something **blocks** a solid plan. Shorter updates will show up
+          here; the full planning packet will land in this thread when it is ready to read. Until the workspace is ready,
+          snippets from disk may be limited.'
         asRole: orchestrator
         target: thread
     - type: call_action
@@ -624,8 +627,10 @@ workflows:
           **Request:** {{codeChange}}
 
 
-          We will explore what this request means, expand drafts from repo context, then post the planning packet. **Use the
-          buttons or menu below** to continue, add scope/must-haves/risks, or jump to clarifying questions.'
+          I will explore what this request means, expand drafts from repo context, and post the planning packet in this thread
+          when it is ready to read. I will only ask questions if something **blocks** a solid plan. Use the buttons below if
+          you want to add scope, must-haves, or risks before we continue — otherwise **Continue to planning packet** moves
+          the autonomous draft forward.'
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
@@ -775,30 +780,48 @@ workflows:
         target: thread
     - type: done
       message: '{{launchMessage}}'
-  # Staging: v2 phase graph wrapping legacy execute_planning_room_cycle (parity tests / gradual cutover).
-  # Switch bot workflowRef from arrietty_room to arrietty_room_v2 when ready; do not change default here.
+  # Production Arrietty entry: v2 phase graph delegates to the full linear coordinator flow (arrietty_room_legacy).
+  # Capability kinds: legacy_action, linear_workflow_ref (see GraphWorkflowRunner).
   arrietty_room_v2:
     workflowSchema: v2
     llm:
       provider: openai
       model: gpt-4o-mini
       timeoutMs: 120000
+    templates:
+      exposeInternal: false
+      allowedKeys:
+        - coordinatorSummary
+        - nextQuestionPlain
+        - progressLine
+        - whatChangedSinceLastTurn
+        - approvalPromptBody
+        - resolutionExplanation
+        - userCopyBlockerSummary
+        - userCopyClarificationLedgerId
+        - userCopyProgressDelta
+        - userCopyProgressEventLatest
+        - userCopyProgressLine
+        - reviewReady
+        - reviewReadyReason
+        - approvalReady
+        - approvalReadyReason
+        - deliberationPhase
     deliberation:
       label: planning_packet_deliberation
       profileHint: software_feature_planning
-    entryPhase: draft
+    entryPhase: planning
     phases:
-      draft:
-        pipeline: [cap_run_planning_cycle]
+      planning:
+        pipeline: [cap_linear_room]
         defaultNextPhase: done
       done:
         pipeline: []
         terminal: true
     capabilities:
-      cap_run_planning_cycle:
-        kind: legacy_action
-        action: execute_planning_room_cycle
-        storeSpread: true
+      cap_linear_room:
+        kind: linear_workflow_ref
+        workflowRef: arrietty_room_legacy
     rulesets: {}
   simple_echo:
     steps:

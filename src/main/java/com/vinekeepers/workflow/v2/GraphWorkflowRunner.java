@@ -5,10 +5,13 @@ import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.workflow.ConfigurableWorkflowRunner;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
+import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.StepOutcome;
 import com.vinekeepers.workflow.StepResult;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
+import com.vinekeepers.workflow.WorkflowDefinition;
 import com.vinekeepers.workflow.WorkflowRunResult;
 import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.steps.CallActionStep;
@@ -43,6 +46,8 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
     private final ToolRunner toolRunner;
     private final ToolPolicy toolPolicy;
     private final WorkflowTemplatePolicy templatePolicy;
+    private final Map<String, Object> siblingWorkflows;
+    private final DynamicChoiceProviderRegistry choiceProviderRegistry;
 
     public GraphWorkflowRunner(
             WorkflowV2Model model,
@@ -51,6 +56,26 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             ToolPolicy toolPolicy,
             ConversationMode conversationMode,
             String sessionKeyStrategyName) {
+        this(
+                model,
+                actionRegistry,
+                toolRunner,
+                toolPolicy,
+                conversationMode,
+                sessionKeyStrategyName,
+                null,
+                null);
+    }
+
+    public GraphWorkflowRunner(
+            WorkflowV2Model model,
+            WorkflowActionRegistry actionRegistry,
+            ToolRunner toolRunner,
+            ToolPolicy toolPolicy,
+            ConversationMode conversationMode,
+            String sessionKeyStrategyName,
+            Map<String, Object> siblingWorkflows,
+            DynamicChoiceProviderRegistry choiceProviderRegistry) {
         WorkflowV2Model resolved =
                 model != null
                         ? model
@@ -70,14 +95,16 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
         this.conversationMode = conversationMode != null ? conversationMode : ConversationMode.SINGLE_EVENT;
         this.sessionKeyStrategyName = sessionKeyStrategyName;
         this.templatePolicy = resolved.getTemplatePolicy();
+        this.siblingWorkflows = siblingWorkflows != null && !siblingWorkflows.isEmpty() ? Map.copyOf(siblingWorkflows) : Map.of();
+        this.choiceProviderRegistry = choiceProviderRegistry;
     }
 
     @Override
     public WorkflowRunResult runResult(Event event, StateStore stateStore, String botId) {
         String stateKey = com.vinekeepers.workflow.SessionKeyStrategies.resolve(sessionKeyStrategyName, event)
                 .resolveSessionKey(botId, event);
-        ConfigurableWorkflowState state = stateStore.get(stateKey, ConfigurableWorkflowState.class)
-                .orElseGet(ConfigurableWorkflowState::new);
+        ConfigurableWorkflowState state =
+                stateStore.get(stateKey, ConfigurableWorkflowState.class).orElseGet(ConfigurableWorkflowState::new);
         state.put("__sessionKey", stateKey);
         state.put("__botId", botId);
 
@@ -134,10 +161,34 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             if (pipeIdx < pipeline.size()) {
                 String capId = pipeline.get(pipeIdx);
                 WorkflowV2CapabilityModel cap = model.getCapabilities().get(capId);
-                if (cap == null || !"legacy_action".equalsIgnoreCase(cap.getKind())) {
+                if (cap == null) {
                     state.markError();
                     stateStore.put(stateKey, state);
-                    return WorkflowRunResult.error("Unknown or unsupported capability: " + capId);
+                    return WorkflowRunResult.error("Unknown capability: " + capId);
+                }
+                String capKind = cap.getKind();
+                if ("linear_workflow_ref".equalsIgnoreCase(capKind)) {
+                    WorkflowRunResult delegated = runLinearWorkflowRef(cap.getWorkflowRef(), event, stateStore, botId);
+                    state = stateStore.get(stateKey, ConfigurableWorkflowState.class).orElse(state);
+                    if (delegated.isWaiting()) {
+                        return delegated;
+                    }
+                    String err = delegated.getErrorMessage();
+                    if (err != null && !err.isBlank()) {
+                        state.markError();
+                        stateStore.put(stateKey, state);
+                        return delegated;
+                    }
+                    pipeIdx++;
+                    state.put(PIPELINE_INDEX_KEY, String.valueOf(pipeIdx));
+                    state.markActive();
+                    stateStore.put(stateKey, state);
+                    continue;
+                }
+                if (!"legacy_action".equalsIgnoreCase(capKind)) {
+                    state.markError();
+                    stateStore.put(stateKey, state);
+                    return WorkflowRunResult.error("Unknown or unsupported capability kind: " + capId);
                 }
                 CallActionStep step =
                         new CallActionStep(
@@ -234,22 +285,47 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
         return WorkflowRunResult.error("Graph workflow step limit reached.");
     }
 
-    private static void applyDeliberationHints(ConfigurableWorkflowState state, WorkflowV2Model model) {
-        if (state == null || model == null) {
-            return;
+    @SuppressWarnings("unchecked")
+    private WorkflowRunResult runLinearWorkflowRef(
+            String workflowRef, Event event, StateStore stateStore, String botId) {
+        if (workflowRef == null || workflowRef.isBlank()) {
+            return WorkflowRunResult.error("linear_workflow_ref: missing workflowRef");
         }
-        Map<String, Object> del = model.getDeliberation();
-        if (del.isEmpty()) {
-            return;
+        Object raw = siblingWorkflows.get(workflowRef.trim());
+        if (!(raw instanceof Map<?, ?> wMap)) {
+            return WorkflowRunResult.error("linear_workflow_ref: unknown workflow: " + workflowRef);
         }
-        Object hint = del.get("profileHint");
-        if (hint != null && !hint.toString().isBlank()) {
-            state.put("deliberationProfileHint", hint.toString().trim());
+        Map<String, Object> wm = (Map<String, Object>) wMap;
+        Object stepsObj = wm.get("steps");
+        if (!(stepsObj instanceof List<?>)) {
+            return WorkflowRunResult.error("linear_workflow_ref: workflow has no steps: " + workflowRef);
         }
-        Object label = del.get("label");
-        if (label != null && !label.toString().isBlank()) {
-            state.put("deliberationLabel", label.toString().trim());
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) stepsObj;
+        WorkflowDefinition def =
+                new WorkflowDefinition(
+                        workflowRef.trim(),
+                        steps,
+                        WorkflowDefinition.copyLlmMap(wm.get("llm")),
+                        schemaFromWorkflowRoot(wm),
+                        WorkflowTemplatePolicy.fromYaml(wm.get("templates")));
+        ConfigurableWorkflowRunner inner =
+                new ConfigurableWorkflowRunner(
+                        def,
+                        actionRegistry,
+                        toolRunner,
+                        toolPolicy,
+                        conversationMode,
+                        sessionKeyStrategyName,
+                        choiceProviderRegistry);
+        return inner.runResult(event, stateStore, botId);
+    }
+
+    private static String schemaFromWorkflowRoot(Map<String, Object> wm) {
+        if (wm == null) {
+            return null;
         }
+        Object s = wm.get("workflowSchema");
+        return s != null ? s.toString().trim() : null;
     }
 
     private void applyWorkflowLlmDefaults(ConfigurableWorkflowState state) {
