@@ -85,6 +85,34 @@ class CoordinatorClarificationGapEvaluatorTest {
     }
 
     @Test
+    void staticIsFineInAssumptionResolvesConfigVsRuntimeGap() {
+        CoordinatorClarificationSettings settings =
+                new CoordinatorClarificationSettings(
+                        CoordinatorClarificationMode.CANONICAL_V1,
+                        List.of(
+                                new CoordinatorClarificationGapRule(
+                                        "config_vs_runtime_scope",
+                                        false,
+                                        "Config or runtime?",
+                                        List.of("config", "runtime"),
+                                        List.of(),
+                                        List.of(
+                                                "config-driven",
+                                                "static",
+                                                "static is fine",
+                                                "compile-time",
+                                                "schema only"))));
+        FeaturePlanState plan =
+                minimalPlan("ctx", "x")
+                        .withAppendedAssumption(
+                                new AssumptionEntry("a1", "Static is fine for this piece.", Instant.now()));
+        List<CoordinatorClarificationGapEvaluator.OpenGap> open =
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
+                        plan, settings, List.of("config versus runtime?"));
+        assertTrue(open.isEmpty());
+    }
+
+    @Test
     void narrowGapOpensFromCanonicalAllOfWhenFirstResolved() {
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(

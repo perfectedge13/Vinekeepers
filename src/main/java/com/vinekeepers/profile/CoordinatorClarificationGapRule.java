@@ -23,6 +23,17 @@ public final class CoordinatorClarificationGapRule {
      * any of these substrings (case-insensitive).
      */
     private final List<String> resolveAnySubstring;
+    /** When true (and profile deliberation enables bounded choices), coordinator may use structured choice UI for this gap. */
+    private final boolean useBoundedChoiceUi;
+    /**
+     * When true (and {@link #useBoundedChoiceUi}), allow OR-in-text heuristic for bounded choices. Default false for
+     * production coordinator gaps.
+     */
+    private final boolean inferOrChoices;
+    /**
+     * When the same gap would repeat the same template as the last merged question, show this text instead (plain English).
+     */
+    private final String narrowEscalationTemplate;
 
     public CoordinatorClarificationGapRule(
             String id,
@@ -31,12 +42,28 @@ public final class CoordinatorClarificationGapRule {
             List<String> hintDetectAllOf,
             List<String> canonicalOpenAllOf,
             List<String> resolveAnySubstring) {
+        this(id, blocking, questionTemplate, hintDetectAllOf, canonicalOpenAllOf, resolveAnySubstring, false, false, "");
+    }
+
+    public CoordinatorClarificationGapRule(
+            String id,
+            boolean blocking,
+            String questionTemplate,
+            List<String> hintDetectAllOf,
+            List<String> canonicalOpenAllOf,
+            List<String> resolveAnySubstring,
+            boolean useBoundedChoiceUi,
+            boolean inferOrChoices,
+            String narrowEscalationTemplate) {
         this.id = Objects.requireNonNull(id, "id").trim();
         this.blocking = blocking;
         this.questionTemplate = questionTemplate != null ? questionTemplate.trim() : "";
         this.hintDetectAllOf = hintDetectAllOf != null ? List.copyOf(hintDetectAllOf) : List.of();
         this.canonicalOpenAllOf = canonicalOpenAllOf != null ? List.copyOf(canonicalOpenAllOf) : List.of();
         this.resolveAnySubstring = resolveAnySubstring != null ? List.copyOf(resolveAnySubstring) : List.of();
+        this.useBoundedChoiceUi = useBoundedChoiceUi;
+        this.inferOrChoices = inferOrChoices;
+        this.narrowEscalationTemplate = narrowEscalationTemplate != null ? narrowEscalationTemplate.trim() : "";
     }
 
     public String getId() {
@@ -61,5 +88,17 @@ public final class CoordinatorClarificationGapRule {
 
     public List<String> getResolveAnySubstring() {
         return resolveAnySubstring;
+    }
+
+    public boolean isUseBoundedChoiceUi() {
+        return useBoundedChoiceUi;
+    }
+
+    public boolean isInferOrChoices() {
+        return inferOrChoices;
+    }
+
+    public String getNarrowEscalationTemplate() {
+        return narrowEscalationTemplate;
     }
 }

@@ -125,7 +125,11 @@ public final class WorkProfileLoader {
         List<String> hintAll = stringList(raw.get("hintDetectAllOf"));
         List<String> canonOpen = stringList(raw.get("canonicalOpenAllOf"));
         List<String> resolveAny = stringList(raw.get("resolveAnySubstring"));
-        return new CoordinatorClarificationGapRule(id, blocking, template, hintAll, canonOpen, resolveAny);
+        boolean useBoundedUi = booleanVal(raw.get("useBoundedChoiceUi"));
+        boolean inferOr = booleanVal(raw.get("inferOrChoices"));
+        String narrowEsc = stringVal(raw.get("narrowEscalationTemplate"));
+        return new CoordinatorClarificationGapRule(
+                id, blocking, template, hintAll, canonOpen, resolveAny, useBoundedUi, inferOr, narrowEsc);
     }
 
     @SuppressWarnings("unchecked")

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -63,7 +65,9 @@ public final class PlanningCyclePipeline {
     private record ClarificationRoundOutcome(
             FeaturePlanState plan,
             RankedClarification rankedLlm,
-            PlanningDeliberationLedgerSync.UpsertResult upsert) {}
+            PlanningDeliberationLedgerSync.UpsertResult upsert,
+            /** When true, canonical_v1 still has at least one open gap (authoritative for {@code planningUserInputRequired}). */
+            boolean canonicalClarificationPending) {}
 
     private final OpenAiChatClient openAiChatClient;
     private final FeaturePlanStateStore planStateStore;
@@ -104,7 +108,7 @@ public final class PlanningCyclePipeline {
             spread.put("planningSelectiveRerunActive", "true");
             spread.put(
                     "planningSelectiveRerunNote",
-                    "Selective rerun: skipped request-expansion; running one critique round after your clarification.");
+                    "Thanks — I'm refreshing the draft from your last answer (skipping a full re-scan this pass).");
             mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
         }
 
@@ -143,7 +147,8 @@ public final class PlanningCyclePipeline {
         CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
         RankedClarification ranked =
                 PlanningGapEvaluator.effectiveRanked(plan, upsert.ledger(), rankedLlm, profile, coord);
-        boolean userInputRequired = PlanningGapEvaluator.requiresUserInputForPlanningClarification(upsert.ledger());
+        boolean userInputRequired =
+                resolvePlanningUserInputRequired(coord.isCanonicalV1(), clr.canonicalClarificationPending(), upsert.ledger());
 
         spread.put("planningQuestionsAskedThisRound", rankedLlm.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
@@ -218,6 +223,11 @@ public final class PlanningCyclePipeline {
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
                         getString(spread, "planningSelectiveRerunNote")));
+        spread.put(
+                "userCopyCoordinatorProgress",
+                spread.get("planningCycleProgressSummary") != null
+                        ? spread.get("planningCycleProgressSummary").toString()
+                        : "");
 
         enrichUserCopyAndProgressLog(state, spread);
         spread.put("planningJustMergedClarification", "false");
@@ -325,7 +335,9 @@ public final class PlanningCyclePipeline {
         CoordinatorClarificationSettings coordFin = profileFin.getCoordinatorClarification();
         RankedClarification ranked =
                 PlanningGapEvaluator.effectiveRanked(plan, upsertFin.ledger(), rankedLlmFin, profileFin, coordFin);
-        boolean userInputRequired = PlanningGapEvaluator.requiresUserInputForPlanningClarification(upsertFin.ledger());
+        boolean userInputRequired =
+                resolvePlanningUserInputRequired(
+                        coordFin.isCanonicalV1(), clrFin.canonicalClarificationPending(), upsertFin.ledger());
 
         spread.put("planningQuestionsAskedThisRound", rankedLlmFin.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
@@ -400,6 +412,11 @@ public final class PlanningCyclePipeline {
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
                         ""));
+        spread.put(
+                "userCopyCoordinatorProgress",
+                spread.get("planningCycleProgressSummary") != null
+                        ? spread.get("planningCycleProgressSummary").toString()
+                        : "");
 
         enrichUserCopyAndProgressLog(state, spread);
         finishProgressFingerprint(state, spread);
@@ -416,56 +433,25 @@ public final class PlanningCyclePipeline {
         CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
         RankedClarification rankedLlm;
         if (coord.isCanonicalV1()) {
-            List<CoordinatorClarificationGapEvaluator.OpenGap> openA =
-                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
-            ledger =
-                    PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
-                            ledger, CoordinatorClarificationGapEvaluator.openGapIds(openA));
-            if (openA.isEmpty()) {
-                rankedLlm = emptyRankedClarification();
-            } else {
-                CoordinatorClarificationGapEvaluator.OpenGap top = openA.get(0);
-                rankedLlm =
-                        PlanningQuestionRankingPolicy.rank(
-                                plan,
-                                List.of(top.questionText()),
-                                3,
-                                ledger,
-                                profile.isBoundedClarificationChoicesEnabled(),
-                                profile.isInferBoundedChoiceFromOrInTextEnabled());
-                rankedLlm = withCoordinatorGapMeta(rankedLlm, top.gapId(), top.blocking());
+            for (int sweep = 0; sweep < 3; sweep++) {
+                List<CoordinatorClarificationGapEvaluator.OpenGap> open =
+                        CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
+                ledger =
+                        PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
+                                ledger, CoordinatorClarificationGapEvaluator.openGapIds(open));
+                if (open.isEmpty()) {
+                    rankedLlm = emptyRankedClarification();
+                } else {
+                    rankedLlm =
+                            rankCanonicalOpenTopGap(
+                                    plan, ledger, profile, coord, open.get(0));
+                }
+                for (String assumption : rankedLlm.assumptionsToRecord()) {
+                    plan = appendAssumption(plan, assumption);
+                }
+                planStateStore.update(plan);
+                plan = planStateStore.getByContextId(contextId).orElse(plan);
             }
-            for (String assumption : rankedLlm.assumptionsToRecord()) {
-                plan = appendAssumption(plan, assumption);
-            }
-            planStateStore.update(plan);
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-
-            List<CoordinatorClarificationGapEvaluator.OpenGap> openB =
-                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
-            ledger =
-                    PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
-                            ledger, CoordinatorClarificationGapEvaluator.openGapIds(openB));
-            if (openB.isEmpty()) {
-                rankedLlm = emptyRankedClarification();
-            } else {
-                CoordinatorClarificationGapEvaluator.OpenGap top = openB.get(0);
-                rankedLlm =
-                        PlanningQuestionRankingPolicy.rank(
-                                plan,
-                                List.of(top.questionText()),
-                                3,
-                                ledger,
-                                profile.isBoundedClarificationChoicesEnabled(),
-                                profile.isInferBoundedChoiceFromOrInTextEnabled());
-                rankedLlm = withCoordinatorGapMeta(rankedLlm, top.gapId(), top.blocking());
-            }
-            for (String assumption : rankedLlm.assumptionsToRecord()) {
-                plan = appendAssumption(plan, assumption);
-            }
-            planStateStore.update(plan);
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-
             List<CoordinatorClarificationGapEvaluator.OpenGap> openFinal =
                     CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, aggregatedFollowUps);
             ledger =
@@ -474,16 +460,9 @@ public final class PlanningCyclePipeline {
             if (openFinal.isEmpty()) {
                 rankedLlm = emptyRankedClarification();
             } else {
-                CoordinatorClarificationGapEvaluator.OpenGap top = openFinal.get(0);
                 rankedLlm =
-                        PlanningQuestionRankingPolicy.rank(
-                                plan,
-                                List.of(top.questionText()),
-                                3,
-                                ledger,
-                                profile.isBoundedClarificationChoicesEnabled(),
-                                profile.isInferBoundedChoiceFromOrInTextEnabled());
-                rankedLlm = withCoordinatorGapMeta(rankedLlm, top.gapId(), top.blocking());
+                        rankCanonicalOpenTopGap(
+                                plan, ledger, profile, coord, openFinal.get(0));
             }
             PlanningDeliberationLedgerSync.UpsertResult upsert;
             if (openFinal.isEmpty()) {
@@ -494,7 +473,7 @@ public final class PlanningCyclePipeline {
                         PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
                                 ledger, rankedLlm, top.gapId(), top.blocking());
             }
-            return new ClarificationRoundOutcome(plan, rankedLlm, upsert);
+            return new ClarificationRoundOutcome(plan, rankedLlm, upsert, !openFinal.isEmpty());
         }
         rankedLlm =
                 PlanningQuestionRankingPolicy.rank(
@@ -511,7 +490,58 @@ public final class PlanningCyclePipeline {
         plan = planStateStore.getByContextId(contextId).orElse(plan);
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
-        return new ClarificationRoundOutcome(plan, rankedLlm, upsert);
+        return new ClarificationRoundOutcome(plan, rankedLlm, upsert, false);
+    }
+
+    static boolean resolvePlanningUserInputRequired(
+            boolean canonicalV1, boolean canonicalGapPending, UnresolvedItemLedger ledger) {
+        if (canonicalV1) {
+            return canonicalGapPending;
+        }
+        return PlanningGapEvaluator.requiresUserInputForPlanningClarification(ledger);
+    }
+
+    static String effectiveCanonicalQuestionText(
+            String templateQuestion,
+            String gapId,
+            CoordinatorClarificationGapRule rule,
+            UnresolvedItemLedger ledger) {
+        String template = templateQuestion != null ? templateQuestion.trim() : "";
+        if (template.isBlank() || gapId == null || gapId.isBlank()) {
+            return template;
+        }
+        Optional<String> last =
+                PlanningDeliberationLedgerSync.lastMergedQuestionTextForPlanningGap(ledger, gapId);
+        if (last.isEmpty()) {
+            return template;
+        }
+        if (!normalizeClarificationQuestion(template).equals(normalizeClarificationQuestion(last.get()))) {
+            return template;
+        }
+        if (rule != null && rule.getNarrowEscalationTemplate() != null && !rule.getNarrowEscalationTemplate().isBlank()) {
+            return rule.getNarrowEscalationTemplate();
+        }
+        return "You already answered part of this. To finish narrowing scope, can you spell out one concrete constraint "
+                + "(where it should live, who changes it, or an example edge case)?";
+    }
+
+    private static RankedClarification rankCanonicalOpenTopGap(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            WorkProfileDefinition profile,
+            CoordinatorClarificationSettings coord,
+            CoordinatorClarificationGapEvaluator.OpenGap top) {
+        CoordinatorClarificationGapRule rule = coord.findGapRule(top.gapId()).orElse(null);
+        String q = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger);
+        boolean bounded =
+                rule != null
+                        && rule.isUseBoundedChoiceUi()
+                        && profile != null
+                        && profile.isBoundedClarificationChoicesEnabled();
+        boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
+        RankedClarification ranked =
+                PlanningQuestionRankingPolicy.rank(plan, List.of(q), 3, ledger, bounded, inferOr);
+        return withCoordinatorGapMeta(ranked, top.gapId(), top.blocking());
     }
 
     private static RankedClarification emptyRankedClarification() {
@@ -744,7 +774,12 @@ public final class PlanningCyclePipeline {
                 spread.get("planningCycleProgressSummary") != null
                         ? spread.get("planningCycleProgressSummary").toString()
                         : "";
-        String fullForHash = ProgressDedupeHelper.normalizeProgressBody("**Planning cycle** — " + summary);
+        String progressBody =
+                firstNonBlank(getString(spread, "userCopyCoordinatorProgress"), summary);
+        if (progressBody == null) {
+            progressBody = "";
+        }
+        String fullForHash = ProgressDedupeHelper.normalizeProgressBody("**Update:** " + progressBody);
         String fp = ProgressDedupeHelper.fingerprintForBody(fullForHash);
         spread.put("planningProgressPostFingerprint", fp);
         String last = state != null ? getString(state, "planningLastProgressPostHash") : null;
@@ -776,16 +811,11 @@ public final class PlanningCyclePipeline {
         spread.put("planningClarificationRepeatCount", String.valueOf(newCount));
         boolean stuck = sameAsPrev && newCount >= 1;
         spread.put("planningClarificationStuck", stuck ? "true" : "false");
-        String lid = getString(spread, "planningClarificationLedgerItemId");
-        String lidNote =
-                lid != null && !lid.isBlank() ? " Ledger item `" + lid + "` is still open — " : " ";
         spread.put(
                 "planningClarificationStuckHint",
                 stuck
-                        ? "We already recorded your answer, but the draft still surfaces the same blocking question."
-                                + lidNote
-                                + "Reply with a concrete example or constraint, use **Use recommended default** if shown, "
-                                + "or use the coordinator menu to add scope or reframe the request."
+                        ? "I'm still missing a bit more detail on the point below — try a concrete example, who owns the "
+                                + "decision, or one edge case. If you see a default option, you can pick that to move on."
                         : "");
     }
 
@@ -935,30 +965,29 @@ public final class PlanningCyclePipeline {
         if (selectiveRerunNote != null && !selectiveRerunNote.isBlank()) {
             sb.append(selectiveRerunNote.trim()).append(' ');
         }
-        sb.append("Status (cycle ").append(cycleIteration).append("): ");
-        sb.append(roleRoundSummary != null ? roleRoundSummary : "").append(' ');
+        sb.append(truncateOneLine(roleRoundSummary != null ? roleRoundSummary : "", 200)).append(' ');
         if (synthesisNote != null && !synthesisNote.isBlank()) {
-            sb.append("Synthesis: ").append(truncateOneLine(synthesisNote, 120)).append(' ');
+            sb.append(truncateOneLine(synthesisNote, 120)).append(' ');
         }
         if ("true".equalsIgnoreCase(expansionFallbackUsed)) {
-            sb.append("Exploration expansion used deterministic fallback. ");
+            sb.append("Used a deterministic fallback for exploration this pass. ");
         }
         if (rolePassError != null && !rolePassError.isBlank()) {
-            sb.append("Pass note: ").append(truncateOneLine(rolePassError, 120)).append(' ');
+            sb.append(truncateOneLine(rolePassError, 120)).append(' ');
         }
         if (planningLlmError != null && planningLlmError.startsWith("ERROR:")) {
-            sb.append("LLM: ").append(truncateOneLine(planningLlmError, 120)).append(' ');
+            sb.append(truncateOneLine(planningLlmError, 120)).append(' ');
         } else if (planningLlmSkipReason != null
                 && !planningLlmSkipReason.isBlank()
                 && !"MISSING_DEPS".equals(planningLlmSkipReason)) {
-            sb.append("Synthesis skip: ").append(truncateOneLine(planningLlmSkipReason, 100)).append(' ');
+            sb.append(truncateOneLine(planningLlmSkipReason, 100)).append(' ');
         }
         if (ranked.userInputRequired()) {
-            sb.append("I need one answer before I can finish the draft and post the packet.");
+            sb.append("Waiting on your reply to one open question before I wrap the draft.");
         } else if (depthOk) {
-            sb.append("Depth check passed.");
+            sb.append("Draft looks solid enough to move forward.");
         } else {
-            sb.append("Draft still being strengthened: ")
+            sb.append("Still tightening the draft: ")
                     .append(truncateOneLine(depthReason != null ? depthReason : "details pending", 140));
         }
         if (cycleError != null && !cycleError.isBlank()) {
@@ -989,36 +1018,34 @@ public final class PlanningCyclePipeline {
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
         StringBuilder sb = new StringBuilder();
         if (clarificationStuck && stuckHint != null && !stuckHint.isBlank()) {
-            sb.append("**Heads up:** ").append(stuckHint).append("\n\n");
+            sb.append(stuckHint).append("\n\n");
         }
-        sb.append("**Planning update (cycle ").append(cycleIteration).append(")**\n\n");
-        sb.append("**Here's my current understanding:** ");
+        sb.append("**What I'm tracking:** ");
         if (gist.isBlank()) {
-            sb.append("Your feature request from this thread (no separate summary text on file).");
+            sb.append("your request from this thread.");
         } else {
             sb.append(gist);
         }
         sb.append(workspaceSummaryLine(plan));
 
-        sb.append("\n\n**Where the draft stands:** ");
+        sb.append("\n\n**Draft:** ");
         if (ranked.userInputRequired()) {
-            sb.append(
-                    "The coordinator passes have run on the current draft, but we are **not** posting the planning packet yet until we resolve the clarification below.");
+            sb.append("I'm holding the thread here until we clear one detail — see below.");
         } else if (readyToPostPacket) {
-            sb.append("Depth check passed; the planning packet is ready to post in this thread for review.");
+            sb.append("Ready to drop the full write-up in this thread for your review.");
         } else if (depthOk) {
-            sb.append("Depth check passed; the next steps will post or refine the packet.");
+            sb.append("In good shape; I'll keep going or post when the next step runs.");
         } else {
-            sb.append("Still strengthening the draft (").append(depthReason).append("). ");
-            sb.append("We will retry automatically inside this round or ask you only when something needs a human decision.");
+            sb.append("Still polishing (").append(depthReason).append("). ");
+            sb.append("I'll keep iterating unless I need a human call on something specific.");
         }
         if (!arch.isBlank()) {
-            sb.append("\n\n**I think this will mainly touch:** ")
+            sb.append("\n\n**Likely touchpoints:** ")
                     .append(arch.length() > 200 ? arch.substring(0, 199) + "…" : arch);
         }
 
         if (!ranked.assumptionsToRecord().isEmpty()) {
-            sb.append("\n\n**Assumptions recorded this round (auto):**\n");
+            sb.append("\n\n**Noted this round:**\n");
             for (String a : ranked.assumptionsToRecord()) {
                 sb.append("- ").append(a).append("\n");
             }
@@ -1026,25 +1053,20 @@ public final class PlanningCyclePipeline {
 
         if (ranked.userInputRequired()) {
             String q = ranked.questionText() != null ? ranked.questionText().trim() : "";
-            sb.append("\n**I need one answer before I can finish the draft:**\n\n");
+            sb.append("\n**One thing I need from you:** ");
             if (!q.isBlank()) {
                 sb.append(q).append("\n\n");
             }
-            sb.append("**Why this matters:** ");
             if (ranked.blockingQuestionCount() > 0) {
                 sb.append(
-                        "Your answer affects compatibility, security, migrations, or validation — getting it wrong would be expensive to unwind during implementation.\n\n");
+                        "This one affects compatibility, security, or migrations — a wrong guess gets expensive to unwind, so I'd rather confirm.\n\n");
             } else {
-                sb.append(
-                        "This shapes scope and design choices in the packet so implementation matches what you expect.\n\n");
+                sb.append("Your answer keeps scope and implementation aligned with what you expect.\n\n");
             }
-            sb.append(
-                    "**Next I'll:** refresh exploration, run the three coordinator passes, check depth, then post the packet or ask again if something is still ambiguous.\n");
             if (ranked.useStructuredChoices()) {
-                sb.append(
-                        "\nChoose an option below, or pick **Use recommended default** to record our baseline and continue.");
+                sb.append("Pick an option below if you see buttons, or **Use recommended default** to go with the baseline.");
             } else {
-                sb.append("\n**Reply in plain text** with your answer. You can give examples or edge cases — no need to match a fixed list.");
+                sb.append("Reply in plain text — examples and edge cases welcome.");
             }
         }
         return sb.toString().trim();
@@ -1131,6 +1153,7 @@ public final class PlanningCyclePipeline {
         m.put("planningDirtyPassesJson", "[]");
         m.put("planningDirtyPassCount", "0");
         m.put("userCopyProgressLine", "");
+        m.put("userCopyCoordinatorProgress", "");
         return m;
     }
 

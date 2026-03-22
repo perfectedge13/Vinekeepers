@@ -267,7 +267,7 @@ workflows:
       action: post_planning_progress_if_changed
       storeSpread: true
       bind:
-        content: '**Planning cycle** — {{planningCycleProgressSummary}}'
+        content: '**Update:** {{userCopyCoordinatorProgress}}'
         asRole: orchestrator
         target: thread
     - type: branch
@@ -281,11 +281,7 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Still stuck on the same question** — {{planningClarificationStuckHint}}
-
-
-          Your last answer is already in the plan. Add a concrete example, pick a default if offered, or use the coordinator
-          menu to add scope or reframe the request.'
+        content: '{{planningClarificationStuckHint}}'
         asRole: orchestrator
         target: thread
     - type: branch
@@ -342,8 +338,7 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Recorded your answer** — merging it into the draft and refreshing impacted planner sections (expansion
-          may be skipped on this pass). Another status line follows when the run finishes.'
+        content: "Thanks — I've recorded that and I'm folding it into the draft. You'll see another short update when this pass finishes."
         asRole: orchestrator
         target: thread
     - type: branch
@@ -353,10 +348,7 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Could not apply your clarification** — {{planningClarificationMergeError}}
-
-
-          Please send a short plain-text answer again in this thread.'
+        content: "I could not apply that clarification — {{planningClarificationMergeError}}. Please send a short plain-text reply in this thread."
         asRole: orchestrator
         target: thread
     - type: branch
@@ -802,6 +794,7 @@ workflows:
         - userCopyProgressDelta
         - userCopyProgressEventLatest
         - userCopyProgressLine
+        - userCopyCoordinatorProgress
         - reviewReady
         - reviewReadyReason
         - approvalReady

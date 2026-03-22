@@ -252,6 +252,34 @@ public final class PlanningDeliberationLedgerSync {
         return false;
     }
 
+    /**
+     * Latest merged planning clarification question text for a coordinator {@code gapId} (stable id in item source), or empty
+     * when none. Used to avoid repeating the same template after a user merge.
+     */
+    public static Optional<String> lastMergedQuestionTextForPlanningGap(UnresolvedItemLedger ledger, String gapId) {
+        if (ledger == null || gapId == null || gapId.isBlank()) {
+            return Optional.empty();
+        }
+        String gid = gapId.trim();
+        String last = null;
+        for (UnresolvedItem it : ledger.items()) {
+            if (it.getStatus() != UnresolvedItemStatus.MERGED) {
+                continue;
+            }
+            if (!PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"))) {
+                continue;
+            }
+            if (!gid.equals(it.getSource().getOrDefault("gapId", "").trim())) {
+                continue;
+            }
+            String q = it.getQuestionText();
+            if (q != null && !q.isBlank()) {
+                last = q.trim();
+            }
+        }
+        return Optional.ofNullable(last);
+    }
+
     private static UnresolvedItemLedger replaceMerged(
             UnresolvedItemLedger base, UnresolvedItem it, String rawAnswer, String normalizedAnswer) {
         UnresolvedItem next =

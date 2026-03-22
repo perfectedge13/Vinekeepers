@@ -135,6 +135,7 @@ profiles:
           hintDetectAllOf:
             - config
             - runtime
+          # Broad substring matches on free-text user answers (assumptions, exploration, decisions).
           resolveAnySubstring:
             - config-driven
             - config only
@@ -145,6 +146,13 @@ profiles:
             - default: assume both
             - decision (user
             - coordinator clarification (user)
+            - static
+            - static is fine
+            - compile-time
+            - build-time
+            - no runtime
+            - not runtime
+            - schema only
         - id: config_runtime_specifics
           blocking: false
           questionTemplate: >-

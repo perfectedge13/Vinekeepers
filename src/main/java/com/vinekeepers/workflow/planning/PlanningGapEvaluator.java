@@ -13,10 +13,12 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Clarification gating: {@linkplain UnresolvedItemLedger ledger} OPEN items drive {@code planningUserInputRequired} after
- * {@link PlanningDeliberationLedgerSync} upsert. In {@link com.vinekeepers.profile.CoordinatorClarificationMode#CANONICAL_V1},
- * {@link #effectiveRanked} does not rehydrate questions from stale ledger rows — the pipeline reconciles OPEN items from
- * canonical gap evaluation first.
+ * Clarification gating: after {@link PlanningDeliberationLedgerSync} upsert, legacy profiles derive
+ * {@code planningUserInputRequired} from OPEN ledger rows ({@link #requiresUserInputForPlanningClarification}). In
+ * {@link com.vinekeepers.profile.CoordinatorClarificationMode#CANONICAL_V1},
+ * {@link com.vinekeepers.workflow.planning.PlanningCyclePipeline} sets {@code planningUserInputRequired} from canonical gap
+ * evaluation (non-empty open gap set), not from OPEN rows first;
+ * {@link #effectiveRanked} does not rehydrate from stale ledger rows — reconcile runs from evaluator output first.
  */
 public final class PlanningGapEvaluator {
 
@@ -25,7 +27,8 @@ public final class PlanningGapEvaluator {
     private PlanningGapEvaluator() {}
 
     /**
-     * True when the ledger has at least one OPEN planning-clarification item with non-empty question text.
+     * True when the ledger has at least one OPEN planning-clarification item with non-empty question text. Used for legacy
+     * coordinator mode; canonical_v1 uses evaluator-driven pending in {@code PlanningCyclePipeline}.
      */
     public static boolean requiresUserInputForPlanningClarification(UnresolvedItemLedger ledger) {
         return firstOpenPlanningClarification(ledger).isPresent();

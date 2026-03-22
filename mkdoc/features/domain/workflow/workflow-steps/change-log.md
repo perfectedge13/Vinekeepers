@@ -5,6 +5,7 @@
 ## 2026-03-22
 
 - **Canonical coordinator clarification (software_feature_planning_v2):** `config/work-profiles.yaml` may declare **`coordinatorClarification`** with **`mode: canonical_v1`** and **`gaps`** (hint triggers, optional **`canonicalOpenAllOf`**, **`resolveAnySubstring`**). **`CoordinatorClarificationGapEvaluator`** opens gaps from merged plan text; **`PlanningCyclePipeline`** reconciles stale OPEN **`planning_clarification`** ledger rows, upserts by stable **`gapId`**, and injects **`gapId`** into **`planningClarificationMetaJson`**. **`PlanningGapEvaluator.effectiveRanked`** skips ledger rehydration in canonical_v1. **`merge_planning_clarification_choice`** resolves ledger items by **`gapId`** when needed. Rollback: set **`mode: legacy`** or omit the block (defaults to legacy). Tests: CoordinatorClarificationGapEvaluatorTest, PlanningDeliberationLedgerSyncTest, PlanningGapEvaluatorTest, WorkProfileLoaderTest.
+- **Live clarification loop (canonical_v1):** **`planningUserInputRequired`** follows open canonical gaps (not OPEN-ledger-first). Coordinator questions rank as plain text unless a gap sets **`useBoundedChoiceUi`** (optional **`inferOrChoices`**, **`narrowEscalationTemplate`**). **`merge_planning_clarification_choice`** re-evaluates gaps and reconciles the ledger on the same turn. Thread progress uses **`userCopyCoordinatorProgress`** with an **Update:** prefix; orchestrator and stuck copy are PM-style. **`resolveAnySubstring`** expanded for common “static / compile-time” answers on **`config_vs_runtime_scope`**.
 
 ## 2026-03-21
 

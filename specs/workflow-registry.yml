@@ -354,9 +354,11 @@ assets:
       architect/auditor/scribe order from planningRolePassOrder bind; sets planningPhase READY_FOR_REVIEW when draft is
       review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
       derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
-      mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts;
-      legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering; PlanningGapEvaluator effectiveRanked
-      skips ledger rehydration in canonical_v1 mode
+      mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
+      and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); canonical coordinator questions use
+      plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
+      post_planning_progress_if_changed; legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering;
+      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -365,9 +367,10 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningGapEvaluator.java
     role: >-
-      Clarification gating after PlanningDeliberationLedgerSync upsert: requiresUserInputForPlanningClarification reflects OPEN
-      planning_clarification items; effectiveRanked rehydrates from the ledger in legacy mode only; CANONICAL_V1 coordinator
-      profiles skip rehydration so stale OPEN rows cannot resurrect questions after CoordinatorClarificationGapEvaluator reconcile
+      Clarification gating: requiresUserInputForPlanningClarification reflects OPEN planning_clarification items for legacy
+      profiles; PlanningCyclePipeline sets planningUserInputRequired from canonical gap pending when mode is CANONICAL_V1;
+      effectiveRanked rehydrates from the ledger in legacy mode only; CANONICAL_V1 profiles skip rehydration so stale OPEN rows
+      cannot resurrect questions after CoordinatorClarificationGapEvaluator reconcile
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -1430,10 +1433,11 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/MergePlanningClarificationChoiceAction.java
     role: >-
       Workflow action merge_planning_clarification_choice — applies planningClarificationRaw to assumptions and decision_log;
-      clears planningClarificationChoicesJson; sets planningUserInputRequired false; on success spreads planningPreviousClarificationQuestionText
-      (normalized) and resets planningClarificationRepeatCount; DeliberationEngine + planningDirtyPassesJson from
-      DeliberationDirtyPassIndex; spreads planningClarificationMergeOk true on success
-      and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE)
+      clears planningClarificationChoicesJson; when coordinatorClarification mode is canonical_v1, re-evaluates open gaps,
+      reconciles OPEN planning_clarification rows, and sets planningUserInputRequired from gap state (otherwise false); on
+      success spreads planningPreviousClarificationQuestionText (normalized) and resets planningClarificationRepeatCount;
+      DeliberationEngine + planningDirtyPassesJson from DeliberationDirtyPassIndex; spreads planningClarificationMergeOk true
+      on success and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE)
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001

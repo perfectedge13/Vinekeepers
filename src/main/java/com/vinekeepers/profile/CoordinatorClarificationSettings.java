@@ -2,6 +2,7 @@ package com.vinekeepers.profile;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Optional {@code coordinatorClarification} block from work profile YAML. */
 public final class CoordinatorClarificationSettings {
@@ -29,5 +30,14 @@ public final class CoordinatorClarificationSettings {
 
     public boolean isCanonicalV1() {
         return mode == CoordinatorClarificationMode.CANONICAL_V1;
+    }
+
+    /** Resolves a gap rule by stable {@code id} from profile YAML. */
+    public Optional<CoordinatorClarificationGapRule> findGapRule(String gapId) {
+        if (gapId == null || gapId.isBlank()) {
+            return Optional.empty();
+        }
+        String id = gapId.trim();
+        return gaps.stream().filter(g -> id.equals(g.getId())).findFirst();
     }
 }

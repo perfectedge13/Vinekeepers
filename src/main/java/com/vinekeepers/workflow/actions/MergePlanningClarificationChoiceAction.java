@@ -3,6 +3,7 @@ package com.vinekeepers.workflow.actions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
@@ -10,6 +11,7 @@ import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.workflow.deliberation.DeliberationDirtyPassIndex;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
+import com.vinekeepers.workflow.planning.CoordinatorClarificationGapEvaluator;
 import com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSync;
 
 import java.util.LinkedHashMap;
@@ -137,7 +139,23 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             spread.put("planningJustMergedClarification", "true");
             spread.put("planningClarificationChoicesJson", "[]");
             spread.put("planningClarificationMetaJson", "{}");
-            spread.put("planningUserInputRequired", "false");
+            WorkProfileDefinition profileDef =
+                    plan.getProfileId() != null && !plan.getProfileId().isBlank()
+                            ? workProfileRegistry.get(plan.getProfileId()).orElse(null)
+                            : null;
+            FeaturePlanState refreshed = planStateStore.getByContextId(contextId).orElse(plan);
+            if (profileDef != null && profileDef.getCoordinatorClarification().isCanonicalV1()) {
+                var open =
+                        CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
+                                refreshed, profileDef.getCoordinatorClarification(), List.of());
+                ledger =
+                        PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
+                                ledger, CoordinatorClarificationGapEvaluator.openGapIds(open));
+                UnresolvedItemLedger.mergeLedgerIntoSpread(spread, ledger);
+                spread.put("planningUserInputRequired", open.isEmpty() ? "false" : "true");
+            } else {
+                spread.put("planningUserInputRequired", "false");
+            }
             spread.put("planningPhase", "REVISING");
             DeliberationEngine.applyDerivedDeliberationSpread(spread);
             DeliberationDirtyPassIndex.writeDirtyPassesSpread(spread, state, bind, List.of("clarification_merge"));

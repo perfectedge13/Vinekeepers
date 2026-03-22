@@ -101,4 +101,36 @@ class PlanningDeliberationLedgerSyncTest {
                         .orElseThrow();
         assertEquals("my_gap", it.getSource().get("gapId"));
     }
+
+    @Test
+    void lastMergedQuestionTextForPlanningGapReturnsLatestForGapId() {
+        UnresolvedItem older =
+                new UnresolvedItem(
+                        "a",
+                        "f1",
+                        UnresolvedItemStatus.MERGED,
+                        "",
+                        "First?",
+                        "normal",
+                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        List.of(),
+                        List.of(),
+                        0);
+        UnresolvedItem newer =
+                new UnresolvedItem(
+                        "b",
+                        "f2",
+                        UnresolvedItemStatus.MERGED,
+                        "",
+                        "Second?",
+                        "normal",
+                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        List.of(),
+                        List.of(),
+                        0);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(older).withAdded(newer);
+        assertEquals(
+                "Second?",
+                PlanningDeliberationLedgerSync.lastMergedQuestionTextForPlanningGap(ledger, "g1").orElseThrow());
+    }
 }
