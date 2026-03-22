@@ -51,7 +51,7 @@ class ExecutePlanningRoomCycleActionSummaryTest {
         assertTrue(ranked.userInputRequired());
         String summary =
                 com.vinekeepers.workflow.planning.PlanningCyclePipeline.buildOrchestratorSummary(
-                        plan, true, "", ranked, 1, false, false, "");
+                        plan, true, "", ranked, 1, false, false, "", true);
         assertTrue(summary.contains("exponential backoff"));
         assertTrue(summary.contains("What I'm tracking"));
         assertTrue(summary.contains("One thing I need from you"));

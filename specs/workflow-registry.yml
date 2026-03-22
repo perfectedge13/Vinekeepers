@@ -358,7 +358,12 @@ assets:
       and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); canonical coordinator questions use
       plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
       post_planning_progress_if_changed; legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering;
-      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode
+      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode; planningOrchestratorRoundSummary and
+      planningCycleProgressSummary branch on the same resolved planningUserInputRequired gate as workflow YAML (not ranked
+      userInputRequired alone); when canonical gaps remain open but the question ranker drops the template, ensureRankedForOpenCanonicalGap
+      synthesizes a non-empty RankedClarification before upsert so ledger and prompts stay consistent; spread keys
+      planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
+      planningUserInputRequired
     requires:
       - REQ-WORKFLOW-001
     feature_ids:

@@ -16,6 +16,9 @@ import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CL
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.vinekeepers.profile.WorkProfileDefinition;
+import com.vinekeepers.state.planning.FeaturePlanState;
+
 class PlanningCyclePipelineCanonicalClarificationTest {
 
     @Test
@@ -91,11 +94,80 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         RankedClarification ranked =
                 new RankedClarification(true, "", "[]", "{}", 1, List.of(), false, "Which API version?");
         String summary =
-                PlanningCyclePipeline.buildOrchestratorSummary(plan, true, "", ranked, 2, false, false, "");
+                PlanningCyclePipeline.buildOrchestratorSummary(plan, true, "", ranked, 2, false, false, "", true);
         assertFalse(summary.contains("Planning update"));
         assertFalse(summary.contains("Depth check passed"));
         assertFalse(summary.contains("planning packet"));
         assertFalse(summary.contains("Next I'll"));
+    }
+
+    @Test
+    void orchestratorSummaryUsesResolvedGateNotRankedFlag() {
+        FeaturePlanState plan =
+                new FeaturePlanState(
+                        "c",
+                        "f",
+                        "s",
+                        "room",
+                        null,
+                        null,
+                        "t",
+                        "Short request",
+                        "PLANNING",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        FeaturePlanState.initialSectionStatuses(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "software_feature_planning",
+                        Map.of(),
+                        null,
+                        null);
+        RankedClarification rankedNoAsk =
+                new RankedClarification(false, "", "[]", "{}", 0, List.of(), false, "");
+        String waiting =
+                PlanningCyclePipeline.buildOrchestratorSummary(
+                        plan, true, "", rankedNoAsk, 1, false, false, "", true);
+        assertTrue(waiting.contains("holding the thread"));
+        assertFalse(waiting.contains("keep going"));
+
+        RankedClarification rankedAsk =
+                new RankedClarification(true, "", "[]", "{}", 1, List.of(), false, "Which version?");
+        String moving =
+                PlanningCyclePipeline.buildOrchestratorSummary(
+                        plan, true, "", rankedAsk, 1, false, false, "", false);
+        assertFalse(moving.contains("holding the thread"));
+    }
+
+    @Test
+    void ensureRankedRepairsWhenRankerDropsShortCanonicalTemplate() {
+        CoordinatorClarificationGapRule rule =
+                new CoordinatorClarificationGapRule("g_low", false, "ok", List.of("x"), List.of(), List.of());
+        CoordinatorClarificationSettings coord =
+                new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(rule));
+        WorkProfileDefinition profile =
+                new WorkProfileDefinition(
+                        "p", "", List.of(), List.of(), false, false, List.of(), coord);
+        CoordinatorClarificationGapEvaluator.OpenGap top = new CoordinatorClarificationGapEvaluator.OpenGap("g_low", false, "ok");
+        RankedClarification dropped =
+                com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.rank(
+                        null, List.of("ok"), 3, UnresolvedItemLedger.empty(), false, false);
+        assertFalse(dropped.userInputRequired());
+        RankedClarification repaired =
+                invokeEnsureRankedForOpenCanonicalGap(
+                        null, UnresolvedItemLedger.empty(), profile, coord, top, dropped);
+        assertTrue(repaired.userInputRequired());
+        assertFalse(repaired.questionText() == null || repaired.questionText().isBlank());
     }
 
     @Test
@@ -144,8 +216,8 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                                         List.of())));
         var top =
                 new CoordinatorClarificationGapEvaluator.OpenGap("g_or", false, "Use option A or option B for timeouts?");
-        com.vinekeepers.profile.WorkProfileDefinition profile =
-                new com.vinekeepers.profile.WorkProfileDefinition(
+        WorkProfileDefinition profile =
+                new WorkProfileDefinition(
                         "p",
                         "",
                         List.of(),
@@ -159,10 +231,34 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         assertFalse(ranked.useStructuredChoices());
     }
 
-    private static RankedClarification invokeRankCanonicalOpenTopGap(
-            com.vinekeepers.state.planning.FeaturePlanState plan,
+    private static RankedClarification invokeEnsureRankedForOpenCanonicalGap(
+            FeaturePlanState plan,
             UnresolvedItemLedger ledger,
-            com.vinekeepers.profile.WorkProfileDefinition profile,
+            WorkProfileDefinition profile,
+            CoordinatorClarificationSettings coord,
+            CoordinatorClarificationGapEvaluator.OpenGap top,
+            RankedClarification ranked) {
+        try {
+            var m =
+                    PlanningCyclePipeline.class.getDeclaredMethod(
+                            "ensureRankedForOpenCanonicalGap",
+                            FeaturePlanState.class,
+                            UnresolvedItemLedger.class,
+                            WorkProfileDefinition.class,
+                            CoordinatorClarificationSettings.class,
+                            CoordinatorClarificationGapEvaluator.OpenGap.class,
+                            RankedClarification.class);
+            m.setAccessible(true);
+            return (RankedClarification) m.invoke(null, plan, ledger, profile, coord, top, ranked);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static RankedClarification invokeRankCanonicalOpenTopGap(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            WorkProfileDefinition profile,
             CoordinatorClarificationSettings coord,
             CoordinatorClarificationGapEvaluator.OpenGap top) {
         try {
@@ -171,7 +267,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                             "rankCanonicalOpenTopGap",
                             com.vinekeepers.state.planning.FeaturePlanState.class,
                             UnresolvedItemLedger.class,
-                            com.vinekeepers.profile.WorkProfileDefinition.class,
+                            WorkProfileDefinition.class,
                             CoordinatorClarificationSettings.class,
                             CoordinatorClarificationGapEvaluator.OpenGap.class);
             m.setAccessible(true);
