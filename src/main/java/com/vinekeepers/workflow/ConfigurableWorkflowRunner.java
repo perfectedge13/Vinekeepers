@@ -27,6 +27,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     private final String sessionKeyStrategyName;
     private final ConversationMode conversationMode;
     private final List<WorkflowStep> steps;
+    private final Map<String, Object> workflowLlmDefaults;
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry) {
         this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null);
@@ -46,6 +47,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
         WorkflowActionRegistry resolvedRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.sessionKeyStrategyName = sessionKeyStrategyName;
         this.conversationMode = conversationMode != null ? conversationMode : ConversationMode.SINGLE_EVENT;
+        this.workflowLlmDefaults = resolvedDefinition.getLlm();
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
                 toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
     }
@@ -74,6 +76,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             state.put("__sessionKey", stateKey);
             state.put("__botId", botId);
         }
+        applyWorkflowLlmDefaults(state);
 
         int maxSteps = 100;
         for (int i = 0; i < maxSteps; i++) {
@@ -194,6 +197,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 case "call_action" -> {
                     boolean storeSpread = Boolean.TRUE.equals(stepMap.get("storeSpread"))
                             || "true".equalsIgnoreCase(String.valueOf(stepMap.get("storeSpread")));
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> stepLlm = (Map<String, Object>) stepMap.get("llm");
                     out.add(new com.vinekeepers.workflow.steps.CallActionStep(
                             registry,
                             toolRunner,
@@ -201,7 +206,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                             (String) stepMap.get("action"),
                             (Map<String, Object>) stepMap.get("bind"),
                             (String) stepMap.get("storeIn"),
-                            storeSpread));
+                            storeSpread,
+                            stepLlm));
                 }
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
@@ -211,6 +217,24 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    private void applyWorkflowLlmDefaults(ConfigurableWorkflowState state) {
+        if (state == null || workflowLlmDefaults == null || workflowLlmDefaults.isEmpty()) {
+            return;
+        }
+        Object provider = workflowLlmDefaults.get("provider");
+        if (provider != null && !provider.toString().isBlank()) {
+            state.put("workflowLlmProvider", provider.toString());
+        }
+        Object model = workflowLlmDefaults.get("model");
+        if (model != null && !model.toString().isBlank()) {
+            state.put("workflowLlmModel", model.toString());
+        }
+        Object timeoutMs = workflowLlmDefaults.get("timeoutMs");
+        if (timeoutMs != null) {
+            state.put("workflowLlmTimeoutMs", timeoutMs.toString());
+        }
     }
 
     private static List<String> toTransformList(Object transformObj) {

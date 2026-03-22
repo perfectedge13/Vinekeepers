@@ -78,32 +78,47 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
 
         spread.put("planningPhase", "REQUEST_EXPANSION");
-        new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, state, bind);
-
         List<String> aggregatedFollowUps = new ArrayList<>();
+        Map<String, Object> work = new LinkedHashMap<>();
+        if (state != null) {
+            work.putAll(state);
+        }
+        Object expansionObj = new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry)
+                .run(event, work, bind);
+        if (expansionObj instanceof Map<?, ?> expMap) {
+            for (Map.Entry<?, ?> e : expMap.entrySet()) {
+                if (e.getKey() != null) {
+                    work.put(e.getKey().toString(), e.getValue());
+                    spread.put(e.getKey().toString(), e.getValue());
+                }
+            }
+        }
+        mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
+
+        new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
         String depthReason = "";
         boolean depthOk = false;
 
         for (int inner = 0; inner < MAX_BOT_INNER_ROUNDS; inner++) {
             spread.put("planningPhase", "DRAFTING");
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.ARCHITECT, plan, profile, event, state, spread, aggregatedFollowUps);
+            runRole(PlanningRole.ARCHITECT, plan, profile, event, work, spread, aggregatedFollowUps);
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.AUDITOR, plan, profile, event, state, spread, aggregatedFollowUps);
+            runRole(PlanningRole.AUDITOR, plan, profile, event, work, spread, aggregatedFollowUps);
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            runRole(PlanningRole.SCRIBE, plan, profile, event, state, spread, aggregatedFollowUps);
+            runRole(PlanningRole.SCRIBE, plan, profile, event, work, spread, aggregatedFollowUps);
 
-            new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, state, bind);
+            new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
 
             Object synthObj =
                     new RunLlmPlanningSynthesisAction(openAiChatClient, planStateStore, workProfileRegistry)
-                            .run(event, state, bind);
+                            .run(event, work, bind);
             @SuppressWarnings("unchecked")
             Map<String, Object> synthSpread =
                     synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
             mergeSynthFollowUps(synthSpread, aggregatedFollowUps);
 
-            new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, state, bind);
+            new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
 
             plan = planStateStore.getByContextId(contextId).orElse(plan);
             PlanningPacketDepthEvaluator.DepthResult dr = PlanningPacketDepthEvaluator.evaluate(plan);
@@ -111,6 +126,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
             depthReason = dr.reason() != null ? dr.reason() : "";
             spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
             spread.put("planningPacketDepthReason", depthReason);
+            spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
             if (depthOk) {
                 break;
             }
@@ -142,6 +158,26 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
             spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
         return spread;
+    }
+
+    private static void mergeExpansionFollowUpsFromWork(Map<String, Object> work, List<String> aggregated) {
+        if (work == null || aggregated == null) {
+            return;
+        }
+        Object raw = work.get("planningExpansionFollowUpsJson");
+        if (raw == null) {
+            return;
+        }
+        try {
+            List<String> qs = JSON.readValue(raw.toString(), new TypeReference<>() {});
+            for (String q : qs) {
+                if (q != null && !q.isBlank()) {
+                    aggregated.add(q.trim());
+                }
+            }
+        } catch (JsonProcessingException ignored) {
+            // ignore
+        }
     }
 
     private static void mergeSynthFollowUps(Map<String, Object> synthesisSpread, List<String> aggregated) {
@@ -236,6 +272,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
         m.put("planningOrchestratorRoundSummary", "");
         m.put("planningPacketDepthOk", "false");
         m.put("planningPacketDepthReason", "");
+        m.put("planningPacketDepthRetryRecommended", "false");
         m.put("planningReadyToPostPacket", "false");
         m.put("planningRevisionNeeded", "false");
         m.put("planningQuestionsAskedThisRound", "0");

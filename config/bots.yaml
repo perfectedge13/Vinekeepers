@@ -3,9 +3,8 @@ bots:
 - id: luna
   persona:
     name: Luna
-    systemPrompt: You are Luna, a bot that helps users run code changes via Cursor
-      Cloud API. You gather which project to update and what change to make, then
-      create a branch, run nova-commit, push, and optionally open a PR.
+    systemPrompt: You are Luna, a bot that helps users run code changes via Cursor Cloud API. You gather which project to
+      update and what change to make, then create a branch, run nova-commit, push, and optionally open a PR.
   workflow:
     type: configured
     params:
@@ -19,9 +18,8 @@ bots:
 - id: arrietty
   persona:
     name: Arrietty
-    systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature
-      rooms. You help users in this channel with follow-up and context for Cursor
-      runs.
+    systemPrompt: You are Arrietty (Orchestrator), the primary coordinator in feature rooms. You help users in this channel
+      with follow-up and context for Cursor runs.
   sessionKeyStrategy: thread
   conversationMode: conversational
   workflow:
@@ -38,9 +36,8 @@ bots:
 - id: architect
   persona:
     name: Architect
-    systemPrompt: You are Architect, a feature room participant. In the intake/spec
-      thread, you contribute visible design and structure proposals when the workflow
-      drives role turns; the main room stays coordinator-led so you do not auto-reply
+    systemPrompt: You are Architect, a feature room participant. In the intake/spec thread, you contribute visible design
+      and structure proposals when the workflow drives role turns; the main room stays coordinator-led so you do not auto-reply
       to generic room traffic.
   sessionKeyStrategy: thread
   workflow:
@@ -53,8 +50,7 @@ bots:
 - id: auditor
   persona:
     name: Auditor
-    systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you
-      reply only when invoked via action.
+    systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you reply only when invoked via action.
   sessionKeyStrategy: thread
   workflow:
     type: configured
@@ -66,9 +62,8 @@ bots:
 - id: scribe
   persona:
     name: Scribe
-    systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread,
-      you post consolidation and status when the workflow drives role turns; the room
-      channel defaults to the orchestrator for summaries.
+    systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread, you post consolidation and status
+      when the workflow drives role turns; the room channel defaults to the orchestrator for summaries.
   sessionKeyStrategy: thread
   workflow:
     type: configured
@@ -80,9 +75,8 @@ bots:
 - id: gadget
   persona:
     name: Gadget
-    systemPrompt: You are Gadget, a DevOps assistant. When @Gadget in the ops channel,
-      you offer deploy actions, gather project and branch, run Ansible on the host,
-      and post progress to a Discord thread.
+    systemPrompt: You are Gadget, a DevOps assistant. When @Gadget in the ops channel, you offer deploy actions, gather project
+      and branch, run Ansible on the host, and post progress to a Discord thread.
   workflow:
     type: configured
     params:
@@ -120,20 +114,37 @@ workflows:
     - type: done
       message: ''
   arrietty_room:
+    llm:
+      provider: openai
+      model: gpt-4o-mini
+      timeoutMs: 120000
     steps:
     - type: call_action
       action: hydrate_planning_session
       storeSpread: true
+    - type: call_action
+      action: ensure_repo_workspace
+    - type: call_action
+      action: spread_plan_workspace_signals
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: repoWorkspaceReady
+          value: 'true'
+        next: 28
+      - when: else
+        next: 27
     - type: branch
       branches:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 63
+        next: 61
       - when:
           key: planningIntakeThread
           value: 'true'
-        next: 2
+        next: 5
       - when: else
         next: 57
     - type: call_action
@@ -150,9 +161,9 @@ workflows:
       - when:
           key: planningHasConfirmPending
           value: 'true'
-        next: 6
+        next: 9
       - when: else
-        next: 14
+        next: 17
     - type: call_action
       action: build_proposal_confirm_prompt
       storeSpread: true
@@ -161,9 +172,9 @@ workflows:
       - when:
           key: proposalConfirmPrompt
           operator: nonblank
-        next: 8
+        next: 11
       - when: else
-        next: 14
+        next: 17
     - type: prompt_for_field
       prompt: '{{proposalConfirmPrompt}}'
       storeIn: discoveryAnswerRaw
@@ -182,11 +193,11 @@ workflows:
       - when:
           key: planningHasConfirmPending
           value: 'true'
-        next: 6
+        next: 9
         clear:
         - discoveryAnswerRaw
       - when: else
-        next: 14
+        next: 17
     - type: call_action
       action: get_structured_discovery_gaps
       storeSpread: true
@@ -195,9 +206,9 @@ workflows:
       - when:
           key: discoveryHasOpenGaps
           value: 'true'
-        next: 16
+        next: 19
       - when: else
-        next: 24
+        next: 28
     - type: call_action
       action: build_insight_discovery_agenda
       storeSpread: true
@@ -206,9 +217,9 @@ workflows:
       - when:
           key: discoveryCurrentQuestionPrompt
           operator: nonblank
-        next: 18
+        next: 21
       - when: else
-        next: 24
+        next: 1
     - type: prompt_for_field
       prompt: '{{discoveryCurrentQuestionPrompt}}'
       storeIn: discoveryAnswerRaw
@@ -226,35 +237,21 @@ workflows:
       - when:
           key: discoveryBlockingIssueMode
           value: 'true'
-        next: 24
+        next: 28
       - when:
           key: discoveryHasOpenGaps
           value: 'true'
-        next: 16
+        next: 19
         clear:
         - discoveryAnswerRaw
       - when: else
-        next: 24
-    - type: call_action
-      action: ensure_repo_workspace
-    - type: call_action
-      action: spread_plan_workspace_signals
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: repoWorkspaceReady
-          value: 'true'
         next: 28
-      - when: else
-        next: 27
     - type: call_action
       action: post_channel_message
       bind:
         content: '**Repo workspace** — {{repoWorkspaceStatusSummary}}
 
-          Planning will continue from your request text; local file snippets may be
-          limited until a workspace is available.'
+          Planning will continue from your request text; local file snippets may be limited until a workspace is available.'
         asRole: orchestrator
         target: thread
     - type: call_action
@@ -300,10 +297,10 @@ workflows:
       - when: else
         next: 42
     - type: call_action
-      action: post_planning_packet_thread
+      action: evaluate_planning_packet_depth
       storeSpread: true
     - type: call_action
-      action: evaluate_planning_packet_depth
+      action: post_planning_packet_thread
       storeSpread: true
     - type: call_action
       action: run_plan_critique_and_readiness
@@ -338,31 +335,31 @@ workflows:
       - when:
           key: planReadinessStatus
           value: NEEDS_HUMAN_DECISION
-        next: 77
+        next: 72
       - when: else
         next: 44
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Planning packet not ready yet** — {{planningRoomCycleError}}
+        content: '**Draft blocked — packet not posted** — {{planningRoomCycleError}}
 
 
           {{planningPacketDepthReason}}
 
 
-          The coordinator menu will offer **Continue to planning packet** to retry,
-          or add a brief note in-thread.'
+          Retry depth: **planningPacketDepthRetryRecommended** = {{planningPacketDepthRetryRecommended}}. Use the **coordinator
+          menu** (buttons) in this thread: continue with a deterministic draft, retry after adding detail, or answer clarifying
+          questions — no typed status/retry/close commands.'
         asRole: orchestrator
         target: thread
     - type: branch
       branches:
       - when: else
-        next: 66
+        next: 61
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Pre-launch review** (planning packet posted above in one or more
-          messages)
+        content: '**Pre-launch review** (planning packet posted above in one or more messages)
 
           **Status:** {{planReadinessStatus}}
 
@@ -473,22 +470,21 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request
-          summary is in the planning packet above.'
+        content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request summary is in the planning packet
+          above.'
         asRole: orchestrator
         target: thread
     - type: call_action
       action: post_channel_message
       bind:
-        content: Feature room ready. Launching Cursor run from the approved planning
-          packet.
+        content: Feature room ready. Launching Cursor run from the approved planning packet.
         asRole: orchestrator
         target: room
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout
-          up to ~2 minutes). A success or failure message follows in this thread.'
+        content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout up to ~2 minutes). A success or failure
+          message follows in this thread.'
         asRole: orchestrator
         target: thread
     - type: call_action
@@ -502,54 +498,23 @@ workflows:
           value: 'false'
         next: 54
       - when: else
-        next: 86
+        next: 81
     - type: call_action
       action: post_channel_message
       bind:
-        content: 'Planning blocked: readiness is BLOCKED ({{planCritiqueError}}).
-          {{planReadinessSummary}}'
+        content: 'Planning blocked: readiness is BLOCKED ({{planCritiqueError}}). {{planReadinessSummary}}'
         asRole: orchestrator
         target: thread
     - type: call_action
       action: post_channel_message
       bind:
-        content: Planning blocked — cannot launch until workspace/gaps are resolved.
-          See intake/spec thread.
+        content: Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread.
         asRole: orchestrator
         target: room
     - type: done
       message: Planning blocked; not launching.
     - type: done
       message: Planning rejected; not launching.
-    - type: capture_field
-      storeIn: roomAction
-      trimAndLower: true
-    - type: branch
-      branches:
-      - when:
-          key: roomAction
-          value: status
-        next: 60
-      - when:
-          key: roomAction
-          value: retry
-        next: 61
-      - when:
-          key: roomAction
-          value: close
-        next: 62
-      - when:
-          key: roomAction
-          value: ''
-        next: 63
-      - when: else
-        next: 63
-    - type: done
-      message: 'Room status: active. Repo and request are in context.'
-    - type: done
-      message: Retry requested. You can ask for another run.
-    - type: done
-      message: Room closed. Use the channel for follow-up.
     - type: done
       message: Use the coordinator menu in the intake thread to continue planning.
     - type: done
@@ -567,9 +532,8 @@ workflows:
           **Request:** {{codeChange}}
 
 
-          We will explore what this request means, expand drafts from repo context,
-          then post the planning packet. **Use the buttons or menu below** to continue,
-          add scope/must-haves/risks, or jump to clarifying questions.'
+          We will explore what this request means, expand drafts from repo context, then post the planning packet. **Use the
+          buttons or menu below** to continue, add scope/must-haves/risks, or jump to clarifying questions.'
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
@@ -590,19 +554,19 @@ workflows:
       - when:
           key: intakeChoice
           value: continue_planning
-        next: 69
+        next: 64
         clear:
         - discoveryAnswerRaw
       - when:
           key: intakeChoice
           value: add_details
-        next: 73
+        next: 68
       - when:
           key: intakeChoice
           value: clarify_questions
-        next: 16
+        next: 19
       - when: else
-        next: 66
+        next: 61
         clear:
         - intakeChoice
     - type: call_action
@@ -616,14 +580,13 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 2
+        next: 5
         clear:
         - coordinatorKickoff
         - discoveryAnswerRaw
         - intakeChoice
     - type: prompt_for_field
-      prompt: Add scope, must-haves, risks, or constraints (one message). We will
-        merge into the plan.
+      prompt: Add scope, must-haves, risks, or constraints (one message). We will merge into the plan.
       storeIn: discoveryAnswerRaw
     - type: capture_field
       storeIn: discoveryAnswerRaw
@@ -637,7 +600,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 66
+        next: 61
         clear:
         - intakeChoice
         - discoveryAnswerRaw
@@ -660,8 +623,7 @@ workflows:
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
-      prompt: Readiness needs your decision. Continue to launch approval or revise
-        the plan first?
+      prompt: Readiness needs your decision. Continue to launch approval or revise the plan first?
       storeIn: readinessProceedRaw
       intent: present_choices
       choices:
@@ -676,11 +638,11 @@ workflows:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 83
+        next: 78
       - when:
           key: readinessProceedRaw
           value: revise
-        next: 2
+        next: 5
         clear:
         - readinessProceedRaw
         - discoveryAnswerRaw
@@ -697,7 +659,7 @@ workflows:
         - discoveryBundledApplyJson
         - intakeChoice
       - when: else
-        next: 71
+        next: 66
     - type: call_action
       action: acknowledge_readiness_human_decision
       storeSpread: true
@@ -846,19 +808,15 @@ workflows:
         mode: replace
         data:
           feature_summary: '{{codeChange}}'
-          current_state_summary: Baseline to be confirmed in intake — describe current
-            behavior and gaps before the change.
-          scope_summary: Refine in intake thread — initial scope to be confirmed with
-            coordinator.
+          current_state_summary: ''
+          scope_summary: ''
           user_stories: ''
-          acceptance_criteria: Draft — refine in intake thread; criteria must be testable
-            before approval.
+          acceptance_criteria: ''
     - type: call_action
       action: post_channel_message
       bind:
-        content: Continue planning in this **intake/spec** thread. Discovery, review,
-          and launch approval all happen here — the coordinator will post next; reply
-          in-thread when prompted.
+        content: Continue planning in this **intake/spec** thread. Discovery, review, and launch approval all happen here
+          — the coordinator will post next; reply in-thread when prompted.
         asRole: orchestrator
         target: thread
     - type: call_action
@@ -866,8 +824,7 @@ workflows:
       bind:
         intakeThreadId: '{{deliveryChannelId}}'
     - type: done
-      message: Feature room is ready. Continue in the intake/spec thread above to
-        complete the plan, approval, and launch.
+      message: Feature room is ready. Continue in the intake/spec thread above to complete the plan, approval, and launch.
     - type: done
       message: Could not create room.
     - type: done

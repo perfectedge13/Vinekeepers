@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.planreview;
 
+import com.vinekeepers.state.planning.AssumptionEntry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 
 import java.util.ArrayList;
@@ -70,7 +71,13 @@ public final class PlanningThreadPacketFormatter {
                     "**Architecture & impacted components**",
                     (comps.isBlank() ? "" : "**Components:** " + comps + "\n\n") + (arch.isBlank() ? orPlaceholder("") : arch));
         }
-        appendSection(sb, "**Risks, edge cases, rollout**", orPlaceholder(risks));
+        appendSection(sb, "**Risks & mitigations**", orPlaceholder(risks));
+        appendSection(
+                sb,
+                "**Rollout / fallback**",
+                risks != null && risks.length() > 40
+                        ? "_See risks above for mitigations; prefer staged enablement and a documented revert path._"
+                        : "_Plan staged rollout, monitoring, and a revert path before wide release._");
         appendSection(sb, "**Open questions**", orPlaceholder(openQ));
         if (!decisions.isBlank()) {
             appendSection(sb, "**Decision log**", decisions);

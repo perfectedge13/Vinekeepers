@@ -50,6 +50,10 @@ public final class OpenAiChatClient {
     }
 
     private static String defaultBaseUrl() {
+        String preferred = Env.get("OPENAI_BASE_URL", "");
+        if (preferred != null && !preferred.isBlank()) {
+            return trimSlash(preferred);
+        }
         return trimSlash(Env.get("OPENAI_API_BASE_URL", "https://api.openai.com/v1"));
     }
 
@@ -83,13 +87,25 @@ public final class OpenAiChatClient {
      * @return assistant message content or error prefix {@code ERROR: ...}
      */
     public String complete(String systemPrompt, String userMessage) {
+        return complete(systemPrompt, userMessage, null, null);
+    }
+
+    /**
+     * @param modelOverride   when non-blank, replaces default model for this call
+     * @param timeoutMsOverride when non-null and positive, HTTP timeout for this call
+     * @return assistant message content or error prefix {@code ERROR: ...}
+     */
+    public String complete(String systemPrompt, String userMessage, String modelOverride, Long timeoutMsOverride) {
         if (!isConfigured()) {
             return "ERROR: OPENAI_API_KEY not set.";
         }
         try {
-            long requestMs = parseLongMs(Env.get("OPENAI_HTTP_REQUEST_TIMEOUT_MS", "120000"), 120000);
+            long requestMs = timeoutMsOverride != null && timeoutMsOverride > 0
+                    ? timeoutMsOverride
+                    : planningRequestTimeoutMs();
+            String useModel = modelOverride != null && !modelOverride.isBlank() ? modelOverride.trim() : model;
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("model", model);
+            body.put("model", useModel);
             List<Map<String, String>> messages = new ArrayList<>();
             messages.add(Map.of("role", "system", "content", systemPrompt));
             messages.add(Map.of("role", "user", "content", userMessage));
@@ -121,6 +137,15 @@ public final class OpenAiChatClient {
             log.warn("OpenAI request failed: {}", e.getMessage());
             return "ERROR: " + (e.getMessage() != null ? e.getMessage() : "request failed");
         }
+    }
+
+    /** Planning calls prefer {@code OPENAI_PLANNING_TIMEOUT_MS}, then {@code OPENAI_HTTP_REQUEST_TIMEOUT_MS}. */
+    public static long planningRequestTimeoutMs() {
+        long planning = parseLongMs(Env.get("OPENAI_PLANNING_TIMEOUT_MS", ""), -1);
+        if (planning > 0) {
+            return planning;
+        }
+        return parseLongMs(Env.get("OPENAI_HTTP_REQUEST_TIMEOUT_MS", "120000"), 120000);
     }
 
     private static String truncate(String s, int max) {

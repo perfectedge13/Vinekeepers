@@ -85,7 +85,7 @@ public final class SynthesizePreCritiqueArtifactsAction implements com.vinekeepe
                 && isEmptyField(plan, "architecture_notes", "impact", "architecture_summary")) {
             String draft = PlanningDraftSupport.buildArchitectureDraft(request, sampleFiles);
             String comps = sampleFiles.isEmpty()
-                    ? "Key modules to confirm during implementation (repo paths not sampled yet)."
+                    ? synthesizeComponentHints(request)
                     : String.join(", ", sampleFiles.subList(0, Math.min(6, sampleFiles.size())));
             upsert.run(event, base, Map.of(
                     "artifactId", "architecture_notes",
@@ -125,6 +125,17 @@ public final class SynthesizePreCritiqueArtifactsAction implements com.vinekeepe
         }
 
         return "OK";
+    }
+
+    private static String synthesizeComponentHints(String request) {
+        if (request == null || request.isBlank()) {
+            return "src/main, src/test (map to concrete packages after workspace bind).";
+        }
+        String t = request.trim();
+        if (t.length() > 180) {
+            t = t.substring(0, 179) + "…";
+        }
+        return "src/ areas implied by request: " + t.replace('\n', ' ');
     }
 
     private static boolean isEmptyField(FeaturePlanState plan, String artId, String secId, String fieldId) {

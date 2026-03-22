@@ -202,6 +202,14 @@ public final class LifecycleRunRecord {
         return true;
     }
 
+    /** True when a prior PR Discord line already contained this URL (avoid repeating in terminal summary). */
+    public synchronized boolean hasPostedPrContaining(String fragment) {
+        if (fragment == null || fragment.isBlank() || lastPostedPrLine == null) {
+            return false;
+        }
+        return lastPostedPrLine.contains(fragment.trim());
+    }
+
     private static String normalizeDedupeLine(String line) {
         if (line == null) {
             return "";

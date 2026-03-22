@@ -9,6 +9,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.planning.PlanningDraftSupport;
 import com.vinekeepers.workflow.planning.PlanningPlaceholderDetection;
+import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -103,33 +104,39 @@ public final class ExpandPlanningDraftsAction implements com.vinekeepers.workflo
         if (profile.findSection("architecture_notes", "impact").isPresent()) {
             String comps = fieldString(plan, "architecture_notes", "impact", "components_impacted");
             String arch = fieldString(plan, "architecture_notes", "impact", "architecture_summary");
-            boolean badComps = PlanningPlaceholderDetection.looksLikePlaceholder(comps)
-                    || "See design notes; confirm modules after quick code search.".equalsIgnoreCase(comps.trim());
-            boolean badArch = PlanningPlaceholderDetection.looksLikePlaceholder(arch) || arch.length() < 40;
-            if (badComps || badArch) {
-                String list = sampleFiles.isEmpty()
-                        ? "Confirm packages/modules after a quick repo search."
-                        : String.join(", ", sampleFiles.subList(0, Math.min(6, sampleFiles.size())));
-                String archDraft = PlanningDraftSupport.buildArchitectureDraft(request, sampleFiles);
-                Map<String, Object> data = new LinkedHashMap<>();
-                if (badComps) {
-                    data.put("components_impacted", list);
+            boolean expansionBacked =
+                    "true".equalsIgnoreCase(String.valueOf(state != null ? state.get("planningExpansionFromLlm") : null))
+                            && !PlanningPlaceholderDetection.looksLikePlaceholder(comps)
+                            && PlanningPacketDepthEvaluator.componentsLookCodeBacked(comps);
+            if (!expansionBacked) {
+                boolean badComps = PlanningPlaceholderDetection.looksLikePlaceholder(comps)
+                        || "See design notes; confirm modules after quick code search.".equalsIgnoreCase(comps.trim());
+                boolean badArch = PlanningPlaceholderDetection.looksLikePlaceholder(arch) || arch.length() < 40;
+                if (badComps || badArch) {
+                    String list = sampleFiles.isEmpty()
+                            ? heuristicComponentHints(request)
+                            : String.join(", ", sampleFiles.subList(0, Math.min(6, sampleFiles.size())));
+                    String archDraft = PlanningDraftSupport.buildArchitectureDraft(request, sampleFiles);
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    if (badComps) {
+                        data.put("components_impacted", list);
+                    }
+                    if (badArch) {
+                        data.put("architecture_summary", archDraft);
+                    }
+                    upsert.run(
+                            event,
+                            base,
+                            Map.of(
+                                    "artifactId",
+                                    "architecture_notes",
+                                    "sectionId",
+                                    "impact",
+                                    "mode",
+                                    "replace",
+                                    "data",
+                                    data));
                 }
-                if (badArch) {
-                    data.put("architecture_summary", archDraft);
-                }
-                upsert.run(
-                        event,
-                        base,
-                        Map.of(
-                                "artifactId",
-                                "architecture_notes",
-                                "sectionId",
-                                "impact",
-                                "mode",
-                                "replace",
-                                "data",
-                                data));
             }
         }
 
@@ -219,6 +226,17 @@ public final class ExpandPlanningDraftsAction implements com.vinekeepers.workflo
                         "replace",
                         "data",
                         Map.of(fieldId, draft)));
+    }
+
+    private static String heuristicComponentHints(String request) {
+        if (request == null || request.isBlank()) {
+            return "src/main, src/test (confirm exact packages after clone).";
+        }
+        String t = request.trim();
+        if (t.length() > 200) {
+            t = t.substring(0, 199) + "…";
+        }
+        return "Likely areas under src/ related to: " + t.replace('\n', ' ');
     }
 
     private static String fieldString(FeaturePlanState plan, String artId, String secId, String fieldId) {

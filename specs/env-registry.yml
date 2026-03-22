@@ -72,6 +72,9 @@ requirements:
         - >-
           Optional repo workspace keys (VINEKEEPERS_REPO_WORKSPACE_ROOT, VINEKEEPERS_ALLOW_GIT_CLONE, GIT_EXECUTABLE) are
           read via Env when RepoWorkspaceService is constructed
+        - >-
+          Optional OpenAI-compatible planning keys (OPENAI_API_KEY, OPENAI_BASE_URL or OPENAI_API_BASE_URL,
+          OPENAI_PLANNING_TIMEOUT_MS or OPENAI_HTTP_REQUEST_TIMEOUT_MS, OPENAI_PLANNING_MODEL) are read via Env in OpenAiChatClient
       examples: []
     traceability:
       assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]

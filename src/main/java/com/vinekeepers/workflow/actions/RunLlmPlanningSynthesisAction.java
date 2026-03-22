@@ -99,9 +99,11 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         }
 
         String userPayload = buildUserPayload(plan, profileId);
+        String model = firstNonBlank(getString(bind, "llmModel"), getString(state, "workflowLlmModel"));
+        Long timeoutMs = parseTimeoutMs(firstNonBlank(getString(bind, "llmTimeoutMs"), getString(state, "workflowLlmTimeoutMs")));
         String raw;
         try {
-            raw = openAiChatClient.complete(SYSTEM, userPayload);
+            raw = openAiChatClient.complete(SYSTEM, userPayload, model, timeoutMs);
         } catch (Exception e) {
             spread.put("planningLlmError", e.getMessage() != null ? e.getMessage() : "synthesis failed");
             log.warn("Planning LLM call failed: {}", spread.get("planningLlmError"));
@@ -237,5 +239,17 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static Long parseTimeoutMs(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            long v = Long.parseLong(raw.trim());
+            return v > 0 ? v : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

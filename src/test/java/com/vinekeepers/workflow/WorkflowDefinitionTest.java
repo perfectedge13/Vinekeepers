@@ -38,4 +38,12 @@ class WorkflowDefinitionTest {
         steps.clear();
         assertEquals(1, def.getSteps().size());
     }
+
+    @Test
+    void getLlmDefaults() {
+        WorkflowDefinition def =
+                new WorkflowDefinition("w", List.of(Map.of("type", "done")), Map.of("model", "m1", "timeoutMs", 99L));
+        assertEquals("m1", def.getLlm().get("model"));
+        assertEquals(99L, def.getLlm().get("timeoutMs"));
+    }
 }

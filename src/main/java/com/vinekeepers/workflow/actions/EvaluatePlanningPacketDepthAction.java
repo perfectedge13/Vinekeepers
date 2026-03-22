@@ -38,6 +38,7 @@ public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.
         PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
         spread.put("planningPacketDepthOk", r.ok() ? "true" : "false");
         spread.put("planningPacketDepthReason", r.reason() != null ? r.reason() : "");
+        spread.put("planningPacketDepthRetryRecommended", r.ok() ? "false" : "true");
         return spread;
     }
 

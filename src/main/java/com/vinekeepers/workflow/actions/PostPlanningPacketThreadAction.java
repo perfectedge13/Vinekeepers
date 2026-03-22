@@ -64,6 +64,10 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             spread.put("planningPacketPostError", "No plan for context.");
             return spread;
         }
+        if (state != null && "false".equals(String.valueOf(state.get("planningPacketDepthOk")))) {
+            spread.put("planningPacketPostError", "Depth gate not satisfied; packet post skipped.");
+            return spread;
+        }
 
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
         String repo = firstNonBlank(plan.getRepoRef(), getString(state, "project"));

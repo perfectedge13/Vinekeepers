@@ -87,7 +87,7 @@ assets:
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, spread_plan_workspace_signals,
       evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
       merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
-      run_llm_planning_synthesis, upsert_artifact_section_data,
+      run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
@@ -318,7 +318,9 @@ assets:
   - id: ASSET-WORKFLOW-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java
-    role: Workflow definition from config (id and list of step configs)
+    role: >-
+      Workflow definition from config (id, list of step configs, optional workflow-level llm map provider/model/timeoutMs
+      merged into state as workflowLlmProvider, workflowLlmModel, workflowLlmTimeoutMs)
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -329,7 +331,8 @@ assets:
     role: >-
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
       intent, choices, confirmLabel, cancelLabel, fields, trimAndLower, transforms, and fromEvent for steps; registers
-      extract_event step; applies StepResult clearKeys to state before setStepIndex
+      extract_event step; applies StepResult clearKeys to state before setStepIndex; merges workflow llm defaults into state
+      at session start; call_action passes merged llm overrides into LLM-capable actions only
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1053,8 +1056,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/connectors/openai/OpenAiChatClient.java
     role: >-
-      OpenAI-compatible chat/completions HTTP client (java.net.http); env OPENAI_API_KEY, OPENAI_API_BASE_URL,
-      OPENAI_PLANNING_MODEL, OPENAI_HTTP_* timeouts; used by run_llm_planning_synthesis when configured
+      OpenAI-compatible chat/completions HTTP client (java.net.http); env OPENAI_API_KEY, OPENAI_BASE_URL (preferred) or
+      OPENAI_API_BASE_URL, OPENAI_PLANNING_MODEL, OPENAI_PLANNING_TIMEOUT_MS (planning calls) or OPENAI_HTTP_REQUEST_TIMEOUT_MS,
+      OPENAI_HTTP_CONNECT_TIMEOUT_MS; used by run_request_expansion_llm and run_llm_planning_synthesis when configured
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1076,7 +1080,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningPacketDepthEvaluator.java
     role: >-
-      Heuristic word-count depth check on request_exploration and requirements narrative fields before posting full planning packet
+      Planning packet depth gate: word counts, placeholder/anti-echo checks, code-backed components_impacted when repo workspace
+      exists, open-questions and validation feature-specific heuristics
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1087,8 +1092,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningPacketDepthAction.java
     role: >-
-      Workflow action evaluate_planning_packet_depth — storeSpread planningPacketDepthOk and planningPacketDepthReason for
-      branch before post_planning_packet_thread
+      Workflow action evaluate_planning_packet_depth — storeSpread planningPacketDepthOk, planningPacketDepthReason,
+      planningPacketDepthRetryRecommended; run before post_planning_packet_thread in YAML
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1108,14 +1113,28 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RUN-REQUEST-EXPANSION-LLM-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RunRequestExpansionLlmAction.java
+    role: >-
+      Workflow action run_request_expansion_llm — structured JSON expansion into exploration_body and narrative/architecture
+      fields; storeSpread planningExpansionSource, planningExpansionFallbackUsed, planningExpansionFromLlm, etc.; invoked inside
+      execute_planning_room_cycle before deterministic build_request_exploration
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-EXECUTE-PLANNING-ROOM-CYCLE-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/ExecutePlanningRoomCycleAction.java
     role: >-
-      Workflow action execute_planning_room_cycle — iterative planning room: request exploration seed, architect/auditor/scribe
-      LLM passes (OpenAI-compatible), expand_planning_drafts + run_llm_planning_synthesis + synthesize_pre_critique with inner
-      depth retries; PlanningQuestionRankingPolicy for defaults vs at most one clarification round; storeSpread planningPhase,
-      planningUserInputRequired, planningClarificationChoicesJson/MetaJson, planningReadyToPostPacket, planningRoomCycleIteration, etc.
+      Workflow action execute_planning_room_cycle — iterative planning room: run_request_expansion_llm (optional) then
+      build_request_exploration, architect/auditor/scribe LLM passes (OpenAI-compatible), expand_planning_drafts +
+      run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; PlanningQuestionRankingPolicy for defaults
+      vs at most one clarification round; storeSpread planningPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
+      planningClarificationChoicesJson/MetaJson, planningReadyToPostPacket, planningRoomCycleIteration, etc.
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1373,7 +1392,7 @@ requirements:
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, spread_plan_workspace_signals,
           evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
           merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
-          run_llm_planning_synthesis, upsert_artifact_section_data,
+          run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
           resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
           capture_and_apply_discovery_answer,
@@ -1820,8 +1839,9 @@ requirements:
           CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true; confirm cancel branches to cancelled done step; channel create failure
           branches to could-not-create-room done step
         - >-
-          arrietty_room packet prep runs ensure_repo_workspace and spread_plan_workspace_signals before build_request_exploration;
-          optional run_llm_planning_synthesis when OPENAI_API_KEY is set; evaluate_planning_packet_depth gates post_planning_packet_thread
+          arrietty_room runs ensure_repo_workspace and spread_plan_workspace_signals immediately after hydrate_planning_session;
+          execute_planning_room_cycle runs run_request_expansion_llm (optional) then build_request_exploration; optional
+          run_llm_planning_synthesis when OPENAI_API_KEY is set; evaluate_planning_packet_depth runs before post_planning_packet_thread in YAML
       examples: []
     traceability:
       assets:

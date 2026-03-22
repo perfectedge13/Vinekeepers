@@ -87,6 +87,7 @@ import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
 import com.vinekeepers.workflow.actions.RunArchitectPlanningPassAction;
 import com.vinekeepers.workflow.actions.RunAuditorPlanningPassAction;
 import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
+import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
 import com.vinekeepers.workflow.actions.RunScribePlanningPassAction;
 import com.vinekeepers.workflow.actions.RunPlanCritiqueAndReadinessAction;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
@@ -368,6 +369,9 @@ public final class Bootstrap {
         registry.register(
                 "run_llm_planning_synthesis",
                 new RunLlmPlanningSynthesisAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "run_request_expansion_llm",
+                new RunRequestExpansionLlmAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
         registry.register("launch_cursor_run", new LaunchCursorRunAction(cursorCloudAdapter, stateStore, lifecycleContextStore, featurePlanStateStore));
         registry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
     }

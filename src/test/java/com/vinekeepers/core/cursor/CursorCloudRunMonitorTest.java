@@ -116,7 +116,8 @@ class CursorCloudRunMonitorTest {
         monitor.tick();
 
         assertEquals(3, messages.size());
-        assertTrue(messages.getLast().contains("pull/12"));
+        assertTrue(messages.stream().anyMatch(m -> m.contains("pull/12")));
+        assertTrue(messages.getLast().contains("finished") || messages.getLast().contains("Finished"));
         monitor.close();
     }
 

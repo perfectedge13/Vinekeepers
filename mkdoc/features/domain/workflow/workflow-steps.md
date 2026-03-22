@@ -17,7 +17,7 @@ Workflow step DSL and branching actions (REQ-WORKFLOW-001). `WorkflowDefinition`
 | ASSET-WORKFLOW-STEP | Single step in a configurable workflow | src/main/java/com/vinekeepers/workflow/WorkflowStep.java |
 | ASSET-WORKFLOW-ACTION | Action interface invokable from workflow steps | src/main/java/com/vinekeepers/workflow/WorkflowAction.java |
 | ASSET-WORKFLOW-ACTION-REGISTRY | Register and resolve workflow actions by name | src/main/java/com/vinekeepers/workflow/WorkflowActionRegistry.java |
-| ASSET-WORKFLOW-DEFINITION | Workflow definition from config (id and list of step configs) | src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java |
+| ASSET-WORKFLOW-DEFINITION | Workflow definition from config (id, steps, optional workflow-level llm defaults) | src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java |
 | ASSET-ASK-FOR-INPUT-STEP | Step that asks for user input and stores in state | src/main/java/com/vinekeepers/workflow/steps/AskForInputStep.java |
 | ASSET-PROMPT-FOR-FIELD-STEP | Step that prompts once for a field and pauses until a later event; optional intent/choices/choiceProvider; interpolates {{key}} from state | src/main/java/com/vinekeepers/workflow/steps/PromptForFieldStep.java |
 | ASSET-CAPTURE-FIELD-STEP | Step that captures a field from the current event; optional transforms list; when both trimAndLower and transforms present, trimAndLower wins | src/main/java/com/vinekeepers/workflow/steps/CaptureFieldFromEventStep.java |

@@ -87,6 +87,35 @@ class ConfigurableWorkflowRunnerTest {
     }
 
     @Test
+    void workflowLlmDefaultsMergedIntoLlmCapableCallAction() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register(
+                "run_llm_planning_synthesis",
+                (e, s, b) -> Map.of("capturedModel", String.valueOf(b.get("llmModel"))));
+        Map<String, Object> llm = Map.of("model", "from-workflow-yaml", "timeoutMs", 4242);
+        List<Map<String, Object>> steps = List.of(
+                Map.of(
+                        "type",
+                        "call_action",
+                        "action",
+                        "run_llm_planning_synthesis",
+                        "bind",
+                        Map.of(),
+                        "storeSpread",
+                        true));
+        WorkflowDefinition def = new WorkflowDefinition("llm-flow", steps, llm);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        Event event = new Event("test", "msg", Map.of());
+        StateStore store = new StateStore();
+        runner.run(event, store, "botx");
+        String key = "bot:botx:state";
+        ConfigurableWorkflowState st = store.get(key, ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals("from-workflow-yaml", st.get("workflowLlmModel"));
+        assertEquals("4242", st.get("workflowLlmTimeoutMs"));
+        assertEquals("from-workflow-yaml", st.get("capturedModel"));
+    }
+
+    @Test
     void runPromptAndCapturePausesThenResumesAtCaptureStep() {
         List<Map<String, Object>> steps = List.of(
                 Map.of("type", "prompt_for_field", "prompt", "Which project?", "storeIn", "project"),

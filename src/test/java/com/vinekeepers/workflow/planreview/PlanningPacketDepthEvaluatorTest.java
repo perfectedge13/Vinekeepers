@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanningPacketDepthEvaluatorTest {
 
+    private static final String RICH_FEATURE =
+            "Ship incremental login improvements with session hardening distinct from the legacy cookie path.";
+
     @Test
     void wordCount_emptyIsZero() {
         assertEquals(0, PlanningPacketDepthEvaluator.wordCount(null));
@@ -29,7 +32,7 @@ class PlanningPacketDepthEvaluatorTest {
 
     @Test
     void evaluate_failsWhenExplorationThin() {
-        FeaturePlanState plan = minimalPlanWithNarrative("word ".repeat(20), "y".repeat(200));
+        FeaturePlanState plan = minimalPlanWithNarrative("word ".repeat(20), "y".repeat(200), RICH_FEATURE);
         PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
         assertFalse(r.ok());
         assertTrue(r.reason().contains("exploration"));
@@ -38,7 +41,7 @@ class PlanningPacketDepthEvaluatorTest {
     @Test
     void evaluate_failsWhenNarrativesThin() {
         String exploration = "word ".repeat(30);
-        FeaturePlanState plan = minimalPlanWithNarrative(exploration, "short");
+        FeaturePlanState plan = minimalPlanWithNarrative(exploration, "short", "also short");
         PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
         assertFalse(r.ok());
         assertTrue(r.reason().contains("thin"));
@@ -48,14 +51,14 @@ class PlanningPacketDepthEvaluatorTest {
     void evaluate_okWhenThresholdsMet() {
         String exploration = "word ".repeat(30);
         String narrative = "state ".repeat(20);
-        FeaturePlanState plan = minimalPlanWithNarrative(exploration, narrative);
+        FeaturePlanState plan = minimalPlanWithNarrative(exploration, narrative, RICH_FEATURE);
         PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan);
-        assertTrue(r.ok());
+        assertTrue(r.ok(), r.reason());
     }
 
-    private static FeaturePlanState minimalPlanWithNarrative(String explorationBody, String currentState) {
+    private static FeaturePlanState minimalPlanWithNarrative(String explorationBody, String currentState, String featureSummary) {
         Map<String, Object> reqValues = new LinkedHashMap<>();
-        reqValues.put("feature_summary", "");
+        reqValues.put("feature_summary", featureSummary);
         reqValues.put("current_state_summary", currentState);
         SectionState reqSec = new SectionState("narrative", SectionState.STATUS_DRAFT, reqValues, List.of());
         ArtifactState reqArt = new ArtifactState("requirements_spec", Map.of("narrative", reqSec));
@@ -65,9 +68,28 @@ class PlanningPacketDepthEvaluatorTest {
         SectionState exSec = new SectionState("analysis", SectionState.STATUS_DRAFT, exValues, List.of());
         ArtifactState exArt = new ArtifactState("request_exploration", Map.of("analysis", exSec));
 
+        Map<String, Object> archValues = new LinkedHashMap<>();
+        archValues.put("components_impacted", "src/main/java/com/example/AuthService.java");
+        archValues.put(
+                "architecture_summary",
+                "Service layer coordinates token issuance; persistence boundary stays behind repository interfaces.");
+        SectionState archSec = new SectionState("impact", SectionState.STATUS_DRAFT, archValues, List.of());
+        ArtifactState archArt = new ArtifactState("architecture_notes", Map.of("impact", archSec));
+
+        Map<String, Object> valValues = new LinkedHashMap<>();
+        valValues.put(
+                "validation_notes",
+                "Run mvn test and integration checks that exercise the authentication flows described in this plan, "
+                        + "including negative cases and refresh handling. "
+                        + "Add regression coverage for session expiry edge cases observed in staging.");
+        SectionState valSec = new SectionState("checks", SectionState.STATUS_DRAFT, valValues, List.of());
+        ArtifactState valArt = new ArtifactState("validation_plan", Map.of("checks", valSec));
+
         Map<String, ArtifactState> arts = new LinkedHashMap<>();
         arts.put("requirements_spec", reqArt);
         arts.put("request_exploration", exArt);
+        arts.put("architecture_notes", archArt);
+        arts.put("validation_plan", valArt);
         FeaturePlanState empty = new FeaturePlanState(
                 "ctx",
                 "f",

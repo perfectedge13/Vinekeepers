@@ -85,12 +85,18 @@ public final class WorkflowRunnerFactory {
             if (w instanceof Map<?, ?> wMap) {
                 Object steps = wMap.get("steps");
                 if (steps instanceof List<?> list) {
-                    return new WorkflowDefinition(ref, (List<Map<String, Object>>) list);
+                    return new WorkflowDefinition(
+                            ref,
+                            (List<Map<String, Object>>) list,
+                            WorkflowDefinition.copyLlmMap(wMap.get("llm")));
                 }
             }
         }
         if (params != null && params.get("steps") instanceof List<?> list) {
-            return new WorkflowDefinition("inline", (List<Map<String, Object>>) list);
+            return new WorkflowDefinition(
+                    "inline",
+                    (List<Map<String, Object>>) list,
+                    WorkflowDefinition.copyLlmMap(params.get("llm")));
         }
         return new WorkflowDefinition("", List.of());
     }
