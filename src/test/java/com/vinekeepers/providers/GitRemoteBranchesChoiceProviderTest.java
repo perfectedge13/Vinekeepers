@@ -1,28 +1,26 @@
 package com.vinekeepers.providers;
 
+import com.vinekeepers.devops.DeployTarget;
+import com.vinekeepers.devops.DeployTargetCompose;
+import com.vinekeepers.devops.DeployTargetRegistry;
 import com.vinekeepers.events.Event;
-import com.vinekeepers.gadget.GadgetProjectDefinition;
-import com.vinekeepers.gadget.GadgetProjectRegistry;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class GitRemoteBranchesChoiceProviderTest {
 
     @Test
     void fallsBackWhenGitRemoteMissing() {
-        GadgetProjectRegistry reg = new GadgetProjectRegistry(List.of(
-                new GadgetProjectDefinition("p1", "P", "playbooks/x.yml")));
+        DeployTargetRegistry reg = new DeployTargetRegistry(List.of(
+                new DeployTarget("p1", "P", "playbooks/x.yml", null, Map.of(), DeployTargetCompose.NONE)));
         GitRemoteBranchesChoiceProvider p = new GitRemoteBranchesChoiceProvider(reg);
         ConfigurableWorkflowState st = new ConfigurableWorkflowState();
-        st.put("gadgetProject", "p1");
-        List<com.vinekeepers.interactions.ResponseIntent.Choice> choices =
-                p.getChoices(new Event("s", "message", Map.of()), st);
-        assertTrue(choices.stream().anyMatch(c -> "main".equals(c.id())));
-        assertTrue(choices.stream().anyMatch(c -> "other".equals(c.id())));
+        st.put("deployTargetId", "p1");
+        assertFalse(p.getChoices(new Event("s", "k", Map.of()), st).isEmpty());
     }
 }

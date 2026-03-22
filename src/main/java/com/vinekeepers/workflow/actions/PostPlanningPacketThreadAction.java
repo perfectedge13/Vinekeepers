@@ -34,6 +34,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         spread.put("planningPacketPosted", "false");
         spread.put("planningPacketChunkCount", "0");
         spread.put("planningPacketPostError", "");
+        spread.put("planningPacketPostedVersion", "0");
         if (replySender == null || planStore == null) {
             spread.put("planningPacketPostError", "Reply sender or plan store not available.");
             return spread;
@@ -82,6 +83,15 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         }
         spread.put("planningPacketPosted", "true");
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));
+        int prev = 0;
+        if (state != null && state.get("planningPacketPostedVersion") != null) {
+            try {
+                prev = Integer.parseInt(state.get("planningPacketPostedVersion").toString().trim());
+            } catch (NumberFormatException ignored) {
+                prev = 0;
+            }
+        }
+        spread.put("planningPacketPostedVersion", String.valueOf(prev + 1));
         return spread;
     }
 

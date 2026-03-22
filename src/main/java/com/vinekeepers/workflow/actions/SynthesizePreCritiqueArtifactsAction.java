@@ -84,13 +84,14 @@ public final class SynthesizePreCritiqueArtifactsAction implements com.vinekeepe
         if (isEmptyField(plan, "architecture_notes", "impact", "components_impacted")
                 && isEmptyField(plan, "architecture_notes", "impact", "architecture_summary")) {
             String draft = PlanningDraftSupport.buildArchitectureDraft(request, sampleFiles);
+            String comps = sampleFiles.isEmpty()
+                    ? "Key modules to confirm during implementation (repo paths not sampled yet)."
+                    : String.join(", ", sampleFiles.subList(0, Math.min(6, sampleFiles.size())));
             upsert.run(event, base, Map.of(
                     "artifactId", "architecture_notes",
                     "sectionId", "impact",
                     "mode", "replace",
-                    "data", Map.of(
-                            "components_impacted", "See design notes; confirm modules after quick code search.",
-                            "architecture_summary", draft)));
+                    "data", Map.of("components_impacted", comps, "architecture_summary", draft)));
         }
 
         plan = planStateStore.getByContextId(contextId).orElse(plan);

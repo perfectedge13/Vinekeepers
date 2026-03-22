@@ -1,8 +1,8 @@
 package com.vinekeepers.providers;
 
+import com.vinekeepers.devops.DeployTarget;
+import com.vinekeepers.devops.DeployTargetRegistry;
 import com.vinekeepers.events.Event;
-import com.vinekeepers.gadget.GadgetProjectDefinition;
-import com.vinekeepers.gadget.GadgetProjectRegistry;
 import com.vinekeepers.interactions.ResponseIntent;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.DynamicChoiceProvider;
@@ -19,32 +19,35 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Branch names from {@code git ls-remote --heads} using the selected project's {@link GadgetProjectDefinition#getGitRemote()}.
+ * Branch names from {@code git ls-remote --heads} using the selected target's {@link DeployTarget#getGitRemote()}.
  */
 public final class GitRemoteBranchesChoiceProvider implements DynamicChoiceProvider {
 
     static final int MAX_BRANCHES = 40;
     static final int TIMEOUT_SECS = 15;
 
-    private final GadgetProjectRegistry registry;
+    private final DeployTargetRegistry registry;
 
-    public GitRemoteBranchesChoiceProvider(GadgetProjectRegistry registry) {
-        this.registry = registry != null ? registry : new GadgetProjectRegistry(List.of());
+    public GitRemoteBranchesChoiceProvider(DeployTargetRegistry registry) {
+        this.registry = registry != null ? registry : new DeployTargetRegistry(List.of());
     }
 
     @Override
     public List<ResponseIntent.Choice> getChoices(Event event, ConfigurableWorkflowState state) {
-        String projectId = stringFromState(state, "gadgetProject");
-        if (projectId == null || projectId.isBlank()) {
+        String targetId = stringFromState(state, "deployTargetId");
+        if (targetId == null || targetId.isBlank()) {
+            targetId = stringFromState(state, "gadgetProject");
+        }
+        if (targetId == null || targetId.isBlank()) {
             return fallbackChoices();
         }
-        return registry.findById(projectId)
-                .map(this::choicesForProject)
+        return registry.findById(targetId)
+                .map(this::choicesForTarget)
                 .orElseGet(GitRemoteBranchesChoiceProvider::fallbackChoices);
     }
 
-    private List<ResponseIntent.Choice> choicesForProject(GadgetProjectDefinition project) {
-        String remote = project.getGitRemote();
+    private List<ResponseIntent.Choice> choicesForTarget(DeployTarget target) {
+        String remote = target.getGitRemote();
         if (remote == null || remote.isBlank()) {
             return fallbackChoices();
         }

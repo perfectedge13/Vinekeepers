@@ -17,7 +17,7 @@
         that:
           - _project | length > 0
         fail_msg: >-
-          project_id is required (GadgetDeployRunner sets it). For manual runs:
+          project_id is required (Vinekeepers AnsiblePlaybookDeployRunner sets it). For manual runs:
           ansible-playbook playbooks/site.yml -e project_id=demo -e branch=main
 
     - name: Ensure deploy staging directory exists

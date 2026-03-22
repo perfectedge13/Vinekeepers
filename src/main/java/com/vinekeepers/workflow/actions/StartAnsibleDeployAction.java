@@ -1,46 +1,49 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
+import com.vinekeepers.devops.AnsiblePlaybookDeployRunner;
+import com.vinekeepers.devops.DeployTarget;
+import com.vinekeepers.devops.DeployTargetRegistry;
 import com.vinekeepers.events.Event;
-import com.vinekeepers.gadget.GadgetDeployRunner;
-import com.vinekeepers.gadget.GadgetProjectDefinition;
-import com.vinekeepers.gadget.GadgetProjectRegistry;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * Starts an asynchronous Ansible-backed deploy and posts initial status to the deploy thread (or parent channel).
+ * Starts an asynchronous Ansible playbook deploy; progress posts use the workflow bot id ({@code __botId}).
  */
-public final class StartGadgetDeployAction implements com.vinekeepers.workflow.WorkflowAction {
+public final class StartAnsibleDeployAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final OutboundDeliveryRouter router;
-    private final GadgetProjectRegistry projectRegistry;
-    private final String gadgetBotId;
+    private final DeployTargetRegistry targetRegistry;
 
-    public StartGadgetDeployAction(OutboundDeliveryRouter router,
-                                   GadgetProjectRegistry projectRegistry,
-                                   String gadgetBotId) {
+    public StartAnsibleDeployAction(OutboundDeliveryRouter router, DeployTargetRegistry targetRegistry) {
         this.router = router;
-        this.projectRegistry = projectRegistry != null ? projectRegistry : new GadgetProjectRegistry(java.util.List.of());
-        this.gadgetBotId = gadgetBotId != null ? gadgetBotId : "gadget";
+        this.targetRegistry = targetRegistry != null ? targetRegistry : new DeployTargetRegistry(java.util.List.of());
     }
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
         Map<String, Object> args = merged(state, bind);
-        String projectId = getString(args, "gadgetProject");
+        String targetId = firstNonBlank(getString(args, "deployTargetId"), getString(args, "gadgetProject"));
         String branch = getString(args, "deployBranch");
         String parentChannelId = getString(args, "channelId");
         String threadId = getString(args, "deliveryChannelId");
+        String workflowBotId = getString(args, "__botId");
 
-        if (projectId == null || projectId.isBlank()) {
-            return fail("Missing gadgetProject for deploy.");
+        if (targetId == null || targetId.isBlank()) {
+            return fail("Missing deployTargetId for Ansible deploy.");
         }
-        Optional<GadgetProjectDefinition> proj = projectRegistry.findById(projectId);
-        if (proj.isEmpty()) {
-            return fail("Unknown project: `" + projectId + "`.");
+        if (workflowBotId == null || workflowBotId.isBlank()) {
+            return fail("Missing __botId for Ansible deploy (workflow bot context).");
+        }
+        Optional<DeployTarget> t = targetRegistry.findById(targetId);
+        if (t.isEmpty()) {
+            return fail("Unknown deploy target: `" + targetId + "`.");
+        }
+        if (!t.get().hasAnsiblePlaybook()) {
+            return fail("Target `" + targetId + "` has no Ansible playbook configured.");
         }
 
         String progressTarget = threadId;
@@ -53,16 +56,20 @@ public final class StartGadgetDeployAction implements com.vinekeepers.workflow.W
             return fail("Missing channel for deploy progress updates.");
         }
 
-        GadgetDeployRunner.submit(router, gadgetBotId, progressTarget, proj.get(), branch);
+        AnsiblePlaybookDeployRunner.submit(router, workflowBotId, progressTarget, t.get(), branch);
 
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("gadgetDeployMessage", "Deploy started. Progress in <#" + progressTarget + ">.");
+        out.put("deployAnsibleMessage", "Ansible deploy started. Progress in <#" + progressTarget + ">.");
+        out.put("deployAnsibleTargetId", progressTarget);
+        out.put("gadgetDeployMessage", out.get("deployAnsibleMessage"));
         out.put("gadgetDeployTargetId", progressTarget);
         return out;
     }
 
     private static Object fail(String msg) {
         Map<String, Object> out = new LinkedHashMap<>();
+        out.put("deployAnsibleMessage", msg);
+        out.put("deployAnsibleTargetId", "");
         out.put("gadgetDeployMessage", msg);
         out.put("gadgetDeployTargetId", "");
         return out;
@@ -89,6 +96,6 @@ public final class StartGadgetDeployAction implements com.vinekeepers.workflow.W
         if (a != null && !a.isBlank()) {
             return a.trim();
         }
-        return b != null ? b.trim() : "";
+        return b != null && !b.isBlank() ? b.trim() : null;
     }
 }

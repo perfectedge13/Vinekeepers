@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -185,24 +184,10 @@ public final class VinekeepersEngine implements EventSubscriber {
     public void onEvent(Event event) {
         log.debug("Engine received event: {} {}", event.getSourceId(), event.getKind());
         if (isDuplicateDiscordPublication(event)) {
-            // #region agent log
-            if (isDiscordMessage(event) && payloadSuggestsGadget(event)) {
-                AgentDebugLog.log("H5", "VinekeepersEngine.onEvent", "discord_dedupe_skip",
-                        Map.of("sourceId", String.valueOf(event.getSourceId())));
-            }
-            // #endregion
             log.debug("Skipping duplicate Discord event within dedupe window: {} {}", event.getSourceId(), event.getKind());
             return;
         }
         List<String> botIds = router.route(event);
-        // #region agent log
-        if (isDiscordMessage(event) && payloadSuggestsGadget(event)) {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("botIds", botIds.toString());
-            d.put("botCount", botIds.size());
-            AgentDebugLog.log("H4", "VinekeepersEngine.onEvent", "after_router_route", d);
-        }
-        // #endregion
         if (isDiscordMessage(event)) {
             addBotsWithWaitingSessionForDiscordMessage(event, botIds);
         }
@@ -210,27 +195,6 @@ public final class VinekeepersEngine implements EventSubscriber {
             handleEventForBot(event, botId);
         }
     }
-
-    // #region agent log
-    private static boolean payloadSuggestsGadget(Event event) {
-        if (event == null) {
-            return false;
-        }
-        Map<String, Object> p = event.getPayload();
-        if (p == null) {
-            return false;
-        }
-        Object text = p.get("text");
-        if (text == null) {
-            text = p.get("content");
-        }
-        if (text != null && text.toString().toLowerCase(Locale.ROOT).contains("gadget")) {
-            return true;
-        }
-        Object mentions = p.get("mentions");
-        return mentions != null && mentions.toString().toLowerCase(Locale.ROOT).contains("gadget");
-    }
-    // #endregion
 
     private static boolean isDiscordMessage(Event event) {
         return "message".equals(event.getKind()) && event.getSourceId() != null && event.getSourceId().startsWith("discord");
@@ -335,15 +299,6 @@ public final class VinekeepersEngine implements EventSubscriber {
 
         ReasonerOutput reasonerOutput = runReasoner(bot, event, workflowResult);
         OutboundResponse outbound = buildOutboundResponse(workflowResult, reasonerOutput);
-        // #region agent log
-        if ("gadget".equals(botId) && payloadSuggestsGadget(event)) {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("hasOutbound", outbound != null);
-            d.put("workflowMsgPresent", workflowResult.getReplyMessage() != null && !workflowResult.getReplyMessage().isBlank());
-            d.put("richReply", workflowResult.getRichReply().isPresent());
-            AgentDebugLog.log("H4", "VinekeepersEngine.runWorkflowReasonerAndDeliver", "pre_reply_resolve", d);
-        }
-        // #endregion
         String sourceId = event.getSourceId();
         if (sourceId == null) {
             log.warn("No reply target resolver for null sourceId; skipping reply delivery");

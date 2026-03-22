@@ -213,13 +213,6 @@ public final class Router {
             if (!f.getDiscordChannels().isEmpty()) {
                 String channel = context.getChannelId();
                 if (channel == null || !f.getDiscordChannels().contains(channel)) {
-                    // #region agent log
-                    if (f.getDiscordMention() != null && "gadget".equalsIgnoreCase(f.getDiscordMention().trim())) {
-                        AgentDebugLog.log("H1", "Router.matches", "discord_channels_reject",
-                                Map.of("eventChannelId", String.valueOf(channel),
-                                        "allowedChannels", f.getDiscordChannels().toString()));
-                    }
-                    // #endregion
                     return false;
                 }
             }
@@ -232,13 +225,6 @@ public final class Router {
                 if (f.getDiscordMention() != null && !f.getDiscordMention().isBlank()) {
                     String mention = f.getDiscordMention().trim().toLowerCase(Locale.ROOT);
                     if (!context.getMentions().contains(mention)) {
-                        // #region agent log
-                        if ("gadget".equals(mention)) {
-                            AgentDebugLog.log("H2", "Router.matches", "discord_mention_reject",
-                                    Map.of("expectedMention", mention,
-                                            "actualMentions", context.getMentions().toString()));
-                        }
-                        // #endregion
                         return false;
                     }
                 }

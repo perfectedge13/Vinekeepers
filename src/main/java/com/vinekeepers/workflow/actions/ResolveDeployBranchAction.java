@@ -6,10 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Workflow action: set {@code deployBranch} from {@code branchChoice} (main/develop/…) or {@code branchCustom}
- * when choice is {@code other}.
+ * Sets {@code deployBranch} from {@code branchChoice} or {@code branchCustom} when choice is {@code other}.
  */
-public final class GadgetResolveBranchAction implements com.vinekeepers.workflow.WorkflowAction {
+public final class ResolveDeployBranchAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final String OTHER = "other";
 

@@ -76,7 +76,7 @@ nav:
               - Workflow runners and session lifecycle: features/domain/workflow/workflow.md
               - Workflow step DSL and branching actions: features/domain/workflow/workflow-steps.md
               - Cursor-backed gathering workflow: features/domain/workflow/cursor-gathering.md
-              - Gadget DevOps bot: features/domain/workflow/gadget-devops.md
+              - DevOps deploy: features/domain/workflow/devops-deploy.md
   - Architecture: architecture.md
   - Runbooks:
       - Index: runbooks/index.md

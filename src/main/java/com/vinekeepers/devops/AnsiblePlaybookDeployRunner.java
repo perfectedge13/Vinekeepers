@@ -1,4 +1,4 @@
-package com.vinekeepers.gadget;
+package com.vinekeepers.devops;
 
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.env.Env;
@@ -20,88 +20,91 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Runs ansible-playbook (or a dry-run) in the background and posts progress to a Discord channel or thread.
+ * Runs ansible-playbook asynchronously and posts condensed output to Discord via {@link OutboundDeliveryRouter#sendAs}.
  */
-public final class GadgetDeployRunner {
+public final class AnsiblePlaybookDeployRunner {
 
-    private static final Logger log = LoggerFactory.getLogger(GadgetDeployRunner.class);
+    private static final Logger log = LoggerFactory.getLogger(AnsiblePlaybookDeployRunner.class);
 
     private static final ExecutorService POOL = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "gadget-deploy");
+        Thread t = new Thread(r, "ansible-playbook-deploy");
         t.setDaemon(true);
         return t;
     });
 
-    private GadgetDeployRunner() {
+    private AnsiblePlaybookDeployRunner() {
     }
 
     /**
-     * Submits deploy work without blocking the caller.
+     * @param workflowBotId required (e.g. {@code __botId} from workflow state); must not be null/blank
      */
     public static void submit(OutboundDeliveryRouter router,
-                              String gadgetBotId,
+                              String workflowBotId,
                               String progressChannelId,
-                              GadgetProjectDefinition project,
+                              DeployTarget target,
                               String branch) {
         Objects.requireNonNull(router, "router");
-        String botId = gadgetBotId != null ? gadgetBotId : "gadget";
-        String channel = progressChannelId != null ? progressChannelId : "";
-        if (channel.isBlank()) {
-            log.warn("Gadget deploy skipped: no progress channel id");
+        if (workflowBotId == null || workflowBotId.isBlank()) {
+            log.warn("Ansible deploy skipped: missing workflow bot id (__botId)");
             return;
         }
-        GadgetProjectDefinition p = project;
-        if (p == null || !p.isValid()) {
-            sendLine(router, botId, channel, "Gadget deploy aborted: invalid project.");
+        String channel = progressChannelId != null ? progressChannelId : "";
+        if (channel.isBlank()) {
+            log.warn("Ansible deploy skipped: no progress channel id");
+            return;
+        }
+        DeployTarget t = target;
+        if (t == null || !t.isValid() || !t.hasAnsiblePlaybook()) {
+            sendLine(router, workflowBotId, channel, "Ansible deploy aborted: invalid target or missing playbook.");
             return;
         }
         String b = branch != null ? branch.trim() : "";
         final String resolvedBranch = b.isBlank() ? "main" : b;
-        POOL.execute(() -> runSync(router, botId, channel, p, resolvedBranch));
+        POOL.execute(() -> runSync(router, workflowBotId, channel, t, resolvedBranch));
     }
 
     private static void runSync(OutboundDeliveryRouter router,
-                                String gadgetBotId,
+                                String workflowBotId,
                                 String progressChannelId,
-                                GadgetProjectDefinition project,
+                                DeployTarget target,
                                 String branch) {
-        sendLine(router, gadgetBotId, progressChannelId,
-                "**Gadget deploy** — project `" + escape(project.getId()) + "`, branch `" + escape(branch) + "`");
+        sendLine(router, workflowBotId, progressChannelId,
+                "**Ansible deploy** — target `" + escape(target.getId()) + "`, branch `" + escape(branch) + "`");
 
-        if (truthy(Env.get("GADGET_ANSIBLE_DISABLED", ""))) {
-            sendLine(router, gadgetBotId, progressChannelId,
-                    "Dry run: `GADGET_ANSIBLE_DISABLED` is set; skipping ansible-playbook.");
+        if (truthy(Env.get("DEPLOY_ANSIBLE_DISABLED", "")) || truthy(Env.get("GADGET_ANSIBLE_DISABLED", ""))) {
+            sendLine(router, workflowBotId, progressChannelId,
+                    "Dry run: Ansible disabled via env; skipping ansible-playbook.");
             return;
         }
 
         Path root = ansibleRoot();
-        Path playbook = root.resolve(project.getPlaybook()).normalize();
+        Path playbook = root.resolve(target.getPlaybook()).normalize();
         if (!playbook.startsWith(root) || !Files.isRegularFile(playbook)) {
-            sendLine(router, gadgetBotId, progressChannelId,
+            sendLine(router, workflowBotId, progressChannelId,
                     "Deploy failed: playbook not found at `" + escape(playbook.toString()) + "` (root `" + root + "`).");
             return;
         }
 
-        List<String> cmd = buildCommand(playbook, project, branch);
+        List<String> cmd = buildCommand(playbook, target, branch);
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(root.toFile());
             pb.redirectErrorStream(true);
             Process proc = pb.start();
-            streamImportantLines(router, gadgetBotId, progressChannelId, proc.getInputStream());
+            streamImportantLines(router, workflowBotId, progressChannelId, proc.getInputStream());
             int code = proc.waitFor();
             if (code == 0) {
-                sendLine(router, gadgetBotId, progressChannelId, "Deploy finished **successfully**.");
+                sendLine(router, workflowBotId, progressChannelId, "Deploy finished **successfully**.");
             } else {
-                sendLine(router, gadgetBotId, progressChannelId, "Deploy finished with **exit code " + code + "**.");
+                sendLine(router, workflowBotId, progressChannelId, "Deploy finished with **exit code " + code + "**.");
             }
         } catch (Exception e) {
-            log.warn("Gadget deploy failed: {}", e.getMessage());
-            sendLine(router, gadgetBotId, progressChannelId, "Deploy failed: " + escape(e.getMessage()));
+            log.warn("Ansible deploy failed: {}", e.getMessage());
+            sendLine(router, workflowBotId, progressChannelId, "Deploy failed: " + escape(e.getMessage()));
         }
     }
 
-    private static List<String> buildCommand(Path playbook, GadgetProjectDefinition project, String branch) {
+    private static List<String> buildCommand(Path playbook, DeployTarget target, String branch) {
         String binary = firstNonBlank(Env.get("DEPLOY_ANSIBLE_BINARY", ""),
                 firstNonBlank(Env.get("GADGET_ANSIBLE_BINARY", ""), "ansible-playbook"));
         List<String> cmd = new ArrayList<>();
@@ -113,12 +116,14 @@ public final class GadgetDeployRunner {
             cmd.add(inventory);
         }
         cmd.add(playbook.toString());
-        String projectId = project.getId();
-        appendExtraVar(cmd, "project_id", projectId);
+        String tid = target.getId();
+        appendExtraVar(cmd, "project_id", tid);
         appendExtraVar(cmd, "branch", branch);
-        appendExtraVar(cmd, "gadget_project", projectId);
+        appendExtraVar(cmd, "deploy_target", tid);
+        appendExtraVar(cmd, "deploy_project", tid);
+        appendExtraVar(cmd, "gadget_project", tid);
         appendExtraVar(cmd, "gadget_branch", branch);
-        for (Map.Entry<String, String> e : project.getExtraVars().entrySet()) {
+        for (Map.Entry<String, String> e : target.getExtraVars().entrySet()) {
             appendExtraVar(cmd, e.getKey(), e.getValue());
         }
         return cmd;
@@ -143,7 +148,7 @@ public final class GadgetDeployRunner {
     }
 
     private static void streamImportantLines(OutboundDeliveryRouter router,
-                                             String gadgetBotId,
+                                             String workflowBotId,
                                              String channelId,
                                              InputStream in) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
@@ -153,16 +158,16 @@ public final class GadgetDeployRunner {
                 if (t.isEmpty()) {
                     continue;
                 }
-                if (shouldEmitLine(t)) {
-                    sendLine(router, gadgetBotId, channelId, truncate(t, 350));
+                if (shouldEmitAnsibleLine(t)) {
+                    sendLine(router, workflowBotId, channelId, truncate(t, 350));
                 }
             }
         } catch (Exception e) {
-            log.debug("Gadget deploy stream read ended: {}", e.getMessage());
+            log.debug("Ansible deploy stream read ended: {}", e.getMessage());
         }
     }
 
-    private static boolean shouldEmitLine(String line) {
+    private static boolean shouldEmitAnsibleLine(String line) {
         String lower = line.toLowerCase(Locale.ROOT);
         return line.startsWith("TASK [")
                 || line.startsWith("PLAY [")
@@ -173,18 +178,18 @@ public final class GadgetDeployRunner {
     }
 
     private static Path ansibleRoot() {
-        String raw = Env.get("GADGET_ANSIBLE_ROOT", "").trim();
+        String raw = firstNonBlank(Env.get("DEPLOY_ANSIBLE_ROOT", ""), Env.get("GADGET_ANSIBLE_ROOT", "")).trim();
         if (!raw.isBlank()) {
             return Path.of(raw);
         }
         return Path.of("ansible");
     }
 
-    private static void sendLine(OutboundDeliveryRouter router, String gadgetBotId, String channelId, String text) {
+    private static void sendLine(OutboundDeliveryRouter router, String workflowBotId, String channelId, String text) {
         if (text == null || text.isBlank()) {
             return;
         }
-        router.sendAs(channelId, null, text, gadgetBotId);
+        router.sendAs(channelId, null, text, workflowBotId);
     }
 
     private static String escape(String s) {
@@ -211,9 +216,9 @@ public final class GadgetDeployRunner {
         return a != null && !a.isBlank() ? a.trim() : b;
     }
 
-    /** Visible for tests: detect playbook path resolution without executing ansible. */
-    static Path resolvePlaybookForTest(GadgetProjectDefinition project) {
+    /** Visible for tests: playbook path resolution without executing ansible. */
+    static Path resolvePlaybookForTest(DeployTarget target) {
         Path root = ansibleRoot();
-        return root.resolve(project.getPlaybook()).normalize();
+        return root.resolve(target.getPlaybook()).normalize();
     }
 }

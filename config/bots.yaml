@@ -86,7 +86,7 @@ bots:
   workflow:
     type: configured
     params:
-      workflowRef: gadget_deploy
+      workflowRef: devops_deploy
   identities:
     discord:
       tokenEnvKey: GADGET_DISCORD_TOKEN
@@ -129,13 +129,13 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 58
+        next: 63
       - when:
           key: planningIntakeThread
           value: 'true'
         next: 2
       - when: else
-        next: 52
+        next: 57
     - type: call_action
       action: get_profile_missing_fields
       storeIn: profileMissingSummary
@@ -258,43 +258,52 @@ workflows:
         asRole: orchestrator
         target: thread
     - type: call_action
-      action: build_request_exploration
-    - type: call_action
-      action: expand_planning_drafts
-    - type: call_action
-      action: run_llm_planning_synthesis
+      action: mark_intake_discovery_complete
       storeSpread: true
     - type: call_action
-      action: synthesize_pre_critique_artifacts
-    - type: call_action
-      action: evaluate_planning_packet_depth
+      action: execute_planning_room_cycle
       storeSpread: true
     - type: branch
       branches:
       - when:
-          key: planningPacketDepthOk
+          key: planningUserInputRequired
           value: 'true'
-        next: 36
+        next: 31
       - when: else
-        next: 34
+        next: 36
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Planning packet not posted** — depth check failed.
-
-          {{planningPacketDepthReason}}
-
-          Add more detail in discovery, choose **Continue to planning packet** from
-          the coordinator menu, or answer clarifying questions so we can enrich the
-          plan.'
+        content: '{{planningOrchestratorRoundSummary}}'
         asRole: orchestrator
         target: thread
+    - type: prompt_for_field
+      prompt: '{{planningOrchestratorRoundSummary}}'
+      storeIn: planningClarificationRaw
+      intent: present_choices
+      choiceProvider: planningClarification
+    - type: capture_field
+      storeIn: planningClarificationRaw
+    - type: call_action
+      action: merge_planning_clarification_choice
+      storeSpread: true
     - type: branch
       branches:
       - when: else
-        next: 61
+        next: 29
+    - type: branch
+      branches:
+      - when:
+          key: planningReadyToPostPacket
+          value: 'true'
+        next: 37
+      - when: else
+        next: 42
     - type: call_action
       action: post_planning_packet_thread
+      storeSpread: true
+    - type: call_action
+      action: evaluate_planning_packet_depth
       storeSpread: true
     - type: call_action
       action: run_plan_critique_and_readiness
@@ -304,11 +313,11 @@ workflows:
       - when:
           key: planReadinessStatus
           value: BLOCKED
-        next: 49
+        next: 54
       - when:
           key: planReadinessStatus
           value: NEEDS_REVISION
-        next: 2
+        next: 29
         clear:
         - discoveryAnswerRaw
         - planApprovalDecision
@@ -324,12 +333,31 @@ workflows:
         - readinessProceedRaw
         - discoveryBundledApplyJson
         - intakeChoice
+        - planningClarificationRaw
+        - planningPacketPostedVersion
       - when:
           key: planReadinessStatus
           value: NEEDS_HUMAN_DECISION
-        next: 72
+        next: 77
       - when: else
-        next: 39
+        next: 44
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Planning packet not ready yet** — {{planningRoomCycleError}}
+
+
+          {{planningPacketDepthReason}}
+
+
+          The coordinator menu will offer **Continue to planning packet** to retry,
+          or add a brief note in-thread.'
+        asRole: orchestrator
+        target: thread
+    - type: branch
+      branches:
+      - when: else
+        next: 66
     - type: call_action
       action: post_channel_message
       bind:
@@ -359,11 +387,34 @@ workflows:
           {{planningThreadReviewBuildError}}
 
 
-          _Approval choices follow in the next message._
+          _Approval choices follow when the packet passes final gates._
 
           '
         asRole: orchestrator
         target: thread
+    - type: call_action
+      action: evaluate_planning_approval_gate
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: planningReadyForApproval
+          value: 'true'
+        next: 48
+      - when: else
+        next: 46
+    - type: call_action
+      action: post_channel_message
+      bind:
+        content: '**Approval held** — {{planningApprovalGateReason}}
+
+          We will run another planning round to strengthen the packet before you approve.'
+        asRole: orchestrator
+        target: thread
+    - type: branch
+      branches:
+      - when: else
+        next: 29
     - type: prompt_for_field
       prompt: Approve implementation launch?
       storeIn: planApprovalDecision
@@ -384,15 +435,15 @@ workflows:
       - when:
           key: planApprovalDecision
           value: approve
-        next: 43
+        next: 51
       - when:
           key: planApprovalDecision
           value: approve_with_risks
-        next: 43
+        next: 51
       - when:
           key: planApprovalDecision
           value: revise
-        next: 2
+        next: 29
         clear:
         - discoveryAnswerRaw
         - planApprovalDecision
@@ -408,12 +459,15 @@ workflows:
         - readinessProceedRaw
         - discoveryBundledApplyJson
         - intakeChoice
+        - planningClarificationRaw
+        - planningPacketPostedVersion
+        - planningRoomCycleIteration
       - when:
           key: planApprovalDecision
           value: reject
-        next: 43
+        next: 51
       - when: else
-        next: 43
+        next: 51
     - type: call_action
       action: persist_plan_approval
     - type: call_action
@@ -446,9 +500,9 @@ workflows:
       - when:
           key: launchSucceeded
           value: 'false'
-        next: 49
+        next: 54
       - when: else
-        next: 81
+        next: 86
     - type: call_action
       action: post_channel_message
       bind:
@@ -475,21 +529,21 @@ workflows:
       - when:
           key: roomAction
           value: status
-        next: 55
+        next: 60
       - when:
           key: roomAction
           value: retry
-        next: 56
+        next: 61
       - when:
           key: roomAction
           value: close
-        next: 57
+        next: 62
       - when:
           key: roomAction
           value: ''
-        next: 58
+        next: 63
       - when: else
-        next: 58
+        next: 63
     - type: done
       message: 'Room status: active. Repo and request are in context.'
     - type: done
@@ -497,7 +551,7 @@ workflows:
     - type: done
       message: Room closed. Use the channel for follow-up.
     - type: done
-      message: What would you like? (status, retry, close, or ask anything)
+      message: Use the coordinator menu in the intake thread to continue planning.
     - type: done
       message: '{{roomAction}}'
     - type: call_action
@@ -536,19 +590,19 @@ workflows:
       - when:
           key: intakeChoice
           value: continue_planning
-        next: 64
+        next: 69
         clear:
         - discoveryAnswerRaw
       - when:
           key: intakeChoice
           value: add_details
-        next: 68
+        next: 73
       - when:
           key: intakeChoice
           value: clarify_questions
         next: 16
       - when: else
-        next: 61
+        next: 66
         clear:
         - intakeChoice
     - type: call_action
@@ -583,7 +637,7 @@ workflows:
     - type: branch
       branches:
       - when: else
-        next: 61
+        next: 66
         clear:
         - intakeChoice
         - discoveryAnswerRaw
@@ -622,7 +676,7 @@ workflows:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 78
+        next: 83
       - when:
           key: readinessProceedRaw
           value: revise
@@ -643,14 +697,14 @@ workflows:
         - discoveryBundledApplyJson
         - intakeChoice
       - when: else
-        next: 66
+        next: 71
     - type: call_action
       action: acknowledge_readiness_human_decision
       storeSpread: true
     - type: branch
       branches:
       - when: else
-        next: 39
+        next: 44
     - type: call_action
       action: post_channel_message
       bind:
@@ -818,35 +872,53 @@ workflows:
       message: Could not create room.
     - type: done
       message: Cancelled.
-  gadget_deploy:
+  devops_deploy:
     steps:
     - type: extract_event
       fromEvent:
       - from: context.channelId
         storeIn: channelId
     - type: prompt_for_field
-      prompt: '**Deploy** — choose an action:'
-      storeIn: menuChoice
+      prompt: '**DevOps** — choose an action:'
+      storeIn: mainMenu
       intent: present_choices
       choices:
-      - id: deploy_docker
-        label: Deploy to Docker
+      - id: ansible
+        label: Ansible playbook deploy
+      - id: compose_up
+        label: Docker Compose — start (up)
+      - id: compose_stop
+        label: Docker Compose — stop
+      - id: compose_ps
+        label: Docker Compose — status (ps)
       - id: cancel
         label: Cancel
     - type: capture_field
-      storeIn: menuChoice
+      storeIn: mainMenu
     - type: branch
       branches:
       - when:
-          key: menuChoice
+          key: mainMenu
           value: cancel
-        next: 17
+        next: 61
       - when:
-          key: menuChoice
-          value: deploy_docker
+          key: mainMenu
+          value: ansible
         next: 4
+      - when:
+          key: mainMenu
+          value: compose_up
+        next: 20
+      - when:
+          key: mainMenu
+          value: compose_stop
+        next: 32
+      - when:
+          key: mainMenu
+          value: compose_ps
+        next: 44
       - when: else
-        next: 17
+        next: 61
     - type: call_action
       action: deploy_resolve_project
       storeSpread: true
@@ -859,11 +931,11 @@ workflows:
       - when: else
         next: 8
     - type: prompt_for_field
-      prompt: Which project should we deploy?
-      storeIn: gadgetProject
-      choiceProvider: gadgetProjects
+      prompt: Which deploy target?
+      storeIn: deployTargetId
+      choiceProvider: deployTargets
     - type: capture_field
-      storeIn: gadgetProject
+      storeIn: deployTargetId
     - type: prompt_for_field
       prompt: Which Git branch should we deploy?
       storeIn: branchChoice
@@ -884,17 +956,116 @@ workflows:
     - type: capture_field
       storeIn: branchCustom
     - type: call_action
-      action: gadget_resolve_branch
+      action: resolve_deploy_branch
       storeSpread: true
     - type: call_action
       action: create_thread
       bind:
-        threadName: gadget-deploy
+        threadName: deploy-progress
       storeIn: deliveryChannelId
     - type: call_action
-      action: start_gadget_deploy
+      action: start_ansible_deploy
       storeSpread: true
     - type: done
-      message: '{{gadgetDeployMessage}}'
+      message: '{{deployAnsibleMessage}}'
+    - type: call_action
+      action: deploy_resolve_project
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: deployNeedsProjectPick
+          value: 'true'
+        next: 22
+      - when: else
+        next: 24
+    - type: prompt_for_field
+      prompt: Which deploy target?
+      storeIn: deployTargetId
+      choiceProvider: deployTargets
+    - type: capture_field
+      storeIn: deployTargetId
+    - type: prompt_for_field
+      prompt: Which service(s)?
+      storeIn: deployComposeService
+      choiceProvider: deployComposeServices
+    - type: capture_field
+      storeIn: deployComposeService
+    - type: call_action
+      action: create_thread
+      bind:
+        threadName: deploy-progress
+      storeIn: deliveryChannelId
+    - type: call_action
+      action: run_deploy_compose
+      bind:
+        composeOperation: up
+      storeSpread: true
+    - type: done
+      message: '{{deployComposeMessage}}'
+    - type: call_action
+      action: deploy_resolve_project
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: deployNeedsProjectPick
+          value: 'true'
+        next: 34
+      - when: else
+        next: 36
+    - type: prompt_for_field
+      prompt: Which deploy target?
+      storeIn: deployTargetId
+      choiceProvider: deployTargets
+    - type: capture_field
+      storeIn: deployTargetId
+    - type: prompt_for_field
+      prompt: Which service(s)?
+      storeIn: deployComposeService
+      choiceProvider: deployComposeServices
+    - type: capture_field
+      storeIn: deployComposeService
+    - type: call_action
+      action: create_thread
+      bind:
+        threadName: deploy-progress
+      storeIn: deliveryChannelId
+    - type: call_action
+      action: run_deploy_compose
+      bind:
+        composeOperation: stop
+      storeSpread: true
+    - type: done
+      message: '{{deployComposeMessage}}'
+    - type: call_action
+      action: deploy_resolve_project
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: deployNeedsProjectPick
+          value: 'true'
+        next: 46
+      - when: else
+        next: 48
+    - type: prompt_for_field
+      prompt: Which deploy target?
+      storeIn: deployTargetId
+      choiceProvider: deployTargets
+    - type: capture_field
+      storeIn: deployTargetId
+    - type: call_action
+      action: create_thread
+      bind:
+        threadName: deploy-progress
+      storeIn: deliveryChannelId
+    - type: call_action
+      action: run_deploy_compose
+      bind:
+        composeOperation: ps
+      storeSpread: true
+    - type: done
+      message: '{{deployComposeMessage}}'
     - type: done
       message: Cancelled.

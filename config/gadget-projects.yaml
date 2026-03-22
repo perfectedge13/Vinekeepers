@@ -1,9 +1,0 @@
-# Deploy targets: playbook path is relative to DEPLOY_ANSIBLE_ROOT / GADGET_ANSIBLE_ROOT.
-# optional gitRemote: used by workflow choiceProvider deployGitBranches (git ls-remote --heads).
-# extraVars: merged into ansible-playbook -e (operator-defined keys for your playbooks).
-projects:
-  - id: vinekeepers
-    label: Vinekeepers
-    playbook: playbooks/site.yml
-    gitRemote: https://github.com/octocat/Hello-World.git
-    extraVars: {}

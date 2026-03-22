@@ -1,0 +1,215 @@
+package com.vinekeepers.workflow.planning;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vinekeepers.state.planning.FeaturePlanState;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+/**
+ * Ranks LLM/critique follow-up questions, applies safe defaults as assumptions instead of asking,
+ * and prepares at most one clarification round with branchable choices (max three options plus default).
+ */
+public final class PlanningQuestionRankingPolicy {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Pattern OR_SPLIT = Pattern.compile("\\s+or\\s+", Pattern.CASE_INSENSITIVE);
+
+    private PlanningQuestionRankingPolicy() {}
+
+    public record RankedClarification(
+            boolean userInputRequired,
+            String orchestratorPrompt,
+            String choicesJson,
+            String metaJson,
+            int blockingQuestionCount,
+            List<String> assumptionsToRecord) {}
+
+    /**
+     * @param candidates   raw questions from LLM passes (deduped)
+     * @param maxQuestions budget for how many distinct topics we consider (selection still surfaces one round)
+     */
+    public static RankedClarification rank(
+            FeaturePlanState plan,
+            List<String> candidates,
+            int maxQuestions) {
+        List<String> assumptions = new ArrayList<>();
+        List<String> pending = new ArrayList<>();
+        int blocking = 0;
+        for (String raw : dedupe(candidates)) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String q = raw.trim();
+            if (q.length() > 240) {
+                q = q.substring(0, 239) + "…";
+            }
+            DefaultResolution d = tryResolveWithDefault(q);
+            if (d != null) {
+                assumptions.add(d.assumptionText());
+                continue;
+            }
+            int score = scoreQuestion(q);
+            if (score < 4) {
+                continue;
+            }
+            pending.add(q);
+            if (isBlocking(q)) {
+                blocking++;
+            }
+            if (pending.size() >= maxQuestions) {
+                break;
+            }
+        }
+        if (pending.isEmpty()) {
+            return new RankedClarification(false, "", "[]", "{}", 0, assumptions);
+        }
+        String top = pending.get(0);
+        ClarificationOptions opts = inferOptions(top);
+        try {
+            List<Map<String, String>> choiceMaps = new ArrayList<>();
+            choiceMaps.add(Map.of("id", "planning_clarify_default", "label", "Use recommended default", "description", "Record the default below and continue."));
+            for (int i = 0; i < opts.labels().size(); i++) {
+                String id = i == 0 ? "planning_clarify_opt_a" : (i == 1 ? "planning_clarify_opt_b" : "planning_clarify_opt_c");
+                choiceMaps.add(Map.of("id", id, "label", truncate(opts.labels().get(i), 72), "description", ""));
+            }
+            String choicesJson = JSON.writeValueAsString(choiceMaps);
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("questionText", top);
+            meta.put("defaultAssumption", opts.defaultAssumption());
+            meta.put("optA", opts.optA());
+            meta.put("optB", opts.optB());
+            meta.put("optC", opts.optC());
+            String metaJson = JSON.writeValueAsString(meta);
+            String prompt = "One implementation decision would help lock the design:\n\n**" + top + "**\n\nChoose an option below, or pick **Use recommended default** to record our usual baseline and keep moving.";
+            return new RankedClarification(true, prompt, choicesJson, metaJson, blocking, assumptions);
+        } catch (JsonProcessingException e) {
+            return new RankedClarification(false, "", "[]", "{}", 0, assumptions);
+        }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    private static List<String> dedupe(List<String> in) {
+        List<String> out = new ArrayList<>();
+        for (String s : in) {
+            if (s == null || s.isBlank()) {
+                continue;
+            }
+            String t = s.trim();
+            boolean dup = false;
+            for (String e : out) {
+                if (similarity(e, t) > 0.72) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
+    private static double similarity(String a, String b) {
+        if (a == null || b == null) {
+            return 0;
+        }
+        String x = a.toLowerCase(Locale.ROOT);
+        String y = b.toLowerCase(Locale.ROOT);
+        if (x.equals(y)) {
+            return 1;
+        }
+        long common = x.chars().filter(ch -> y.indexOf(ch) >= 0).count();
+        return (2.0 * common) / (x.length() + y.length() + 1);
+    }
+
+    private static boolean isBlocking(String q) {
+        String s = q.toLowerCase(Locale.ROOT);
+        return s.contains("breaking") || s.contains("compat") || s.contains("migration") || s.contains("security")
+                || s.contains("schema") || s.contains("validation") && s.contains("must");
+    }
+
+    private static int scoreQuestion(String q) {
+        String s = q.toLowerCase(Locale.ROOT);
+        int score = 0;
+        if (s.contains("implement") || s.contains("runtime") || s.contains("config")) {
+            score += 3;
+        }
+        if (s.contains("architecture") || s.contains("component") || s.contains("workflow") || s.contains("override")) {
+            score += 3;
+        }
+        if (s.contains("valid") || s.contains("test") || s.contains("migrat") || s.contains("backward")) {
+            score += 2;
+        }
+        if (s.contains("should ") || s.contains("must we") || s.contains("do we need")) {
+            score += 2;
+        }
+        if (s.contains("favorite color") || s.contains("what would you like") || s.length() < 12) {
+            score -= 5;
+        }
+        return score;
+    }
+
+    private record DefaultResolution(String assumptionText) {}
+
+    private static DefaultResolution tryResolveWithDefault(String q) {
+        String s = q.toLowerCase(Locale.ROOT);
+        if (s.contains("override") && (s.contains("provider") || s.contains("model"))) {
+            return new DefaultResolution(
+                    "Default: workflow YAML exposes a global LLM default (provider/model); each LLM-capable step may override model and/or provider; non-LLM steps do not declare LLM fields.");
+        }
+        if (s.contains("invalid") && s.contains("override")) {
+            return new DefaultResolution(
+                    "Default: invalid LLM overrides on a step fail workflow validation (no silent fallback to the workflow default).");
+        }
+        if (s.contains("config") && s.contains("runtime") && s.contains("only")) {
+            return new DefaultResolution(
+                    "Default: assume both configuration schema and runtime resolution behavior may change unless the request explicitly limits scope to config-only.");
+        }
+        if (s.contains("non-llm") && s.contains("llm")) {
+            return new DefaultResolution("Default: non-LLM workflow steps cannot define LLM overrides.");
+        }
+        return null;
+    }
+
+    private record ClarificationOptions(
+            List<String> labels, String defaultAssumption, String optA, String optB, String optC) {}
+
+    private static ClarificationOptions inferOptions(String question) {
+        String[] parts = OR_SPLIT.split(question, 3);
+        if (parts.length >= 2) {
+            String a = cleanOption(parts[0]);
+            String b = cleanOption(parts[1]);
+            String def = "Proceed with " + a + " unless product guidance prefers " + b + ".";
+            return new ClarificationOptions(List.of(a, b), def, a, b, "");
+        }
+        String def =
+                "Proceed with the architect/auditor draft in the packet as written; refine later if implementation reveals gaps.";
+        return new ClarificationOptions(
+                List.of("Prefer stricter validation and smaller scope", "Prefer faster delivery with documented risks"),
+                def,
+                "Prefer stricter validation and smaller scope",
+                "Prefer faster delivery with documented risks",
+                "");
+    }
+
+    private static String cleanOption(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.replaceFirst("(?i)^(should|must|will|can)\\s+", "").trim();
+        t = t.replaceFirst("\\?$", "").trim();
+        return truncate(t, 80);
+    }
+}

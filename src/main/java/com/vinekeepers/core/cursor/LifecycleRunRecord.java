@@ -167,36 +167,46 @@ public final class LifecycleRunRecord {
     }
 
     public synchronized boolean shouldPostStatusLine(String line) {
-        if (line == null || line.isBlank()) {
+        String norm = normalizeDedupeLine(line);
+        if (norm.isBlank()) {
             return false;
         }
-        if (line.equals(lastPostedStatusLine)) {
+        if (norm.equals(lastPostedStatusLine)) {
             return false;
         }
-        this.lastPostedStatusLine = line;
+        this.lastPostedStatusLine = norm;
         return true;
     }
 
     public synchronized boolean shouldPostAssistantLine(String line) {
-        if (line == null || line.isBlank()) {
+        String norm = normalizeDedupeLine(line);
+        if (norm.isBlank()) {
             return false;
         }
-        if (line.equals(lastPostedAssistantLine)) {
+        if (norm.equals(lastPostedAssistantLine)) {
             return false;
         }
-        this.lastPostedAssistantLine = line;
+        this.lastPostedAssistantLine = norm;
         return true;
     }
 
     public synchronized boolean shouldPostPrLine(String line) {
-        if (line == null || line.isBlank()) {
+        String norm = normalizeDedupeLine(line);
+        if (norm.isBlank()) {
             return false;
         }
-        if (line.equals(lastPostedPrLine)) {
+        if (norm.equals(lastPostedPrLine)) {
             return false;
         }
-        this.lastPostedPrLine = line;
+        this.lastPostedPrLine = norm;
         return true;
+    }
+
+    private static String normalizeDedupeLine(String line) {
+        if (line == null) {
+            return "";
+        }
+        return line.trim().replaceAll("\\s+", " ");
     }
 
     public synchronized boolean isTerminal() {

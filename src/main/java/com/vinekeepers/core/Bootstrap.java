@@ -35,12 +35,14 @@ import com.vinekeepers.tools.CursorFullRunTool;
 import com.vinekeepers.tools.EchoTool;
 import com.vinekeepers.tools.ToolRegistry;
 import com.vinekeepers.tools.ToolRunner;
-import com.vinekeepers.gadget.GadgetProjectRegistry;
+import com.vinekeepers.devops.DeployTargetRegistry;
 import com.vinekeepers.profile.WorkProfileLoader;
 import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.providers.GadgetProjectsChoiceProvider;
+import com.vinekeepers.providers.DeployComposeServicesChoiceProvider;
+import com.vinekeepers.providers.DeployTargetsChoiceProvider;
 import com.vinekeepers.providers.GitHubReposChoiceProvider;
 import com.vinekeepers.providers.GitRemoteBranchesChoiceProvider;
+import com.vinekeepers.providers.PlanningClarificationChoiceProvider;
 import com.vinekeepers.workflow.DynamicChoiceProviderRegistry;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunner;
@@ -63,11 +65,14 @@ import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
 import com.vinekeepers.workflow.actions.DeployResolveProjectAction;
+import com.vinekeepers.workflow.actions.EvaluatePlanningApprovalGateAction;
 import com.vinekeepers.workflow.actions.EvaluatePlanningPacketDepthAction;
+import com.vinekeepers.workflow.actions.ExecutePlanningRoomCycleAction;
 import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.EnsureRepoWorkspaceAction;
-import com.vinekeepers.workflow.actions.GadgetResolveBranchAction;
-import com.vinekeepers.workflow.actions.StartGadgetDeployAction;
+import com.vinekeepers.workflow.actions.ResolveDeployBranchAction;
+import com.vinekeepers.workflow.actions.RunDeployComposeAction;
+import com.vinekeepers.workflow.actions.StartAnsibleDeployAction;
 import com.vinekeepers.workflow.actions.GeneratePlanningProposalsAction;
 import com.vinekeepers.workflow.actions.GetProfileMissingFieldsAction;
 import com.vinekeepers.workflow.actions.GetStructuredDiscoveryGapsAction;
@@ -76,9 +81,13 @@ import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import com.vinekeepers.workflow.actions.InitializeFeatureRoomStateAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
+import com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
+import com.vinekeepers.workflow.actions.RunArchitectPlanningPassAction;
+import com.vinekeepers.workflow.actions.RunAuditorPlanningPassAction;
 import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
+import com.vinekeepers.workflow.actions.RunScribePlanningPassAction;
 import com.vinekeepers.workflow.actions.RunPlanCritiqueAndReadinessAction;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
 import com.vinekeepers.workflow.actions.ProvisionBotInstanceAction;
@@ -155,11 +164,11 @@ public final class Bootstrap {
         this.outboundDeliveryRouter = new OutboundDeliveryRouter(lifecycleContextStore, featureRoomStateStore);
         registerLegacyActions(actionRegistry);
         registerLifecycleActions(actionRegistry);
-        actionRegistry.register("gadget_resolve_branch", new GadgetResolveBranchAction());
-        GadgetProjectRegistry bootstrapGadgetProjects = GadgetProjectRegistry.load(Path.of("config", "gadget-projects.yaml"));
-        actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(bootstrapGadgetProjects));
-        actionRegistry.register("start_gadget_deploy", new StartGadgetDeployAction(outboundDeliveryRouter,
-                bootstrapGadgetProjects, "gadget"));
+        actionRegistry.register("resolve_deploy_branch", new ResolveDeployBranchAction());
+        DeployTargetRegistry bootstrapTargets = DeployTargetRegistry.load(DeployTargetRegistry.resolveManifestPath());
+        actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(bootstrapTargets));
+        actionRegistry.register("start_ansible_deploy", new StartAnsibleDeployAction(outboundDeliveryRouter, bootstrapTargets));
+        actionRegistry.register("run_deploy_compose", new RunDeployComposeAction(outboundDeliveryRouter, bootstrapTargets));
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
         this.router = new Router(lifecycleContextStore, featureRoomStateStore);
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
@@ -196,8 +205,11 @@ public final class Bootstrap {
             loader.addRoutings(config, router);
             DynamicChoiceProviderRegistry choiceProviderRegistry = new DynamicChoiceProviderRegistry();
             choiceProviderRegistry.register("githubRepos", new GitHubReposChoiceProvider(stateStore));
-            GadgetProjectRegistry gadgetProjectRegistry = GadgetProjectRegistry.load(Path.of("config", "gadget-projects.yaml"));
-            choiceProviderRegistry.register("gadgetProjects", new GadgetProjectsChoiceProvider(gadgetProjectRegistry));
+            choiceProviderRegistry.register("planningClarification", new PlanningClarificationChoiceProvider());
+            DeployTargetRegistry deployTargetRegistry = DeployTargetRegistry.load(DeployTargetRegistry.resolveManifestPath());
+            choiceProviderRegistry.register("deployTargets", new DeployTargetsChoiceProvider(deployTargetRegistry));
+            choiceProviderRegistry.register("deployComposeServices", new DeployComposeServicesChoiceProvider(deployTargetRegistry));
+            choiceProviderRegistry.register("deployGitBranches", new GitRemoteBranchesChoiceProvider(deployTargetRegistry));
             List<BotDefinition> bots = loader.buildBots(config);
             lastLoadedBots.clear();
             lastLoadedBots.addAll(bots);
@@ -215,8 +227,9 @@ public final class Bootstrap {
                 engine.registerRunner(bot.getId(), runner);
                 engine.registerReasoner(bot.getId(), new StubReasoner());
             }
-            actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(gadgetProjectRegistry));
-            actionRegistry.register("start_gadget_deploy", new StartGadgetDeployAction(outboundDeliveryRouter, gadgetProjectRegistry, "gadget"));
+            actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(deployTargetRegistry));
+            actionRegistry.register("start_ansible_deploy", new StartAnsibleDeployAction(outboundDeliveryRouter, deployTargetRegistry));
+            actionRegistry.register("run_deploy_compose", new RunDeployComposeAction(outboundDeliveryRouter, deployTargetRegistry));
         } catch (Exception e) {
             log.warn("Could not load config from {}: {}", configPath, e.getMessage());
         }
@@ -336,6 +349,22 @@ public final class Bootstrap {
                 outboundDeliveryRouter));
         registry.register("spread_plan_workspace_signals", new SpreadPlanWorkspaceSignalsAction(featurePlanStateStore));
         registry.register("evaluate_planning_packet_depth", new EvaluatePlanningPacketDepthAction(featurePlanStateStore));
+        registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction());
+        registry.register(
+                "execute_planning_room_cycle",
+                new ExecutePlanningRoomCycleAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "merge_planning_clarification_choice",
+                new MergePlanningClarificationChoiceAction(featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "run_architect_planning_pass",
+                new RunArchitectPlanningPassAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "run_auditor_planning_pass",
+                new RunAuditorPlanningPassAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "run_scribe_planning_pass",
+                new RunScribePlanningPassAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
         registry.register(
                 "run_llm_planning_synthesis",
                 new RunLlmPlanningSynthesisAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));

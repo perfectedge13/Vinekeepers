@@ -85,12 +85,14 @@ assets:
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
       resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, spread_plan_workspace_signals,
-      evaluate_planning_packet_depth, run_llm_planning_synthesis, upsert_artifact_section_data,
+      evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
+      merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
+      run_llm_planning_synthesis, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, mark_intake_discovery_complete,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
-      append/set plan actions; register gadget_resolve_branch
-      and start_gadget_deploy; load GadgetProjectRegistry and register gadgetProjects choice provider on config load
+      append/set plan actions; register resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose;
+      load DeployTargetRegistry and register deployTargets, deployComposeServices, and deployGitBranches choice providers on config load
     requires:
       - REQ-CORE-002
       - REQ-TOOLS-001
@@ -127,7 +129,7 @@ assets:
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
       workflowRef arrietty_room, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
-      blank/empty; gadget bot with workflowRef gadget_deploy, routing discordMention gadget and discordChannels allowlist
+      blank/empty; operator bot (e.g. id gadget) with workflowRef devops_deploy, routing discordMention and discordChannels allowlist
       ops channel id in discordChannels (see comment block top of config/bots.yaml); Luna routing optional discordChannelsExclude
       for that ops channel id
     requires:
@@ -406,8 +408,10 @@ assets:
       - FEAT-CURSOR-GATHERING
   - id: ASSET-GADGET-PROJECT-REGISTRY
     kind: source
-    path: src/main/java/com/vinekeepers/gadget/GadgetProjectRegistry.java
-    role: Loads deployable Gadget projects from config/gadget-projects.yaml (id, label, playbook path)
+    path: src/main/java/com/vinekeepers/devops/DeployTargetRegistry.java
+    role: >-
+      Loads deploy targets from config/deploy-targets.yaml (targets or legacy projects; id, label, playbook, optional
+      compose block); path from DEPLOY_TARGETS_PATH with GADGET_PROJECTS_PATH alias
     requires:
       - REQ-WORKFLOW-001
       - REQ-GADGET-001
@@ -415,18 +419,18 @@ assets:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-GADGET-DEPLOY-RUNNER
     kind: source
-    path: src/main/java/com/vinekeepers/gadget/GadgetDeployRunner.java
+    path: src/main/java/com/vinekeepers/devops/AnsiblePlaybookDeployRunner.java
     role: >-
-      Background ansible-playbook execution; streams TASK/fatal lines to Discord via OutboundDeliveryRouter.sendAs;
-      env GADGET_ANSIBLE_ROOT, GADGET_ANSIBLE_BINARY, GADGET_ANSIBLE_INVENTORY, GADGET_ANSIBLE_DISABLED
+      Background ansible-playbook execution; streams TASK/fatal lines to Discord via OutboundDeliveryRouter.sendAs workflow bot id;
+      env DEPLOY_ANSIBLE_* with GADGET_ANSIBLE_* aliases; passes -e project_id, branch, gadget_project, gadget_branch for compatibility
     requires:
       - REQ-GADGET-001
     feature_ids:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-GADGET-PROJECTS-CHOICE-PROVIDER
     kind: source
-    path: src/main/java/com/vinekeepers/providers/GadgetProjectsChoiceProvider.java
-    role: Dynamic choice provider gadgetProjects for gadget_deploy project selection
+    path: src/main/java/com/vinekeepers/providers/DeployTargetsChoiceProvider.java
+    role: Dynamic choice provider deployTargets for devops_deploy target selection
     requires:
       - REQ-WORKFLOW-001
       - REQ-GADGET-001
@@ -434,8 +438,8 @@ assets:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-GADGET-RESOLVE-BRANCH-ACTION
     kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/GadgetResolveBranchAction.java
-    role: Workflow action gadget_resolve_branch; sets deployBranch from branchChoice or branchCustom when other
+    path: src/main/java/com/vinekeepers/workflow/actions/ResolveDeployBranchAction.java
+    role: Workflow action resolve_deploy_branch; sets deployBranch from branchChoice or branchCustom when other
     requires:
       - REQ-WORKFLOW-001
       - REQ-GADGET-001
@@ -443,23 +447,53 @@ assets:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-START-GADGET-DEPLOY-ACTION
     kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/StartGadgetDeployAction.java
+    path: src/main/java/com/vinekeepers/workflow/actions/StartAnsibleDeployAction.java
     role: >-
-      Workflow action start_gadget_deploy; validates project, resolves progress target (thread or parent channel on
-      THREAD_CREATE_FAILED), submits GadgetDeployRunner
+      Workflow action start_ansible_deploy; validates deploy target, resolves progress target (thread or parent channel on
+      THREAD_CREATE_FAILED), submits AnsiblePlaybookDeployRunner using __botId from workflow state (no hardcoded bot id)
     requires:
       - REQ-GADGET-001
     feature_ids:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-GADGET-PROJECTS-YAML
     kind: config
-    path: config/gadget-projects.yaml
-    role: Gadget deploy targets list (projects with id, label, playbook relative to GADGET_ANSIBLE_ROOT)
+    path: config/deploy-targets.yaml
+    role: >-
+      Deploy targets list (targets with id, label, playbook relative to ansible root, optional compose file, workingDirectory,
+      composeServices allowlist, hostOpsExecutor direct or cursor_agent)
     requires:
       - REQ-CONFIG-001
       - REQ-GADGET-001
     feature_ids:
       - FEAT-CONFIG
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-HOST-COMPOSE-OPS-RUNNER
+    kind: source
+    path: src/main/java/com/vinekeepers/devops/HostComposeOpsRunner.java
+    role: >-
+      docker compose up/down/restart/ps or cursor agent non-interactive prompt for compose ops; streams output to Discord;
+      DEPLOY_HOST_OPS_DISABLED (GADGET_HOST_OPS_DISABLED alias) kill switch
+    requires:
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-RUN-DEPLOY-COMPOSE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RunDeployComposeAction.java
+    role: Workflow action run_deploy_compose; bind composeOperation; submits HostComposeOpsRunner with workflow bot id from state
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-DEPLOY-COMPOSE-SERVICES-CHOICE-PROVIDER
+    kind: source
+    path: src/main/java/com/vinekeepers/providers/DeployComposeServicesChoiceProvider.java
+    role: Choice provider deployComposeServices from manifest allowlist for selected deployTargetId
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-GADGET-001
+    feature_ids:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-DONE-STEP
     kind: source
@@ -1074,6 +1108,94 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-EXECUTE-PLANNING-ROOM-CYCLE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ExecutePlanningRoomCycleAction.java
+    role: >-
+      Workflow action execute_planning_room_cycle — iterative planning room: request exploration seed, architect/auditor/scribe
+      LLM passes (OpenAI-compatible), expand_planning_drafts + run_llm_planning_synthesis + synthesize_pre_critique with inner
+      depth retries; PlanningQuestionRankingPolicy for defaults vs at most one clarification round; storeSpread planningPhase,
+      planningUserInputRequired, planningClarificationChoicesJson/MetaJson, planningReadyToPostPacket, planningRoomCycleIteration, etc.
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-MERGE-PLANNING-CLARIFICATION-CHOICE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/MergePlanningClarificationChoiceAction.java
+    role: >-
+      Workflow action merge_planning_clarification_choice — applies planningClarificationRaw to assumptions and decision_log;
+      clears planningClarificationChoicesJson; sets planningUserInputRequired false
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-EVALUATE-PLANNING-APPROVAL-GATE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningApprovalGateAction.java
+    role: >-
+      Workflow action evaluate_planning_approval_gate — storeSpread planningReadyForApproval when packet posted version,
+      depth, READY readiness, humanDiscoveryCompleted, and no pending clarification
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RUN-ARCHITECT-PLANNING-PASS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RunArchitectPlanningPassAction.java
+    role: Thin workflow action run_architect_planning_pass — single PlanningRolePassRunner ARCHITECT LLM upsert pass
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RUN-AUDITOR-PLANNING-PASS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RunAuditorPlanningPassAction.java
+    role: Thin workflow action run_auditor_planning_pass — AUDITOR role pass
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-RUN-SCRIBE-PLANNING-PASS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/RunScribePlanningPassAction.java
+    role: Thin workflow action run_scribe_planning_pass — SCRIBE role pass
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-CLARIFICATION-CHOICE-PROVIDER
+    kind: source
+    path: src/main/java/com/vinekeepers/providers/PlanningClarificationChoiceProvider.java
+    role: DynamicChoiceProvider planningClarification — builds PresentChoices from planningClarificationChoicesJson in workflow state
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-QUESTION-RANKING-POLICY
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningQuestionRankingPolicy.java
+    role: Ranks LLM follow-ups, records safe defaults as assumptions, prepares at most one user clarification round with branchable choices
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-PERSIST-PLAN-APPROVAL-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PersistPlanApprovalAction.java
@@ -1249,7 +1371,9 @@ requirements:
           merges entries into workflow state before advancing (StepResult.advanceSpread)
         - >-
           Bootstrap registers workflow actions initialize_feature_plan_state, ensure_repo_workspace, spread_plan_workspace_signals,
-          evaluate_planning_packet_depth, run_llm_planning_synthesis, upsert_artifact_section_data,
+          evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
+          merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
+          run_llm_planning_synthesis, upsert_artifact_section_data,
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
           resolve_proposal_confirmation, synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
           capture_and_apply_discovery_answer,
@@ -2038,13 +2162,14 @@ requirements:
         Do not serialize null fields in Cursor API request payload because it can cause API errors or unexpected
         behavior.
   - id: REQ-GADGET-001
-    title: Gadget bot — DevOps Discord menu, Ansible deploy, thread progress
+    title: DevOps deploy — Discord menu, Ansible and Docker Compose, thread progress
     statement: >-
-      Bot id gadget with Discord token env GADGET_DISCORD_TOKEN; routing uses discordMention gadget and discordChannels
-      allowlist (ops channel id); workflow gadget_deploy uses extract_event for channelId, menu Deploy to Docker or Cancel,
-      choiceProvider gadgetProjects from config/gadget-projects.yaml, branch choices main/develop/other with
-      gadget_resolve_branch, create_thread for progress thread, start_gadget_deploy to run ansible-playbook asynchronously
-      with OutboundDeliveryRouter.sendAs gadget; progress falls back to parent channel when THREAD_CREATE_FAILED
+      Operator bot (e.g. id gadget) with Discord token env GADGET_DISCORD_TOKEN; routing uses discordMention and discordChannels
+      allowlist (ops channel id); workflow devops_deploy uses extract_event for channelId, main menu (Ansible deploy vs compose up/stop/ps or Cancel),
+      choiceProvider deployTargets from config/deploy-targets.yaml, branch choices main/develop/other with resolve_deploy_branch,
+      create_thread for progress thread (thread name deploy-progress), start_ansible_deploy to run ansible-playbook asynchronously
+      and run_deploy_compose for docker compose or optional cursor agent executor; OutboundDeliveryRouter.sendAs workflow bot id from state;
+      progress falls back to parent channel when THREAD_CREATE_FAILED
     status: active
     priority: medium
     type: functional
@@ -2056,19 +2181,21 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - bots.yaml defines gadget bot with workflowRef gadget_deploy and identities.discord ingress routed
+        - bots.yaml defines operator DevOps bot with workflowRef devops_deploy and identities.discord ingress routed
         - >-
-          Routing filter discordMention gadget and discordChannels; messages match only in allowlisted channel with
-          @Gadget mention metadata
+          Routing filter discordMention and discordChannels; messages match only in allowlisted channel with bot mention metadata
         - >-
-          gadget_deploy registers choiceProviders gadgetProjects and deployGitBranches; Bootstrap registers
-          deploy_resolve_project, gadget_resolve_branch, and start_gadget_deploy; reload registry actions when config loads
+          devops_deploy registers choiceProviders deployTargets, deployComposeServices, and deployGitBranches; Bootstrap registers
+          deploy_resolve_project, resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose; reload registry actions when config loads
         - >-
-          GadgetDeployRunner invokes ansible-playbook with -e project_id, branch, gadget_project, gadget_branch, and manifest
-          extraVars; respects DEPLOY_ANSIBLE_DISABLED/GADGET_ANSIBLE_DISABLED for dry run; posts via sendAs workflow bot id
+          AnsiblePlaybookDeployRunner invokes ansible-playbook with -e project_id, branch, gadget_project, gadget_branch, and manifest
+          extraVars; respects DEPLOY_ANSIBLE_DISABLED/GADGET_ANSIBLE_DISABLED for dry run; posts via sendAs workflow bot id from state
+        - >-
+          HostComposeOpsRunner runs allowlisted docker compose operations per target manifest; DEPLOY_HOST_OPS_DISABLED disables host ops;
+          optional hostOpsExecutor cursor_agent uses Cursor Agent CLI with non-interactive flags
         - >-
           ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies
-          ansible tree, sets GADGET_ANSIBLE_ROOT, installs ansible via apt on Ubuntu Jammy runtime (not Alpine pip)
+          ansible tree, sets GADGET_ANSIBLE_ROOT / DEPLOY_ANSIBLE_ROOT, installs ansible via apt on Ubuntu Jammy runtime (not Alpine pip)
       examples: []
     traceability:
       assets:
@@ -2078,6 +2205,9 @@ requirements:
         - ASSET-GADGET-RESOLVE-BRANCH-ACTION
         - ASSET-START-GADGET-DEPLOY-ACTION
         - ASSET-GADGET-PROJECTS-YAML
+        - ASSET-HOST-COMPOSE-OPS-RUNNER
+        - ASSET-RUN-DEPLOY-COMPOSE-ACTION
+        - ASSET-DEPLOY-COMPOSE-SERVICES-CHOICE-PROVIDER
         - ASSET-BOOTSTRAP
         - ASSET-BOTS-YAML
         - ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
@@ -2086,23 +2216,23 @@ requirements:
     validation:
       tests:
         - id: UNIT-GADGET-RESOLVE-BRANCH
-          title: GadgetResolveBranchActionTest
+          title: ResolveDeployBranchActionTest
           intent: Verify deployBranch from branchChoice and branchCustom when other
-          testClass: com.vinekeepers.workflow.actions.GadgetResolveBranchActionTest
+          testClass: com.vinekeepers.workflow.actions.ResolveDeployBranchActionTest
           preconditions: []
         - id: UNIT-GADGET-PROJECT-REGISTRY
-          title: GadgetProjectRegistryTest
-          intent: Verify YAML load and findById for gadget projects
-          testClass: com.vinekeepers.gadget.GadgetProjectRegistryTest
+          title: DeployTargetRegistryTest
+          intent: Verify YAML load and findById for deploy targets including compose fields
+          testClass: com.vinekeepers.devops.DeployTargetRegistryTest
           preconditions: []
         - id: UNIT-START-GADGET-DEPLOY
-          title: StartGadgetDeployActionTest
-          intent: Verify unknown project failure and dry-run path posts via sendAs gadget
-          testClass: com.vinekeepers.workflow.actions.StartGadgetDeployActionTest
+          title: StartAnsibleDeployActionTest
+          intent: Verify unknown target failure and dry-run path posts via sendAs workflow bot id
+          testClass: com.vinekeepers.workflow.actions.StartAnsibleDeployActionTest
           preconditions: []
         - id: UNIT-GADGET-ROUTING
           title: RouterTest
-          intent: Verify gadget routing with mention and discordChannels allowlist
+          intent: Verify DevOps bot routing with mention and discordChannels allowlist
           testClass: com.vinekeepers.bot.RouterTest
           testMethod: routeMatchesGadgetWhenMentionAndChannelAllowlist
           preconditions: []
@@ -2116,9 +2246,24 @@ requirements:
           intent: Verify branch choice fallback without git remote
           testClass: com.vinekeepers.providers.GitRemoteBranchesChoiceProviderTest
           preconditions: []
+        - id: UNIT-HOST-COMPOSE-OPS-RUNNER
+          title: HostComposeOpsRunnerTest
+          intent: Verify argv and prompt building for compose and cursor agent paths without invoking docker
+          testClass: com.vinekeepers.devops.HostComposeOpsRunnerTest
+          preconditions: []
+        - id: UNIT-DEPLOY-COMPOSE-SERVICES-CHOICE
+          title: DeployComposeServicesChoiceProviderTest
+          intent: Verify service choices from manifest allowlist for deployTargetId
+          testClass: com.vinekeepers.providers.DeployComposeServicesChoiceProviderTest
+          preconditions: []
+        - id: UNIT-ANSIBLE-DEPLOY-RUNNER-ESCAPE
+          title: AnsiblePlaybookDeployRunnerEscapeTest
+          intent: Verify extra-var escaping for ansible-playbook argv
+          testClass: com.vinekeepers.devops.AnsiblePlaybookDeployRunnerEscapeTest
+          preconditions: []
     anti_patterns:
       - Running ansible-playbook on the engine thread (blocks Discord gateway)
-      - Posting deploy progress with default sender when multi-bot; use sendAs gadget
+      - Posting deploy progress with default sender when multi-bot; use sendAs workflow bot id from state
 features:
   - id: FEAT-WORKFLOW
     slug: workflow
@@ -2231,13 +2376,14 @@ features:
       - ASSET-OUTBOUND-GATEWAY
     status: active
   - id: FEAT-DEVOPS-GADGET
-    slug: devops-gadget
-    title: Gadget DevOps Discord bot and Ansible deploy
+    slug: devops-deploy
+    title: DevOps deploy — Discord menu, Ansible and Docker Compose
     domain_slug: workflow
-    doc_path: features/domain/workflow/gadget-devops.md
+    doc_path: features/domain/workflow/devops-deploy.md
     summary: >-
-      Gadget offers a deploy menu in an allowlisted Discord channel, gathers project and branch, opens a status thread,
-      and runs ansible-playbook on the host with progress posts as the gadget bot.
+      Operator bot offers a deploy menu in an allowlisted Discord channel, gathers deploy target and branch for Ansible,
+      optional Docker Compose up/stop/ps with allowlisted services, opens a status thread, and runs host operations with
+      progress posts as the workflow bot.
     requirement_ids:
       - REQ-GADGET-001
     asset_ids:
@@ -2247,6 +2393,9 @@ features:
       - ASSET-GADGET-RESOLVE-BRANCH-ACTION
       - ASSET-START-GADGET-DEPLOY-ACTION
       - ASSET-GADGET-PROJECTS-YAML
+      - ASSET-HOST-COMPOSE-OPS-RUNNER
+      - ASSET-RUN-DEPLOY-COMPOSE-ACTION
+      - ASSET-DEPLOY-COMPOSE-SERVICES-CHOICE-PROVIDER
       - ASSET-BOTS-YAML
       - ASSET-BOOTSTRAP
       - ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY
