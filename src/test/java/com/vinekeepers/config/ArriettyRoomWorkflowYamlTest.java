@@ -118,8 +118,8 @@ class ArriettyRoomWorkflowYamlTest {
         List<Map<String, Object>> steps = (List<Map<String, Object>>) room.get("steps");
         assertTrue(steps != null && !steps.isEmpty(), "arrietty_room_legacy has no steps");
         assertEquals("call_action", String.valueOf(steps.get(79).get("type")));
-        assertEquals("post_channel_message", String.valueOf(steps.get(79).get("action")));
-        assertEquals("prompt_for_field", String.valueOf(steps.get(80).get("type")));
+        assertEquals("coordinator_intake_bootstrap", String.valueOf(steps.get(79).get("action")));
+        assertEquals("branch", String.valueOf(steps.get(80).get("type")));
         assertEquals("call_action", String.valueOf(steps.get(29).get("type")));
         assertEquals("execute_planning_room_cycle", String.valueOf(steps.get(29).get("action")));
     }

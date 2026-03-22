@@ -405,7 +405,7 @@ class RouterTest {
         assertEquals(List.of("owner-bot"), r.route(event));
     }
 
-    // --- Feature room: coordinator-only on room channel; four participants on intake thread; legacy single-owner unchanged ---
+    // --- Feature room: coordinator-only on room channel and on intake thread messages (planning ingress); legacy single-owner unchanged ---
 
     @Test
     void routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly() {
@@ -428,7 +428,7 @@ class RouterTest {
     }
 
     @Test
-    void routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder() {
+    void routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly() {
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
                 new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
@@ -443,7 +443,7 @@ class RouterTest {
 
         Event event = new Event("discord:g:room-ch-parent", "message", Map.of("channelId", "thread-456", "content", "reply in thread"));
         List<String> botIds = r.route(event);
-        assertEquals(List.of("arrietty", "architect", "auditor", "scribe"), botIds);
+        assertEquals(List.of("arrietty"), botIds);
     }
 
     @Test

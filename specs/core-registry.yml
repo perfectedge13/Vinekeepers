@@ -215,6 +215,12 @@ requirements:
           intent: Verify Bootstrap wires engine, config, ConnectorRegistry, Discord adapter and registerBots
           testClass: com.vinekeepers.core.BootstrapTest
           preconditions: []
+        - id: UNIT-BOOTSTRAP-COORDINATOR-INTAKE
+          title: BootstrapTest
+          intent: Verify Bootstrap registers coordinator_intake_bootstrap workflow action
+          testClass: com.vinekeepers.core.BootstrapTest
+          testMethod: bootstrapConstructor_registersCoordinatorIntakeBootstrap
+          preconditions: []
 
   - id: REQ-CORE-003
     title: Event-driven engine routes events to bots

@@ -250,7 +250,8 @@ assets:
       Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action and linear_workflow_ref
       capabilities); linear_workflow_ref runs a sibling linear workflow via ConfigurableWorkflowRunner on the same session store;
       applies workflow template policy to state each run; when YAML includes deliberation map, writes workflowDeliberationMetaJson plus
-      deliberationProfileHint and deliberationLabel when present
+      deliberationProfileHint and deliberationLabel when present; on outer micro-step guard exhaustion sets
+      planningWorkflowStepLimitReached=true before markError
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -538,7 +539,8 @@ assets:
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
       intent, choices, confirmLabel, cancelLabel, fields, optional control.mode for prompt_for_field, trimAndLower, transforms,
       and fromEvent for steps; registers extract_event step; applies StepResult clearKeys to state before setStepIndex;
-      merges workflow llm defaults into state at session start; call_action passes merged llm overrides into LLM-capable actions only
+      merges workflow llm defaults into state at session start; call_action passes merged llm overrides into LLM-capable actions only;
+      on inner step iteration limit sets state key planningWorkflowStepLimitReached=true before markError
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1032,7 +1034,9 @@ assets:
     role: >-
       Workflow action hydrate_planning_session — when event channel is a feature-room intake thread id, storeSpread
       planningIntakeThread, contextId, channelId, deliveryChannelId, project, codeChange from FeatureRoomState and FeaturePlanState;
-      spreads coordinatorKickoff from synthetic kickoff payload when present
+      spreads coordinatorKickoff from synthetic kickoff payload when present; when workflow state has
+      planningWorkflowStepLimitReached=true, persists FeaturePlanState.withPlanningOrchestrationFailure once and clears the flag
+      via spread; spreads canonicalPlanningIntakeStage from FeaturePlanState when plan exists
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1061,6 +1065,20 @@ assets:
     role: >-
       Workflow action mark_intake_discovery_complete — spreads humanDiscoveryCompleted=true after coordinator discovery
       kickoff reply; gates run_plan_critique_and_readiness until set
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+      - REQ-LUNA-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/CoordinatorIntakeBootstrapAction.java
+    role: >-
+      Workflow action coordinator_intake_bootstrap — idempotent discovery kickoff post to intake thread (fingerprinted body vs
+      FeaturePlanState), spreads humanDiscoveryCompleted, updates PlanningIntakeStage to DRAFTING on first successful post;
+      skips duplicate sends when fingerprint unchanged
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1438,7 +1456,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/PostPlanningPacketThreadAction.java
     role: >-
       Workflow action post_planning_packet_thread — posts packet chunks; on success updates FeaturePlanState with
-      packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids)
+      packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids) and sets
+      PlanningIntakeStage.PACKET_POSTED
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1882,6 +1901,7 @@ requirements:
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
+        - ASSET-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
         - ASSET-START-COORDINATOR-PLANNING-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
@@ -2186,9 +2206,9 @@ requirements:
           coordinator graph); rollback is switching workflowRef back to arrietty_room_legacy with type configured
         - >-
           arrietty_room_legacy branch next targets must not jump to terminal done steps (launch/done inserts shift indices);
-          coordinatorKickoff, post-optional-scope text, draft-blocked recovery, and invalid intakeChoice else route to discovery
-          kickoff post_channel_message (stable index 79) or intake re-prompt prompt_for_field (80); ArriettyRoomWorkflowYamlTest
-          guards branch-to-done and coordinator entry anchors
+          coordinatorKickoff routes to stable index 79 coordinator_intake_bootstrap then branch to main planning; draft-blocked
+          recovery runs another planning round (not kickoff loop); clarification uses plain-text path only; ArriettyRoomWorkflowYamlTest
+          guards branch-to-done and coordinator entry anchors (79=bootstrap, 80=branch to execute_planning_room_cycle index 5)
         - >-
           GraphWorkflowRunner when linear_workflow_ref completes with user-visible text (reply or rich intent) and the phase
           pipeline is exhausted collapses through default/terminal v2 phases and returns that delegated result instead of
@@ -2465,6 +2485,7 @@ requirements:
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
+        - ASSET-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
         - ASSET-START-COORDINATOR-PLANNING-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
@@ -2510,6 +2531,17 @@ requirements:
           intent: Verify Luna config uses discordMention routing that activates on @Luna-style messages
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildRouterParsesDiscordMentionRouting
+          preconditions: []
+        - id: UNIT-ARRIETTY-ROOM-WORKFLOW-YAML
+          title: ArriettyRoomWorkflowYamlTest
+          intent: Verify arrietty_room_legacy branch indices and coordinator entry steps in config/bots.yaml
+          testClass: com.vinekeepers.config.ArriettyRoomWorkflowYamlTest
+          preconditions: []
+        - id: UNIT-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
+          title: CoordinatorIntakeBootstrapActionTest
+          intent: Verify coordinator_intake_bootstrap error spread when plan is missing
+          testClass: com.vinekeepers.workflow.actions.CoordinatorIntakeBootstrapActionTest
+          testMethod: missingPlan_returnsErrorSpread
           preconditions: []
         - id: UNIT-LUNA-WORKFLOW
           title: CursorCloudGatheringWorkflowTest

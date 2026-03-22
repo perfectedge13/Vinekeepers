@@ -5,6 +5,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -53,17 +54,30 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
         out.put("deliveryChannelId", room.getIntakeThreadId());
         String project = room.getRepo();
         String codeChange = room.getInitialRequest();
-        if (planStore != null) {
-            Optional<FeaturePlanState> planOpt = planStore.getByContextId(room.getContextId());
-            if (planOpt.isPresent()) {
-                FeaturePlanState plan = planOpt.get();
-                if (plan.getRepoRef() != null && !plan.getRepoRef().isBlank()) {
-                    project = plan.getRepoRef();
-                }
-                if (plan.getInitialRequest() != null && !plan.getInitialRequest().isBlank()) {
-                    codeChange = plan.getInitialRequest();
+        Optional<FeaturePlanState> planOpt =
+                planStore != null ? planStore.getByContextId(room.getContextId()) : Optional.empty();
+        if (state != null
+                && "true".equalsIgnoreCase(String.valueOf(state.get("planningWorkflowStepLimitReached")))) {
+            if (planOpt.isPresent() && planStore != null) {
+                FeaturePlanState p = planOpt.get();
+                if (p.getPlanningIntakeStage() != PlanningIntakeStage.FAILED) {
+                    planStore.update(
+                            p.withPlanningOrchestrationFailure(
+                                    "Workflow step limit reached. Send a short reply in this thread to retry."));
+                    planOpt = planStore.getByContextId(room.getContextId());
                 }
             }
+            out.put("planningWorkflowStepLimitReached", "false");
+        }
+        if (planOpt.isPresent()) {
+            FeaturePlanState plan = planOpt.get();
+            if (plan.getRepoRef() != null && !plan.getRepoRef().isBlank()) {
+                project = plan.getRepoRef();
+            }
+            if (plan.getInitialRequest() != null && !plan.getInitialRequest().isBlank()) {
+                codeChange = plan.getInitialRequest();
+            }
+            out.put("canonicalPlanningIntakeStage", plan.getPlanningIntakeStage().name());
         }
         if (project != null && !project.isBlank()) {
             out.put("project", project);

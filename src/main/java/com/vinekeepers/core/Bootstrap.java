@@ -64,6 +64,7 @@ import com.vinekeepers.workflow.actions.BuildRequestExplorationAction;
 import com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesAction;
 import com.vinekeepers.workflow.actions.CaptureAndApplyDiscoveryAnswerAction;
 import com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueAction;
+import com.vinekeepers.workflow.actions.CoordinatorIntakeBootstrapAction;
 import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
 import com.vinekeepers.workflow.actions.CreateThreadAction;
@@ -348,6 +349,9 @@ public final class Bootstrap {
         registry.register("classify_assumption_or_issue", new ClassifyAssumptionOrIssueAction(featurePlanStateStore));
         registry.register("recompute_plan_progress", new RecomputePlanProgressAction(featurePlanStateStore, workProfileRegistry));
         registry.register("mark_intake_discovery_complete", new MarkIntakeDiscoveryCompleteAction());
+        registry.register(
+                "coordinator_intake_bootstrap",
+                new CoordinatorIntakeBootstrapAction(outboundDeliveryRouter, featurePlanStateStore));
         registry.register("acknowledge_readiness_human_decision", new AcknowledgeReadinessHumanDecisionAction(
                 featurePlanStateStore, workProfileRegistry));
         registry.register("build_role_planning_thread_messages", new BuildRolePlanningThreadMessagesAction(featurePlanStateStore));

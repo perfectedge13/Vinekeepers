@@ -5,6 +5,7 @@ import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningRole;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 
@@ -126,7 +127,9 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                 return spread;
             }
         }
-        planStore.update(plan.withPacketPosted(Instant.now(), "", fingerprint, chunks.size()));
+        planStore.update(
+                plan.withPacketPosted(Instant.now(), "", fingerprint, chunks.size())
+                        .withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null));
         spread.put("planningPacketPosted", "true");
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));
         spread.put("planningPacketSkippedDuplicate", "false");

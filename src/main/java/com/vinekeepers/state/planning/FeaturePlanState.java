@@ -50,9 +50,17 @@ public final class FeaturePlanState {
     private final String packetMessageRef;
     private final String packetPostedFingerprint;
     private final int packetPostedChunkCount;
+    private final PlanningIntakeStage planningIntakeStage;
+    private final Instant planningIntakeStageEnteredAt;
+    private final int intakeKickoffPostedVersion;
+    private final String intakeKickoffPostedFingerprint;
+    private final String planningOrchestrationFailureReason;
     private final Instant createdAt;
     private final Instant updatedAt;
 
+    /**
+     * Legacy constructor shape; intake orchestration fields default to {@link PlanningIntakeStage#GATHERING_CONTEXT}.
+     */
     public FeaturePlanState(
             String contextId,
             String featureId,
@@ -90,6 +98,92 @@ public final class FeaturePlanState {
             Integer packetPostedChunkCount,
             Instant createdAt,
             Instant updatedAt) {
+        this(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                updatedAt,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    public FeaturePlanState(
+            String contextId,
+            String featureId,
+            String featureSlug,
+            String roomChannelId,
+            String intakeThreadId,
+            String repoRef,
+            String title,
+            String initialRequest,
+            String planStatus,
+            List<RequirementEntry> requirements,
+            List<PlanAssumption> assumptions,
+            List<PlanIssue> issues,
+            List<ValidationEntry> validationNotes,
+            SolutionOutline solutionOutline,
+            TraceabilityPlaceholder traceability,
+            ProjectContextSummary projectContext,
+            Map<PlanSectionKey, PlanSectionStatus> sectionStatuses,
+            PlanConfidence planConfidence,
+            PlanApproval planApproval,
+            PlanCritiqueSnapshot planCritiqueSnapshot,
+            String repoWorkspaceId,
+            String repoWorkspaceStatus,
+            String repoLocalPath,
+            String repoAccessNotes,
+            String profileId,
+            Map<String, ArtifactState> artifacts,
+            List<PlanRisk> risks,
+            List<PlanDecision> decisions,
+            List<String> unresolvedQuestions,
+            String critiqueLifecycleStatus,
+            Instant packetPostedAt,
+            String packetMessageRef,
+            String packetPostedFingerprint,
+            Integer packetPostedChunkCount,
+            Instant createdAt,
+            Instant updatedAt,
+            PlanningIntakeStage planningIntakeStage,
+            Instant planningIntakeStageEnteredAt,
+            Integer intakeKickoffPostedVersion,
+            String intakeKickoffPostedFingerprint,
+            String planningOrchestrationFailureReason) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
         this.featureId = featureId;
         this.featureSlug = featureSlug;
@@ -127,7 +221,17 @@ public final class FeaturePlanState {
         this.packetMessageRef = packetMessageRef != null ? packetMessageRef : "";
         this.packetPostedFingerprint = packetPostedFingerprint != null ? packetPostedFingerprint : "";
         this.packetPostedChunkCount = packetPostedChunkCount != null ? packetPostedChunkCount : 0;
-        this.createdAt = createdAt != null ? createdAt : Instant.now();
+        Instant effectiveCreated = createdAt != null ? createdAt : Instant.now();
+        this.planningIntakeStage =
+                planningIntakeStage != null ? planningIntakeStage : PlanningIntakeStage.GATHERING_CONTEXT;
+        this.planningIntakeStageEnteredAt =
+                planningIntakeStageEnteredAt != null ? planningIntakeStageEnteredAt : effectiveCreated;
+        this.intakeKickoffPostedVersion = intakeKickoffPostedVersion != null ? intakeKickoffPostedVersion : 0;
+        this.intakeKickoffPostedFingerprint =
+                intakeKickoffPostedFingerprint != null ? intakeKickoffPostedFingerprint : "";
+        this.planningOrchestrationFailureReason =
+                planningOrchestrationFailureReason != null ? planningOrchestrationFailureReason : "";
+        this.createdAt = effectiveCreated;
         this.updatedAt = updatedAt != null ? updatedAt : this.createdAt;
     }
 
@@ -244,7 +348,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     /**
@@ -287,7 +396,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     public FeaturePlanState withPlanConfidence(PlanConfidence confidence) {
@@ -327,7 +441,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     public FeaturePlanState withPlanApproval(PlanApproval approval) {
@@ -367,7 +486,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     public FeaturePlanState withPlanCritiqueSnapshot(PlanCritiqueSnapshot snapshot) {
@@ -409,7 +533,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     public FeaturePlanState withCritiqueLifecycleStatus(String status) {
@@ -449,7 +578,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     public FeaturePlanState withPacketPosted(
@@ -493,7 +627,12 @@ public final class FeaturePlanState {
                 fingerprint != null ? fingerprint : "",
                 chunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     /**
@@ -541,7 +680,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     private FeaturePlanState copy(
@@ -588,7 +732,12 @@ public final class FeaturePlanState {
                 packetPostedFingerprint,
                 packetPostedChunkCount,
                 createdAt,
-                updated);
+                updated,
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
     }
 
     public String getContextId() {
@@ -733,6 +882,167 @@ public final class FeaturePlanState {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public PlanningIntakeStage getPlanningIntakeStage() {
+        return planningIntakeStage;
+    }
+
+    public Instant getPlanningIntakeStageEnteredAt() {
+        return planningIntakeStageEnteredAt;
+    }
+
+    public int getIntakeKickoffPostedVersion() {
+        return intakeKickoffPostedVersion;
+    }
+
+    public String getIntakeKickoffPostedFingerprint() {
+        return intakeKickoffPostedFingerprint;
+    }
+
+    public String getPlanningOrchestrationFailureReason() {
+        return planningOrchestrationFailureReason;
+    }
+
+    /**
+     * Move to a new intake stage (updates {@code planningIntakeStageEnteredAt} when {@code enteredAt} is non-null).
+     */
+    public FeaturePlanState withPlanningIntakeStage(PlanningIntakeStage stage, Instant enteredAt) {
+        Objects.requireNonNull(stage, "stage");
+        Instant at = enteredAt != null ? enteredAt : Instant.now();
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                stage,
+                at,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason);
+    }
+
+    public FeaturePlanState withIntakeKickoffPosted(int version, String fingerprint) {
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                version,
+                fingerprint != null ? fingerprint : "",
+                planningOrchestrationFailureReason);
+    }
+
+    public FeaturePlanState withPlanningOrchestrationFailure(String reason) {
+        String r = reason != null ? reason : "";
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                PlanningIntakeStage.FAILED,
+                Instant.now(),
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                r);
     }
 
     public int countBlockingIssues() {

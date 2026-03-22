@@ -24,9 +24,9 @@ import java.util.Set;
  * When lifecycle context exists for a Discord channel and the owner bot has handlesOwnedSpaces,
  * single-owner precedence applies: only the owner bot is returned for that channel.
  * When FeatureRoomState exists: room-channel events route to the primary coordinator only (low-noise);
- * intake/spec thread events route to all participant configuredBotIds
- * in stable role order (visible multi-role collaboration). Legacy single-owner channels unchanged when
- * no feature room applies.
+ * intake/spec thread messages route to the coordinator only (single planning ingress; role passes stay inside the
+ * coordinator workflow). Intake-thread interactions also route to the coordinator only.
+ * Legacy single-owner channels unchanged when no feature room applies.
  */
 public final class Router {
 
@@ -115,8 +115,8 @@ public final class Router {
                     Optional<FeatureRoomState> byRoom = featureRoomStateStore.getByRoomChannelId(channelId);
                     if (byThread.isPresent()) {
                         FeatureRoomState threadRoom = byThread.get();
+                        Optional<String> coordinator = FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(threadRoom);
                         if ("interaction".equals(context.getEventType())) {
-                            Optional<String> coordinator = FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(threadRoom);
                             if (coordinator.isPresent()) {
                                 // #region agent log
                                 AgentDebugLog.log("H3", "Router.route:featureRoom", "override_intake_thread_coordinator",
@@ -125,6 +125,13 @@ public final class Router {
                                 return List.of(coordinator.get());
                             }
                             log.warn("Intake thread has feature room state but no coordinator; falling back to participant list");
+                        }
+                        if ("message".equals(context.getEventType()) && coordinator.isPresent()) {
+                            // #region agent log
+                            AgentDebugLog.log("H3", "Router.route:featureRoom", "override_intake_thread_coordinator_message",
+                                    Map.of("channelId", String.valueOf(channelId), "bot", coordinator.get()));
+                            // #endregion
+                            return List.of(coordinator.get());
                         }
                         List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(threadRoom);
                         if (!participantBotIds.isEmpty()) {

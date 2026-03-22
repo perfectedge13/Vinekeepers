@@ -151,6 +151,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             state.setStepIndex(nextStepIndex);
         }
 
+        state.put("planningWorkflowStepLimitReached", "true");
         state.markError();
         stateStore.put(stateKey, state);
         return WorkflowRunResult.error("Workflow step limit reached.");

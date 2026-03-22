@@ -71,7 +71,17 @@ assets:
       solution/traceability/context, sectionStatuses, repo workspace linkage, profileId, artifacts map, PlanRisk /
       PlanDecision, unresolvedQuestions, critiqueLifecycleStatus, packet delivery fields (packetPostedAt, optional
       packetMessageRef, packetPostedFingerprint, chunk count), PlanCritiqueSnapshot, PlanConfidence (readiness, level,
-      notes, confidenceScore, confidenceReasons, computedAt), PlanApproval (status, actorId, at, optional rationale)
+      notes, confidenceScore, confidenceReasons, computedAt), PlanApproval (status, actorId, at, optional rationale);
+      durable PlanningIntakeStage with stageEnteredAt, intakeKickoffPostedVersion / intakeKickoffPostedFingerprint for
+      idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-INTAKE-STAGE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningIntakeStage.java
+    role: >-
+      Enum of durable coordinator intake phases (GATHERING_CONTEXT through DONE/FAILED) persisted on FeaturePlanState for
+      orchestration spine separate from YAML step index
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-DISCOVERY-GAP
@@ -288,6 +298,10 @@ requirements:
           metadata after a successful thread post, critique lifecycle status, enriched PlanCritiqueSnapshot (rubric scores,
           blocking counts), and PlanConfidence with numeric score for approval gating
         - >-
+          FeaturePlanState carries PlanningIntakeStage, intake kickoff post version/fingerprint, and optional
+          planningOrchestrationFailureReason for terminal intake failures; withPlanningIntakeStage / withIntakeKickoffPosted /
+          withPlanningOrchestrationFailure update the canonical intake spine
+        - >-
           Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, DiscoveryFinding, and PlanningProposal models
           for structured discovery and proposal-driven planning (JSON-serializable; workflow state for proposals until confirm or auto-apply)
         - >-
@@ -295,7 +309,7 @@ requirements:
           (used by workflow engine features; JSON-serializable)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-PLANNING-INTAKE-STAGE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER, ASSET-STRUCTURED-DISCOVERY-SUPPORT]
       symbols: []
     validation:
       tests:

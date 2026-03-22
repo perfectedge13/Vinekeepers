@@ -288,6 +288,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             return WorkflowRunResult.completed("");
         }
 
+        state.put("planningWorkflowStepLimitReached", "true");
         state.markError();
         stateStore.put(stateKey, state);
         return WorkflowRunResult.error("Graph workflow step limit reached.");

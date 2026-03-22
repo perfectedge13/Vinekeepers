@@ -3,6 +3,7 @@ package com.vinekeepers.core;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.workflow.WorkflowAction;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
+import com.vinekeepers.workflow.actions.CoordinatorIntakeBootstrapAction;
 import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,6 +38,19 @@ class BootstrapTest {
         Field engineField = StartCoordinatorPlanningAction.class.getDeclaredField("engine");
         engineField.setAccessible(true);
         assertNotNull(engineField.get(action));
+    }
+
+    @Test
+    void bootstrapConstructor_registersCoordinatorIntakeBootstrap() throws Exception {
+        Bootstrap bootstrap = new Bootstrap();
+        Field regField = Bootstrap.class.getDeclaredField("actionRegistry");
+        regField.setAccessible(true);
+        WorkflowActionRegistry registry = (WorkflowActionRegistry) regField.get(bootstrap);
+        Field actionsField = WorkflowActionRegistry.class.getDeclaredField("actions");
+        actionsField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, WorkflowAction> actions = (Map<String, WorkflowAction>) actionsField.get(registry);
+        assertInstanceOf(CoordinatorIntakeBootstrapAction.class, actions.get("coordinator_intake_bootstrap"));
     }
 
     @Test

@@ -38,9 +38,8 @@ assets:
     path: src/main/java/com/vinekeepers/bot/Router.java
     role: >-
       Match events to bots by routing rules and ownership; depends on LifecycleContextStore and optional
-      FeatureRoomStateStore; feature room routing runs before lifecycle single-owner; intake thread id returns four
-      participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE) for messages;
-      intake thread component interactions return the primary coordinator configuredBotId only; room channel
+      FeatureRoomStateStore; feature room routing runs before lifecycle single-owner; intake thread id returns the
+      primary coordinator configuredBotId for Discord messages and interactions (single planning ingress); room channel
       returns coordinator only; lifecycle resolved by channelId then getByDeliveryTargetId(channelId); when lifecycle
       context exists and owner has handlesOwnedSpaces, single-owner precedence; setHandlesOwnedSpacesByBotId(map);
       discordAuthors match by actorId or actorUsername; Discord mention and trigger apply only to message events;
@@ -117,7 +116,7 @@ assets:
 requirements:
   - id: REQ-BOT-001
     title: Route events to bots by routing rules and ownership
-    statement: Router matches incoming events to bots using RoutingRule and EventFilter/RoutingFilter over a normalized event view, and contextual/ownership-based routing when a Discord channel has a lifecycle context and the owner bot has handlesOwnedSpaces (single-owner precedence). When a FeatureRoomStateStore is present, feature room routing is evaluated before lifecycle single-owner on the same Discord channel id (intake thread returns role-ordered participants; room channel returns coordinator only; feature room wins over lifecycle owner on the same channel). Lifecycle context is resolved by channel id first, then by delivery target id when the event channel id matches a registered delivery thread. When lifecycle owner exists but that bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing. Events are dispatched only to bots whose filters accept the event; Discord mention-based routing from payload metadata or @mention text and optional discordAuthors by actor id or username apply when configured. When lifecycle context exists for the event's channel and the owner bot has handlesOwnedSpaces, only that owner is returned; otherwise filter-based routing applies. Discord trigger and mention filters apply only to message events; interaction events use author and channel only.
+    statement: Router matches incoming events to bots using RoutingRule and EventFilter/RoutingFilter over a normalized event view, and contextual/ownership-based routing when a Discord channel has a lifecycle context and the owner bot has handlesOwnedSpaces (single-owner precedence). When a FeatureRoomStateStore is present, feature room routing is evaluated before lifecycle single-owner on the same Discord channel id (intake thread messages and interactions return the primary coordinator configuredBotId only; room channel returns coordinator only; feature room wins over lifecycle owner on the same channel). Lifecycle context is resolved by channel id first, then by delivery target id when the event channel id matches a registered delivery thread. When lifecycle owner exists but that bot does not have handlesOwnedSpaces, Router logs a warning and uses filter-based routing. Events are dispatched only to bots whose filters accept the event; Discord mention-based routing from payload metadata or @mention text and optional discordAuthors by actor id or username apply when configured. When lifecycle context exists for the event's channel and the owner bot has handlesOwnedSpaces, only that owner is returned; otherwise filter-based routing applies. Discord trigger and mention filters apply only to message events; interaction events use author and channel only.
     status: active
     priority: high
     type: functional
@@ -242,9 +241,9 @@ requirements:
           preconditions: []
         - id: UNIT-ROUTER-FEATURE-ROOM-THREAD
           title: RouterTest
-          intent: Verify when feature room state exists for intake thread id, returns four participant bot ids in deterministic role order
+          intent: Verify when feature room state exists for intake thread id, Discord messages return coordinator only
           testClass: com.vinekeepers.bot.RouterTest
-          testMethod: routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder
+          testMethod: routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly
           preconditions: []
         - id: UNIT-ROUTER-FEATURE-ROOM-LEGACY-SINGLE-OWNER
           title: RouterTest
