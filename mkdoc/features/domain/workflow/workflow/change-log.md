@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **Coordinator planning stabilization:** **`PlanningCyclePipeline`**, **`RunLlmPlanningSynthesisAction`**, **`PlanningPostDraftGovernor`**, **`HydratePlanningSessionAction`**, **`StartCoordinatorPlanningAction`**, **`InitializeFeaturePlanStateAction`**, and **`PlanningUserFacingCopy`** align typed synthesis failure handling, post-draft actions, and hydrate spreads with **`FeaturePlanState`** planner recovery fields and Router/engine coordinator-exclusive intake behavior. Specs: **workflow-registry**, **state-registry**, **core-registry**, **bot-registry**; tests include **RunLlmPlanningSynthesisActionJsonTest**, **PlanningPostDraftGovernorTest**.
+
 ## 2026-03-07
 
 - Configurable workflow execution now supports multi-turn conversational sessions with `prompt_for_field` and `capture_field`, bot-level `sessionKeyStrategy`, and explicit `StepOutcome` plus `WorkflowRunResult` lifecycle flags. `CallActionStep` can invoke registered tools through `ToolRunner` before falling back to legacy workflow actions, and tests now cover pause and resume behavior plus per-session isolation.

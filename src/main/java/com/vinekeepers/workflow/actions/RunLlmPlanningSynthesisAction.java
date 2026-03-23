@@ -10,6 +10,7 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.workflow.planning.PlanningLlmJsonSupport;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
@@ -47,10 +48,11 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
               "top_unresolved_gap": "string or empty",
               "recommended_action": "ASK_ONE_QUESTION | ASSUME_AND_CONTINUE | POST_PACKET | BLOCK",
               "question_if_needed": "single string — empty unless recommended_action is ASK_ONE_QUESTION",
-              "explicit_assumptions": ["short strings"],
-              "follow_up_questions": []
+              "explicit_assumptions": ["short strings"]
             }
-            Always leave follow_up_questions empty; put any single clarification in question_if_needed only.
+            If the model still emits a legacy follow_up_questions array, it is ignored except for backward compatibility.
+            Always leave follow_up_questions empty when it is present.
+            Always put any single clarification in question_if_needed only.
             Use only artifact/section ids that exist in the profile snapshot. Prefer enriching current_state_summary,
             feature_summary, scope_summary, user_stories, acceptance_criteria, open_questions. Keep values concise.
             Separate observed repo facts this pass from inference and unknowns; do not name paths/packages unless observed.
@@ -80,6 +82,12 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         spread.put("planningLlmSkipReason", "");
         spread.put("planningFollowUpQuestionsJson", "[]");
         spread.put("planningLlmUpsertCount", "0");
+        spread.put("planningSynthesisParseOk", "false");
+        spread.put("planningSynthesisRepairAttempted", "false");
+        spread.put("planningSynthesisRepairExhausted", "false");
+        spread.put("planningSynthesisFailureCategory", "");
+        spread.put("planningSynthesisUpsertsAttempted", "0");
+        spread.put("planningSynthesisUpsertsRejected", "0");
         if (planStateStore == null || workProfileRegistry == null) {
             spread.put("planningLlmSkipReason", "MISSING_DEPS");
             return spread;
@@ -138,10 +146,13 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                     contextId,
                     spread,
                     PlanningLlmJsonSupport.parseJsonObject(raw));
+            spread.put("planningSynthesisParseOk", "true");
         } catch (Exception e) {
             Exception parseFailure = e;
+            spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_JSON_INVALID.name());
             String repaired = PlanningLlmJsonSupport.tryRepairJson(openAiChatClient, raw, "planning synthesis", event, state);
             if (repaired != null) {
+                spread.put("planningSynthesisRepairAttempted", "true");
                 try {
                     applyStructuredResponse(
                             event,
@@ -149,11 +160,18 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                             contextId,
                             spread,
                             PlanningLlmJsonSupport.parseJsonObject(repaired));
+                    spread.put("planningSynthesisParseOk", "true");
+                    spread.put("planningSynthesisFailureCategory", "");
                     return spread;
                 } catch (Exception repairedFailure) {
                     parseFailure = repairedFailure;
+                    spread.put("planningSynthesisRepairExhausted", "true");
+                    spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_REPAIR_EXHAUSTED.name());
                     log.warn("Planning LLM parse failed after repair: {}", repairedFailure.getMessage());
                 }
+            } else {
+                spread.put("planningSynthesisRepairExhausted", "true");
+                spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_REPAIR_EXHAUSTED.name());
             }
             spread.put("planningLlmError", parseFailure.getMessage() != null ? parseFailure.getMessage() : "parse failed");
             log.warn("Planning LLM parse/apply failed: {}", spread.get("planningLlmError"));
@@ -171,8 +189,15 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         PlanningLlmJsonSupport.UpsertApplyResult upsertResult =
                 PlanningLlmJsonSupport.applyUpsertsDetailed(
                         root, event, state, contextId, planStateStore, workProfileRegistry);
+        spread.put("planningSynthesisUpsertsAttempted", Integer.toString(upsertResult.attempted()));
+        spread.put("planningSynthesisUpsertsRejected", Integer.toString(upsertResult.rejected().size()));
         if (upsertResult.attempted() > 0 && upsertResult.applied() == 0) {
-            throw new IllegalArgumentException(PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
+            spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_UPSERT_REJECTED.name());
+            spread.put("planningLlmOk", "false");
+            spread.put("planningLlmError", PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
+            spread.put("planningLlmUpsertCount", "0");
+            spread.put("planningFollowUpQuestionsJson", "[]");
+            return;
         }
         List<String> followUps = new ArrayList<>(PlanningLlmJsonSupport.readFollowUpQuestions(root));
         String qNeeded = root.path("question_if_needed").asText("").trim();
@@ -185,6 +210,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         spread.put("planningFollowUpQuestionsJson", JSON.writeValueAsString(followUps));
         spread.put("planningLlmOk", "true");
         spread.put("planningLlmError", "");
+        spread.put("planningSynthesisFailureCategory", "");
     }
 
     private static String buildUserPayload(FeaturePlanState plan, String profileId, Map<String, Object> state) {

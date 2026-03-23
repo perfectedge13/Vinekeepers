@@ -8,8 +8,11 @@ import ch.qos.logback.core.read.ListAppender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningRole;
 import com.vinekeepers.state.planning.RoomParticipant;
 import org.junit.jupiter.api.Assumptions;
@@ -23,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RouterTest {
@@ -737,5 +741,77 @@ class RouterTest {
         Event event = new Event("discord:g:thread-delivery", "message",
                 Map.of("channelId", "thread-delivery", "content", "in thread"));
         assertEquals(List.of("arrietty"), r.route(event));
+    }
+
+    /** Plan indexed in {@link FeaturePlanStateStore} only (no {@link FeatureRoomStateStore}) — coordinator routing must still win. */
+    @Test
+    void routeWithNullRoomStore_activePlanningIntakeThread_returnsOnlyCoordinatorWhenMultipleRulesMatch() {
+        FeaturePlanState plan = featurePlanForExclusiveRouting("room-z", "thread-plan-only", "arrietty");
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        planStore.put(plan);
+        Router r = new Router(new LifecycleContextStore(), null, planStore, "");
+        r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "luna"));
+        r.addRouting(new RoutingRule(new RoutingFilter(Set.of(), Set.of(), null, null, Set.of(), Set.of(), Set.of()), "arrietty"));
+
+        Event event = new Event("discord:g:x", "message",
+                Map.of("channelId", "thread-plan-only", "content", "follow-up without mention"));
+        assertEquals(List.of("arrietty"), r.route(event));
+    }
+
+    @Test
+    void isCoordinatorExclusivePlanningDiscordEvent_trueInIntakeThread_falseInParentRoom() {
+        FeaturePlanState plan = featurePlanForExclusiveRouting("room-parent", "thread-exc", "coord-bot");
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        planStore.put(plan);
+        Router r = new Router(new LifecycleContextStore(), null, planStore, "");
+
+        assertTrue(r.isCoordinatorExclusivePlanningDiscordEvent(
+                new Event("discord:g:x", "message", Map.of("channelId", "thread-exc", "content", "x"))));
+        assertFalse(r.isCoordinatorExclusivePlanningDiscordEvent(
+                new Event("discord:g:x", "message", Map.of("channelId", "room-parent", "content", "x"))));
+    }
+
+    private static FeaturePlanState featurePlanForExclusiveRouting(
+            String roomChannelId, String intakeThreadId, String coordinatorBotId) {
+        FeaturePlanState base =
+                new FeaturePlanState(
+                        "ctx-r",
+                        "fid",
+                        "slug",
+                        roomChannelId,
+                        intakeThreadId,
+                        null,
+                        "t",
+                        "req",
+                        "PLANNING",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        FeaturePlanState.initialSectionStatuses(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "software_feature_planning_v2",
+                        Map.of(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null);
+        return base.withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, Instant.now())
+                .withCoordinatorConfiguredBotId(coordinatorBotId);
     }
 }

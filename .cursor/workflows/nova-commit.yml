@@ -54,7 +54,7 @@ phases:
     type: step
     skill: nova-reconcile
     location: .cursor/skills/common/reconcile.md
-    description: Reconcile README and docs. See common/reconcile.md.
+    description: Reconcile README and docs/spec drift only. Do not run unit tests in this phase; test execution belongs exclusively to run_tests.
 
   - id: build_check
     type: step

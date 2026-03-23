@@ -24,6 +24,7 @@ import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.state.planning.ClarificationResolutionDecision;
+import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.planning.ClarificationEngineAssessor.AssessedGap;
 import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
@@ -695,6 +696,9 @@ public final class PlanningCyclePipeline {
                         structuredParseFailed,
                         depthReason != null ? depthReason : "",
                         cycleErr,
+                        firstNonBlank(getString(spread, "planningSynthesisFailureCategory"), ""),
+                        "true".equalsIgnoreCase(getString(spread, "planningRecoverableDraftAfterSynthesis")),
+                        "true".equalsIgnoreCase(getString(spread, "planningSuppressAutonomousRedraftNotice")),
                         clr.hardClarificationBlock());
         boolean effectiveUser = userInputRequired || gov.forceUserInputRequired();
         if (gov.forceUserInputRequired()) {
@@ -728,6 +732,21 @@ public final class PlanningCyclePipeline {
             spread.put("planningUserInputRequired", "false");
             spread.put("planningCanonicalUserInputRequired", "false");
             effectiveReady = false;
+            String synthCat = firstNonBlank(getString(spread, "planningSynthesisFailureCategory"), "");
+            if (!synthCat.isBlank()
+                    && contextId != null
+                    && !contextId.isBlank()
+                    && plan != null) {
+                boolean rd = "true".equalsIgnoreCase(getString(spread, "planningRecoverableDraftAfterSynthesis"));
+                FeaturePlanState updated =
+                        plan.withPlannerRecoveryFields(
+                                PlanningFailureCategory.parse(synthCat),
+                                getString(spread, "planningPhase"),
+                                rd,
+                                PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthCat));
+                planStateStore.update(updated);
+                plan = planStateStore.getByContextId(contextId).orElse(updated);
+            }
         }
         spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
         spread.put(
@@ -1040,7 +1059,7 @@ public final class PlanningCyclePipeline {
         Map<String, Object> synthSpread = synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
         mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
         mergeSynthFollowUps(spread, aggregatedFollowUps);
-        applyImmediateSynthesisFailure(spread, synthSpread);
+        applyImmediateSynthesisFailure(contextId, spread, synthSpread);
         String lastSynthLlmLine = pickSynthLlmLine(synthSpread, previousSynthLine);
 
         new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
@@ -1212,7 +1231,8 @@ public final class PlanningCyclePipeline {
         return previous;
     }
 
-    private void applyImmediateSynthesisFailure(Map<String, Object> spread, Map<String, Object> synthSpread) {
+    private void applyImmediateSynthesisFailure(
+            String contextId, Map<String, Object> spread, Map<String, Object> synthSpread) {
         if (synthSpread == null || spread == null) {
             return;
         }
@@ -1224,11 +1244,36 @@ public final class PlanningCyclePipeline {
         if (applied > 0) {
             return;
         }
+        String cat = firstNonBlank(getString(spread, "planningSynthesisFailureCategory"), "");
+        boolean structuredRoleFailed =
+                "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
+        FeaturePlanState planForRecover = planStateStore.getByContextId(contextId).orElse(null);
+        boolean recoverable = hasRecoverablePlanningDraft(planForRecover) && !structuredRoleFailed;
+        spread.put("planningRecoverableDraftAfterSynthesis", recoverable ? "true" : "false");
+        if ("SYNTHESIS_JSON_INVALID".equals(cat) || "SYNTHESIS_REPAIR_EXHAUSTED".equals(cat)) {
+            spread.put("planningSuppressAutonomousRedraftNotice", "true");
+        }
+        if (!cat.isBlank()) {
+            spread.put("planningSynthesisFailureCategory", cat);
+            return;
+        }
         String existing = getString(spread, "planningRoomCycleError");
         if (existing != null && !existing.isBlank()) {
             return;
         }
         putPlanningRoomCycleError(spread, "SYNTHESIS_UPSERTS_NOT_APPLIED");
+    }
+
+    private static boolean hasRecoverablePlanningDraft(FeaturePlanState plan) {
+        if (plan == null) {
+            return false;
+        }
+        if (PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan)) {
+            return true;
+        }
+        String ex = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
+        String fs = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
+        return (ex != null && !ex.isBlank()) || (fs != null && !fs.isBlank());
     }
 
     private static void mergeExpansionFollowUpsFromWork(Map<String, Object> work, List<String> aggregated) {

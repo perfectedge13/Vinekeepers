@@ -6,6 +6,7 @@ import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.profile.TestWorkProfiles;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningFailureCategory;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpClient;
@@ -133,6 +134,42 @@ class RunLlmPlanningSynthesisActionJsonTest {
         assertEquals("false", spread.get("planningLlmOk"));
         assertEquals("0", spread.get("planningLlmUpsertCount"));
         assertTrue(String.valueOf(spread.get("planningLlmError")).contains("fieldId"));
+    }
+
+    @Test
+    void run_marksRepairExhaustedWhenJsonRepairReturnsError() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> invalid = assistantResponse("this is not json {");
+        HttpResponse<String> repairError = assistantResponse("ERROR:upstream");
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(invalid).thenReturn(repairError);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        var registry = TestWorkProfiles.loadFromRepoConfig();
+        var init = new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId",
+                                "ctx-repair-ex",
+                                "channelId",
+                                "room-repair",
+                                "repoRef",
+                                "perfectedge13/Vinekeepers",
+                                "initialRequest",
+                                "x"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+
+        var action = new RunLlmPlanningSynthesisAction(client, planStore, registry);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread = (Map<String, Object>) action.run(null, Map.of("contextId", "ctx-repair-ex"), Map.of());
+
+        assertEquals("true", spread.get("planningSynthesisRepairExhausted"));
+        assertEquals(PlanningFailureCategory.SYNTHESIS_REPAIR_EXHAUSTED.name(), spread.get("planningSynthesisFailureCategory"));
+        assertEquals("false", spread.get("planningSynthesisParseOk"));
     }
 
     private static HttpResponse<String> assistantResponse(String content) throws Exception {

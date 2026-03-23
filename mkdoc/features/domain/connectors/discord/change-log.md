@@ -4,6 +4,7 @@
 
 ## 2026-03-23
 
+- **OWNED_SPACES + active planning intake:** **DiscordOwnedSpacePredicate** may consult **FeaturePlanStateStore** so bots with **OWNED_SPACES** ingress still receive messages in coordinator-bound intake threads when an active plan row matches. **ConnectorContext** carries the optional plan store from **Bootstrap**. Specs: **connectors-registry**, **state-registry**.
 - **User/bot mention routing alignment:** `discordMention` matches only supported user/bot mention tokens. **NormalizedEventContext** parses numeric snowflakes from `<@id>` and `<@!id>` in message text only; role pings `<@&id>` and other angle-bracket bodies are ignored. **JdaDiscordGateway** mention metadata uses Discord user id plus account username and global display name (no guild nicknames), and thread ingress payloads now include `parentChannelId` for message and interaction routing. **Router** logs a structured **INFO** line when no rule matches (channelId, parentChannelId, authorId, actorUsername, mentions, ingestBotId, rolePingDetected, truncated textPrefix). Tests: RouterTest, NormalizedEventContextTest. Specs (bot, connectors, config, core, workflow) and README aligned; `config/bots.yaml` routing stays config-driven while ops-thread messages can match via parent-channel allowlists.
 
 ## 2026-03-20

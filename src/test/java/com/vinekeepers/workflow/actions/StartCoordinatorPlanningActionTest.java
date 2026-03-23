@@ -60,14 +60,14 @@ class StartCoordinatorPlanningActionTest {
 
     @Test
     void missingIntakeThreadId_returnsError() {
-        var action = new StartCoordinatorPlanningAction(engine, rooms);
+        var action = new StartCoordinatorPlanningAction(engine, rooms, null);
         String out = (String) action.run(new Event("discord:g", "message", Map.of()), Map.of(), Map.of());
         assertTrue(out.contains("missing intakeThreadId"));
     }
 
     @Test
     void threadCreateFailed_returnsError() {
-        var action = new StartCoordinatorPlanningAction(engine, rooms);
+        var action = new StartCoordinatorPlanningAction(engine, rooms, null);
         String out = (String) action.run(new Event("discord:g", "message", Map.of()),
                 Map.of(),
                 Map.of("intakeThreadId", CreateThreadAction.THREAD_CREATE_FAILED));
@@ -76,7 +76,7 @@ class StartCoordinatorPlanningActionTest {
 
     @Test
     void missingCoordinator_returnsErrorWhenNoFeatureRoom() {
-        var action = new StartCoordinatorPlanningAction(engine, rooms);
+        var action = new StartCoordinatorPlanningAction(engine, rooms, null);
         String out = (String) action.run(
                 new Event("discord:g", "message", Map.of()),
                 Map.of(),
@@ -125,7 +125,7 @@ class StartCoordinatorPlanningActionTest {
         engine.registerRunner("arrietty", WorkflowRunnerFactory.create(arriettyConfigured,
                 Map.of("thr_kick", wf), reg, new ToolRunner(new ToolRegistry())));
 
-        var action = new StartCoordinatorPlanningAction(engine, rooms);
+        var action = new StartCoordinatorPlanningAction(engine, rooms, null);
         Event parent = new Event("discord:g:1", "message",
                 Map.of("channelId", "main", "authorId", "user-9", "content", "@Luna launch"));
         assertEquals("RAN", action.run(parent, Map.of("deliveryChannelId", threadId),
@@ -169,7 +169,7 @@ class StartCoordinatorPlanningActionTest {
         engine.registerRunner("arrietty", WorkflowRunnerFactory.create(arriettyConfigured,
                 Map.of("dup_kick", wf), reg, new ToolRunner(new ToolRegistry())));
 
-        var action = new StartCoordinatorPlanningAction(engine, rooms);
+        var action = new StartCoordinatorPlanningAction(engine, rooms, null);
         Event parent = new Event("discord:g:1", "message", Map.of("authorId", "u1"));
         Map<String, Object> bind = Map.of("intakeThreadId", threadId);
         assertEquals("RAN", action.run(parent, Map.of(), bind));

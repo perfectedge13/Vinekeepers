@@ -1,7 +1,6 @@
 package com.vinekeepers.connectors;
 
 import com.vinekeepers.bot.BotDefinition;
-import com.vinekeepers.bot.ConnectorIdentity;
 import com.vinekeepers.env.Env;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,9 +52,10 @@ public final class DiscordConnectorAdapter implements ConnectorAdapter {
                 DiscordOwnedSpacePredicate ownedPredicate = null;
                 if (modes.needsOwnedSpacePredicate()) {
                     var frs = context.getFeatureRoomStateStore();
+                    var fps = context.getFeaturePlanStateStore();
                     var lcs = context.getLifecycleContextStore();
                     if (frs != null || lcs != null) {
-                        ownedPredicate = new DiscordOwnedSpacePredicate(frs, lcs, bot.getId());
+                        ownedPredicate = new DiscordOwnedSpacePredicate(frs, lcs, bot.getId(), fps);
                     } else {
                         log.warn("Bot {} uses OWNED_SPACES ingress but no FeatureRoomStateStore/LifecycleContextStore in ConnectorContext; "
                                 + "falling back to scoped policy without channel filter on interactions.", bot.getId());

@@ -4,6 +4,7 @@
 
 ## 2026-03-23
 
+- **Planner stabilization (failure + intake binding):** **`PlanningFailureCategory`**, **`PlanningIntakeBindingResolver`**, and **`FeaturePlanState.withPlannerRecoveryFields`** document typed synthesis/orchestration failures and coordinator-exclusive intake routing data used by **`hydrate_planning_session`**, **`RunLlmPlanningSynthesisAction`**, **`PlanningPostDraftGovernor`**, Router, engine, and Discord ingress. Specs: **state-registry**, **workflow-registry**, **bot-registry**, **connectors-registry**; tests: **PlanningFailureCategoryTest**, **PlanningIntakeBindingResolverTest**, and related workflow tests.
 - **Plan confidence (known vs unknown):** **`PlanConfidence`** documents and persists **structuredKnownFactCount**, **materialUnknownCount**, and **materialUnknownLabels** so critique/readiness and approval gating can reflect how much of the plan is grounded vs still unknown. **`FeaturePlanState`** / **`REQ-STATE-001`** wording aligned in **state-registry** with workflow **PlanReadinessCalculator** / **PlanningApprovalGateSupport** (launch bar **0.85**). Docs: summary, how-it-works, contracts.
 
 ## 2026-03-22

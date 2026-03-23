@@ -8,6 +8,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeBindingResolver;
 
 import java.util.Map;
 import java.util.Optional;
@@ -142,6 +143,17 @@ public final class InitializeFeaturePlanStateAction implements com.vinekeepers.w
                 null,
                 null,
                 null);
+        String coordinator =
+                room != null
+                        ? PlanningIntakeBindingResolver.resolveCoordinatorBotId(room, null)
+                                .orElse(null)
+                        : null;
+        if (coordinator == null || coordinator.isBlank()) {
+            coordinator = firstNonBlank(getString(bind, "coordinatorBotId"), getString(state, "coordinatorBotId"));
+        }
+        if (coordinator != null && !coordinator.isBlank()) {
+            plan = plan.withCoordinatorConfiguredBotId(coordinator);
+        }
         planStateStore.put(plan);
         return "OK";
     }

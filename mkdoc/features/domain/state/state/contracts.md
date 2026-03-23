@@ -20,4 +20,7 @@ State: JSON-shaped per workflow (e.g. TicketDraft, ReviewDraft). Key: (botId, co
 - **DiscoveryAgenda:** ordered questions plus summary fields for workflow state snapshots.
 - **DiscoveryFinding:** optional metadata for a captured answer (future persistence).
 - **PlanConfidence:** readiness status, qualitative level, notes, **confidenceScore** (0–1), **confidenceReasons** (including summaries tied to known-vs-unknown signals), **structuredKnownFactCount**, **materialUnknownCount**, **materialUnknownLabels**, **computedAt**.
+- **PlanningFailureCategory:** enum values such as **NONE**, **SYNTHESIS_JSON_INVALID**, **SYNTHESIS_REPAIR_EXHAUSTED**, **SYNTHESIS_UPSERT_REJECTED**, **SYNTHESIS_EMPTY_NOOP**, **REPO_GROUNDING_UNAVAILABLE**; **parse** / **wireName** for YAML and persistence.
+- **PlanningIntakeBindingResolver:** resolves **Binding** from Discord channel/thread id via **FeatureRoomStateStore**, **FeaturePlanStateStore**, and active **PlanningIntakeStage**; **exclusiveCoordinatorThread** when intake is active and coordinator-only routing applies; static **isActivePlanningIntake** when stage is not **DONE**.
+- **FeaturePlanState:** optional **planningFailureCategory**, **planningFailurePhase**, **planningRecoverableDraftAvailable**, **planningLastRecoveryHint** (planner recovery metadata); **withPlannerRecoveryFields** for durable updates.
 

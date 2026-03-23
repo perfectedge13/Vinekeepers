@@ -2,8 +2,11 @@ package com.vinekeepers.connectors;
 
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeBindingResolver;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -14,6 +17,7 @@ import java.util.Optional;
 public final class DiscordOwnedSpacePredicate {
 
     private final FeatureRoomStateStore featureRoomStateStore;
+    private final FeaturePlanStateStore featurePlanStateStore;
     private final LifecycleContextStore lifecycleContextStore;
     private final String botId;
 
@@ -21,8 +25,17 @@ public final class DiscordOwnedSpacePredicate {
             FeatureRoomStateStore featureRoomStateStore,
             LifecycleContextStore lifecycleContextStore,
             String botId) {
+        this(featureRoomStateStore, lifecycleContextStore, botId, null);
+    }
+
+    public DiscordOwnedSpacePredicate(
+            FeatureRoomStateStore featureRoomStateStore,
+            LifecycleContextStore lifecycleContextStore,
+            String botId,
+            FeaturePlanStateStore featurePlanStateStore) {
         this.featureRoomStateStore = featureRoomStateStore;
         this.lifecycleContextStore = lifecycleContextStore;
+        this.featurePlanStateStore = featurePlanStateStore;
         this.botId = Objects.requireNonNull(botId, "botId");
     }
 
@@ -38,6 +51,24 @@ public final class DiscordOwnedSpacePredicate {
             var byRoom = featureRoomStateStore.getByRoomChannelId(channelId);
             if (byRoom.isPresent()) {
                 return isParticipant(byRoom.get());
+            }
+        }
+        if (featurePlanStateStore != null) {
+            Optional<FeaturePlanState> planThread = featurePlanStateStore.getByIntakeThreadId(channelId);
+            if (planThread.isPresent()
+                    && PlanningIntakeBindingResolver.isActivePlanningIntake(planThread.get())) {
+                String c = planThread.get().getCoordinatorConfiguredBotId();
+                return c != null && c.equals(botId);
+            }
+            Optional<FeaturePlanState> planRoom = featurePlanStateStore.getByRoomChannelId(channelId);
+            if (planRoom.isPresent()) {
+                FeaturePlanState p = planRoom.get();
+                if (PlanningIntakeBindingResolver.isActivePlanningIntake(p)
+                        && p.getIntakeThreadId() != null
+                        && !p.getIntakeThreadId().isBlank()) {
+                    String c = p.getCoordinatorConfiguredBotId();
+                    return c != null && c.equals(botId);
+                }
             }
         }
         if (lifecycleContextStore != null) {

@@ -86,6 +86,6 @@ class DeployTargetRegistryTest {
         DeployTarget wiki = reg.findById("wikijs").orElseThrow();
         assertTrue(wiki.getCompose().isConfigured());
         assertEquals("/home/perfect_edge13/Docker/wikijs", wiki.getCompose().getWorkingDirectory());
-        assertTrue(wiki.getCompose().allowsService("wikijs"));
+        assertTrue(wiki.getCompose().allowsService("wikijs-db"));
     }
 }

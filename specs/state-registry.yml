@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T00:00:00Z"
+  updated_utc: "2026-03-24T18:00:00Z"
 
 project:
   id: vinekeepers
@@ -76,7 +76,10 @@ assets:
       durable PlanningIntakeStage with stageEnteredAt, intakeKickoffPostedVersion / intakeKickoffPostedFingerprint for
       idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED; repo workspace fields
       (repoWorkspaceStatus, repoLocalPath, repoRef, repoAccessNotes) feed spread_plan_workspace_signals and JSON evidence spreads in workflow state;
-      autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back post-draft clarification engine and discovery gap gating on the plan record
+      autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back post-draft clarification engine and discovery gap gating on the plan record;
+      durable coordinatorConfiguredBotId for routing when FeatureRoomState is evicted; withPlannerRecoveryFields persists
+      planningFailureCategory, planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint for typed
+      synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-CLARIFICATION-RESOLUTION-DECISION
@@ -91,6 +94,25 @@ assets:
     role: >-
       Enum of durable coordinator intake phases (GATHERING_CONTEXT through DONE/FAILED) persisted on FeaturePlanState for
       orchestration spine separate from YAML step index
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-FAILURE-CATEGORY
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningFailureCategory.java
+    role: >-
+      Machine-stable enum for planner/synthesis failures (NONE, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED,
+      SYNTHESIS_UPSERT_REJECTED, SYNTHESIS_EMPTY_NOOP, REPO_GROUNDING_UNAVAILABLE); parse and wireName for FeaturePlanState
+      persistence and workflow spreads
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-INTAKE-BINDING-RESOLVER
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningIntakeBindingResolver.java
+    role: >-
+      Resolves feature-room intake thread ↔ plan binding and coordinator bot id: FeatureRoomStateStore by intake thread,
+      FeaturePlanStateStore by intake thread id, then by room channel (or parent thread) when planning intake is active and
+      intakeThreadId is set; Binding.exclusiveCoordinatorThread gates coordinator-only Discord routing; static
+      isActivePlanningIntake when PlanningIntakeStage is not DONE
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-DISCOVERY-GAP
@@ -343,9 +365,17 @@ requirements:
           Workflow session may persist PlanningPostDraftGovernor material baselines and revision fingerprint keys
           (planningMaterialBaselineRepoEvidenceHash, planningMaterialBaselineAssumptionCount, planningMaterialBaselineCritiqueBlockingCount,
           planningMaterialBaselineDraftFingerprint, planningLastNonPostingRevisionSituation) so autonomous redrafts are gated on real input change
+        - >-
+          FeaturePlanState carries optional coordinatorConfiguredBotId and planner recovery fields (planningFailureCategory,
+          planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint) updated when post-draft handling
+          records a blocking synthesis classification
+        - >-
+          PlanningIntakeBindingResolver resolves intake/plan binding from FeatureRoomStateStore and/or FeaturePlanStateStore
+          (intake thread id, room channel with active intake, parent thread under room); coordinator id prefers room
+          primary/ORCHESTRATOR resolution then plan coordinatorConfiguredBotId
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-INTAKE-STAGE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-INTAKE-STAGE, ASSET-PLANNING-FAILURE-CATEGORY, ASSET-PLANNING-INTAKE-BINDING-RESOLVER, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
       symbols: []
     validation:
       tests:
@@ -456,6 +486,16 @@ requirements:
           intent: Verify nested placeholder resolution in string maps from bind/state
           testClass: com.vinekeepers.profile.BindPlaceholderResolverTest
           preconditions: []
+        - id: UNIT-PLANNING-FAILURE-CATEGORY
+          title: PlanningFailureCategoryTest
+          intent: Verify PlanningFailureCategory parse, wireName, and unknown input handling
+          testClass: com.vinekeepers.state.planning.PlanningFailureCategoryTest
+          preconditions: []
+        - id: UNIT-PLANNING-INTAKE-BINDING-RESOLVER
+          title: PlanningIntakeBindingResolverTest
+          intent: Verify intake binding resolution from room and plan stores including plan-only active intake paths
+          testClass: com.vinekeepers.state.planning.PlanningIntakeBindingResolverTest
+          preconditions: []
 
 features:
   - id: FEAT-STATE
@@ -465,7 +505,8 @@ features:
     doc_path: features/domain/state/state.md
     summary: >-
       StateStore persists and loads per-bot, per-conversation workflow state; state.workflow holds generic UnresolvedItem
-      models for config-driven clarification ledgers (REQ-WORKFLOW-002).
+      models for config-driven clarification ledgers (REQ-WORKFLOW-002); planning package includes PlanningFailureCategory and
+      PlanningIntakeBindingResolver for durable recovery metadata and intake-thread binding when room state is missing.
     requirement_ids: [REQ-STATE-001]
-    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-FAILURE-CATEGORY, ASSET-PLANNING-INTAKE-BINDING-RESOLVER, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
     status: active

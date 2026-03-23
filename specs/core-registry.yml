@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T22:30:00Z"
+  updated_utc: "2026-03-24T18:00:00Z"
 
 project:
   id: vinekeepers
@@ -73,8 +73,9 @@ assets:
     role: >-
       Wire engine, config, ConnectorRegistry; build DiscordConnectorConfig and DiscordConnectorAdapter; call
       adapter.registerBots(bots, ConnectorContext); build handlesMap from getConnectorIdentity("discord"); create
-      FeatureRoomStateStore, FeaturePlanStateStore, RepoWorkspaceStateStore, RepoWorkspaceService and pass room store to
-      Router and OutboundDeliveryRouter; register engine reply sender, sink, and ReplyTargetResolver by connector id;
+      FeatureRoomStateStore, FeaturePlanStateStore, RepoWorkspaceStateStore, RepoWorkspaceService and pass room and plan stores to
+      Router (PlanningIntakeBindingResolver), OutboundDeliveryRouter, and ConnectorContext; loadConfig sets Router planning coordinator
+      fallback bot id from loaded bots; register engine reply sender, sink, and ReplyTargetResolver by connector id;
       register workflow actions provision_room_participants, initialize_feature_room_state, initialize_feature_plan_state,
       hydrate_planning_session, synthesize_plan_drafts, ensure_repo_workspace (with BotCatalog), prep_planning_repo_grounding, spread_plan_workspace_signals,
       upsert_artifact_section_data,
@@ -85,7 +86,13 @@ assets:
   - id: ASSET-ENGINE
     kind: source
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
-    role: Route events to bots (router plus waiting-session for message events); run workflow and reasoner; apply tool/state side effects; deliver replies via sink registry then fallback to reply-sender registry, both keyed by event source prefix (connector id)—no connector literal in engine; ReplySender and AppReplySink registered by Bootstrap; lifecycle (respondImmediately, sendFollowUp, updateMessage); build OutboundResponse from workflow/reasoner; obtains ReplyTarget only via connector-owned ReplyTargetResolver by connector id—fail closed when no resolver or resolver returns empty; no defer in engine
+    role: >-
+      Route events to bots (router plus waiting-session merge for Discord message events except when
+      router.isCoordinatorExclusivePlanningDiscordEvent is true); run workflow and reasoner; apply tool/state side effects; deliver
+      replies via sink registry then fallback to reply-sender registry, both keyed by event source prefix (connector id)—no connector
+      literal in engine; ReplySender and AppReplySink registered by Bootstrap; lifecycle (respondImmediately, sendFollowUp, updateMessage);
+      build OutboundResponse from workflow/reasoner; obtains ReplyTarget only via connector-owned ReplyTargetResolver by connector id—fail
+      closed when no resolver or resolver returns empty; no defer in engine
     requires: [REQ-CORE-003, REQ-REASONER-001, REQ-LUNA-001]
     feature_ids: [FEAT-ENGINE, FEAT-REASONER, FEAT-CURSOR-GATHERING]
   - id: ASSET-OUTBOUND-RESPONSE
@@ -241,7 +248,7 @@ requirements:
     acceptance:
       criteria:
         - Engine subscribes to event bus and dispatches to bots by routing rules (Router); Discord message mention and trigger matching semantics follow REQ-BOT-001
-        - For Discord message events, engine adds bots that have a workflow runner and stateStore state with WAITING_INPUT for the event's session key (waiting-session routing) so workflows resume in the same conversation
+        - For Discord message events, engine adds bots that have a workflow runner and stateStore state with WAITING_INPUT for the event's session key (waiting-session routing) so workflows resume in the same conversation, except when the router reports a coordinator-exclusive active planning intake thread for that message (no waiting-session merge on those channels)
         - Engine uses registered runners and runner.runResult(event, stateStore, botId) for workflow execution
         - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message
         - Engine applies reasoner state patches and executes proposed tool calls through ToolRunner

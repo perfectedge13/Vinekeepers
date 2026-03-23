@@ -18,4 +18,5 @@ None. `Workflow.handle(event, context, state) -> WorkflowResult` remains the leg
 - **`WorkflowActionRegistry`:** registers and resolves legacy workflow actions when a `call_action` id is not handled by `ToolRunner`.
 - **`WorkflowStep`:** interface for step implementations. **`StepResult`:** per-step result object. **`StepOutcome`:** enum describing continue, waiting, complete, or error outcomes.
 - **Step types:** `AskForInputStep`, `PromptForFieldStep`, `CaptureFieldFromEventStep`, `CallActionStep`, `BranchStep`, and `DoneStep`.
+- **Planning cycle (selected):** `PlanningCyclePipeline` orchestrates expansion, drafting, synthesis, and clarification spreads for **`execute_planning_room_cycle`**; `PlanningPostDraftGovernor` derives **`planningPostDraftAction`**; `RunLlmPlanningSynthesisAction` implements **`run_llm_planning_synthesis`** with JSON repair and **`planningSynthesisFailureCategory`** spreads; `HydratePlanningSessionAction` / `StartCoordinatorPlanningAction` hydrate kickoff and coordinator dispatch; `PlanningUserFacingCopy` humanizes cycle errors for Discord templates.
 

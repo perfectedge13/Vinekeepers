@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T00:00:00Z"
+  updated_utc: "2026-03-24T18:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -140,7 +140,7 @@ assets:
     path: src/main/java/com/vinekeepers/core/VinekeepersEngine.java
     role: >-
       Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event
-      session key); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink;
+      session key unless router.isCoordinatorExclusivePlanningDiscordEvent); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink;
       dispatchCoordinatorPlanningKickoff runs a single coordinator bot for a synthetic thread message after Luna handoff with idempotent skip when thread session is already waiting, in progress, or completed
       registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage);
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
@@ -413,7 +413,10 @@ assets:
       PlanningPostDraftGovernor derives planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
       AUTONOMOUS_REDRAFT) plus planningPostDraftNoticeMarkdown and material/revision baselines so Arrietty v2 post-assess YAML
       routes only on that action (no truthy planningUserInputRequired/planningReadyToPostPacket convergence); finalizePlanningCycleSpread
-      persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute)
+      persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute);
+      applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
+      SYNTHESIS_JSON_INVALID / SYNTHESIS_REPAIR_EXHAUSTED when no upserts applied; applyPostDraftGovernor persists planner recovery
+      fields on FeaturePlanState when synthesis failure forces BLOCK
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -422,12 +425,14 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPostDraftGovernor.java
     role: >-
-      Post-draft routing governor: derives PlanningPostDraftAction from clarification, depth, parse health, ledger repeat, and
+      Post-draft routing governor: derives PlanningPostDraftAction from clarification, depth, parse health, ledger repeat,
       material-change signals (merged user answer, repo evidence hash, assumption count, critique blocking count, draft
-      fingerprint when canonical exploration/summary text changed); revision situation fingerprint stops unchanged non-posting
-      loops; when redraft would otherwise assume-through, ASK_ONE_QUESTION if FeaturePlanState still has structured material
-      gaps (unresolvedQuestions, open blocking issues, open HIGH assumptions) via firstStructuredMaterialQuestion — not packet
-      display text; firstUserFacingClarificationTextOrEmpty merges ledger then plan for forced clarification copy
+      fingerprint when canonical exploration/summary text changed), and non-blank planningSynthesisFailureCategory; when category is
+      recoverable (planningRecoverableDraftAfterSynthesis) prefers ASK_ONE_QUESTION from ledger/plan, else ASSUME_AND_CONTINUE with a
+      plain continuing notice instead of AUTONOMOUS_REDRAFT spam; otherwise BLOCK with PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode;
+      revision situation fingerprint stops unchanged non-posting loops; when redraft would otherwise assume-through, ASK_ONE_QUESTION if
+      FeaturePlanState still has structured material gaps (unresolvedQuestions, open blocking issues, open HIGH assumptions) via
+      firstStructuredMaterialQuestion — not packet display text; firstUserFacingClarificationTextOrEmpty merges ledger then plan for forced clarification copy
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -776,7 +781,8 @@ assets:
     role: >-
       Deploy targets list (targets with id, label, optional playbook relative to ansible root when Ansible is used, optional
       compose file, host workingDirectory for stack cwd, composeServices allowlist, hostOpsExecutor direct or cursor_agent); compose-only
-      entries omit playbook; shipped examples neo4j and wikijs under /opt/stacks paths
+      entries omit playbook; shipped examples neo4j and wikijs use host stack workingDirectory paths (sample repo uses
+      /home/perfect_edge13/Docker/*) with allowlisted compose services
     requires:
       - REQ-CONFIG-001
       - REQ-GADGET-001
@@ -788,7 +794,8 @@ assets:
     path: config/deploy-targets.docker.yaml
     role: >-
       Containerized deploy target manifest for compose.host-ops.yaml; selected via DEPLOY_TARGETS_PATH so direct host compose
-      uses mounted in-container paths (/workspace/vinekeepers and /opt/stacks/*) without shadowing /app
+      uses /workspace/vinekeepers for the repo target and the same host absolute paths for neo4j/wikijs stacks as
+      deploy-targets.yaml (bind-mounted), without shadowing /app
     requires:
       - REQ-GADGET-001
     feature_ids:
@@ -1213,7 +1220,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningUserFacingCopy.java
     role: >-
       Shared plain-language labels for Discord-visible planning copy (critique severities, readiness and tracked-item statuses,
-      profile field titles for internal paths,       coordinator cycle error lines humanized from machine codes, clarification merge errors always mapped to safe plain text (no raw
+      profile field titles for internal paths, coordinator cycle error lines humanized from machine codes (including
+      PlanningFailureCategory synthesis codes such as SYNTHESIS_REPAIR_EXHAUSTED), clarification merge errors always mapped to safe plain text (no raw
       exception messages), repo-grounding pointer after packet post) so operators
       are not shown raw enums, artifact ids, or internal pipeline failure mechanics
     requires:
@@ -1231,7 +1239,8 @@ assets:
       spreads coordinatorKickoff from synthetic kickoff payload when present; spreads planningIngressMode from event payload when
       set, else SYNTHETIC_KICKOFF when coordinatorKickoff, else USER_MESSAGE on intake thread, else empty; when workflow state has
       planningWorkflowStepLimitReached=true, persists FeaturePlanState.withPlanningOrchestrationFailure once and clears the flag
-      via spread; spreads canonicalPlanningIntakeStage from FeaturePlanState when plan exists
+      via spread; spreads canonicalPlanningIntakeStage from FeaturePlanState when plan exists; spreads planningFailureCategory and
+      planningFailurePhase from FeaturePlanState when present for template-safe recovery copy
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1837,10 +1846,10 @@ assets:
       ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), a single recommended_action aligned with
       post-draft routing semantics, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
       planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
-      parse uses shared PlanningLlmJsonSupport extraction and attempts one JSON repair before surfacing planningLlmError;
-      semantic validation now requires real profile artifact/section ids and field-keyed data maps (never literal fieldId placeholders),
-      and zero-applied upsert batches fail visibly instead of silently redrafting; failures return ERROR-prefixed or exception messages
-      without hanging
+      parse uses shared PlanningLlmJsonSupport extraction and attempts one JSON repair pass; spreads planningSynthesisFailureCategory
+      (PlanningFailureCategory: SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED), planningSynthesisRepairAttempted,
+      planningSynthesisRepairExhausted when repair or apply still fails; semantic validation requires real profile artifact/section ids and
+      field-keyed data maps (never literal fieldId placeholders), and zero-applied upsert batches fail visibly; failures return ERROR-prefixed or exception messages without hanging
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -2270,8 +2279,15 @@ requirements:
           evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator
         - >-
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
-          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely, attempting one JSON repair first;
+          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely; JSON parse uses PlanningLlmJsonSupport
+          with one repair attempt via OpenAI when raw output is invalid; spreads planningSynthesisFailureCategory (e.g. SYNTHESIS_JSON_INVALID,
+          SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED) and planningSynthesisRepairExhausted when repair/apply still fails; PlanningCyclePipeline
+          then sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for invalid/repair-exhausted paths so
+          PlanningPostDraftGovernor advances with a deterministic ASSUME_AND_CONTINUE notice (or ASK_ONE_QUESTION when clarification text exists) instead of repeated AUTONOMOUS_REDRAFT;
           when planningRagAvailable is true in workflow state, includes planningRagRetrievalText in the synthesis prompt context
+        - >-
+          hydrate_planning_session spreads planningFailureCategory and planningFailurePhase from FeaturePlanState when set so Arrietty kickoff
+          and intake templates can surface typed recovery metadata without reading raw plan rows in YAML
         - >-
           prep_planning_repo_grounding (PrepPlanningRepoGroundingAction + PlanningRepoGroundingService) runs after a materialized checkout path exists on FeaturePlanState;
           loads .vinekeepers/repo-grounding.parquet when present before embedding; indexes only missing chunk hashes into Qdrant with payload scoped by repo ref and branch;
@@ -2739,6 +2755,12 @@ requirements:
             Verify OpenAiPlanningProgressPoster posts **Update:** lines via PostChannelMessageAction when Discord progress env is enabled
           testClass: com.vinekeepers.workflow.actions.OpenAiPlanningProgressPosterTest
           preconditions: []
+        - id: UNIT-RUN-LLM-PLANNING-SYNTHESIS-JSON
+          title: RunLlmPlanningSynthesisActionJsonTest
+          intent: >-
+            Verify run_llm_planning_synthesis JSON parse, repair exhaustion spreads (planningSynthesisFailureCategory), and upsert rejection paths
+          testClass: com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisActionJsonTest
+          preconditions: []
         - id: MANUAL-WORKFLOW
           title: Workflow interface
           intent: Verify workflow is part of bot definition
@@ -2858,7 +2880,10 @@ requirements:
           arrietty_room_v2 uses named phases plus embedded configurable_steps segments; configurable_steps persist isolated segment
           cursors; kickoff routes through planning_ingress/planning_kickoff; after planning_assess_clarification, rs_post_draft rulesets
           branch only on planningPostDraftAction (fail-closed default planning_blocked); cap_post_draft_blocked reaches planning_redraft_notice
-          only for AUTONOMOUS_REDRAFT after material change per governor; clarification uses the explicit planning_clarification phase when
+          only for AUTONOMOUS_REDRAFT after material change per governor; synthesis JSON repair exhaustion and similar failure categories route
+          through PlanningPostDraftGovernor recoverable paths (ASSUME_AND_CONTINUE with suppress-redraft notice) instead of cycling AUTONOMOUS_REDRAFT;
+          when post-draft handling blocks on synthesis failure, FeaturePlanState planner recovery fields persist category, phase, recoverable flag,
+          and humanized last recovery hint; clarification uses the explicit planning_clarification phase when
           the coordinator must ask the operator; ArriettyV2WorkflowYamlTest guards phase ownership, post-assess branching, and bans
           linear_workflow_ref in production config
         - >-
@@ -3033,7 +3058,8 @@ requirements:
           title: PlanningPostDraftGovernorTest
           intent: >-
             Verify post-draft action derivation, material-change detection, revision-situation repeat blocking, ASK_ONE_QUESTION when
-            deny-redraft would assume-through but structured material gaps or OPEN ledger questions remain, and notice markdown
+            deny-redraft would assume-through but structured material gaps or OPEN ledger questions remain, synthesis failure category
+            recoverable vs block paths, and notice markdown
           testClass: com.vinekeepers.workflow.planning.PlanningPostDraftGovernorTest
           preconditions: []
         - id: UNIT-PLANNING-PACKET-DEPTH-EVALUATOR-RELAX-OPEN-Q
@@ -3639,8 +3665,9 @@ requirements:
           Shipped config/deploy-targets.yaml includes compose-only neo4j and wikijs targets with host stack workingDirectory and
           allowlisted services
         - >-
-          Shipped compose.host-ops.yaml mounts /var/run/docker.sock, the repo at /workspace/vinekeepers, and sample /opt/stacks/*
-          targets while switching DEPLOY_TARGETS_PATH to config/deploy-targets.docker.yaml for containerized direct compose
+          Shipped compose.host-ops.yaml mounts /var/run/docker.sock, the repo at /workspace/vinekeepers, bind-mounts the neo4j and
+          wikijs stack directories at the same absolute paths as config/deploy-targets.yaml, and switches DEPLOY_TARGETS_PATH to
+          config/deploy-targets.docker.yaml for containerized direct compose
         - >-
           ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies
           ansible tree, sets GADGET_ANSIBLE_ROOT / DEPLOY_ANSIBLE_ROOT, and installs ansible plus the Docker CLI/Compose plugin
@@ -3673,7 +3700,9 @@ requirements:
           preconditions: []
         - id: UNIT-GADGET-PROJECT-REGISTRY
           title: DeployTargetRegistryTest
-          intent: Verify YAML load and findById including compose fields; shipped manifest neo4j/wikijs host stack paths
+          intent: >-
+            Verify YAML load and findById including compose fields; shipped manifest neo4j/wikijs host stack paths and compose
+            service allowlists (neo4j, wikijs-db)
           testClass: com.vinekeepers.devops.DeployTargetRegistryTest
           preconditions: []
         - id: UNIT-START-GADGET-DEPLOY

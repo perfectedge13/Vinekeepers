@@ -2,7 +2,7 @@
 
 ## Summary
 
-Full-suite verification and commit. Discovery (all registries) → gates → tests → plausibility → docs reconcile → static analysis → commit/push → output. Do not commit until all phases pass.
+Full-suite verification and commit. Discovery (all registries) → gates → tests → plausibility → docs reconcile → static analysis → commit/push → output. Do not commit until all phases pass. `docs_reconcile` is for docs/spec alignment only and must not re-run unit tests.
 
 ## Sequence
 

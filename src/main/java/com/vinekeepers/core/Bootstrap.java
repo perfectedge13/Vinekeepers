@@ -193,10 +193,12 @@ public final class Bootstrap {
         actionRegistry.register("start_ansible_deploy", new StartAnsibleDeployAction(outboundDeliveryRouter, bootstrapTargets));
         actionRegistry.register("run_deploy_compose", new RunDeployComposeAction(outboundDeliveryRouter, bootstrapTargets));
         AuditRecorder audit = entry -> log.info("Audit: {} {} {} {}", entry.getTimestamp(), entry.getBotId(), entry.getAction(), entry.getDetail());
-        this.router = new Router(lifecycleContextStore, featureRoomStateStore);
+        this.router = new Router(lifecycleContextStore, featureRoomStateStore, featurePlanStateStore, "");
         this.engine = new VinekeepersEngine(router, stateStore, audit, toolRunner);
         this.engineEventExecutor = EngineEventExecutorFactory.create();
-        actionRegistry.register("start_coordinator_planning", new StartCoordinatorPlanningAction(engine, featureRoomStateStore));
+        actionRegistry.register(
+                "start_coordinator_planning",
+                new StartCoordinatorPlanningAction(engine, featureRoomStateStore, featurePlanStateStore));
         eventBus.subscribe(new AsyncEngineEventSubscriber(engine, engineEventExecutor));
         registerTools(toolRegistry);
         cursorCloudRunMonitor.start();
@@ -246,6 +248,24 @@ public final class Bootstrap {
                 handlesMap.put(bot.getId(), handles);
             }
             router.setHandlesOwnedSpacesByBotId(handlesMap);
+            String planningCoordinatorFallback = null;
+            for (BotDefinition bot : bots) {
+                if ("arrietty_room_v2".equals(bot.getWorkflowType())
+                        && Boolean.TRUE.equals(handlesMap.get(bot.getId()))) {
+                    planningCoordinatorFallback = bot.getId();
+                    break;
+                }
+            }
+            if (planningCoordinatorFallback == null) {
+                for (BotDefinition bot : bots) {
+                    if (Boolean.TRUE.equals(handlesMap.get(bot.getId()))) {
+                        planningCoordinatorFallback = bot.getId();
+                        break;
+                    }
+                }
+            }
+            router.setPlanningCoordinatorFallbackBotId(
+                    planningCoordinatorFallback != null ? planningCoordinatorFallback : "");
             for (BotDefinition bot : bots) {
                 engine.registerBot(bot);
                 WorkflowRunner runner = WorkflowRunnerFactory.create(bot, config.getWorkflows(), this.actionRegistry, toolRunner, choiceProviderRegistry);
@@ -277,7 +297,9 @@ public final class Bootstrap {
         DiscordConnectorConfig discordConfig = new DiscordConnectorConfig(defaultDiscordTokenEnvKey);
         DiscordConnectorAdapter discordAdapter = new DiscordConnectorAdapter(discordConfig, routedBotIds);
         connectorRegistry.register("discord", discordAdapter);
-        ConnectorContext context = new ConnectorContext(eventBus, outboundDeliveryRouter, featureRoomStateStore, lifecycleContextStore);
+        ConnectorContext context =
+                new ConnectorContext(
+                        eventBus, outboundDeliveryRouter, featureRoomStateStore, lifecycleContextStore, featurePlanStateStore);
         discordAdapter.registerBots(lastLoadedBots, context);
 
         engine.setReplySender("discord", outboundDeliveryRouter);

@@ -1,11 +1,13 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.bot.NormalizedEventContext;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningIntakeBindingResolver;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
@@ -21,10 +23,12 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
 
     private final FeatureRoomStateStore roomStore;
     private final FeaturePlanStateStore planStore;
+    private final PlanningIntakeBindingResolver bindingResolver;
 
     public HydratePlanningSessionAction(FeatureRoomStateStore roomStore, FeaturePlanStateStore planStore) {
         this.roomStore = roomStore;
         this.planStore = planStore;
+        this.bindingResolver = new PlanningIntakeBindingResolver(roomStore, planStore);
     }
 
     @Override
@@ -44,20 +48,40 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
             out.put("planningHydrateError", "Missing channel id for hydrate_planning_session.");
             return out;
         }
-        Optional<FeatureRoomState> roomOpt = roomStore.getByIntakeThreadId(channelId);
-        if (roomOpt.isEmpty()) {
+        String parentChannelId =
+                event != null ? NormalizedEventContext.from(event).getParentChannelId() : null;
+        Optional<PlanningIntakeBindingResolver.Binding> boundOpt = bindingResolver.resolve(channelId, parentChannelId);
+        if (boundOpt.isEmpty()) {
             out.put("planningIntakeThread", "false");
             return out;
         }
-        FeatureRoomState room = roomOpt.get();
+        PlanningIntakeBindingResolver.Binding bound = boundOpt.get();
+        FeatureRoomState room = bound.roomState();
+        FeaturePlanState planFromBinding = bound.planState();
         out.put("planningIntakeThread", "true");
-        out.put("contextId", room.getContextId());
-        out.put("channelId", room.getRoomChannelId());
-        out.put("deliveryChannelId", room.getIntakeThreadId());
-        String project = room.getRepo();
-        String codeChange = room.getInitialRequest();
+        if (room != null) {
+            out.put("contextId", room.getContextId());
+            out.put("channelId", room.getRoomChannelId());
+            out.put("deliveryChannelId", room.getIntakeThreadId());
+        } else if (planFromBinding != null) {
+            out.put("contextId", planFromBinding.getContextId());
+            out.put("channelId", planFromBinding.getRoomChannelId());
+            out.put(
+                    "deliveryChannelId",
+                    planFromBinding.getIntakeThreadId() != null && !planFromBinding.getIntakeThreadId().isBlank()
+                            ? planFromBinding.getIntakeThreadId()
+                            : channelId);
+        } else {
+            out.put("planningIntakeThread", "false");
+            return out;
+        }
+        String project = room != null ? room.getRepo() : null;
+        String codeChange = room != null ? room.getInitialRequest() : null;
+        String contextIdForPlan = out.get("contextId") != null ? out.get("contextId").toString() : "";
         Optional<FeaturePlanState> planOpt =
-                planStore != null ? planStore.getByContextId(room.getContextId()) : Optional.empty();
+                planStore != null && !contextIdForPlan.isBlank()
+                        ? planStore.getByContextId(contextIdForPlan)
+                        : Optional.empty();
         if (state != null
                 && "true".equalsIgnoreCase(String.valueOf(state.get("planningWorkflowStepLimitReached")))) {
             if (planOpt.isPresent() && planStore != null) {
@@ -66,7 +90,7 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
                     planStore.update(
                             p.withPlanningOrchestrationFailure(
                                     "Workflow step limit reached. Send a short reply in this thread to retry."));
-                    planOpt = planStore.getByContextId(room.getContextId());
+                    planOpt = planStore.getByContextId(contextIdForPlan);
                 }
             }
             out.put("planningWorkflowStepLimitReached", "false");
@@ -94,6 +118,14 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
                         PlanReadinessStatus.NEEDS_HUMAN_DECISION.equals(rs)
                                 ? PlanningUserFacingCopy.readinessCheckpointGuideForDiscord()
                                 : "");
+            }
+            if (plan.getPlanningIntakeStage() == PlanningIntakeStage.FAILED) {
+                out.put("planningFailureCategory", plan.getPlanningFailureCategory());
+                out.put("planningFailurePhase", plan.getPlanningFailurePhase());
+                out.put(
+                        "planningRecoverableDraftAvailable",
+                        plan.isPlanningRecoverableDraftAvailable() ? "true" : "false");
+                out.put("planningLastRecoveryHint", plan.getPlanningLastRecoveryHint());
             }
         }
         if (project != null && !project.isBlank()) {

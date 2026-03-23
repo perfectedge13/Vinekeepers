@@ -2,6 +2,7 @@ package com.vinekeepers.connectors;
 
 import com.vinekeepers.events.EventBus;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
 
 import java.util.Objects;
@@ -18,9 +19,10 @@ public final class ConnectorContext {
     private final OutboundDeliveryRouter outboundDeliveryRouter;
     private final FeatureRoomStateStore featureRoomStateStore;
     private final LifecycleContextStore lifecycleContextStore;
+    private final FeaturePlanStateStore featurePlanStateStore;
 
     public ConnectorContext(EventBus eventBus, OutboundDeliveryRouter outboundDeliveryRouter) {
-        this(eventBus, outboundDeliveryRouter, null, null);
+        this(eventBus, outboundDeliveryRouter, null, null, null);
     }
 
     public ConnectorContext(
@@ -28,10 +30,20 @@ public final class ConnectorContext {
             OutboundDeliveryRouter outboundDeliveryRouter,
             FeatureRoomStateStore featureRoomStateStore,
             LifecycleContextStore lifecycleContextStore) {
+        this(eventBus, outboundDeliveryRouter, featureRoomStateStore, lifecycleContextStore, null);
+    }
+
+    public ConnectorContext(
+            EventBus eventBus,
+            OutboundDeliveryRouter outboundDeliveryRouter,
+            FeatureRoomStateStore featureRoomStateStore,
+            LifecycleContextStore lifecycleContextStore,
+            FeaturePlanStateStore featurePlanStateStore) {
         this.eventBus = Objects.requireNonNull(eventBus, "eventBus");
         this.outboundDeliveryRouter = Objects.requireNonNull(outboundDeliveryRouter, "outboundDeliveryRouter");
         this.featureRoomStateStore = featureRoomStateStore;
         this.lifecycleContextStore = lifecycleContextStore;
+        this.featurePlanStateStore = featurePlanStateStore;
     }
 
     public EventBus getEventBus() {
@@ -48,5 +60,9 @@ public final class ConnectorContext {
 
     public LifecycleContextStore getLifecycleContextStore() {
         return lifecycleContextStore;
+    }
+
+    public FeaturePlanStateStore getFeaturePlanStateStore() {
+        return featurePlanStateStore;
     }
 }

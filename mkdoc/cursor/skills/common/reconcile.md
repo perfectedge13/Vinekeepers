@@ -2,7 +2,7 @@
 
 ## Summary
 
-Ensures no dangling refs, traceability consistent, spec matches code, README matches; when wiki is used, wiki–spec alignment. Apply fixes or raise issues.
+Ensures no dangling refs, traceability consistent, spec matches code, README matches; when wiki is used, wiki–spec alignment. Apply fixes or raise issues, but do not re-run unit tests in this step.
 
 ## Key points
 
@@ -19,6 +19,8 @@ Ensures no dangling refs, traceability consistent, spec matches code, README mat
 
 **Inputs**: Index, registries, README, code paths.
 **Outputs**: Mismatches (if any); applied fixes or raised issues.
+
+**Boundary**: This step must not execute unit tests or re-run the project test command. Treat `run_tests` as the only workflow phase that runs tests; in reconcile, consume existing test results and limit validation to reconcile-specific checks.
 
 ## Instructions
 

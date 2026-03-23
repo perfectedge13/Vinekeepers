@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T23:45:00Z"
+  updated_utc: "2026-03-24T18:00:00Z"
 
 project:
   id: vinekeepers
@@ -197,6 +197,10 @@ requirements:
         - >-
           arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace
           to enable Parquet-backed embedding cache and Qdrant retrieval (planningRag* workflow spreads) without blocking the graph when RAG is disabled or misconfigured
+        - >-
+          Bootstrap loadConfig sets Router.setPlanningCoordinatorFallbackBotId to the first bot whose workflow type is
+          arrietty_room_v2 and handlesOwnedSpaces is true, else the first handlesOwnedSpaces bot, so active planning intake routing
+          can recover when coordinator metadata is missing from evicted room state
       examples: []
     traceability:
       assets:

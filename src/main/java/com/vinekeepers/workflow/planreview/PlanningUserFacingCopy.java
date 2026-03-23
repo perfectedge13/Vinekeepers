@@ -137,6 +137,16 @@ public final class PlanningUserFacingCopy {
                     "This work profile does not enable the full coordinator drafting loop for this room.";
             case "SYNTHESIS_UPSERTS_NOT_APPLIED" ->
                     "A drafting step returned planning updates that did not match this room's schema.";
+            case "SYNTHESIS_JSON_INVALID" ->
+                    "A drafting step returned structured output we could not read; your existing draft is preserved.";
+            case "SYNTHESIS_REPAIR_EXHAUSTED" ->
+                    "A drafting step still returned unreadable structured output after repair; your existing draft is preserved.";
+            case "SYNTHESIS_UPSERT_REJECTED" ->
+                    "A drafting step proposed updates that did not match this room's schema; the prior draft is unchanged.";
+            case "SYNTHESIS_EMPTY_NOOP" ->
+                    "A drafting step made no applicable updates this pass.";
+            case "REPO_GROUNDING_UNAVAILABLE" ->
+                    "Repo grounding was not available for this drafting pass; continuing with limited workspace context.";
             default -> "Planning hit an unexpected issue; try again or check configuration.";
         };
     }

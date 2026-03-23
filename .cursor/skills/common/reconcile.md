@@ -3,6 +3,8 @@
 **Inputs**: Index, registries, README, code paths.
 **Outputs**: Mismatches (if any); applied fixes or raised issues.
 
+**Boundary**: This step must not execute unit tests or re-run the project test command. Treat `run_tests` as the only workflow phase that runs tests; in reconcile, consume existing test results and limit validation to reconcile-specific checks.
+
 ## Instructions
 
 1. **No dangling refs**: All index entrypoints exist; all `assets[].path` exist; all validation references point to existing TestNG test classes/methods (or real files).

@@ -225,7 +225,7 @@ public final class VinekeepersEngine implements EventSubscriber {
                     event.getKind(),
                     correlationId);
             List<String> botIds = router.route(event);
-            if (isDiscordMessage(event)) {
+            if (isDiscordMessage(event) && !router.isCoordinatorExclusivePlanningDiscordEvent(event)) {
                 addBotsWithWaitingSessionForDiscordMessage(event, botIds);
             }
             for (String botId : botIds) {

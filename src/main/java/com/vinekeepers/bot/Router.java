@@ -4,8 +4,10 @@ import com.vinekeepers.debug.AgentDebugLog;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeBindingResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +39,9 @@ public final class Router {
     private final List<RoutingRule> routings = new ArrayList<>();
     private final LifecycleContextStore lifecycleContextStore;
     private final FeatureRoomStateStore featureRoomStateStore;
+    private final PlanningIntakeBindingResolver planningIntakeBindingResolver;
     private volatile Map<String, Boolean> handlesOwnedSpacesByBotId = Map.of();
+    private volatile String planningCoordinatorFallbackBotId = "";
 
     private static boolean isNumeric(String s) {
         if (s == null || s.isEmpty()) return false;
@@ -50,16 +54,39 @@ public final class Router {
     public Router() {
         this.lifecycleContextStore = null;
         this.featureRoomStateStore = null;
+        this.planningIntakeBindingResolver = null;
     }
 
     public Router(LifecycleContextStore lifecycleContextStore) {
         this.lifecycleContextStore = lifecycleContextStore;
         this.featureRoomStateStore = null;
+        this.planningIntakeBindingResolver = null;
     }
 
     public Router(LifecycleContextStore lifecycleContextStore, FeatureRoomStateStore featureRoomStateStore) {
         this.lifecycleContextStore = lifecycleContextStore;
         this.featureRoomStateStore = featureRoomStateStore;
+        this.planningIntakeBindingResolver =
+                featureRoomStateStore != null
+                        ? new PlanningIntakeBindingResolver(featureRoomStateStore, null)
+                        : null;
+    }
+
+    public Router(
+            LifecycleContextStore lifecycleContextStore,
+            FeatureRoomStateStore featureRoomStateStore,
+            FeaturePlanStateStore featurePlanStateStore,
+            String planningCoordinatorFallbackBotId) {
+        this.lifecycleContextStore = lifecycleContextStore;
+        this.featureRoomStateStore = featureRoomStateStore;
+        this.planningIntakeBindingResolver =
+                featureRoomStateStore != null || featurePlanStateStore != null
+                        ? new PlanningIntakeBindingResolver(featureRoomStateStore, featurePlanStateStore)
+                        : null;
+        this.planningCoordinatorFallbackBotId =
+                planningCoordinatorFallbackBotId != null && !planningCoordinatorFallbackBotId.isBlank()
+                        ? planningCoordinatorFallbackBotId.trim()
+                        : "";
     }
 
     /**
@@ -67,6 +94,33 @@ public final class Router {
      */
     public void setHandlesOwnedSpacesByBotId(Map<String, Boolean> handlesOwnedSpacesByBotId) {
         this.handlesOwnedSpacesByBotId = handlesOwnedSpacesByBotId != null ? Map.copyOf(handlesOwnedSpacesByBotId) : Map.of();
+    }
+
+    /**
+     * Bot id used when an intake thread is clearly coordinator-owned but coordinator metadata was lost (in-memory
+     * eviction). Set from config at load time — not a routing rule id hardcoded in match logic.
+     */
+    public void setPlanningCoordinatorFallbackBotId(String botId) {
+        this.planningCoordinatorFallbackBotId =
+                botId != null && !botId.isBlank() ? botId.trim() : "";
+    }
+
+    public boolean isCoordinatorExclusivePlanningDiscordEvent(Event event) {
+        NormalizedEventContext ctx = event != null ? NormalizedEventContext.from(event) : null;
+        if (ctx == null || !"discord".equals(ctx.getSourceType())) {
+            return false;
+        }
+        if (!"message".equals(ctx.getEventType()) && !"interaction".equals(ctx.getEventType())) {
+            return false;
+        }
+        String channelId = ctx.getChannelId();
+        if (channelId == null || channelId.isBlank() || planningIntakeBindingResolver == null) {
+            return false;
+        }
+        return planningIntakeBindingResolver
+                .resolve(channelId, ctx.getParentChannelId())
+                .filter(PlanningIntakeBindingResolver.Binding::exclusiveCoordinatorThread)
+                .isPresent();
     }
 
     public void addRouting(RoutingRule routing) {
@@ -113,6 +167,35 @@ public final class Router {
         if (context != null && "discord".equals(context.getSourceType())) {
             String channelId = context.getChannelId();
             if (channelId != null && !channelId.isBlank()) {
+                if (planningIntakeBindingResolver != null) {
+                    Optional<PlanningIntakeBindingResolver.Binding> bound =
+                            planningIntakeBindingResolver.resolve(channelId, context.getParentChannelId());
+                    if (bound.isPresent()) {
+                        PlanningIntakeBindingResolver.Binding b = bound.get();
+                        if (b.exclusiveCoordinatorThread()) {
+                            Optional<String> coord = b.coordinatorConfiguredBotId();
+                            String route =
+                                    coord.filter(id -> !id.isBlank())
+                                            .orElseGet(
+                                                    () ->
+                                                            planningCoordinatorFallbackBotId.isBlank()
+                                                                    ? null
+                                                                    : planningCoordinatorFallbackBotId);
+                            if (route != null && !route.isBlank()) {
+                                AgentDebugLog.log(
+                                        "H3",
+                                        "Router.route:planningBinding",
+                                        "exclusive_intake_thread_coordinator",
+                                        Map.of("channelId", channelId, "bot", route));
+                                return List.of(route);
+                            }
+                            log.warn(
+                                    "Active planning intake thread {} but coordinator could not be resolved; fail-closed (empty route)",
+                                    channelId);
+                            return List.of();
+                        }
+                    }
+                }
                 if (featureRoomStateStore != null) {
                     Optional<FeatureRoomState> byThread = featureRoomStateStore.getByIntakeThreadId(channelId);
                     Optional<FeatureRoomState> byRoom = featureRoomStateStore.getByRoomChannelId(channelId);
@@ -127,7 +210,15 @@ public final class Router {
                                 // #endregion
                                 return List.of(coordinator.get());
                             }
-                            log.warn("Intake thread has feature room state but no coordinator; falling back to participant list");
+                            String fb =
+                                    planningCoordinatorFallbackBotId.isBlank() ? null : planningCoordinatorFallbackBotId;
+                            if (fb != null) {
+                                log.warn(
+                                        "Intake thread has feature room state but no coordinator; routing to configured planning fallback bot");
+                                return List.of(fb);
+                            }
+                            log.warn("Intake thread has feature room state but no coordinator; fail-closed (empty route)");
+                            return List.of();
                         }
                         if ("message".equals(context.getEventType()) && coordinator.isPresent()) {
                             // #region agent log
@@ -136,13 +227,15 @@ public final class Router {
                             // #endregion
                             return List.of(coordinator.get());
                         }
-                        List<String> participantBotIds = featureRoomStateStore.getParticipantBotIds(threadRoom);
-                        if (!participantBotIds.isEmpty()) {
-                            // #region agent log
-                            AgentDebugLog.log("H3", "Router.route:featureRoom", "override_intake_thread_participants",
-                                    Map.of("channelId", String.valueOf(channelId), "bots", participantBotIds.toString()));
-                            // #endregion
-                            return List.copyOf(participantBotIds);
+                        if ("message".equals(context.getEventType())) {
+                            String fb =
+                                    planningCoordinatorFallbackBotId.isBlank() ? null : planningCoordinatorFallbackBotId;
+                            if (fb != null) {
+                                log.warn(
+                                        "Intake thread message without coordinator metadata; routing to planning fallback bot");
+                                return List.of(fb);
+                            }
+                            return List.of();
                         }
                     }
                     if (byRoom.isPresent()) {

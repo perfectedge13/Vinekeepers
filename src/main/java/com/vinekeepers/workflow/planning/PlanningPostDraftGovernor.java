@@ -7,9 +7,11 @@ import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
 import com.vinekeepers.state.planning.PlanGovernanceSeverity;
 import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.PlanIssueStatus;
+import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 import java.util.Map;
 import java.util.Objects;
 
@@ -46,10 +48,14 @@ public final class PlanningPostDraftGovernor {
             boolean structuredParseFailed,
             String depthReason,
             String cycleError,
+            String synthesisFailureCategory,
+            boolean recoverableAfterSynthesis,
+            boolean suppressAutonomousRedraftNotice,
             boolean hardClarificationBlock) {
         String depth = depthReason != null ? depthReason : "";
         String cyc = cycleError != null ? cycleError : "";
         boolean wantsRevision = !readyToPost && !userInputRequired;
+        String synthCat = synthesisFailureCategory != null ? synthesisFailureCategory.trim() : "";
 
         boolean material =
                 detectMaterialChange(
@@ -80,6 +86,28 @@ public final class PlanningPostDraftGovernor {
                             + "reviewable packet.",
                     false);
         }
+
+        if (!synthCat.isBlank() && PlanningFailureCategory.parse(synthCat) != PlanningFailureCategory.NONE) {
+            if (recoverableAfterSynthesis) {
+                String q = firstUserFacingClarificationTextOrEmpty(ledger, plan);
+                if (!q.isBlank()) {
+                    return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+                }
+                if (hasStructuredMaterialPlanningGaps(plan)) {
+                    return new Result(
+                            PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                            "**Continuing**\n\nA structured merge step had trouble; I'm keeping the current draft and "
+                                    + "moving forward with documented assumptions. Reply if you want to correct anything.",
+                            false);
+                }
+            }
+            String human = PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthCat);
+            return new Result(
+                    PlanningPostDraftAction.BLOCK,
+                    "**Planning paused**\n\n" + (human.isBlank() ? synthCat : human),
+                    false);
+        }
+
         if (!cyc.isBlank()) {
             return new Result(
                     PlanningPostDraftAction.BLOCK,
@@ -120,6 +148,13 @@ public final class PlanningPostDraftGovernor {
         }
 
         if (wantsRevision) {
+            if (suppressAutonomousRedraftNotice) {
+                return new Result(
+                        PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                        "**Continuing**\n\nAdvancing from the saved draft without a separate redraft notice — reply "
+                                + "only if you want to correct something before the next packet step.",
+                        false);
+            }
             return new Result(
                     PlanningPostDraftAction.AUTONOMOUS_REDRAFT,
                     "**Another drafting pass**\n\nTightening the draft from the latest repo signals and coordinator "

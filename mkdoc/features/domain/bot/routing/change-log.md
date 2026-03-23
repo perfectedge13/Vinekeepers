@@ -4,6 +4,7 @@
 
 ## 2026-03-23
 
+- **Planning intake binding precedence:** **Router** consults **`PlanningIntakeBindingResolver`** (with **FeaturePlanStateStore**) so **active planning intake** threads route **coordinator-only** before legacy feature-room and lifecycle overrides; **`isCoordinatorExclusivePlanningDiscordEvent`** gates engine waiting-session merge; fallback coordinator id from config when binding is exclusive but coordinator id is missing. Tests: **RouterTest** updates. Specs: **bot-registry**, **state-registry**.
 - **`discordMention` token rules:** Only numeric user/bot snowflakes in `<@id>` / `<@!id>` (from text normalization and gateway `mentions` metadata) satisfy `discordMention`; role pings and pseudo-name bracket tokens do not. Discord thread events now carry `parentChannelId`, so `discordChannels` / `discordChannelsExclude` can match the parent room for thread messages and interactions. **Router** no-match diagnostics are a structured **INFO** log including `ingestBotId`, `parentChannelId`, `rolePingDetected`, and a truncated `textPrefix` (replaces prior DEBUG-only no-match line). **NormalizedEventContext** / **JdaDiscordGateway** behavior aligned with connectors Discord decision (2026-03-23). Tests: RouterTest, NormalizedEventContextTest.
 
 ## 2026-03-22

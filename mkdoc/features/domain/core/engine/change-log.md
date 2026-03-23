@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **Waiting-session merge guard:** **VinekeepersEngine** skips adding **WAITING_INPUT** bots on Discord **message** events when **`router.isCoordinatorExclusivePlanningDiscordEvent`** is true, keeping coordinator-only intake threads from merging foreign sessions. Spec: **core-registry** (**ASSET-ENGINE**).
+
 ## 2026-03-13
 
 - **Reply target resolution refactor:** Engine obtains **ReplyTarget** via connector-owned **ReplyTargetResolver** by connector id (source prefix); Discord resolver lives in connectors (**DiscordReplyTargetResolver**); when no resolver is registered or resolver returns empty, the engine does not deliver the reply (fail closed); when delivering the engine uses **target.channelId()** and **target.messageId()**. Bootstrap registers the Discord resolver (e.g. `engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver())`).

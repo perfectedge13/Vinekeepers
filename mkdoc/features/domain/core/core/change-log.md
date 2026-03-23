@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **Bootstrap wiring for planning stabilization:** **Bootstrap** passes **FeaturePlanStateStore** into **Router**, **ConnectorContext**, and related planning registrations so **`PlanningIntakeBindingResolver`**, Discord **OWNED_SPACES** predicates, and coordinator kickoff paths share the same stores; **`handlesOwnedSpaces`** map wiring unchanged. Specs: **core-registry**, **connectors-registry**, **workflow-registry**.
+
 ## 2026-03-22
 
 - **Optional Qdrant planning RAG wiring:** **Bootstrap** registers **prep_planning_repo_grounding** (**PrepPlanningRepoGroundingAction**) with **OpenAiChatClient** and plan/workspace stores so ingress YAML can run Parquet-backed embedding cache and Qdrant retrieval after **ensure_repo_workspace** without failing the workflow when RAG is disabled or misconfigured. Specs: **core-registry**, **workflow-registry**; implementation under **workflow/planning/rag**.

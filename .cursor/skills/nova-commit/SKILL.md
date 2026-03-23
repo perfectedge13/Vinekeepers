@@ -14,4 +14,6 @@ This skill runs the full **verification and commit** workflow for the project.
 
 **Mandatory:** Run every phase in order. Do not skip any phase. The workflow has 9 phases: discovery, schema_gate, drift_gate, run_tests, plausibility_review, docs_reconcile, build_check, commit_push, output. Run each one before proceeding to the next (stop on gate/step failure; do not commit if any prior phase failed).
 
+**Phase boundary:** `run_tests` is the only nova-commit phase that executes unit tests. During `docs_reconcile`, review and fix docs/spec alignment only; do not run `mvn test` or re-run the project test suite.
+
 Do not duplicate the step list here; the workflow and the files at each `location` contain the full instructions.

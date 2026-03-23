@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T00:10:00Z"
+  updated_utc: "2026-03-24T18:00:00Z"
 
 project:
   id: vinekeepers
@@ -36,7 +36,7 @@ assets:
   - id: ASSET-CONNECTOR-CONTEXT
     kind: source
     path: src/main/java/com/vinekeepers/connectors/ConnectorContext.java
-    role: Generic context for adapters (EventBus, OutboundDeliveryRouter; optional FeatureRoomStateStore and LifecycleContextStore for Discord ingress scoping); no Discord-named fields in API beyond optional stores
+    role: Generic context for adapters (EventBus, OutboundDeliveryRouter; optional FeatureRoomStateStore, LifecycleContextStore, and FeaturePlanStateStore for Discord ingress scoping); no Discord-named fields in API beyond optional stores
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-CONNECTOR-ADAPTER
@@ -84,7 +84,9 @@ assets:
   - id: ASSET-DISCORD-OWNED-SPACE-PREDICATE
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordOwnedSpacePredicate.java
-    role: Channel/thread id allowed for ingress when FeatureRoomStateStore or LifecycleContextStore indicates this bot participates or owns the space
+    role: >-
+      Channel/thread id allowed for OWNED_SPACES ingress when FeatureRoomStateStore, optional FeaturePlanStateStore (active
+      planning intake rows matched to coordinatorConfiguredBotId), or LifecycleContextStore indicates this bot participates or owns the space
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-REPLY-SENDER
@@ -119,7 +121,7 @@ assets:
       defer, send with components; interaction events include threadId when the channel is a ThreadChannel (aligns
       thread session keys with message events); getSelfUserId and addPermissionOverride for lifecycle room;
       DiscordIngressModes select message vs interaction listeners independently; outbound-only when both modes none;
-      OWNED_SPACES filters via DiscordOwnedSpacePredicate; message mention metadata lists lowercase snowflake id plus
+      OWNED_SPACES filters via DiscordOwnedSpacePredicate (room store, optional plan store, lifecycle); message mention metadata lists lowercase snowflake id plus
       account username and global display name for mentioned users (guild member nicknames / effective display names are not added)
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
@@ -232,7 +234,7 @@ assets:
 requirements:
   - id: REQ-CONNECTORS-DISCORD-001
     title: Discord event source and reply
-    statement: Discord event source and reply; generic outbound abstraction ReplySender (send) and OutboundGateway (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride). DiscordReplySender extends ReplySender; DiscordGateway extends OutboundGateway. Per-bot identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces, optional ingress map). DiscordIngressModes resolves message vs interaction ingress (none, routed, owned_spaces for messages; none, routed, own_messages, owned_spaces for interactions) from identities.discord.ingress when set, else from YAML routing plus handlesOwnedSpaces so lifecycle owners without routing do not publish general guild messages but still receive component interactions. JdaDiscordGateway registers message and/or interaction listeners independently; OWNED_SPACES uses DiscordOwnedSpacePredicate with FeatureRoomStateStore and LifecycleContextStore from ConnectorContext. ConnectorContext passes EventBus, OutboundDeliveryRouter, and optional feature-room and lifecycle stores. Adapter registerBots() does per-bot gateway/sender/default registration only. Bootstrap registers engine reply sender, sink, and Discord ReplyTargetResolver by connector id; keeps action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId; getGatewayForChannel returns OutboundGateway or null when lifecycle bot has no gateway; getSelfUserIdForBot(botId) returns that bot's gateway getSelfUserId. DiscordAppReplySink with lifecycle operations; ack/defer adapter-owned; fallback to text when intent not supported.
+    statement: Discord event source and reply; generic outbound abstraction ReplySender (send) and OutboundGateway (send, getSelfUserId, createTextChannel, createThreadChannel, addPermissionOverride). DiscordReplySender extends ReplySender; DiscordGateway extends OutboundGateway. Per-bot identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces, optional ingress map). DiscordIngressModes resolves message vs interaction ingress (none, routed, owned_spaces for messages; none, routed, own_messages, owned_spaces for interactions) from identities.discord.ingress when set, else from YAML routing plus handlesOwnedSpaces so lifecycle owners without routing do not publish general guild messages but still receive component interactions. JdaDiscordGateway registers message and/or interaction listeners independently; OWNED_SPACES uses DiscordOwnedSpacePredicate with FeatureRoomStateStore, optional FeaturePlanStateStore, and LifecycleContextStore from ConnectorContext so coordinator-owned active planning threads remain ingress-eligible when plan rows persist without room state. ConnectorContext passes EventBus, OutboundDeliveryRouter, and optional feature-room, plan, and lifecycle stores. Adapter registerBots() does per-bot gateway/sender/default registration only. Bootstrap registers engine reply sender, sink, and Discord ReplyTargetResolver by connector id; keeps action registration. OutboundDeliveryRouter implements ReplySender; registerSender(botId, ReplySender, OutboundGateway); resolves sender from delivery target and lifecycle configuredBotId; getGatewayForChannel returns OutboundGateway or null when lifecycle bot has no gateway; getSelfUserIdForBot(botId) returns that bot's gateway getSelfUserId. DiscordAppReplySink with lifecycle operations; ack/defer adapter-owned; fallback to text when intent not supported.
     status: active
     priority: medium
     type: functional
@@ -260,6 +262,7 @@ requirements:
         - getSelfUserIdForBot(botId) returns the bot's Discord user id from that bot's gateway getSelfUserId, or null if the bot has no gateway or getSelfUserId returns null
         - OutboundGateway exposes getSelfUserId(), createTextChannel, createThreadChannel, addPermissionOverride; DiscordGateway extends OutboundGateway; JDA gateway implements DiscordGateway
         - "Outbound-only gateway when DiscordIngressModes resolves both message and interaction ingress to none. Routed bots use routed message and interaction ingress. Bots with handlesOwnedSpaces only (not in YAML routing) use owned_spaces for messages and own_messages for interactions by default so they do not publish duplicate general guild messages; component interactions on that bot's messages are still received. Optional identities.discord.ingress overrides defaults."
+        - DiscordOwnedSpacePredicate when given FeaturePlanStateStore allows channels that match an active planning intake row for this bot's coordinatorConfiguredBotId (intake thread or feature room with recorded intake thread)
         - Discord gateway handles Interaction Create; on receive, adapter acks or defers within platform window and publishes Event with kind interaction and token
         - DiscordAppReplySink implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; all lifecycle operations; render intents; channel send and follow-up/update with optional components; fallback to text
         - Deferred Discord interaction follow-ups carrying ingestBotId route through that bot's registered gateway; when no gateway is registered for the ingest bot, the sink does not fall back to the default gateway

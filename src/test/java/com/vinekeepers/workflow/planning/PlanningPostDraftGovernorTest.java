@@ -1,6 +1,7 @@
 package com.vinekeepers.workflow.planning;
 
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
@@ -12,6 +13,7 @@ import java.util.Map;
 
 import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanningPostDraftGovernorTest {
@@ -32,6 +34,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.POST_PACKET, r.action());
     }
@@ -50,6 +55,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
     }
@@ -70,6 +78,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "thin",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.AUTONOMOUS_REDRAFT, r.action());
     }
@@ -88,6 +99,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "",
                         "",
+                        "",
+                        false,
+                        false,
                         true);
         assertEquals(PlanningPostDraftAction.BLOCK, r.action());
     }
@@ -130,6 +144,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "thin",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
         assertTrue(r.forceUserInputRequired());
@@ -173,6 +190,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "thin",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
         assertTrue(r.forceUserInputRequired());
@@ -221,6 +241,9 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "thin",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
         assertTrue(r.forceUserInputRequired());
@@ -264,8 +287,140 @@ class PlanningPostDraftGovernorTest {
                         false,
                         "thin",
                         "",
+                        "",
+                        false,
+                        false,
                         false);
         assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
+    }
+
+    @Test
+    void derive_recoverableSynthesisFailure_withOpenClarification_asksOne() {
+        UnresolvedItem it =
+                new UnresolvedItem(
+                        "uq_1",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "Pick A or B?",
+                        "normal",
+                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        List.of(),
+                        List.of(),
+                        0);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(it);
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        minimalPlan(),
+                        ledger,
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        PlanningFailureCategory.SYNTHESIS_REPAIR_EXHAUSTED.name(),
+                        true,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
+        assertTrue(r.forceUserInputRequired());
+    }
+
+    @Test
+    void derive_recoverableSynthesisFailure_withStructuredGaps_asksOneQuestion() {
+        FeaturePlanState plan =
+                minimalPlan()
+                        .withGovernanceRecords(
+                                List.of(), List.of(), List.of(), List.of(), List.of("Confirm data retention?"));
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        plan,
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        PlanningFailureCategory.SYNTHESIS_JSON_INVALID.name(),
+                        true,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
+        assertTrue(r.forceUserInputRequired());
+    }
+
+    @Test
+    void derive_recoverableSynthesisFailure_noLedgerOrStructuredGaps_blocks() {
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        PlanningFailureCategory.SYNTHESIS_UPSERT_REJECTED.name(),
+                        true,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.BLOCK, r.action());
+        assertFalse(r.forceUserInputRequired());
+    }
+
+    @Test
+    void derive_synthesisFailure_notRecoverable_blocks() {
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        PlanningFailureCategory.SYNTHESIS_REPAIR_EXHAUSTED.name(),
+                        false,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.BLOCK, r.action());
+        assertTrue(r.noticeMarkdown().contains("Planning paused"));
+    }
+
+    @Test
+    void derive_wantsRevision_suppressAutonomousRedraftNotice_assumesContinue() {
+        Map<String, Object> persisted = Map.of();
+        Map<String, Object> signal = Map.of("planningRepoEvidenceJson", "{\"x\":1}");
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        persisted,
+                        signal,
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        false,
+                        false,
+                        "thin",
+                        "",
+                        "",
+                        false,
+                        true,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
+        assertTrue(r.noticeMarkdown().contains("without a separate redraft notice"));
     }
 
     @Test
