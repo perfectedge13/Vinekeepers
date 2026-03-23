@@ -512,7 +512,10 @@ assets:
   - id: ASSET-PLANNING-READINESS-SPREAD
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningReadinessSpread.java
-    role: Dual-writes reviewReady / planningReviewReady and approval placeholders during planning cycle spreads
+    role: >-
+      Planning-cycle spread contract for clarification-first gating: writes packet/review/approval allowance keys,
+      keeps reviewReady false until packet-post + critique gates run, and exposes helper predicates for pending
+      clarification, packet-post permission, and human checkpoint acknowledgment
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1283,8 +1286,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/AcknowledgeReadinessHumanDecisionAction.java
     role: >-
-      Workflow action acknowledge_readiness_human_decision — re-runs Phase C with bind humanReadinessProceedAck to persist
-      READY after NEEDS_HUMAN_DECISION proceed path
+      Workflow action acknowledge_readiness_human_decision — records a durable workflow flag that the operator chose
+      Continue to approval at the human checkpoint; does not rewrite stored PlanConfidence readiness
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1567,7 +1570,7 @@ assets:
       PlanningUserFacingCopy; when repo evidence exists and the planning packet is already visible in-thread, appends a short pointer
       instead of repeating full repo grounding); adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
       FeaturePlanState PlanningIntakeStage is GATHERING_CONTEXT (complements canonical
-      intake stage with legacy spread); bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path;
+      intake stage with legacy spread); no longer rewrites stored readiness on human proceed;
       planningCritiqueAutoRevisionCount tracks NEEDS_REVISION-driven full replan attempts; after threshold spreads NEEDS_HUMAN_DECISION
       and persists PlanConfidence with the same status so auto critique→replan loops stop without silent storms
     requires:
@@ -1695,7 +1698,8 @@ assets:
       Workflow action evaluate_planning_packet_depth — resolves WorkProfileDefinition from plan profileId and
       PlanningPacketDepthEvaluator.evaluate(plan, profile, relaxOpenQuestionSupplementalChecks(state));
       storeSpread planningPacketDepthOk, planningPacketDepthReason,
-      planningPacketDepthRetryRecommended, planningReviewReady/reviewReady aligned with depth + no pending clarification;
+      planningPacketDepthRetryRecommended; depth feedback is emitted here but final reviewReady/reviewReady stays deferred
+      until packet-post + critique gates run;
       derive_plan_governance runs before this step in YAML so depth/post see merged governance lists
     requires:
       - REQ-WORKFLOW-001
@@ -1754,7 +1758,8 @@ assets:
     role: >-
       Evidence-based PlanConfidence (readiness NOT_READY / CONDITIONALLY_READY / READY / BLOCKED, confidenceScore,
       reasons, known-vs-unknown tallies) from gaps, unresolved questions, blocking issues, blocking findings, rubric mean,
-      structured captured signals, packetPostedOnPlan; APPROVAL_CONFIDENCE_THRESHOLD (0.85) is the single launch-approval
+      structured captured signals, packetPostedOnPlan, canonical clarification-pending state, and repo-grounding
+      sufficiency from workflow evidence; APPROVAL_CONFIDENCE_THRESHOLD (0.85) is the single launch-approval
       bar shared with PlanningApprovalGateSupport
     requires:
       - REQ-WORKFLOW-001
@@ -1782,7 +1787,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningApprovalGateSupport.java
     role: >-
       Shared validateApproveAllowed (including PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD on stored
-      confidenceScore) and persist status mapping for evaluate_planning_approval_gate and persist_plan_approval
+      confidenceScore, pending-clarification block, and CONDITIONALLY_READY + human-ack handling) and persist status
+      mapping for evaluate_planning_approval_gate and persist_plan_approval
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1813,7 +1819,8 @@ assets:
     role: >-
       Workflow action post_planning_packet_thread — posts a short operator notice before packet chunks (multi-message packet,
       readiness checks, and that a pre-launch review summary follows before approval buttons); on success updates FeaturePlanState
-      with packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids) and sets PlanningIntakeStage.PACKET_POSTED
+      with packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids) and sets PlanningIntakeStage.PACKET_POSTED;
+      refuses packet posting when the clarification-first spread contract says packet posting is not allowed
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1934,10 +1941,11 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningApprovalGateAction.java
     role: >-
       Workflow action evaluate_planning_approval_gate — storeSpread planningReadyForApproval / planningApprovalReady / approvalReady
-          when packet posted version, depth, READY readiness, intake discovery complete (PlanningIntakeStage beyond
-      GATHERING_CONTEXT and CLARIFYING, or FeaturePlanState.autonomousPlanningPassCompleted true), no pending clarification, and
-      PlanningApprovalGateSupport canonical checks pass; refreshes planningReviewReady/reviewReady (dual legacy signals) for posted
-      packet view with human-readable gate reasons
+      when packet posted version, depth, canonical stored readiness (READY or CONDITIONALLY_READY after the human checkpoint
+      proceed decision), intake discovery complete (PlanningIntakeStage beyond GATHERING_CONTEXT and CLARIFYING, or
+      FeaturePlanState.autonomousPlanningPassCompleted true), no pending clarification, and PlanningApprovalGateSupport
+      canonical checks pass; refreshes planningReviewReady/reviewReady only for the posted-packet view with human-readable
+      gate reasons
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -3589,8 +3597,8 @@ requirements:
       create_thread for progress/status threads (thread name deploy-progress for mutating actions, DevOps Progress for compose ps),
       start_ansible_deploy to run ansible-playbook asynchronously and run_deploy_compose for docker compose or optional cursor
       agent executor; OutboundDeliveryRouter.sendAs workflow bot id from state; progress falls back to parent channel when
-      THREAD_CREATE_FAILED; compose-only targets may omit playbook and use host workingDirectory paths (e.g. /opt/stacks/neo4j,
-      /opt/stacks/wikijs) so docker compose resolves the stack file on the deploy host
+      THREAD_CREATE_FAILED; compose-only targets may omit playbook and use host workingDirectory paths (e.g.
+      /home/perfect_edge13/Docker/neo4j, /home/perfect_edge13/Docker/wikijs) so docker compose resolves the stack file on the deploy host
     status: active
     priority: medium
     type: functional
@@ -3618,6 +3626,9 @@ requirements:
           operator-facing prerequisite errors when the Docker CLI, compose file, workingDirectory mount, or /var/run/docker.sock
           mount is missing inside a containerized Vinekeepers runtime; startup logs warn early when direct compose targets are
           mis-mounted; DEPLOY_HOST_OPS_DISABLED disables host ops
+        - >-
+          compose.host-ops.yaml bind-mounts the real host stack directories declared in config/deploy-targets.yaml at the same
+          absolute paths inside the container so direct compose can run without stack-path env vars
         - >-
           config/bots.yaml workflows.devops_deploy main menu includes compose_restart; branch step next indices reference valid step
           indices (DevopsDeployWorkflowYamlTest)

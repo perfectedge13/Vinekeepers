@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EvaluatePlanningApprovalGateActionTest {
 
@@ -60,6 +61,54 @@ class EvaluatePlanningApprovalGateActionTest {
                         .run(new Event("x", "m", Map.of()), state, Map.of());
         assertEquals("false", spread.get("planningReadyForApproval"));
         assertEquals("false", spread.get("planningReviewReady"));
+    }
+
+    @Test
+    void gateClosedWhenClarificationPending() {
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        Instant t = Instant.now();
+        store.put(approvalReadyPlan("c3", t));
+
+        Map<String, Object> state = new HashMap<>();
+        state.put("contextId", "c3");
+        state.put("planningPacketPostedVersion", "1");
+        state.put("planningPacketDepthOk", "true");
+        state.put("planningUserInputRequired", "true");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread =
+                (Map<String, Object>) new EvaluatePlanningApprovalGateAction(store)
+                        .run(new Event("x", "m", Map.of()), state, Map.of());
+        assertEquals("false", spread.get("planningReadyForApproval"));
+        assertEquals("false", spread.get("planningReviewReady"));
+        assertTrue(String.valueOf(spread.get("planningApprovalGateReason")).contains("clarification"));
+    }
+
+    @Test
+    void gateOpensForConditionalReadinessAfterHumanAck() {
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        Instant t = Instant.now();
+        FeaturePlanState plan = approvalReadyPlan("c4", t)
+                .withPlanConfidence(new PlanConfidence(
+                        "HIGH",
+                        "conditional",
+                        PlanReadinessStatus.CONDITIONALLY_READY,
+                        t,
+                        0.9,
+                        List.of()));
+        store.put(plan);
+
+        Map<String, Object> state = new HashMap<>();
+        state.put("contextId", "c4");
+        state.put("planningPacketPostedVersion", "1");
+        state.put("planningPacketDepthOk", "true");
+        state.put("planningHumanReadinessAcknowledged", "true");
+        state.put("planningUserInputRequired", "false");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread =
+                (Map<String, Object>) new EvaluatePlanningApprovalGateAction(store)
+                        .run(new Event("x", "m", Map.of()), state, Map.of());
+        assertEquals("true", spread.get("planningReadyForApproval"));
+        assertEquals("true", spread.get("approvalReady"));
     }
 
     private static FeaturePlanState approvalReadyPlan(String contextId, Instant t) {

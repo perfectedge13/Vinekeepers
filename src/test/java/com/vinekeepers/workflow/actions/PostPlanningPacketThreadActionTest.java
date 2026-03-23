@@ -74,7 +74,7 @@ class PostPlanningPacketThreadActionTest {
     }
 
     @Test
-    void postsWhenReviewReadyEvenIfDepthFlagFalse() {
+    void blocksWhenPacketPostingNotAllowed() {
         List<String> sent = new ArrayList<>();
         FeatureRoomStateStore roomStore = new FeatureRoomStateStore();
         roomStore.put(
@@ -99,13 +99,12 @@ class PostPlanningPacketThreadActionTest {
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("channelId", "th3");
         state.put("contextId", "ctx3");
-        state.put("planningPacketDepthOk", "false");
-        state.put("reviewReady", "true");
+        state.put("planningPacketDepthOk", "true");
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) action.run(ev, state, Map.of());
-        assertEquals("true", spread.get("planningPacketPosted"));
-        assertTrue(sent.size() > 1);
-        assertTrue(sent.get(0).contains("readiness checks"));
+        assertEquals("false", spread.get("planningPacketPosted"));
+        assertTrue(String.valueOf(spread.get("planningPacketPostError")).contains("cannot post yet"));
+        assertEquals(0, sent.size());
     }
 
     @Test
@@ -135,6 +134,7 @@ class PostPlanningPacketThreadActionTest {
         state.put("channelId", "th2");
         state.put("contextId", "ctx2");
         state.put("planningPacketDepthOk", "true");
+        state.put("planningPacketPostingAllowed", "true");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> spread1 = (Map<String, Object>) action.run(ev, state, Map.of());
@@ -150,6 +150,7 @@ class PostPlanningPacketThreadActionTest {
         state.put("channelId", "thread-target");
         state.put("contextId", "ctx1");
         state.put("planningPacketDepthOk", "true");
+        state.put("planningPacketPostingAllowed", "true");
         return state;
     }
 

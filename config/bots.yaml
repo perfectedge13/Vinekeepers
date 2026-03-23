@@ -530,6 +530,7 @@ workflows:
             - proposalConfirmProposedValue
             - planningHasConfirmPending
             - readinessProceedRaw
+            - planningHumanReadinessAcknowledged
             - discoveryBundledApplyJson
             - intakeChoice
             - planningClarificationRaw

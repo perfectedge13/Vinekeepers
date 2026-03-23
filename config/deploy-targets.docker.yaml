@@ -1,6 +1,6 @@
 # Containerized host-ops manifest for compose.host-ops.yaml.
-# Use DEPLOY_TARGETS_PATH=/app/config/deploy-targets.docker.yaml so direct compose
-# targets resolve against mounted in-container paths without shadowing /app.
+# The repo target uses an in-container path; host stack targets still use the same
+# absolute host paths defined in config/deploy-targets.yaml and are bind-mounted there.
 targets:
   - id: vinekeepers
     label: Vinekeepers
@@ -17,7 +17,7 @@ targets:
     label: Neo4j
     compose:
       file: docker-compose.yml
-      workingDirectory: /opt/stacks/neo4j
+      workingDirectory: /home/perfect_edge13/Docker/neo4j
       services:
         - neo4j
       hostOpsExecutor: direct
@@ -25,7 +25,7 @@ targets:
     label: Wiki.js
     compose:
       file: docker-compose.yml
-      workingDirectory: /opt/stacks/wikijs
+      workingDirectory: /home/perfect_edge13/Docker/wikijs
       services:
         - wikijs
       hostOpsExecutor: direct

@@ -205,7 +205,17 @@ public final class PlanningCyclePipeline {
         }
 
         applyPostDraftGovernor(
-                state, spread, plan, clr, profile, userInputRequired, readyToPost, depthOk, structuredParseFailed, depthReason);
+                contextId,
+                state,
+                spread,
+                plan,
+                clr,
+                profile,
+                userInputRequired,
+                readyToPost,
+                depthOk,
+                structuredParseFailed,
+                depthReason);
 
         DeliberationEngine.applyDerivedDeliberationSpread(spread);
         spread.put("planningAssumptionsUsed", String.valueOf(rankedLlm.assumptionsToRecord().size()));
@@ -413,6 +423,7 @@ public final class PlanningCyclePipeline {
         }
 
         applyPostDraftGovernor(
+                contextId,
                 state,
                 spread,
                 plan,
@@ -650,6 +661,7 @@ public final class PlanningCyclePipeline {
     }
 
     private void applyPostDraftGovernor(
+            String contextId,
             Map<String, Object> persistedSessionState,
             Map<String, Object> spread,
             FeaturePlanState plan,
@@ -702,6 +714,15 @@ public final class PlanningCyclePipeline {
         } else {
             spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
         }
+        if (gov.action() == PlanningPostDraftAction.ASK_ONE_QUESTION
+                && contextId != null
+                && !contextId.isBlank()
+                && plan != null
+                && plan.getPlanningIntakeStage() != PlanningIntakeStage.CLARIFYING) {
+            FeaturePlanState clarifying = plan.withPlanningIntakeStage(PlanningIntakeStage.CLARIFYING, java.time.Instant.now());
+            planStateStore.update(clarifying);
+            plan = planStateStore.getByContextId(contextId).orElse(clarifying);
+        }
         boolean effectiveReady = depthOk && !effectiveUser && !structuredParseFailed;
         if (gov.action() == PlanningPostDraftAction.BLOCK) {
             spread.put("planningUserInputRequired", "false");
@@ -717,7 +738,7 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningRevisionNeeded",
                 (!depthOk || effectiveUser || structuredParseFailed) ? "true" : "false");
-        PlanningReadinessSpread.applyCycleReadiness(spread, effectiveReady, effectiveUser);
+        PlanningReadinessSpread.applyCycleReadiness(spread, gov.action(), effectiveReady, effectiveUser);
         spread.put(PlanningPostDraftGovernor.SPREAD_KEY, gov.action().name());
         spread.put(
                 PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY,
@@ -1586,6 +1607,9 @@ public final class PlanningCyclePipeline {
         m.put("planningPacketDepthReason", "");
         m.put("planningPacketDepthRetryRecommended", "false");
         m.put("planningReadyToPostPacket", "false");
+        m.put(PlanningReadinessSpread.PACKET_POSTING_ALLOWED_KEY, "false");
+        m.put(PlanningReadinessSpread.REVIEW_ALLOWED_KEY, "false");
+        m.put(PlanningReadinessSpread.APPROVAL_ALLOWED_KEY, "false");
         m.put("planningRevisionNeeded", "false");
         m.put("planningQuestionsAskedThisRound", "0");
         m.put("planningBlockingQuestionCount", "0");
@@ -1612,6 +1636,7 @@ public final class PlanningCyclePipeline {
         m.put("planningCycleUserVisibleFailure", "");
         m.put("planningLlmError", "");
         m.put("planningLlmSkipReason", "");
+        m.put(PlanningReadinessSpread.HUMAN_READINESS_ACKNOWLEDGED_KEY, "false");
         m.put("planningReviewReady", "false");
         m.put("reviewReady", "false");
         m.put("planningApprovalReady", "false");

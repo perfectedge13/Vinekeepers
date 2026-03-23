@@ -116,20 +116,6 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                             blockingFc,
                             revisions);
             PlanConfidence confidence = PlanReadinessEvaluator.evaluate(plan, gaps, findings, now, state);
-            if ("true".equalsIgnoreCase(String.valueOf(bind != null ? bind.get("humanReadinessProceedAck") : null))) {
-                confidence =
-                        new PlanConfidence(
-                                confidence.getLevel(),
-                                "Human acknowledged warnings; proceeding to approval. "
-                                        + (confidence.getNotes() != null ? confidence.getNotes() : ""),
-                                PlanReadinessStatus.READY,
-                                now,
-                                confidence.getConfidenceScore(),
-                                confidence.getConfidenceReasons(),
-                                confidence.getStructuredKnownFactCount(),
-                                confidence.getMaterialUnknownCount(),
-                                confidence.getMaterialUnknownLabels());
-            }
             String legacyStatus = PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus());
             String summaryForSpread = confidence.getNotes() != null ? confidence.getNotes() : "";
             String prevCtr = getString(state, "planningCritiqueAutoRevisionCount");

@@ -19,6 +19,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EvaluatePlanningPacketDepthActionTest {
 
@@ -58,6 +59,8 @@ class EvaluatePlanningPacketDepthActionTest {
                                 state,
                                 Map.of("contextId", "ctx-relax"));
         assertEquals("true", spread.get("planningPacketDepthOk"));
+        assertEquals("false", spread.get("planningReviewReady"));
+        assertTrue(String.valueOf(spread.get("planningReviewReadyReason")).contains("Final review readiness"));
     }
 
     @Test
@@ -79,6 +82,7 @@ class EvaluatePlanningPacketDepthActionTest {
                                 state,
                                 Map.of("contextId", "ctx-block"));
         assertEquals("false", spread.get("planningPacketDepthOk"));
+        assertEquals("false", spread.get("planningReviewReady"));
         assertFalse(String.valueOf(spread.get("planningPacketDepthReason")).isBlank());
     }
 

@@ -1,6 +1,6 @@
 # Deploy targets: playbook path is relative to DEPLOY_ANSIBLE_ROOT / GADGET_ANSIBLE_ROOT.
-# Host-native/default manifest. Containerized host-ops runs may instead point DEPLOY_TARGETS_PATH
-# at config/deploy-targets.docker.yaml so compose workingDirectory values match container mounts.
+# Host stack paths for direct compose live here and should match the real deploy host layout.
+# On Neo, the sample neo4j / wikijs stacks live under /home/perfect_edge13/Docker/*.
 # Root key: targets (legacy gadget-projects.yaml may use projects:).
 # optional gitRemote: branch UX via deployGitBranches (git ls-remote --heads).
 # extraVars: merged into ansible-playbook -e.
@@ -21,7 +21,7 @@ targets:
     label: Neo4j
     compose:
       file: docker-compose.yml
-      workingDirectory: /opt/stacks/neo4j
+      workingDirectory: /home/perfect_edge13/Docker/neo4j
       services:
         - neo4j
       hostOpsExecutor: direct
@@ -29,7 +29,7 @@ targets:
     label: Wiki.js
     compose:
       file: docker-compose.yml
-      workingDirectory: /opt/stacks/wikijs
+      workingDirectory: /home/perfect_edge13/Docker/wikijs
       services:
         - wikijs
       hostOpsExecutor: direct

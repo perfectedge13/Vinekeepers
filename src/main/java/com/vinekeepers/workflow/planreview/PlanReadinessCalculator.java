@@ -1,5 +1,7 @@
 package com.vinekeepers.workflow.planreview;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.profile.ArtifactState;
 import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.DiscoveryGap;
@@ -11,7 +13,9 @@ import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
 import com.vinekeepers.state.planning.PlanGovernanceSeverity;
 import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.SolutionOutline;
+import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,6 +31,7 @@ public final class PlanReadinessCalculator {
     /** Launch approval: single source of truth for {@link PlanningApprovalGateSupport}. */
     public static final double APPROVAL_CONFIDENCE_THRESHOLD = 0.85;
 
+    private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MAX_MATERIAL_UNKNOWN_LABELS = 12;
 
     private PlanReadinessCalculator() {}
@@ -37,7 +42,8 @@ public final class PlanReadinessCalculator {
             List<PlanCritiqueFinding> findings,
             PlanCritiqueRubricScores rubric,
             Instant now,
-            boolean packetPostedOnPlan) {
+            boolean packetPostedOnPlan,
+            java.util.Map<String, Object> workflowState) {
 
         List<String> reasons = new ArrayList<>();
         int blockingIssues = PlanCritiqueRubric.countUnresolvedBlockingIssues(plan);
@@ -47,9 +53,13 @@ public final class PlanReadinessCalculator {
         boolean blockerGap =
                 gaps != null && gaps.stream().anyMatch(g -> "BLOCKER".equalsIgnoreCase(g.getSeverity()));
         int unresolvedQ = countNonBlankUnresolvedQuestions(plan);
+        boolean clarificationPending = hasPendingClarification(plan, workflowState);
+        boolean repoGroundingMissing = repoGroundingMissing(plan, workflowState);
         int knownFacts = countStructuredKnownFacts(plan);
-        List<String> unknownLabels = buildMaterialUnknownLabels(gaps, plan, blockingIssues);
-        int materialUnknowns = computeMaterialUnknownCount(gapCount, unresolvedQ, blockingIssues);
+        List<String> unknownLabels =
+                buildMaterialUnknownLabels(gaps, plan, blockingIssues, clarificationPending, repoGroundingMissing);
+        int materialUnknowns =
+                computeMaterialUnknownCount(gapCount, unresolvedQ, blockingIssues, clarificationPending, repoGroundingMissing);
 
         if (blockerGap) {
             reasons.add("At least one discovery gap is marked BLOCKER.");
@@ -69,6 +79,12 @@ public final class PlanReadinessCalculator {
         if (unresolvedQ > 0) {
             reasons.add(unresolvedQ + " unresolved question line(s) on the plan.");
         }
+        if (clarificationPending) {
+            reasons.add("A clarification is still pending in the coordinator workflow.");
+        }
+        if (repoGroundingMissing) {
+            reasons.add("Repository grounding has not been completed strongly enough for approval.");
+        }
         reasons.add(
                 "Structured planning signals: "
                         + knownFacts
@@ -82,7 +98,9 @@ public final class PlanReadinessCalculator {
         } else if (!packetPostedOnPlan
                 || blockingIssues > 0
                 || blockingFindings > 0
-                || openGaps) {
+                || openGaps
+                || clarificationPending
+                || repoGroundingMissing) {
             readiness = PlanReadinessStatus.NOT_READY;
         } else if (needsConditional(plan, findings)) {
             readiness = PlanReadinessStatus.CONDITIONALLY_READY;
@@ -97,6 +115,12 @@ public final class PlanReadinessCalculator {
         base -= PlanCritiqueRubric.governanceAssumptionPenalty(plan);
         base -= Math.min(0.5, blockingIssues * 0.14);
         base -= Math.min(0.45, blockingFindings * 0.12);
+        if (clarificationPending) {
+            base -= 0.18;
+        }
+        if (repoGroundingMissing) {
+            base -= 0.16;
+        }
         if (!packetPostedOnPlan) {
             base -= 0.25;
         }
@@ -124,8 +148,17 @@ public final class PlanReadinessCalculator {
                 List.copyOf(unknownLabels));
     }
 
-    private static int computeMaterialUnknownCount(int gapCount, int unresolvedQuestions, int blockingIssues) {
-        return Math.max(0, gapCount) + Math.max(0, unresolvedQuestions) + Math.max(0, blockingIssues);
+    private static int computeMaterialUnknownCount(
+            int gapCount,
+            int unresolvedQuestions,
+            int blockingIssues,
+            boolean clarificationPending,
+            boolean repoGroundingMissing) {
+        return Math.max(0, gapCount)
+                + Math.max(0, unresolvedQuestions)
+                + Math.max(0, blockingIssues)
+                + (clarificationPending ? 1 : 0)
+                + (repoGroundingMissing ? 1 : 0);
     }
 
     private static int countNonBlankUnresolvedQuestions(FeaturePlanState plan) {
@@ -194,7 +227,11 @@ public final class PlanReadinessCalculator {
     }
 
     private static List<String> buildMaterialUnknownLabels(
-            List<DiscoveryGap> gaps, FeaturePlanState plan, int blockingIssues) {
+            List<DiscoveryGap> gaps,
+            FeaturePlanState plan,
+            int blockingIssues,
+            boolean clarificationPending,
+            boolean repoGroundingMissing) {
         Set<String> out = new LinkedHashSet<>();
         if (gaps != null) {
             for (DiscoveryGap g : gaps) {
@@ -231,7 +268,55 @@ public final class PlanReadinessCalculator {
                 }
             }
         }
+        if (clarificationPending && out.size() < MAX_MATERIAL_UNKNOWN_LABELS) {
+            out.add("Coordinator clarification is still pending.");
+        }
+        if (repoGroundingMissing && out.size() < MAX_MATERIAL_UNKNOWN_LABELS) {
+            out.add("Repository grounding has not been completed for this planning pass.");
+        }
         return new ArrayList<>(out);
+    }
+
+    private static boolean hasPendingClarification(FeaturePlanState plan, java.util.Map<String, Object> workflowState) {
+        if (PlanningReadinessSpread.hasPendingClarification(workflowState)) {
+            return true;
+        }
+        return plan != null && plan.getPlanningIntakeStage() == PlanningIntakeStage.CLARIFYING;
+    }
+
+    private static boolean repoGroundingMissing(FeaturePlanState plan, java.util.Map<String, Object> workflowState) {
+        if (workflowState == null) {
+            return false;
+        }
+        Object rawObj = workflowState.get("planningRepoEvidenceJson");
+        if (rawObj == null) {
+            return false;
+        }
+        String raw = rawObj.toString().trim();
+        if (raw.isBlank() || "{}".equals(raw)) {
+            return true;
+        }
+        try {
+            JsonNode node = JSON.readTree(raw);
+            String workspaceStatus = node.path("workspaceStatus").asText("");
+            double score = node.path("repoGroundingScore").asDouble(-1.0);
+            boolean localPathPresent = node.path("localPathPresent").asBoolean(false);
+            if (workspaceStatus.isBlank() || "unknown".equalsIgnoreCase(workspaceStatus)) {
+                return true;
+            }
+            boolean materialized =
+                    workspaceStatus.toUpperCase().contains("MATERIALIZED")
+                            || workspaceStatus.toUpperCase().contains("RESOLVED");
+            if (!materialized && !localPathPresent) {
+                return true;
+            }
+            if (score >= 0 && score < 0.45) {
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     private static String firstNonBlank(String a, String b) {

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,7 +80,7 @@ class PlanReadinessCalculatorTest {
         PlanCritiqueRubricScores rubric = new PlanCritiqueRubricScores(0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9);
         PlanConfidence c =
                 PlanReadinessCalculator.evaluate(
-                        plan, List.of(), List.of(), rubric, T, true);
+                        plan, List.of(), List.of(), rubric, T, true, null);
         assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
     }
 
@@ -88,7 +89,7 @@ class PlanReadinessCalculatorTest {
         FeaturePlanState plan = basePlan(null).withPacketPosted(T, "", "fp", 1);
         PlanCritiqueRubricScores rubric = new PlanCritiqueRubricScores(0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95);
         PlanConfidence c =
-                PlanReadinessCalculator.evaluate(plan, List.of(), List.of(), rubric, T, true);
+                PlanReadinessCalculator.evaluate(plan, List.of(), List.of(), rubric, T, true, null);
         assertEquals(PlanReadinessStatus.READY, c.getReadinessStatus());
         assertTrue(c.getConfidenceScore() >= PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD);
         assertEquals(0, c.getMaterialUnknownCount());
@@ -115,7 +116,7 @@ class PlanReadinessCalculatorTest {
                         "profile",
                         "Need API shape");
         PlanConfidence c =
-                PlanReadinessCalculator.evaluate(plan, List.of(gap), List.of(), rubric, T, true);
+                PlanReadinessCalculator.evaluate(plan, List.of(gap), List.of(), rubric, T, true, null);
         assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
         assertTrue(c.getMaterialUnknownCount() >= 1);
         assertTrue(c.getMaterialUnknownLabels().stream().anyMatch(l -> l.contains("Need API")));
@@ -129,7 +130,47 @@ class PlanReadinessCalculatorTest {
                         new PlanCritiqueFinding(
                                 "f1", "X", "MUST_FIX", "C", "fix", "ref", true, List.of()));
         PlanCritiqueRubricScores rubric = PlanCritiqueRubric.compute(plan, f, 1);
-        PlanConfidence c = PlanReadinessCalculator.evaluate(plan, List.of(), f, rubric, T, true);
+        PlanConfidence c = PlanReadinessCalculator.evaluate(plan, List.of(), f, rubric, T, true, null);
         assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
+    }
+
+    @Test
+    void pendingClarificationCountsAsMaterialUnknown() {
+        FeaturePlanState plan = basePlan(null).withPacketPosted(T, "", "fp", 1);
+        PlanCritiqueRubricScores rubric = new PlanCritiqueRubricScores(0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95);
+        PlanConfidence c =
+                PlanReadinessCalculator.evaluate(
+                        plan,
+                        List.of(),
+                        List.of(),
+                        rubric,
+                        T,
+                        true,
+                        Map.of(
+                                "planningCanonicalUserInputRequired",
+                                "true",
+                                "planningRepoEvidenceJson",
+                                "{\"workspaceStatus\":\"MATERIALIZED\",\"localPathPresent\":true,\"repoGroundingScore\":0.82}"));
+        assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
+        assertTrue(c.getMaterialUnknownCount() >= 1);
+        assertTrue(c.getMaterialUnknownLabels().stream().anyMatch(l -> l.contains("clarification")));
+    }
+
+    @Test
+    void missingRepoGroundingPreventsReady() {
+        FeaturePlanState plan = basePlan(null).withPacketPosted(T, "", "fp", 1);
+        PlanCritiqueRubricScores rubric = new PlanCritiqueRubricScores(0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95);
+        PlanConfidence c =
+                PlanReadinessCalculator.evaluate(
+                        plan,
+                        List.of(),
+                        List.of(),
+                        rubric,
+                        T,
+                        true,
+                        Map.of("planningRepoEvidenceJson", "{}"));
+        assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
+        assertTrue(c.getMaterialUnknownCount() >= 1);
+        assertTrue(c.getMaterialUnknownLabels().stream().anyMatch(l -> l.contains("Repository grounding")));
     }
 }

@@ -53,14 +53,13 @@ public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.
         spread.put("planningPacketDepthOk", r.ok() ? "true" : "false");
         spread.put("planningPacketDepthReason", r.reason() != null ? r.reason() : "");
         spread.put("planningPacketDepthRetryRecommended", r.ok() ? "false" : "true");
-        boolean noClarify = !"true".equalsIgnoreCase(String.valueOf(state.get("planningUserInputRequired")));
-        boolean rr = r.ok() && noClarify;
-        spread.put("planningReviewReady", rr ? "true" : "false");
-        spread.put("reviewReady", rr ? "true" : "false");
-        if (rr) {
+        spread.put("planningReviewReady", "false");
+        spread.put("reviewReady", "false");
+        boolean noClarify = !com.vinekeepers.workflow.planning.PlanningReadinessSpread.hasPendingClarification(state);
+        if (r.ok() && noClarify) {
             spread.put(
                     "planningReviewReadyReason",
-                    "Depth evaluation passed and no clarification is blocking — safe to post the review packet when other checks agree.");
+                    "Depth evaluation passed and no clarification is blocking. Final review readiness will be computed after the packet is posted and critique runs.");
             spread.put("reviewReadyReason", spread.get("planningReviewReadyReason"));
         } else {
             StringBuilder sb = new StringBuilder();

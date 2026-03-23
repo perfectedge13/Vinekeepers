@@ -45,7 +45,7 @@ public final class PlanReadinessEvaluator {
         }
         PlanCritiqueRubricScores rubric = PlanCritiqueRubric.compute(plan, findings, blockingFc);
         boolean posted = inferPacketPostedOnPlan(plan, workflowState);
-        return PlanReadinessCalculator.evaluate(plan, gaps, findings, rubric, now, posted);
+        return PlanReadinessCalculator.evaluate(plan, gaps, findings, rubric, now, posted, workflowState);
     }
 
     static boolean inferPacketPostedOnPlan(FeaturePlanState plan, Map<String, Object> workflowState) {

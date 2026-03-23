@@ -14,9 +14,10 @@ services:
       - ./config:/app/config
       # Gadget / run_deploy_compose (direct executor): use
       # `docker compose -f compose.yaml -f compose.host-ops.yaml up -d`
-      # to add the Docker socket and sample host stack mounts without shadowing /app.
+      # to add the Docker socket and host stack mounts without shadowing /app.
       # The override switches DEPLOY_TARGETS_PATH to config/deploy-targets.docker.yaml,
-      # which points the Vinekeepers target at /workspace/vinekeepers and keeps the
-      # sample neo4j / wikijs stacks at /opt/stacks/*.
+      # which points the Vinekeepers target at /workspace/vinekeepers and bind-mounts
+      # the neo4j / wikijs stack paths at the same absolute locations declared in
+      # config/deploy-targets.yaml.
       # See README.md → Docker → Gadget / run_deploy_compose on Docker.
     restart: unless-stopped

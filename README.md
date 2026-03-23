@@ -47,16 +47,27 @@ That override:
 - mounts `/var/run/docker.sock`
 - keeps the runtime image mounted at `/app`
 - bind-mounts the repo to `/workspace/vinekeepers` for the `vinekeepers` compose target
-- bind-mounts the sample host stacks to `/opt/stacks/neo4j` and `/opt/stacks/wikijs`
+- bind-mounts the host stack directories from `config/deploy-targets.yaml` at the same absolute paths inside the container
 - sets `DEPLOY_TARGETS_PATH=/app/config/deploy-targets.docker.yaml` so direct compose uses container-visible paths
 
-Optional host path overrides for the compose command environment:
+The shipped stack targets use:
 
-- `VINEKEEPERS_HOST_REPO_ROOT` (default `.`)
-- `VINEKEEPERS_HOST_STACK_NEO4J` (default `/opt/stacks/neo4j`)
-- `VINEKEEPERS_HOST_STACK_WIKIJS` (default `/opt/stacks/wikijs`)
+- `/home/perfect_edge13/Docker/neo4j`
+- `/home/perfect_edge13/Docker/wikijs`
 
-If you run Vinekeepers outside Docker, keep using `config/deploy-targets.yaml`. If you run it in Docker and the socket, compose file, or working directory is missing inside the container, Gadget now fails fast and Vinekeepers logs startup warnings before the first Discord-triggered compose request. Rebuild and restart the Vinekeepers container after image or runtime changes so the live bot picks up the new Docker CLI and compose preflight behavior. Prefer **`hostOpsExecutor: direct`** when the container has the Docker CLI and matching mounts; otherwise use **`cursor_agent`**.
+Example:
+
+```bash
+docker compose -f compose.yaml -f compose.host-ops.yaml up -d
+```
+
+If you launch with `sudo`, you no longer need stack-path env vars:
+
+```bash
+sudo docker compose -f compose.yaml -f compose.host-ops.yaml up -d
+```
+
+If you run Vinekeepers outside Docker, keep using `config/deploy-targets.yaml`. If the stack paths on the host change, update `config/deploy-targets.yaml` first and keep `compose.host-ops.yaml` in sync so the container bind-mounts those same absolute paths. If the socket, compose file, or working directory is still missing inside the container, Gadget fails fast and Vinekeepers logs startup warnings before the first Discord-triggered compose request. Rebuild and restart the Vinekeepers container after image or runtime changes so the live bot picks up the new Docker CLI and compose preflight behavior. Prefer **`hostOpsExecutor: direct`** when the container has the Docker CLI and matching mounts; otherwise use **`cursor_agent`**.
 
 Optional: set `JAVA_OPTS` (e.g. `-Xmx512m`) via `-e JAVA_OPTS=...`.
 

@@ -36,6 +36,39 @@ class PlanningApprovalGateSupportTest {
         assertNull(PlanningApprovalGateSupport.validateApproveAllowed(plan, Map.of("planningPacketPostedVersion", 1)));
     }
 
+    @Test
+    void validateApproveAllowed_requiresHumanAckForConditionalReadiness() {
+        FeaturePlanState plan = approvalBasePlan(PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD)
+                .withPlanConfidence(new PlanConfidence(
+                        "HIGH",
+                        "conditional",
+                        PlanReadinessStatus.CONDITIONALLY_READY,
+                        T,
+                        PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD,
+                        List.of()));
+        String block = PlanningApprovalGateSupport.validateApproveAllowed(plan, Map.of("planningPacketPostedVersion", 1));
+        assertNotNull(block);
+        assertTrue(block.contains("human checkpoint"));
+    }
+
+    @Test
+    void validateApproveAllowed_allowsConditionalReadinessAfterHumanAck() {
+        FeaturePlanState plan = approvalBasePlan(PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD)
+                .withPlanConfidence(new PlanConfidence(
+                        "HIGH",
+                        "conditional",
+                        PlanReadinessStatus.CONDITIONALLY_READY,
+                        T,
+                        PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD,
+                        List.of()));
+        assertNull(
+                PlanningApprovalGateSupport.validateApproveAllowed(
+                        plan,
+                        Map.of(
+                                "planningPacketPostedVersion", 1,
+                                "planningHumanReadinessAcknowledged", "true")));
+    }
+
     private static FeaturePlanState approvalBasePlan(double confidenceScore) {
         PlanCritiqueRubricScores rubric =
                 new PlanCritiqueRubricScores(0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9);

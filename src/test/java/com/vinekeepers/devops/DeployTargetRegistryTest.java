@@ -81,11 +81,11 @@ class DeployTargetRegistryTest {
         DeployTargetRegistry reg = DeployTargetRegistry.load(Path.of("config", "deploy-targets.yaml"));
         DeployTarget neo = reg.findById("neo4j").orElseThrow();
         assertTrue(neo.getCompose().isConfigured());
-        assertEquals("/opt/stacks/neo4j", neo.getCompose().getWorkingDirectory());
+        assertEquals("/home/perfect_edge13/Docker/neo4j", neo.getCompose().getWorkingDirectory());
         assertTrue(neo.getCompose().allowsService("neo4j"));
         DeployTarget wiki = reg.findById("wikijs").orElseThrow();
         assertTrue(wiki.getCompose().isConfigured());
-        assertEquals("/opt/stacks/wikijs", wiki.getCompose().getWorkingDirectory());
+        assertEquals("/home/perfect_edge13/Docker/wikijs", wiki.getCompose().getWorkingDirectory());
         assertTrue(wiki.getCompose().allowsService("wikijs"));
     }
 }

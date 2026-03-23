@@ -7,6 +7,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningRole;
+import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,8 +81,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         }
         boolean legacyDepthOnly = truthy(getString(bind, "planningPostCompatLegacyDepthOnly"));
         boolean depthOk = !"false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
-        boolean reviewReady =
-                truthy(getString(state, "planningReviewReady")) || truthy(getString(state, "reviewReady"));
+        boolean packetAllowed = PlanningReadinessSpread.packetPostingAllowed(state);
         if (legacyDepthOnly) {
             if (state != null && "false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")))) {
                 spread.put(
@@ -90,10 +90,16 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                 return spread;
             }
         } else {
-            if (state != null && !depthOk && !reviewReady) {
+            if (state != null && !packetAllowed) {
                 spread.put(
                         "planningPacketPostError",
-                        "The draft is not ready to post yet (depth and review gates). "
+                        "The draft is waiting on clarification or another drafting pass, so the packet cannot post yet.");
+                return spread;
+            }
+            if (state != null && !depthOk) {
+                spread.put(
+                        "planningPacketPostError",
+                        "The draft is not ready to post yet because depth checks still fail. "
                                 + "Reply in this thread with more detail or wait for the coordinator to finish another drafting pass.");
                 return spread;
             }

@@ -1,33 +1,24 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
-import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Re-runs Phase C critique spread after the user chose to proceed from {@code NEEDS_HUMAN_DECISION},
- * forcing persisted readiness to {@code READY} for the approval step while retaining findings.
+ * Records that the user acknowledged the readiness checkpoint and wants approval-gate evaluation to continue.
  */
 public final class AcknowledgeReadinessHumanDecisionAction implements com.vinekeepers.workflow.WorkflowAction {
 
-    private final RunPlanCritiqueAndReadinessAction critique;
-
     public AcknowledgeReadinessHumanDecisionAction(
-            FeaturePlanStateStore planStateStore,
-            WorkProfileRegistry workProfileRegistry) {
-        this.critique = new RunPlanCritiqueAndReadinessAction(planStateStore, workProfileRegistry);
-    }
+            com.vinekeepers.state.planning.FeaturePlanStateStore planStateStore,
+            com.vinekeepers.profile.WorkProfileRegistry workProfileRegistry) {}
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        Map<String, Object> merged = new HashMap<>();
-        if (bind != null) {
-            merged.putAll(bind);
-        }
-        merged.put("humanReadinessProceedAck", "true");
-        return critique.run(event, state, merged);
+        Map<String, Object> spread = new LinkedHashMap<>();
+        spread.put(PlanningReadinessSpread.HUMAN_READINESS_ACKNOWLEDGED_KEY, "true");
+        return spread;
     }
 }

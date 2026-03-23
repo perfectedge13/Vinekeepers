@@ -3,9 +3,11 @@ package com.vinekeepers.workflow.actions;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
+import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 import com.vinekeepers.workflow.planreview.PlanningApprovalGateSupport;
 
 import java.util.LinkedHashMap;
@@ -44,18 +46,11 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
             posted = true;
         }
         boolean depthOk = "true".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
-        String readinessSpread = getString(state, "planReadinessStatus");
-        boolean ready = PlanReadinessStatus.READY.equals(readinessSpread);
-        if (plan != null
-                && plan.getPlanConfidence() != null
-                && plan.getPlanConfidence().getReadinessStatus() != null
-                && !plan.getPlanConfidence().getReadinessStatus().isBlank()) {
-            ready =
-                    PlanReadinessStatus.READY.equals(
-                            PlanReadinessStatus.legacySpreadValue(plan.getPlanConfidence().getReadinessStatus()));
-        }
+        String readinessStatus = canonicalReadinessStatus(plan, state);
+        boolean humanAcknowledged = PlanningReadinessSpread.humanReadinessAcknowledged(state);
+        boolean ready = approvalReadinessSatisfied(readinessStatus, humanAcknowledged);
         boolean humanOk = intakeDiscoveryCompleteForApproval(plan, state);
-        boolean noPendingClarification = !"true".equalsIgnoreCase(String.valueOf(state.get("planningUserInputRequired")));
+        boolean noPendingClarification = !PlanningReadinessSpread.hasPendingClarification(state);
 
         boolean reviewSignal = posted && depthOk && noPendingClarification;
         spread.put("planningReviewReady", reviewSignal ? "true" : "false");
@@ -90,9 +85,7 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         }
         if (!ready) {
             reason.append(
-                    "Critique readiness is not READY yet (current status: "
-                            + (readinessSpread != null ? readinessSpread : "unknown")
-                            + "). ");
+                    readinessBlockReason(readinessStatus, humanAcknowledged));
         }
         if (!humanOk) {
             reason.append("Discovery in the coordinator flow is not marked complete. ");
@@ -138,6 +131,41 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         }
         return plan.getPlanningIntakeStage() != PlanningIntakeStage.GATHERING_CONTEXT
                 && plan.getPlanningIntakeStage() != PlanningIntakeStage.CLARIFYING;
+    }
+
+    private static String canonicalReadinessStatus(FeaturePlanState plan, Map<String, Object> state) {
+        if (plan != null) {
+            PlanConfidence confidence = plan.getPlanConfidence();
+            if (confidence != null
+                    && confidence.getReadinessStatus() != null
+                    && !confidence.getReadinessStatus().isBlank()) {
+                return confidence.getReadinessStatus().trim();
+            }
+        }
+        String spreadStatus = getString(state, "planReadinessStatus");
+        if (spreadStatus == null || spreadStatus.isBlank()) {
+            return "";
+        }
+        return switch (spreadStatus.trim()) {
+            case PlanReadinessStatus.NEEDS_REVISION -> PlanReadinessStatus.NOT_READY;
+            case PlanReadinessStatus.NEEDS_HUMAN_DECISION -> PlanReadinessStatus.CONDITIONALLY_READY;
+            default -> spreadStatus.trim();
+        };
+    }
+
+    private static boolean approvalReadinessSatisfied(String readinessStatus, boolean humanAcknowledged) {
+        if (PlanReadinessStatus.READY.equals(readinessStatus)) {
+            return true;
+        }
+        return PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus) && humanAcknowledged;
+    }
+
+    private static String readinessBlockReason(String readinessStatus, boolean humanAcknowledged) {
+        if (PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus) && !humanAcknowledged) {
+            return "Critique readiness still needs human acknowledgment before approval can open. ";
+        }
+        String label = readinessStatus == null || readinessStatus.isBlank() ? "unknown" : readinessStatus;
+        return "Critique readiness is not approval-ready yet (current status: " + label + "). ";
     }
 
     private static int parseInt(String s, int dflt) {

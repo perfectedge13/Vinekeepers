@@ -5,6 +5,7 @@ import com.vinekeepers.state.planning.PlanApprovalStatus;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
 import java.util.Map;
 
@@ -51,10 +52,18 @@ public final class PlanningApprovalGateSupport {
         if (c == null || c.getReadinessStatus() == null || c.getReadinessStatus().isBlank()) {
             return "NOT READY because readiness has not been computed on the plan.";
         }
-        if (!PlanReadinessStatus.READY.equals(c.getReadinessStatus())) {
+        boolean humanAcknowledged = PlanningReadinessSpread.humanReadinessAcknowledged(workflowState);
+        if (PlanReadinessStatus.CONDITIONALLY_READY.equals(c.getReadinessStatus()) && !humanAcknowledged) {
+            return "NOT READY because readiness is CONDITIONALLY_READY and the human checkpoint has not been acknowledged yet.";
+        }
+        if (!PlanReadinessStatus.READY.equals(c.getReadinessStatus())
+                && !(PlanReadinessStatus.CONDITIONALLY_READY.equals(c.getReadinessStatus()) && humanAcknowledged)) {
             return "NOT READY because readiness is "
                     + c.getReadinessStatus()
-                    + " (need READY after human proceed if applicable).";
+                    + " (approval requires READY, or CONDITIONALLY_READY after a human proceed decision).";
+        }
+        if (workflowState != null && PlanningReadinessSpread.hasPendingClarification(workflowState)) {
+            return "NOT READY because a clarification is still pending.";
         }
         if (c.getConfidenceScore() >= 0
                 && c.getConfidenceScore() < PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD) {
