@@ -732,7 +732,7 @@ public final class PlanningCyclePipeline {
             spread.put("planningUserInputRequired", "false");
             spread.put("planningCanonicalUserInputRequired", "false");
             effectiveReady = false;
-            String synthCat = firstNonBlank(getString(spread, "planningSynthesisFailureCategory"), "");
+            String synthCat = blankToEmpty(getString(spread, "planningSynthesisFailureCategory"));
             if (!synthCat.isBlank()
                     && contextId != null
                     && !contextId.isBlank()
@@ -1244,7 +1244,7 @@ public final class PlanningCyclePipeline {
         if (applied > 0) {
             return;
         }
-        String cat = firstNonBlank(getString(spread, "planningSynthesisFailureCategory"), "");
+        String cat = blankToEmpty(getString(spread, "planningSynthesisFailureCategory"));
         boolean structuredRoleFailed =
                 "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
         FeaturePlanState planForRecover = planStateStore.getByContextId(contextId).orElse(null);
@@ -1739,5 +1739,9 @@ public final class PlanningCyclePipeline {
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static String blankToEmpty(String value) {
+        return value != null && !value.isBlank() ? value : "";
     }
 }

@@ -5,6 +5,7 @@
 ## 2026-03-23
 
 - **Coordinator planning stabilization:** **`PlanningCyclePipeline`**, **`RunLlmPlanningSynthesisAction`**, **`PlanningPostDraftGovernor`**, **`HydratePlanningSessionAction`**, **`StartCoordinatorPlanningAction`**, **`InitializeFeaturePlanStateAction`**, and **`PlanningUserFacingCopy`** align typed synthesis failure handling, post-draft actions, and hydrate spreads with **`FeaturePlanState`** planner recovery fields and Router/engine coordinator-exclusive intake behavior. Specs: **workflow-registry**, **state-registry**, **core-registry**, **bot-registry**; tests include **RunLlmPlanningSynthesisActionJsonTest**, **PlanningPostDraftGovernorTest**.
+- **Planning finalize crash fix:** **`PlanningCyclePipeline`** now normalizes blank synthesis categories before post-draft and immediate-failure checks, so schema-mismatch recovery paths no longer throw on `.isBlank()`. **`RunLlmPlanningSynthesisAction`** also presents artifact/section-shaped synthesis context plus a wrong-vs-right section-id example so rejected upserts fail visibly without nudging the model toward invalid `sectionId` values.
 
 ## 2026-03-07
 

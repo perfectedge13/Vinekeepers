@@ -137,6 +137,43 @@ class RunLlmPlanningSynthesisActionJsonTest {
     }
 
     @Test
+    void run_failsWhenUpsertsUseFieldIdAsSectionId() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> invalid = assistantResponse(
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Wrong section\"}}],\"follow_up_questions\":[]}");
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(invalid);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        var registry = TestWorkProfiles.loadFromRepoConfig();
+        var init = new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId",
+                                "ctx-bad-section",
+                                "channelId",
+                                "room-bad-section",
+                                "repoRef",
+                                "perfectedge13/Vinekeepers",
+                                "initialRequest",
+                                "Improve planner"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+
+        var action = new RunLlmPlanningSynthesisAction(client, planStore, registry);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread = (Map<String, Object>) action.run(null, Map.of("contextId", "ctx-bad-section"), Map.of());
+
+        assertEquals("false", spread.get("planningLlmOk"));
+        assertEquals("0", spread.get("planningLlmUpsertCount"));
+        assertEquals(PlanningFailureCategory.SYNTHESIS_UPSERT_REJECTED.name(), spread.get("planningSynthesisFailureCategory"));
+        assertTrue(String.valueOf(spread.get("planningLlmError")).contains("does not match this planning profile"));
+    }
+
+    @Test
     void run_marksRepairExhaustedWhenJsonRepairReturnsError() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> invalid = assistantResponse("this is not json {");

@@ -37,6 +37,8 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("recommended_action"));
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("Always leave follow_up_questions empty"));
+        assertTrue(system.contains("Wrong: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\""));
+        assertTrue(system.contains("Right: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\""));
         assertTrue(system.contains("do not name paths/packages unless observed"));
         assertTrue(system.contains("current_state_summary"));
         assertTrue(system.contains("never use the literal key \"fieldId\""));

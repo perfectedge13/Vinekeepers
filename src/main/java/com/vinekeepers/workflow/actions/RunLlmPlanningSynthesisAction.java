@@ -55,6 +55,8 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             Always put any single clarification in question_if_needed only.
             Use only artifact/section ids that exist in the profile snapshot. Prefer enriching current_state_summary,
             feature_summary, scope_summary, user_stories, acceptance_criteria, open_questions. Keep values concise.
+            Wrong: {"artifactId":"requirements_spec","sectionId":"feature_summary","data":{"current_state_summary":"x"}}
+            Right: {"artifactId":"requirements_spec","sectionId":"narrative","data":{"feature_summary":"x","current_state_summary":"y"}}
             Separate observed repo facts this pass from inference and unknowns; do not name paths/packages unless observed.
             At most one clarification question per response, only in question_if_needed.
             If nothing should change, return {"upserts":[],"follow_up_questions":[],"explicit_assumptions":[],
@@ -218,14 +220,57 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         snap.put("profileId", profileId);
         snap.put("initialRequest", plan.getInitialRequest());
         snap.put("repoRef", plan.getRepoRef());
-        snap.put("exploration", PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body"));
-        snap.put("feature_summary", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary"));
-        snap.put("current_state_summary", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "current_state_summary"));
-        snap.put("scope_summary", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"));
-        snap.put("user_stories", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories"));
-        snap.put("acceptance_criteria", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
-        snap.put("open_questions", PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"));
-        snap.put("plan_body", PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"));
+        snap.put(
+                "section_id_examples",
+                Map.of(
+                        "requirements_spec", "narrative",
+                        "open_questions_block", "backlog",
+                        "overall_plan", "outline",
+                        "request_exploration", "analysis"));
+        snap.put(
+                "field_id_note",
+                "feature_summary, current_state_summary, scope_summary, and open_questions are field ids inside data, not sectionId values.");
+        Map<String, Object> artifacts = new LinkedHashMap<>();
+        artifacts.put(
+                "request_exploration",
+                Map.of(
+                        "analysis",
+                        sectionData(
+                                "exploration_body",
+                                PlanningArtifactTexts.artifactField(
+                                        plan, "request_exploration", "analysis", "exploration_body"))));
+        artifacts.put(
+                "requirements_spec",
+                Map.of(
+                        "narrative",
+                        sectionData(
+                                "feature_summary",
+                                PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary"),
+                                "current_state_summary",
+                                PlanningArtifactTexts.artifactField(
+                                        plan, "requirements_spec", "narrative", "current_state_summary"),
+                                "scope_summary",
+                                PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"),
+                                "user_stories",
+                                PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories"),
+                                "acceptance_criteria",
+                                PlanningArtifactTexts.artifactField(
+                                        plan, "requirements_spec", "narrative", "acceptance_criteria"))));
+        artifacts.put(
+                "open_questions_block",
+                Map.of(
+                        "backlog",
+                        sectionData(
+                                "open_questions",
+                                PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"))));
+        artifacts.put(
+                "overall_plan",
+                Map.of(
+                        "outline",
+                        sectionData(
+                                "plan_body",
+                                PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"))));
+        snap.put("artifacts", artifacts);
         if (state != null && "true".equalsIgnoreCase(String.valueOf(state.get("planningRagAvailable")))) {
             String rag = state.get("planningRagRetrievalText") != null ? state.get("planningRagRetrievalText").toString() : "";
             if (rag != null && !rag.isBlank()) {
@@ -250,6 +295,17 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static Map<String, Object> sectionData(Object... keyValues) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            Object key = keyValues[i];
+            if (key != null) {
+                out.put(key.toString(), keyValues[i + 1]);
+            }
+        }
+        return out;
     }
 
     private static Long parseTimeoutMs(String raw) {
