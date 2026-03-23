@@ -31,5 +31,6 @@ targets:
       file: docker-compose.yml
       workingDirectory: /home/perfect_edge13/Docker/wikijs
       services:
-        - wikijs-db
+        - wikijs
+        - db
       hostOpsExecutor: direct

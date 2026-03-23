@@ -3702,7 +3702,7 @@ requirements:
           title: DeployTargetRegistryTest
           intent: >-
             Verify YAML load and findById including compose fields; shipped manifest neo4j/wikijs host stack paths and compose
-            service allowlists (neo4j, wikijs-db)
+            service allowlists (neo4j; wikijs stack wikijs, db)
           testClass: com.vinekeepers.devops.DeployTargetRegistryTest
           preconditions: []
         - id: UNIT-START-GADGET-DEPLOY
