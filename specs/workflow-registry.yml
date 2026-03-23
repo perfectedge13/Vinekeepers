@@ -3704,7 +3704,7 @@ requirements:
           preconditions: []
         - id: UNIT-DEVOPS-DEPLOY-WORKFLOW-YAML
           title: DevopsDeployWorkflowYamlTest
-          intent: Guard devops_deploy YAML branch next indices; main menu exposes compose_restart
+          intent: Guard devops_deploy YAML branch next indices, compose up/stop semantic routing, and main menu compose options
           testClass: com.vinekeepers.config.DevopsDeployWorkflowYamlTest
           preconditions: []
         - id: UNIT-DEPLOY-COMPOSE-SERVICES-CHOICE

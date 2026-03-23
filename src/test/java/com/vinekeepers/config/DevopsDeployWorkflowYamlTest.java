@@ -18,15 +18,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DevopsDeployWorkflowYamlTest {
 
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> devopsSteps() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        Map<String, Object> devops = (Map<String, Object>) workflows.get("devops_deploy");
+        return (List<Map<String, Object>>) devops.get("steps");
+    }
+
     @Test
     void devopsDeploy_branchNextIndicesAreInRange() throws Exception {
-        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> devops = (Map<String, Object>) workflows.get("devops_deploy");
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> steps = (List<Map<String, Object>>) devops.get("steps");
+        List<Map<String, Object>> steps = devopsSteps();
         int n = steps.size();
         List<Integer> bad = new ArrayList<>();
         for (int i = 0; i < n; i++) {
@@ -57,13 +59,7 @@ class DevopsDeployWorkflowYamlTest {
 
     @Test
     void devopsDeploy_mainMenuIncludesComposeRestart() throws Exception {
-        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> devops = (Map<String, Object>) workflows.get("devops_deploy");
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> steps = (List<Map<String, Object>>) devops.get("steps");
+        List<Map<String, Object>> steps = devopsSteps();
         Map<String, Object> mainPrompt = steps.stream()
                 .filter(s -> "prompt_for_field".equals(String.valueOf(s.get("type"))))
                 .filter(s -> "mainMenu".equals(String.valueOf(s.get("storeIn"))))
@@ -78,13 +74,7 @@ class DevopsDeployWorkflowYamlTest {
 
     @Test
     void devopsDeploy_composePsUsesDevOpsProgressThread() throws Exception {
-        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> devops = (Map<String, Object>) workflows.get("devops_deploy");
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> steps = (List<Map<String, Object>>) devops.get("steps");
+        List<Map<String, Object>> steps = devopsSteps();
 
         Map<String, Object> createThread = (Map<String, Object>) steps.get(48);
         assertEquals("call_action", String.valueOf(createThread.get("type")));
@@ -99,5 +89,59 @@ class DevopsDeployWorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> composeBind = (Map<String, Object>) composeCall.get("bind");
         assertEquals("ps", String.valueOf(composeBind.get("composeOperation")));
+    }
+
+    @Test
+    void devopsDeploy_composeUpRoutesToTargetOrServiceThenRunsUp() throws Exception {
+        List<Map<String, Object>> steps = devopsSteps();
+
+        Map<String, Object> branch = (Map<String, Object>) steps.get(18);
+        assertEquals("branch", String.valueOf(branch.get("type")));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> branches = (List<Map<String, Object>>) branch.get("branches");
+        assertEquals(19, ((Number) branches.get(0).get("next")).intValue());
+        assertEquals(21, ((Number) branches.get(1).get("next")).intValue());
+
+        Map<String, Object> createThread = (Map<String, Object>) steps.get(23);
+        assertEquals("create_thread", String.valueOf(createThread.get("action")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> threadBind = (Map<String, Object>) createThread.get("bind");
+        assertEquals("DevOps Progress", String.valueOf(threadBind.get("threadName")));
+
+        Map<String, Object> composeCall = (Map<String, Object>) steps.get(24);
+        assertEquals("run_deploy_compose", String.valueOf(composeCall.get("action")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> composeBind = (Map<String, Object>) composeCall.get("bind");
+        assertEquals("up", String.valueOf(composeBind.get("composeOperation")));
+    }
+
+    @Test
+    void devopsDeploy_composeStopRoutesToTargetOrServiceThenRunsStop() throws Exception {
+        List<Map<String, Object>> steps = devopsSteps();
+
+        Map<String, Object> branch = (Map<String, Object>) steps.get(27);
+        assertEquals("branch", String.valueOf(branch.get("type")));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> branches = (List<Map<String, Object>>) branch.get("branches");
+        assertEquals(28, ((Number) branches.get(0).get("next")).intValue());
+        assertEquals(30, ((Number) branches.get(1).get("next")).intValue());
+
+        Map<String, Object> createThread = (Map<String, Object>) steps.get(32);
+        assertEquals("create_thread", String.valueOf(createThread.get("action")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> threadBind = (Map<String, Object>) createThread.get("bind");
+        assertEquals("deploy-progress", String.valueOf(threadBind.get("threadName")));
+
+        Map<String, Object> composeCall = (Map<String, Object>) steps.get(33);
+        assertEquals("run_deploy_compose", String.valueOf(composeCall.get("action")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> composeBind = (Map<String, Object>) composeCall.get("bind");
+        assertEquals("stop", String.valueOf(composeBind.get("composeOperation")));
     }
 }

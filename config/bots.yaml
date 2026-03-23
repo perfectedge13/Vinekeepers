@@ -1040,9 +1040,9 @@ workflows:
       - when:
           key: deployNeedsProjectPick
           value: 'true'
-        next: 34
+        next: 28
       - when: else
-        next: 36
+        next: 30
     - type: prompt_for_field
       prompt: Which deploy target?
       storeIn: deployTargetId
