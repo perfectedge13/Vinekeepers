@@ -14,8 +14,10 @@ Compose menu adds **restart**; `deploy-targets.yaml` adds example **`neo4j`** / 
 
 ## 2026-03-23
 
-Added `compose.host-ops.yaml` and `config/deploy-targets.docker.yaml` so containerized Vinekeepers can reach host Docker and mounted stack paths without shadowing `/app`.
+Added `config/deploy-targets.docker.yaml` and folded host-ops bind mounts (docker.sock, stack paths, `/workspace/vinekeepers`, `DEPLOY_TARGETS_PATH`) into `compose.yaml` so `docker compose up -d` enables Gadget without a second compose file.
 
 `HostComposeOpsRunner` now logs startup warnings when direct compose targets are configured in a container but the Docker socket, stack directory, or compose file is missing.
 
 Shipped Wiki.js compose allowlist uses service keys **`wikijs`** and **`db`** (not the Postgres `container_name` **`wikijs-db`**), matching `docker compose` service arguments.
+
+Gadget **Stop** only stops the compose **service(s)** you pick; choosing **`wikijs`** leaves **`db`** (container often named `wikijs-db`) running. Use **All services (full stack)** to stop the whole stack; the bot now explains this after a partial stop.

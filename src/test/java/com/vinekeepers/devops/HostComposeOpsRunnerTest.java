@@ -47,6 +47,16 @@ class HostComposeOpsRunnerTest {
     }
 
     @Test
+    void partialStackStopHintWhenOnlyOneServiceStoppedOnMultiServiceTarget() {
+        DeployTargetCompose c = new DeployTargetCompose("dc.yml", "/w", List.of("wikijs", "db"), ComposeHostExecutor.DIRECT);
+        assertEquals(null, HostComposeOpsRunner.partialStackStopHintForTest(ComposeOperation.STOP, 0, List.of("wikijs", "db"), c));
+        String hint = HostComposeOpsRunner.partialStackStopHintForTest(ComposeOperation.STOP, 0, List.of("wikijs"), c);
+        assertTrue(hint != null && hint.contains("wikijs") && hint.contains("All services (full stack)"), hint);
+        assertEquals(null, HostComposeOpsRunner.partialStackStopHintForTest(ComposeOperation.STOP, 1, List.of("wikijs"), c));
+        assertEquals(null, HostComposeOpsRunner.partialStackStopHintForTest(ComposeOperation.UP, 0, List.of("wikijs"), c));
+    }
+
+    @Test
     void validateDirectComposePrerequisitesReportsMissingWorkingDirectory() {
         Path missing = Path.of("target", "missing-compose-dir");
         String msg = HostComposeOpsRunner.validateDirectComposePrerequisitesForTest(missing, "compose.yaml", "docker");

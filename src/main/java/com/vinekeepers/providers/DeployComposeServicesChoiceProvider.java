@@ -40,7 +40,7 @@ public final class DeployComposeServicesChoiceProvider implements DynamicChoiceP
             return List.of();
         }
         List<ResponseIntent.Choice> out = new ArrayList<>();
-        out.add(new ResponseIntent.Choice("_all", "All configured services", null));
+        out.add(new ResponseIntent.Choice("_all", "All services (full stack)", null));
         for (String s : target.getCompose().allServiceNames()) {
             out.add(new ResponseIntent.Choice(s, s, null));
         }

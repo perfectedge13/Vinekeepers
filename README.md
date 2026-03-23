@@ -36,38 +36,9 @@ docker run --rm -v "$(pwd)/config:/app/config" -v "$(pwd)/.env:/app/.env" vineke
 
 **Gadget / `run_deploy_compose` on Docker:** the DevOps Discord flow offers compose **up**, **stop**, **restart**, and **ps** (status) per target in `config/deploy-targets.yaml`. The `compose ps` path now posts into **`DevOps Progress`**; mutating compose operations still use **`deploy-progress`**. Direct host compose operations run `docker compose` on the **host** engine from inside the Vinekeepers container, so the runtime image must include the Docker CLI + Compose plugin and the container must mount **`/var/run/docker.sock`** plus each compose target's **`workingDirectory`** at the path visible inside the container.
 
-For the containerized setup in this repo, start Vinekeepers in host-ops mode with the dedicated override:
+`compose.yaml` is set up for **Gadget** when you run with Compose: it mounts **`/var/run/docker.sock`**, bind-mounts the repo to **`/workspace/vinekeepers`** (override with **`VINEKEEPERS_HOST_REPO_ROOT`**), bind-mounts the shipped stack paths **`/home/perfect_edge13/Docker/neo4j`** and **`/home/perfect_edge13/Docker/wikijs`** at the same absolute paths inside the container, and sets **`DEPLOY_TARGETS_PATH=/app/config/deploy-targets.docker.yaml`**. If those host paths differ on your machine, update **`config/deploy-targets.yaml`**, **`config/deploy-targets.docker.yaml`**, and the **`volumes`** entries in **`compose.yaml`** together.
 
-```bash
-docker compose -f compose.yaml -f compose.host-ops.yaml up -d
-```
-
-That override:
-
-- mounts `/var/run/docker.sock`
-- keeps the runtime image mounted at `/app`
-- bind-mounts the repo to `/workspace/vinekeepers` for the `vinekeepers` compose target
-- bind-mounts the host stack directories from `config/deploy-targets.yaml` at the same absolute paths inside the container
-- sets `DEPLOY_TARGETS_PATH=/app/config/deploy-targets.docker.yaml` so direct compose uses container-visible paths
-
-The shipped stack targets use:
-
-- `/home/perfect_edge13/Docker/neo4j`
-- `/home/perfect_edge13/Docker/wikijs`
-
-Example:
-
-```bash
-docker compose -f compose.yaml -f compose.host-ops.yaml up -d
-```
-
-If you launch with `sudo`, you no longer need stack-path env vars:
-
-```bash
-sudo docker compose -f compose.yaml -f compose.host-ops.yaml up -d
-```
-
-If you run Vinekeepers outside Docker, keep using `config/deploy-targets.yaml`. If the stack paths on the host change, update `config/deploy-targets.yaml` first and keep `compose.host-ops.yaml` in sync so the container bind-mounts those same absolute paths. If the socket, compose file, or working directory is still missing inside the container, Gadget fails fast and Vinekeepers logs startup warnings before the first Discord-triggered compose request. Rebuild and restart the Vinekeepers container after image or runtime changes so the live bot picks up the new Docker CLI and compose preflight behavior. Prefer **`hostOpsExecutor: direct`** when the container has the Docker CLI and matching mounts; otherwise use **`cursor_agent`**.
+If you run Vinekeepers outside Docker, keep using **`config/deploy-targets.yaml`** and unset container-specific paths. If the socket, compose file, or working directory is still missing inside the container, Gadget fails fast and Vinekeepers logs startup warnings before the first Discord-triggered compose request. Rebuild and restart the Vinekeepers container after image or runtime changes so the live bot picks up the Docker CLI and compose preflight behavior. Prefer **`hostOpsExecutor: direct`** when the container has the Docker CLI and matching mounts; otherwise use **`cursor_agent`**.
 
 Optional: set `JAVA_OPTS` (e.g. `-Xmx512m`) via `-e JAVA_OPTS=...`.
 
@@ -138,7 +109,7 @@ Required for Luna on Discord:
 
 Optional:
 
-- `HEALTH_PORT`: port for the health HTTP server (default 8080); used by Prometheus blackbox for Grafana status dashboard. Set to 0 or omit to disable.
+- `HEALTH_PORT`: port for the health HTTP server (default 8080); used by Prometheus uptime bridges on Docker network **`monitoring`** (`/health`, `/`). Set to 0 or omit to disable. Create **`docker network create monitoring`** and use `compose.yaml`’s **`monitoring`** network so `~/Docker/prometheus` can reach **`vinekeepers:8080`**.
 - `CURSOR_API_BASE_URL`: defaults to `https://api.cursor.com`
 - `CURSOR_MODEL`: explicit model id for cloud launches
 - `CURSOR_BASE_BRANCH`: default base branch when Luna launches a run

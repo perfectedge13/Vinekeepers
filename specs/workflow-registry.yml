@@ -796,19 +796,20 @@ assets:
     kind: config
     path: config/deploy-targets.docker.yaml
     role: >-
-      Containerized deploy target manifest for compose.host-ops.yaml; selected via DEPLOY_TARGETS_PATH so direct host compose
-      uses /workspace/vinekeepers for the repo target and the same host absolute paths for neo4j/wikijs stacks as
-      deploy-targets.yaml (bind-mounted), without shadowing /app
+      Containerized deploy target manifest when DEPLOY_TARGETS_PATH selects this file; direct host compose uses /workspace/vinekeepers
+      for the repo target and the same host absolute paths for neo4j/wikijs stacks as deploy-targets.yaml (bind-mounted), without
+      shadowing /app
     requires:
       - REQ-GADGET-001
     feature_ids:
       - FEAT-DEVOPS-GADGET
   - id: ASSET-COMPOSE-HOST-OPS-YAML
     kind: config
-    path: compose.host-ops.yaml
+    path: compose.yaml
     role: >-
-      Optional Docker Compose override for containerized Gadget host compose operations; mounts docker.sock and sample host stack
-      paths, mounts the repo under /workspace/vinekeepers, and sets DEPLOY_TARGETS_PATH to the docker-specific manifest
+      Docker Compose service definition for Vinekeepers; mounts docker.sock, sample neo4j/wikijs host stack paths at the same
+      absolute paths as deploy-targets manifests, mounts the repo under /workspace/vinekeepers, sets DEPLOY_TARGETS_PATH to the
+      docker-specific manifest, and attaches the external monitoring network for health probes
     requires:
       - REQ-GADGET-001
     feature_ids:
@@ -3682,8 +3683,8 @@ requirements:
           mount is missing inside a containerized Vinekeepers runtime; startup logs warn early when direct compose targets are
           mis-mounted; DEPLOY_HOST_OPS_DISABLED disables host ops
         - >-
-          compose.host-ops.yaml bind-mounts the real host stack directories declared in config/deploy-targets.yaml at the same
-          absolute paths inside the container so direct compose can run without stack-path env vars
+          compose.yaml bind-mounts the real host stack directories declared in config/deploy-targets.yaml at the same absolute paths
+          inside the container so direct compose can run without stack-path env vars
         - >-
           config/bots.yaml workflows.devops_deploy main menu includes compose_restart; branch step next indices reference valid step
           indices (DevopsDeployWorkflowYamlTest)
@@ -3694,8 +3695,8 @@ requirements:
           Shipped config/deploy-targets.yaml includes compose-only neo4j and wikijs targets with host stack workingDirectory and
           allowlisted services
         - >-
-          Shipped compose.host-ops.yaml mounts /var/run/docker.sock, the repo at /workspace/vinekeepers, bind-mounts the neo4j and
-          wikijs stack directories at the same absolute paths as config/deploy-targets.yaml, and switches DEPLOY_TARGETS_PATH to
+          Shipped compose.yaml mounts /var/run/docker.sock, the repo at /workspace/vinekeepers, bind-mounts the neo4j and wikijs
+          stack directories at the same absolute paths as config/deploy-targets.yaml, and switches DEPLOY_TARGETS_PATH to
           config/deploy-targets.docker.yaml for containerized direct compose
         - >-
           ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies

@@ -19,7 +19,7 @@ Operator-driven deploys from Discord (**REQ-GADGET-001**). Any bot may use `work
 | ASSET-START-GADGET-DEPLOY-ACTION | `start_ansible_deploy` | src/main/java/com/vinekeepers/workflow/actions/StartAnsibleDeployAction.java |
 | ASSET-GADGET-PROJECTS-YAML | Target list (Ansible + compose) | config/deploy-targets.yaml |
 | ASSET-GADGET-PROJECTS-DOCKER-YAML | Containerized target list for direct compose host-ops | config/deploy-targets.docker.yaml |
-| ASSET-COMPOSE-HOST-OPS-YAML | Docker Compose override for containerized host ops | compose.host-ops.yaml |
+| ASSET-COMPOSE-HOST-OPS-YAML | Docker Compose for Vinekeepers (Gadget mounts + monitoring network) | compose.yaml |
 | ASSET-HOST-COMPOSE-OPS-RUNNER | `docker compose` / optional Cursor Agent CLI | src/main/java/com/vinekeepers/devops/HostComposeOpsRunner.java |
 | ASSET-RUN-DEPLOY-COMPOSE-ACTION | `run_deploy_compose` | src/main/java/com/vinekeepers/workflow/actions/RunDeployComposeAction.java |
 | ASSET-DEPLOY-COMPOSE-SERVICES-CHOICE-PROVIDER | `deployComposeServices` allowlist | src/main/java/com/vinekeepers/providers/DeployComposeServicesChoiceProvider.java |

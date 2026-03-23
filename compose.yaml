@@ -1,23 +1,30 @@
 # Vinekeepers — run with: docker compose up -d
 # Build first: docker build -t vinekeepers .   (or use: docker compose build)
 # Env: put DISCORD_BOT_TOKEN, CURSOR_API_KEY, etc. in .env (loaded into container).
-# Port 8080: health endpoint for Prometheus blackbox (Grafana status dashboard green/red tile).
+# Port 8080: health endpoint (/ and /health) for Prometheus uptime bridge on Docker network "monitoring".
+#
+# Gadget / run_deploy_compose: Docker socket + host stack dirs + DEPLOY_TARGETS_PATH are configured here
+# so direct compose can run against neo4j/wikijs paths that match config/deploy-targets.docker.yaml.
 
 services:
   vinekeepers:
     image: vinekeepers
     build: .
     env_file: .env
+    environment:
+      DEPLOY_TARGETS_PATH: /app/config/deploy-targets.docker.yaml
     ports:
       - "8080:8080"
     volumes:
       - ./config:/app/config
-      # Gadget / run_deploy_compose (direct executor): use
-      # `docker compose -f compose.yaml -f compose.host-ops.yaml up -d`
-      # to add the Docker socket and host stack mounts without shadowing /app.
-      # The override switches DEPLOY_TARGETS_PATH to config/deploy-targets.docker.yaml,
-      # which points the Vinekeepers target at /workspace/vinekeepers and bind-mounts
-      # the neo4j / wikijs stack paths at the same absolute locations declared in
-      # config/deploy-targets.yaml.
-      # See README.md → Docker → Gadget / run_deploy_compose on Docker.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${VINEKEEPERS_HOST_REPO_ROOT:-.}:/workspace/vinekeepers:ro
+      - /home/perfect_edge13/Docker/neo4j:/home/perfect_edge13/Docker/neo4j
+      - /home/perfect_edge13/Docker/wikijs:/home/perfect_edge13/Docker/wikijs
     restart: unless-stopped
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    external: true

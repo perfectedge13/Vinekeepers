@@ -1071,7 +1071,7 @@ workflows:
     - type: capture_field
       storeIn: deployTargetId
     - type: prompt_for_field
-      prompt: Which service(s)?
+      prompt: Which compose service(s)? **All services (full stack)** stops every container; one service stops only that service (e.g. a database may keep running).
       storeIn: deployComposeService
       choiceProvider: deployComposeServices
     - type: capture_field

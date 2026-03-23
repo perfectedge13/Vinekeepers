@@ -134,6 +134,10 @@ public final class HostComposeOpsRunner {
         int code = proc.exitValue();
         if (code == 0) {
             sendLine(router, workflowBotId, channelId, "Compose finished **successfully**.");
+            String partialStopHint = partialStackStopHint(operation, code, services, c);
+            if (partialStopHint != null) {
+                sendLine(router, workflowBotId, channelId, partialStopHint);
+            }
         } else {
             sendLine(router, workflowBotId, channelId, "Compose finished with **exit code " + code + "**.");
         }
@@ -225,6 +229,33 @@ public final class HostComposeOpsRunner {
         int code = proc.exitValue();
         sendLine(router, workflowBotId, channelId,
                 "Cursor agent finished with **exit code " + code + "**.");
+    }
+
+    /**
+     * When stopping a single service on a multi-service stack, operators often expect the whole stack to stop
+     * (e.g. Wiki.js app vs Postgres {@code db} still running under container name {@code wikijs-db}).
+     */
+    static String partialStackStopHintForTest(ComposeOperation operation,
+                                              int exitCode,
+                                              List<String> resolvedServices,
+                                              DeployTargetCompose c) {
+        return partialStackStopHint(operation, exitCode, resolvedServices, c);
+    }
+
+    private static String partialStackStopHint(ComposeOperation operation,
+                                               int exitCode,
+                                               List<String> resolvedServices,
+                                               DeployTargetCompose c) {
+        if (operation != ComposeOperation.STOP || exitCode != 0 || c == null) {
+            return null;
+        }
+        if (resolvedServices == null || resolvedServices.size() != 1 || c.allServiceNames().size() <= 1) {
+            return null;
+        }
+        String svc = resolvedServices.get(0);
+        return "This target has **multiple** compose services; only `" + escape(svc) + "` was stopped. "
+                + "Other containers (for example a database) may still be running — `docker ps` can show a different **container** name than the compose **service** name. "
+                + "To stop **every** service, run **Stop** again and choose **All services (full stack)**.";
     }
 
     /** Visible for tests: prompt only. */

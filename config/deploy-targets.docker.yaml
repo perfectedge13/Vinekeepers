@@ -1,4 +1,4 @@
-# Containerized host-ops manifest for compose.host-ops.yaml.
+# Containerized deploy manifest when DEPLOY_TARGETS_PATH points here (see compose.yaml).
 # The repo target uses an in-container path; host stack targets still use the same
 # absolute host paths defined in config/deploy-targets.yaml and are bind-mounted there.
 targets:
