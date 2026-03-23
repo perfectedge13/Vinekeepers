@@ -17,3 +17,5 @@ Compose menu adds **restart**; `deploy-targets.yaml` adds example **`neo4j`** / 
 Added `compose.host-ops.yaml` and `config/deploy-targets.docker.yaml` so containerized Vinekeepers can reach host Docker and mounted stack paths without shadowing `/app`.
 
 `HostComposeOpsRunner` now logs startup warnings when direct compose targets are configured in a container but the Docker socket, stack directory, or compose file is missing.
+
+Shipped Wiki.js compose allowlist uses service keys **`wikijs`** and **`db`** (not the Postgres `container_name` **`wikijs-db`**), matching `docker compose` service arguments.
