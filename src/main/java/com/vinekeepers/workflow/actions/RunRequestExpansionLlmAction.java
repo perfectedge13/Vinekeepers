@@ -1,7 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.connectors.openai.OpenAiCallContext;
@@ -58,6 +57,8 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             Do not fabricate file paths or packages when repo_evidence_this_pass is not observed.
             Prefer question_if_needed for any clarification; never emit multiple questions across follow_up_decisions and question_if_needed.
             Populate fields from the user's feature request and repo snapshot. Avoid echoing the request verbatim as the only content.
+            Return exactly one JSON object as the entire response body. Do not add commentary before or after it.
+            If you are unsure, prefer an empty or conservative JSON object over malformed JSON, prose, or placeholder keys.
             """;
 
     private final PlanningContentGenerator generator;
@@ -146,8 +147,21 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             return spread;
         }
 
+        PlanningLlmJsonSupport.ParsedJsonObjectResult parsed =
+                PlanningLlmJsonSupport.parseJsonObjectWithRepair(openAiChatClient, raw, "request expansion", event, state);
+        spread.put("planningExpansionRepairAttempted", parsed.repairAttempted() ? "true" : "false");
+        spread.put("planningExpansionRepairExhausted", parsed.repairExhausted() ? "true" : "false");
+        if (!parsed.success()) {
+            spread.put("planningLlmError", parsed.errorMessage());
+            spread.put("planningExpansionFallbackUsed", "true");
+            spread.put("planningExpansionSource", "DETERMINISTIC");
+            spread.put("planningLlmOk", "false");
+            log.warn("Request expansion parse/apply failed: {}", spread.get("planningLlmError"));
+            return spread;
+        }
+
         try {
-            JsonNode root = PlanningLlmJsonSupport.parseJsonObject(raw);
+            JsonNode root = parsed.root();
             UpsertArtifactSectionDataAction upsertAction = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
             Map<String, Object> base = new LinkedHashMap<>();
             if (state != null) {
@@ -235,10 +249,22 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
                                 Map.of("plan_body", design)));
             }
 
-            int appliedExtras = applyUpsertsArray(upsertAction, event, base, root.path("upserts"));
+            PlanningLlmJsonSupport.UpsertApplyResult extraResult =
+                    PlanningLlmJsonSupport.applyUpsertsArrayDetailed(
+                            root.path("upserts"), event, state, contextId, planStateStore, workProfileRegistry);
+            int appliedExtras = extraResult.applied();
+            spread.put("planningExpansionUpsertsAttempted", String.valueOf(extraResult.attempted()));
+            spread.put("planningExpansionUpsertsRejected", String.valueOf(extraResult.rejected().size()));
+            if (extraResult.attempted() > 0 && appliedExtras == 0) {
+                spread.put("planningLlmError", PlanningLlmJsonSupport.summarizeRejectedUpserts(extraResult));
+                spread.put("planningExpansionFallbackUsed", "true");
+                spread.put("planningExpansionSource", "DETERMINISTIC");
+                spread.put("planningLlmOk", "false");
+                return spread;
+            }
 
             List<String> followUps = new ArrayList<>();
-            String qIfNeeded = text(root, "question_if_needed");
+            String qIfNeeded = PlanningLlmJsonSupport.readSingleQuestionIfNeeded(root);
             if (!qIfNeeded.isBlank()) {
                 followUps.add(qIfNeeded);
             }
@@ -295,57 +321,6 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
                         "replace",
                         "data",
                         Map.of(narrativeField, v)));
-    }
-
-    private static int applyUpsertsArray(
-            UpsertArtifactSectionDataAction upsertAction,
-            Event event,
-            Map<String, Object> base,
-            JsonNode upsertsNode)
-            throws JsonProcessingException {
-        if (!upsertsNode.isArray()) {
-            return 0;
-        }
-        int applied = 0;
-        for (JsonNode n : upsertsNode) {
-            if (!n.isObject()) {
-                continue;
-            }
-            Map<String, Object> upsert;
-            try {
-                upsert = JSON.convertValue(n, new TypeReference<>() {});
-            } catch (IllegalArgumentException e) {
-                continue;
-            }
-            Object aid = upsert.get("artifactId");
-            Object sid = upsert.get("sectionId");
-            if (aid == null || sid == null) {
-                continue;
-            }
-            Object dataObj = upsert.get("data");
-            if (!(dataObj instanceof Map<?, ?>)) {
-                continue;
-            }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> dataMap = (Map<String, Object>) dataObj;
-            String mode = upsert.get("mode") != null ? upsert.get("mode").toString() : "replace";
-            Object res = upsertAction.run(
-                    event,
-                    base,
-                    Map.of(
-                            "artifactId",
-                            aid.toString(),
-                            "sectionId",
-                            sid.toString(),
-                            "mode",
-                            mode,
-                            "data",
-                            dataMap));
-            if ("OK".equals(res)) {
-                applied++;
-            }
-        }
-        return applied;
     }
 
     private static String composeExplorationMarkdown(FeaturePlanState plan, JsonNode root) {
@@ -410,6 +385,10 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         m.put("planningExpansionRichBody", "false");
         m.put("planningExpansionFollowUpsJson", "[]");
         m.put("planningExpansionUpsertExtras", "0");
+        m.put("planningExpansionUpsertsAttempted", "0");
+        m.put("planningExpansionUpsertsRejected", "0");
+        m.put("planningExpansionRepairAttempted", "false");
+        m.put("planningExpansionRepairExhausted", "false");
         m.put("planningExpansionLatencyMs", "0");
         return m;
     }

@@ -6,6 +6,7 @@ package com.vinekeepers.state.planning;
 public enum PlanningFailureCategory {
     /** No failure or not classified. */
     NONE,
+    SYNTHESIS_TRANSPORT_ERROR,
     SYNTHESIS_JSON_INVALID,
     SYNTHESIS_REPAIR_EXHAUSTED,
     SYNTHESIS_UPSERT_REJECTED,

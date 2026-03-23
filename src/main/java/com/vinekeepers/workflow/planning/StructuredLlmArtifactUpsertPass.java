@@ -63,40 +63,40 @@ public final class StructuredLlmArtifactUpsertPass {
         if (raw.startsWith("ERROR:")) {
             return new RolePassResult(0, List.of(), raw, false);
         }
-        try {
-            return parseAndApplyUpserts(raw, event, state, contextId, planStore, profileRegistry, roleNameForPayload);
-        } catch (Exception e) {
-            log.warn("{} pass parse failed: {}", roleNameForPayload, e.getMessage());
-            String repaired = PlanningLlmJsonSupport.tryRepairJson(client, raw, roleNameForPayload, event, state);
-            if (repaired != null) {
-                try {
-                    return parseAndApplyUpserts(
-                            repaired, event, state, contextId, planStore, profileRegistry, roleNameForPayload);
-                } catch (Exception e2) {
-                    log.warn("{} pass parse failed after repair: {}", roleNameForPayload, e2.getMessage());
-                }
-            }
-            String brief = e.getMessage() != null ? truncateOneLine(e.getMessage(), 400) : "parse failed";
+        PlanningLlmJsonSupport.ParsedJsonObjectResult parsed =
+                PlanningLlmJsonSupport.parseJsonObjectWithRepair(client, raw, roleNameForPayload, event, state);
+        if (!parsed.success()) {
+            log.warn("{} pass parse failed: {}", roleNameForPayload, parsed.errorMessage());
+            String brief = parsed.errorMessage() != null ? truncateOneLine(parsed.errorMessage(), 400) : "parse failed";
             return new RolePassResult(0, List.of(), STRUCTURED_JSON_PARSE_PREFIX + brief, false);
+        }
+        try {
+            return parseAndApplyUpserts(parsed.root(), event, state, contextId, planStore, profileRegistry);
+        } catch (Exception e) {
+            log.warn("{} pass apply failed: {}", roleNameForPayload, e.getMessage());
+            String brief = e.getMessage() != null ? truncateOneLine(e.getMessage(), 400) : "apply failed";
+            return new RolePassResult(0, List.of(), brief, false);
         }
     }
 
     private static RolePassResult parseAndApplyUpserts(
-            String raw,
+            JsonNode root,
             Event event,
             Map<String, Object> state,
             String contextId,
             FeaturePlanStateStore planStore,
-            WorkProfileRegistry profileRegistry,
-            String roleNameForPayload)
+            WorkProfileRegistry profileRegistry)
             throws Exception {
-        JsonNode root = PlanningLlmJsonSupport.parseJsonObject(raw);
         PlanningLlmJsonSupport.UpsertApplyResult upsertResult =
                 PlanningLlmJsonSupport.applyUpsertsDetailed(root, event, state, contextId, planStore, profileRegistry);
         if (upsertResult.attempted() > 0 && upsertResult.applied() == 0) {
             throw new IllegalArgumentException(PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
         }
         List<String> followUps = PlanningLlmJsonSupport.readFollowUpQuestions(root);
+        String qIfNeeded = PlanningLlmJsonSupport.readSingleQuestionIfNeeded(root);
+        if (followUps.isEmpty() && !qIfNeeded.isBlank()) {
+            followUps = List.of(qIfNeeded);
+        }
         return new RolePassResult(upsertResult.applied(), followUps, "", false);
     }
 

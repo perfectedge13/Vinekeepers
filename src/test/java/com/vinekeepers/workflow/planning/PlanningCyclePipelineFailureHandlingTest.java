@@ -6,6 +6,7 @@ import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
@@ -38,6 +39,25 @@ class PlanningCyclePipelineFailureHandlingTest {
 
         assertDoesNotThrow(() -> m.invoke(ctx.pipeline(), ctx.plan().getContextId(), spread, synthSpread));
         assertEquals("SYNTHESIS_UPSERTS_NOT_APPLIED", spread.get("planningRoomCycleError"));
+    }
+
+    @Test
+    void applyImmediateSynthesisFailure_usesExplicitSynthesisCategoryWhenPresent() throws Exception {
+        TestContext ctx = createContext("ctx-immediate-category");
+        Method m =
+                PlanningCyclePipeline.class.getDeclaredMethod(
+                        "applyImmediateSynthesisFailure", String.class, Map.class, Map.class);
+        m.setAccessible(true);
+
+        Map<String, Object> spread = new LinkedHashMap<>();
+        Map<String, Object> synthSpread = new LinkedHashMap<>();
+        synthSpread.put("planningLlmError", "ERROR: upstream timeout");
+        synthSpread.put("planningLlmUpsertCount", "0");
+        synthSpread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name());
+
+        assertDoesNotThrow(() -> m.invoke(ctx.pipeline(), ctx.plan().getContextId(), spread, synthSpread));
+        assertEquals(PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name(), spread.get("planningSynthesisFailureCategory"));
+        assertEquals(PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name(), spread.get("planningRoomCycleError"));
     }
 
     @Test

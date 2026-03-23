@@ -1244,17 +1244,23 @@ public final class PlanningCyclePipeline {
         if (applied > 0) {
             return;
         }
-        String cat = blankToEmpty(getString(spread, "planningSynthesisFailureCategory"));
+        String cat = blankToEmpty(getString(synthSpread, "planningSynthesisFailureCategory"));
         boolean structuredRoleFailed =
                 "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
         FeaturePlanState planForRecover = planStateStore.getByContextId(contextId).orElse(null);
         boolean recoverable = hasRecoverablePlanningDraft(planForRecover) && !structuredRoleFailed;
         spread.put("planningRecoverableDraftAfterSynthesis", recoverable ? "true" : "false");
-        if ("SYNTHESIS_JSON_INVALID".equals(cat) || "SYNTHESIS_REPAIR_EXHAUSTED".equals(cat)) {
+        if ("SYNTHESIS_JSON_INVALID".equals(cat)
+                || "SYNTHESIS_REPAIR_EXHAUSTED".equals(cat)
+                || "SYNTHESIS_TRANSPORT_ERROR".equals(cat)) {
             spread.put("planningSuppressAutonomousRedraftNotice", "true");
         }
         if (!cat.isBlank()) {
             spread.put("planningSynthesisFailureCategory", cat);
+            String existing = getString(spread, "planningRoomCycleError");
+            if (existing == null || existing.isBlank()) {
+                putPlanningRoomCycleError(spread, cat);
+            }
             return;
         }
         String existing = getString(spread, "planningRoomCycleError");

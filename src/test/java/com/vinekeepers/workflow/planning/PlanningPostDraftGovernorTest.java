@@ -356,7 +356,7 @@ class PlanningPostDraftGovernorTest {
     }
 
     @Test
-    void derive_recoverableSynthesisFailure_noLedgerOrStructuredGaps_blocks() {
+    void derive_recoverableSynthesisFailure_noLedgerOrStructuredGaps_continuesWithSavedDraft() {
         PlanningPostDraftGovernor.Result r =
                 PlanningPostDraftGovernor.derive(
                         Map.of(),
@@ -373,8 +373,52 @@ class PlanningPostDraftGovernorTest {
                         true,
                         false,
                         false);
-        assertEquals(PlanningPostDraftAction.BLOCK, r.action());
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
         assertFalse(r.forceUserInputRequired());
+        assertTrue(r.noticeMarkdown().contains("current draft"));
+    }
+
+    @Test
+    void derive_recoverableTransportFailure_continuesWithSavedDraft() {
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name(),
+                        true,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
+        assertTrue(r.noticeMarkdown().contains("current draft"));
+    }
+
+    @Test
+    void derive_emptyNoopRecoverable_continuesWithoutBlocking() {
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        PlanningFailureCategory.SYNTHESIS_EMPTY_NOOP.name(),
+                        true,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
     }
 
     @Test

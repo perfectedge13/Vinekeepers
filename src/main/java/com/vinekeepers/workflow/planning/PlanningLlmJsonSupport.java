@@ -32,9 +32,16 @@ public final class PlanningLlmJsonSupport {
     private static final int REPAIR_USER_SNIPPET_MAX = 14_000;
     private static final String JSON_REPAIR_SYSTEM =
             "You fix JSON. Reply with a single valid JSON object only: no markdown fences, no explanation. "
-                    + "Arrays must use [ ]. Objects must use { }. No trailing commas.";
+                    + "Arrays must use [ ]. Objects must use { }. No trailing commas. "
+                    + "Do not invent keys or wrap the object in prose.";
 
     public record UpsertApplyResult(int attempted, int applied, List<String> rejected) {}
+    public record ParsedJsonObjectResult(
+            JsonNode root, boolean repairAttempted, boolean repairExhausted, String errorMessage) {
+        public boolean success() {
+            return root != null;
+        }
+    }
 
     private PlanningLlmJsonSupport() {}
 
@@ -82,13 +89,36 @@ public final class PlanningLlmJsonSupport {
     public static JsonNode parseJsonObject(String raw) throws Exception {
         String cleaned = stripMarkdownFence(raw);
         try {
-            return JSON.readTree(cleaned);
+            return requireObject(JSON.readTree(cleaned));
         } catch (Exception fullParseError) {
             String extracted = extractJsonObject(cleaned);
             if (extracted.equals(cleaned)) {
                 throw fullParseError;
             }
-            return JSON.readTree(extracted);
+            return requireObject(JSON.readTree(extracted));
+        }
+    }
+
+    public static ParsedJsonObjectResult parseJsonObjectWithRepair(
+            OpenAiChatClient client,
+            String rawAssistant,
+            String roleNameForPayload,
+            Event event,
+            Map<String, Object> state) {
+        try {
+            return new ParsedJsonObjectResult(parseJsonObject(rawAssistant), false, false, "");
+        } catch (Exception firstFailure) {
+            String repaired = tryRepairJson(client, rawAssistant, roleNameForPayload, event, state);
+            boolean repairAttempted = client != null && client.isConfigured();
+            if (repaired != null) {
+                try {
+                    return new ParsedJsonObjectResult(parseJsonObject(repaired), true, false, "");
+                } catch (Exception repairedFailure) {
+                    return new ParsedJsonObjectResult(
+                            null, true, true, firstNonBlankMessage(repairedFailure, firstFailure));
+                }
+            }
+            return new ParsedJsonObjectResult(null, repairAttempted, true, firstNonBlankMessage(firstFailure, null));
         }
     }
 
@@ -136,8 +166,18 @@ public final class PlanningLlmJsonSupport {
             String contextId,
             FeaturePlanStateStore planStateStore,
             WorkProfileRegistry workProfileRegistry) {
-        JsonNode upsertsNode = root.path("upserts");
-        if (!upsertsNode.isArray()) {
+        return applyUpsertsArrayDetailed(
+                root != null ? root.path("upserts") : null, event, state, contextId, planStateStore, workProfileRegistry);
+    }
+
+    public static UpsertApplyResult applyUpsertsArrayDetailed(
+            JsonNode upsertsNode,
+            Event event,
+            Map<String, Object> state,
+            String contextId,
+            FeaturePlanStateStore planStateStore,
+            WorkProfileRegistry workProfileRegistry) {
+        if (upsertsNode == null || !upsertsNode.isArray()) {
             return new UpsertApplyResult(0, 0, List.of());
         }
         UpsertArtifactSectionDataAction upsertAction = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
@@ -196,6 +236,9 @@ public final class PlanningLlmJsonSupport {
 
     public static List<String> readFollowUpQuestions(JsonNode root) {
         List<String> followUps = new ArrayList<>();
+        if (root == null) {
+            return followUps;
+        }
         JsonNode fq = root.path("follow_up_questions");
         if (fq.isArray()) {
             for (JsonNode n : fq) {
@@ -208,6 +251,42 @@ public final class PlanningLlmJsonSupport {
             }
         }
         return followUps;
+    }
+
+    public static String readSingleQuestionIfNeeded(JsonNode root) {
+        if (root == null) {
+            return "";
+        }
+        JsonNode q = root.path("question_if_needed");
+        return q.isTextual() ? q.asText("").trim() : "";
+    }
+
+    public static boolean hasMeaningfulPlanningContent(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            return false;
+        }
+        JsonNode upserts = root.path("upserts");
+        if (upserts.isArray() && upserts.size() > 0) {
+            return true;
+        }
+        if (!readSingleQuestionIfNeeded(root).isBlank()) {
+            return true;
+        }
+        if (!readFollowUpQuestions(root).isEmpty()) {
+            return true;
+        }
+        if (!textField(root, "top_unresolved_gap").isBlank()) {
+            return true;
+        }
+        JsonNode assumptions = root.path("explicit_assumptions");
+        if (assumptions.isArray()) {
+            for (JsonNode node : assumptions) {
+                if (node.isTextual() && !node.asText("").trim().isBlank()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static String stripMarkdownFence(String raw) {
@@ -287,5 +366,33 @@ public final class PlanningLlmJsonSupport {
                     + unknown + "; allowed fields: " + allowed + ".";
         }
         return null;
+    }
+
+    private static JsonNode requireObject(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            throw new IllegalArgumentException("Expected a single JSON object.");
+        }
+        return node;
+    }
+
+    private static String textField(JsonNode root, String field) {
+        JsonNode node = root.path(field);
+        return node.isTextual() ? node.asText("").trim() : "";
+    }
+
+    private static String firstNonBlankMessage(Throwable primary, Throwable fallback) {
+        if (primary != null && primary.getMessage() != null && !primary.getMessage().isBlank()) {
+            return primary.getMessage();
+        }
+        if (fallback != null && fallback.getMessage() != null && !fallback.getMessage().isBlank()) {
+            return fallback.getMessage();
+        }
+        if (primary != null) {
+            return primary.getClass().getSimpleName();
+        }
+        if (fallback != null) {
+            return fallback.getClass().getSimpleName();
+        }
+        return "parse failed";
     }
 }

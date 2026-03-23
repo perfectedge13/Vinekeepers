@@ -146,7 +146,23 @@ class PlanningUserFacingCopyTest {
         assertTrue(
                 PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode("SYNTHESIS_UPSERTS_NOT_APPLIED")
                         .toLowerCase()
-                        .contains("schema"));
+                        .contains("valid planning updates"));
+        assertTrue(
+                PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode("SYNTHESIS_TRANSPORT_ERROR")
+                        .toLowerCase()
+                        .contains("model service"));
+    }
+
+    @Test
+    void humanizePlanningCycleFailureFragmentMapsTransportNoise() {
+        assertTrue(
+                PlanningUserFacingCopy.humanizePlanningCycleFailureFragment("HTTP 429 rate limit")
+                        .toLowerCase()
+                        .contains("slow down"));
+        assertTrue(
+                PlanningUserFacingCopy.humanizePlanningCycleFailureFragment("connection refused")
+                        .toLowerCase()
+                        .contains("unavailable"));
     }
 
     @Test

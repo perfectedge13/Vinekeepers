@@ -209,6 +209,40 @@ class RunLlmPlanningSynthesisActionJsonTest {
         assertEquals("false", spread.get("planningSynthesisParseOk"));
     }
 
+    @Test
+    void run_classifiesTransportFailureSeparately() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> transportError = assistantResponse("ERROR: upstream timeout");
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(transportError);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        var registry = TestWorkProfiles.loadFromRepoConfig();
+        var init = new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId",
+                                "ctx-transport",
+                                "channelId",
+                                "room-transport",
+                                "repoRef",
+                                "perfectedge13/Vinekeepers",
+                                "initialRequest",
+                                "Improve planner"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+
+        var action = new RunLlmPlanningSynthesisAction(client, planStore, registry);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread = (Map<String, Object>) action.run(null, Map.of("contextId", "ctx-transport"), Map.of());
+
+        assertEquals(PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name(), spread.get("planningSynthesisFailureCategory"));
+        assertEquals("ERROR: upstream timeout", spread.get("planningLlmError"));
+    }
+
     private static HttpResponse<String> assistantResponse(String content) throws Exception {
         return stringResponse(
                 200,

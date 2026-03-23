@@ -548,7 +548,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/StructuredLlmArtifactUpsertPass.java
     role: >-
       Generic LLM JSON upsert pass over feature-plan artifacts; used by PlanningRolePassRunner; supplies OpenAiCallContext
-      per pass so OpenAiChatClient emits Discord progress and server logs for Arrietty-owned planning calls
+      per pass so OpenAiChatClient emits Discord progress and server logs for Arrietty-owned planning calls; reuses
+      PlanningLlmJsonSupport object-only parse/repair flow and rejects zero-applied schema-invalid upsert batches
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1848,10 +1849,11 @@ assets:
       ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), a single recommended_action aligned with
       post-draft routing semantics, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
       planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
-      parse uses shared PlanningLlmJsonSupport extraction and attempts one JSON repair pass; spreads planningSynthesisFailureCategory
-      (PlanningFailureCategory: SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED), planningSynthesisRepairAttempted,
-      planningSynthesisRepairExhausted when repair or apply still fails; semantic validation requires real profile artifact/section ids and
-      field-keyed data maps (never literal fieldId placeholders), and zero-applied upsert batches fail visibly; failures return ERROR-prefixed or exception messages without hanging
+      parse uses shared PlanningLlmJsonSupport extraction and attempts one bounded JSON repair pass; spreads planningSynthesisFailureCategory
+      (PlanningFailureCategory: SYNTHESIS_TRANSPORT_ERROR, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED,
+      SYNTHESIS_UPSERT_REJECTED, SYNTHESIS_EMPTY_NOOP), planningSynthesisRepairAttempted, planningSynthesisRepairExhausted when repair
+      or apply still fails; semantic validation requires real profile artifact/section ids and field-keyed data maps (never literal
+      fieldId placeholders), and zero-applied upsert batches fail visibly while recoverable prior drafts remain available
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1868,8 +1870,10 @@ assets:
       and caps follow-ups to one (optional follow_up_decisions only when bounded UI); forbids naming repo touchpoints not observed
       in supplied evidence; prompt examples use real software_feature_planning_v2 section ids and field ids rather than generic fieldId
       placeholders; user payload may include planningRepoEvidenceJson
-      and optional RAG snippets when present in workflow state; storeSpread planningExpansionSource, planningExpansionFallbackUsed,
-      planningExpansionFromLlm, etc.; invoked inside execute_planning_room_cycle before deterministic build_request_exploration
+      and optional RAG snippets when present in workflow state; parse/repair now reuses PlanningLlmJsonSupport and extra
+      upserts use the same detailed profile validation path as synthesis; storeSpread planningExpansionSource,
+      planningExpansionFallbackUsed, planningExpansionFromLlm, etc.; invoked inside execute_planning_room_cycle before
+      deterministic build_request_exploration
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -2281,10 +2285,11 @@ requirements:
           evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator
         - >-
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
-          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely; JSON parse uses PlanningLlmJsonSupport
-          with one repair attempt via OpenAI when raw output is invalid; spreads planningSynthesisFailureCategory (e.g. SYNTHESIS_JSON_INVALID,
-          SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED) and planningSynthesisRepairExhausted when repair/apply still fails; PlanningCyclePipeline
-          then sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for invalid/repair-exhausted paths so
+          on transport, parse, or schema errors it spreads planningLlmError without blocking the workflow indefinitely; JSON parse uses
+          PlanningLlmJsonSupport with one repair attempt via OpenAI when raw output is invalid; spreads planningSynthesisFailureCategory
+          (e.g. SYNTHESIS_TRANSPORT_ERROR, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED,
+          SYNTHESIS_EMPTY_NOOP) and planningSynthesisRepairExhausted when repair/apply still fails; PlanningCyclePipeline then sets
+          planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for recoverable transport/parse paths so
           PlanningPostDraftGovernor advances with a deterministic ASSUME_AND_CONTINUE notice (or ASK_ONE_QUESTION when clarification text exists) instead of repeated AUTONOMOUS_REDRAFT;
           when planningRagAvailable is true in workflow state, includes planningRagRetrievalText in the synthesis prompt context
         - >-
@@ -2763,6 +2768,13 @@ requirements:
             Verify run_llm_planning_synthesis JSON parse, repair exhaustion spreads (planningSynthesisFailureCategory), and upsert rejection paths
           testClass: com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisActionJsonTest
           preconditions: []
+        - id: UNIT-RUN-REQUEST-EXPANSION-LLM-JSON
+          title: RunRequestExpansionLlmActionJsonTest
+          intent: >-
+            Verify run_request_expansion_llm repairs malformed JSON, validates extra upserts against the active profile, and
+            falls back cleanly when structured expansion output is unusable
+          testClass: com.vinekeepers.workflow.actions.RunRequestExpansionLlmActionJsonTest
+          preconditions: []
         - id: MANUAL-WORKFLOW
           title: Workflow interface
           intent: Verify workflow is part of bot definition
@@ -3065,6 +3077,19 @@ requirements:
             deny-redraft would assume-through but structured material gaps or OPEN ledger questions remain, synthesis failure category
             recoverable vs block paths, and notice markdown
           testClass: com.vinekeepers.workflow.planning.PlanningPostDraftGovernorTest
+          preconditions: []
+        - id: UNIT-PLANNING-CYCLE-PIPELINE-FAILURE-HANDLING
+          title: PlanningCyclePipelineFailureHandlingTest
+          intent: >-
+            Verify immediate synthesis failures preserve explicit failure categories, set cycle error state consistently, and
+            do not crash post-draft governor routing
+          testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineFailureHandlingTest
+          preconditions: []
+        - id: UNIT-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
+          title: StructuredLlmArtifactUpsertPassTest
+          intent: >-
+            Verify coordinator role passes repair malformed JSON, reject schema-invalid field ids, and preserve structured upsert behavior
+          testClass: com.vinekeepers.workflow.planning.StructuredLlmArtifactUpsertPassTest
           preconditions: []
         - id: UNIT-PLANNING-PACKET-DEPTH-EVALUATOR-RELAX-OPEN-Q
           title: PlanningPacketDepthEvaluatorTest

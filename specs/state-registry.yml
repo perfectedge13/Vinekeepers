@@ -100,8 +100,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/PlanningFailureCategory.java
     role: >-
-      Machine-stable enum for planner/synthesis failures (NONE, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED,
-      SYNTHESIS_UPSERT_REJECTED, SYNTHESIS_EMPTY_NOOP, REPO_GROUNDING_UNAVAILABLE); parse and wireName for FeaturePlanState
+      Machine-stable enum for planner/synthesis failures (NONE, SYNTHESIS_TRANSPORT_ERROR, SYNTHESIS_JSON_INVALID,
+      SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED, SYNTHESIS_EMPTY_NOOP, REPO_GROUNDING_UNAVAILABLE); parse and wireName for FeaturePlanState
       persistence and workflow spreads
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]

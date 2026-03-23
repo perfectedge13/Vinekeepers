@@ -56,6 +56,7 @@ public final class PlanningPostDraftGovernor {
         String cyc = cycleError != null ? cycleError : "";
         boolean wantsRevision = !readyToPost && !userInputRequired;
         String synthCat = synthesisFailureCategory != null ? synthesisFailureCategory.trim() : "";
+        PlanningFailureCategory synthFailure = PlanningFailureCategory.parse(synthCat);
 
         boolean material =
                 detectMaterialChange(
@@ -87,24 +88,38 @@ public final class PlanningPostDraftGovernor {
                     false);
         }
 
-        if (!synthCat.isBlank() && PlanningFailureCategory.parse(synthCat) != PlanningFailureCategory.NONE) {
+        if (synthFailure == PlanningFailureCategory.SYNTHESIS_EMPTY_NOOP) {
+            if (recoverableAfterSynthesis) {
+                return new Result(
+                        PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                        "**Continuing**\n\nThe latest drafting pass made no applicable structured changes, so I'm "
+                                + "keeping the current draft and moving forward.",
+                        false);
+            }
+            synthFailure = PlanningFailureCategory.NONE;
+        }
+
+        if (synthFailure != PlanningFailureCategory.NONE) {
             if (recoverableAfterSynthesis) {
                 String q = firstUserFacingClarificationTextOrEmpty(ledger, plan);
                 if (!q.isBlank()) {
                     return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
                 }
                 if (hasStructuredMaterialPlanningGaps(plan)) {
-                    return new Result(
-                            PlanningPostDraftAction.ASSUME_AND_CONTINUE,
-                            "**Continuing**\n\nA structured merge step had trouble; I'm keeping the current draft and "
-                                    + "moving forward with documented assumptions. Reply if you want to correct anything.",
-                            false);
+                    return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
                 }
+                String human = PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthFailure.name());
+                return new Result(
+                        PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                        "**Continuing**\n\n"
+                                + (human.isBlank() ? "The latest drafting pass had trouble." : human)
+                                + " I'm keeping the current draft and moving forward with the saved version.",
+                        false);
             }
-            String human = PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthCat);
+            String human = PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthFailure.name());
             return new Result(
                     PlanningPostDraftAction.BLOCK,
-                    "**Planning paused**\n\n" + (human.isBlank() ? synthCat : human),
+                    "**Planning paused**\n\n" + (human.isBlank() ? synthFailure.name() : human),
                     false);
         }
 

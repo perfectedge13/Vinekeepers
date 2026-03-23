@@ -13,6 +13,7 @@ public enum PlanningCoordinatorRole {
                 Contract rules: sectionId must be a real profile section id like narrative, impact, backlog, outline,
                 checks, context, analysis, or decisions. data keys must be real field ids for that section. Never use
                 the literal key "fieldId" and never use a field id such as scope_summary or open_questions as sectionId.
+                If you are unsure, return {"upserts":[],"follow_up_questions":[]} instead of prose, placeholders, or malformed JSON.
                 Schema:
                 {
                   "upserts": [

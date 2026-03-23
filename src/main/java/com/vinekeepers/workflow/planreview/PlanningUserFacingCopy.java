@@ -135,8 +135,10 @@ public final class PlanningUserFacingCopy {
             case "NO_PLAN" -> "No planning draft is loaded for this session yet.";
             case "PROFILE_NOT_V2" ->
                     "This work profile does not enable the full coordinator drafting loop for this room.";
+            case "SYNTHESIS_TRANSPORT_ERROR" ->
+                    "A drafting step could not reach the model service cleanly; the current draft is preserved.";
             case "SYNTHESIS_UPSERTS_NOT_APPLIED" ->
-                    "A drafting step returned planning updates that did not match this room's schema.";
+                    "A drafting step produced no valid planning updates we could apply this pass.";
             case "SYNTHESIS_JSON_INVALID" ->
                     "A drafting step returned structured output we could not read; your existing draft is preserved.";
             case "SYNTHESIS_REPAIR_EXHAUSTED" ->
@@ -178,6 +180,31 @@ public final class PlanningUserFacingCopy {
         String lower = t.toLowerCase(Locale.ROOT);
         if (lower.contains("json") && (lower.contains("parse") || lower.contains("invalid"))) {
             return "A drafting step returned output we could not apply.";
+        }
+        if (lower.contains("fieldid")
+                || lower.contains("does not match this planning profile")
+                || lower.contains("unsupported field ids")) {
+            return "A drafting step proposed updates that did not match this room's schema.";
+        }
+        if (lower.contains("timeout") || lower.contains("timed out")) {
+            return "A drafting step timed out while contacting the model service.";
+        }
+        if (lower.contains("rate limit") || lower.contains("too many requests") || lower.contains("429")) {
+            return "The model service asked us to slow down during a drafting step.";
+        }
+        if (lower.contains("401") || lower.contains("403") || lower.contains("unauthorized") || lower.contains("forbidden")) {
+            return "The model service rejected this drafting request.";
+        }
+        if (lower.contains("connect")
+                || lower.contains("connection")
+                || lower.contains("refused")
+                || lower.contains("reset")
+                || lower.contains("503")
+                || lower.contains("502")
+                || lower.contains("bad gateway")
+                || lower.contains("service unavailable")
+                || lower.contains("upstream")) {
+            return "The model service was unavailable during a drafting step.";
         }
         if (lower.contains("interrupted")) {
             return "A drafting step was interrupted.";
