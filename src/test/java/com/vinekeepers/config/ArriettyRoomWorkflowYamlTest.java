@@ -132,9 +132,8 @@ class ArriettyRoomWorkflowYamlTest {
                 "workspace branch must enter early workspace post (step 1), not skip coordinator spine");
         assertEquals("call_action", String.valueOf(steps.get(1).get("type")));
         assertEquals("post_channel_message", String.valueOf(steps.get(1).get("action")));
-        assertEquals("call_action", String.valueOf(steps.get(73).get("type")));
-        assertEquals("coordinator_intake_bootstrap", String.valueOf(steps.get(73).get("action")));
-        assertEquals("branch", String.valueOf(steps.get(74).get("type")));
+        int coordinatorBootstrap = indexOfCallAction(steps, "coordinator_intake_bootstrap");
+        assertEquals("branch", String.valueOf(steps.get(coordinatorBootstrap + 1).get("type")));
         assertEquals("call_action", String.valueOf(steps.get(26).get("type")));
         assertEquals("execute_planning_room_cycle", String.valueOf(steps.get(26).get("action")));
         assertEquals("build_insight_discovery_agenda", String.valueOf(steps.get(17).get("action")));
@@ -156,6 +155,7 @@ class ArriettyRoomWorkflowYamlTest {
                 }),
                 "optional solicitation prompt_for_field must not exist in live workflow");
         int humanReview = -1;
+        int readinessChoice = -1;
         int ack = -1;
         for (int i = 0; i < steps.size(); i++) {
             Map<String, Object> s = steps.get(i);
@@ -173,8 +173,15 @@ class ArriettyRoomWorkflowYamlTest {
                     }
                 }
             }
+            if ("prompt_for_field".equals(String.valueOf(s.get("type")))
+                    && "readinessProceedRaw".equals(String.valueOf(s.get("storeIn")))) {
+                readinessChoice = i;
+            }
         }
-        assertTrue(humanReview >= 0 && ack >= 0, "human review and acknowledge steps must exist");
+        assertTrue(humanReview >= 0 && readinessChoice >= 0 && ack >= 0,
+                "human review, readiness choice, and acknowledge steps must exist");
+        assertTrue(humanReview < readinessChoice, "human review summary should appear before the readiness choice prompt");
+        assertTrue(readinessChoice < ack, "acknowledgement should only happen after the readiness choice");
         for (int i = 0; i < steps.size(); i++) {
             Map<String, Object> s = steps.get(i);
             if (!"branch".equals(String.valueOf(s.get("type")))) {

@@ -20,6 +20,8 @@ import com.vinekeepers.workflow.discovery.StructuredDiscoverySupport;
 import com.vinekeepers.workflow.planreview.PlanCritiqueRubric;
 import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
 import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
+import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,25 +55,25 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
         Map<String, Object> err = baseErrorSpread("Plan store or work profile registry not available.");
         if (planStateStore == null || workProfileRegistry == null) {
-            err.put("planReadinessStatus", com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
+            putReadinessStatus(err, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return err;
         }
         String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
         if (contextId == null || contextId.isBlank()) {
             Map<String, Object> m = baseErrorSpread("Missing contextId for run_plan_critique_and_readiness.");
-            m.put("planReadinessStatus", com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
+            putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return m;
         }
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
         if (plan == null) {
             Map<String, Object> m = baseErrorSpread("No FeaturePlanState for contextId: " + contextId);
-            m.put("planReadinessStatus", com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
+            putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return m;
         }
         String profileId = plan.getProfileId();
         if (profileId == null || profileId.isBlank()) {
             Map<String, Object> m = baseErrorSpread("FeaturePlanState has no profileId.");
-            m.put("planReadinessStatus", com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
+            putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return m;
         }
         WorkProfileDefinition profile = workProfileRegistry.get(profileId).orElse(null);
@@ -156,7 +158,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             } else if (prevCtr != null && !prevCtr.isBlank()) {
                 spread.put("planningCritiqueAutoRevisionCount", prevCtr);
             }
-            spread.put("planReadinessStatus", legacyStatus);
+            putReadinessStatus(spread, legacyStatus);
             spread.put("planConfidenceLevel", confidenceForStore.getLevel() != null ? confidenceForStore.getLevel() : "");
             spread.put(
                     "planConfidenceScore",
@@ -165,14 +167,16 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                             : "");
             spread.put("planReadinessSummary", summaryForSpread);
             spread.put("planCritiqueFindingsJson", JSON.writeValueAsString(findings));
-            spread.put("planCritiqueSummary", formatCritiqueSummary(findings));
+            spread.put(
+                    "planCritiqueSummary",
+                    appendRepoEvidenceToCritique(formatCritiqueSummary(findings, profile), state));
             putAssumptionIssueSummaries(spread, next);
             mergePlanningThreadReview(spread, event, state, bind);
             return spread;
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "critique failed";
             Map<String, Object> m = baseErrorSpread(msg);
-            m.put("planReadinessStatus", com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
+            putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             try {
                 m.put("planCritiqueFindingsJson", JSON.writeValueAsString(List.of()));
             } catch (JsonProcessingException ignored) {
@@ -204,7 +208,12 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                         return a.getStatement();
                     }
                     if (e instanceof PlanIssue i) {
-                        return i.getText();
+                        String title = i.getTitle();
+                        String detail = i.getDetail();
+                        if (detail != null && !detail.isBlank()) {
+                            return title == null || title.isBlank() ? detail : title + ": " + detail;
+                        }
+                        return title;
                     }
                     return e != null ? e.toString() : "";
                 })
@@ -230,12 +239,26 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         }
     }
 
+    private static void putReadinessStatus(Map<String, Object> spread, String legacyStatus) {
+        String s = legacyStatus != null ? legacyStatus : "";
+        spread.put("planReadinessStatus", s);
+        spread.put(
+                "planReadinessStatusLabel",
+                s.isBlank() ? "" : PlanningUserFacingCopy.humanizeReadinessStatus(s));
+        spread.put(
+                "planReadinessCheckpointGuide",
+                PlanReadinessStatus.NEEDS_HUMAN_DECISION.equals(s)
+                        ? PlanningUserFacingCopy.readinessCheckpointGuideForDiscord()
+                        : "");
+    }
+
     private static Map<String, Object> baseErrorSpread(String error) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("planCritiqueError", error);
-        m.put("planReadinessStatus", "");
+        putReadinessStatus(m, "");
         m.put("planConfidenceLevel", "");
         m.put("planReadinessSummary", "");
+        m.put("planReadinessCheckpointGuide", "");
         m.put("planCritiqueFindingsJson", "[]");
         m.put("planCritiqueSummary", "");
         m.put("planningThreadReviewBody", "");
@@ -245,13 +268,21 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         return m;
     }
 
-    private static String formatCritiqueSummary(List<PlanCritiqueFinding> findings) {
+    private static String formatCritiqueSummary(List<PlanCritiqueFinding> findings, WorkProfileDefinition profile) {
         if (findings == null || findings.isEmpty()) {
             return "No critique findings.";
         }
         return findings.stream()
-                .map(f -> "• [" + f.getSeverity() + "] " + f.getMessage())
+                .map(f -> PlanningUserFacingCopy.formatCritiqueFindingBullet(f, profile))
                 .collect(Collectors.joining("\n"));
+    }
+
+    private static String appendRepoEvidenceToCritique(String critique, Map<String, Object> state) {
+        String ev = PlanningThreadPacketFormatter.summarizeRepoEvidenceForHumans(getString(state, "planningRepoEvidenceJson"));
+        if (ev == null || ev.isBlank()) {
+            return critique;
+        }
+        return critique + "\n\n**Repo grounding (same signals as packet):**\n" + ev;
     }
 
     private static String getString(Map<String, Object> map, String key) {

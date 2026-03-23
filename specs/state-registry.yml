@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T20:45:00Z"
+  updated_utc: "2026-03-23T00:20:00Z"
 
 project:
   id: vinekeepers
@@ -298,6 +298,10 @@ requirements:
           FeaturePlanState holds governance lists (PlanAssumption, PlanIssue, PlanRisk, PlanDecision), packet delivery
           metadata after a successful thread post, critique lifecycle status, enriched PlanCritiqueSnapshot (rubric scores,
           blocking counts), and PlanConfidence with numeric score for approval gating
+        - >-
+          packetPostedAt on FeaturePlanState is the canonical persisted signal that the planning packet was posted;
+          PlanReadinessEvaluator treats it as authoritative for "packet posted" when workflow state map is omitted; workflow
+          spreads planningPacketPosted / planningPacketPostedVersion are a secondary hint only when the evaluator is given workflow state
         - >-
           FeaturePlanState carries PlanningIntakeStage, intake kickoff post version/fingerprint, and optional
           planningOrchestrationFailureReason for terminal intake failures; withPlanningIntakeStage / withIntakeKickoffPosted /

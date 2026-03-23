@@ -5,12 +5,16 @@ import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.FeaturePlanState;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Reads canonical artifact section values (same paths as proposal auto-apply / thread review body).
  */
 public final class PlanningArtifactTexts {
+
+    public static final String NO_OPEN_QUESTIONS_READY = "None — ready to implement.";
 
     private PlanningArtifactTexts() {}
 
@@ -85,5 +89,33 @@ public final class PlanningArtifactTexts {
         }
         Object v = sec.getValues().get(fieldId);
         return v != null ? v.toString().trim() : "";
+    }
+
+    public static String effectiveOpenQuestions(FeaturePlanState plan) {
+        if (plan == null) {
+            return "";
+        }
+        if (!plan.getUnresolvedQuestions().isEmpty()) {
+            return plan.getUnresolvedQuestions().stream()
+                    .map(q -> q != null ? q.trim() : "")
+                    .filter(q -> !q.isBlank())
+                    .collect(Collectors.joining("\n"));
+        }
+        String artifactValue = artifactField(plan, "open_questions_block", "backlog", "open_questions");
+        if (!artifactValue.isBlank()) {
+            return artifactValue;
+        }
+        return NO_OPEN_QUESTIONS_READY;
+    }
+
+    public static boolean isReadyToImplementOpenQuestions(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String normalized = value.trim()
+                .replace('—', '-')
+                .replaceAll("\\s+", " ")
+                .toLowerCase(Locale.ROOT);
+        return "none - ready to implement.".equals(normalized) || "none - ready to implement".equals(normalized);
     }
 }

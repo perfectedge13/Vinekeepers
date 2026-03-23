@@ -5,7 +5,9 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -78,6 +80,21 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
                 codeChange = plan.getInitialRequest();
             }
             out.put("canonicalPlanningIntakeStage", plan.getPlanningIntakeStage().name());
+            if (plan.getPacketPostedAt() != null) {
+                out.put("planningPacketPosted", "true");
+                int v = plan.getPacketPostedChunkCount() > 0 ? plan.getPacketPostedChunkCount() : 1;
+                out.put("planningPacketPostedVersion", String.valueOf(v));
+            }
+            if (plan.getPlanConfidence() != null && plan.getPlanConfidence().getReadinessStatus() != null) {
+                String rs = PlanReadinessStatus.legacySpreadValue(plan.getPlanConfidence().getReadinessStatus());
+                out.put("planReadinessStatus", rs);
+                out.put("planReadinessStatusLabel", PlanningUserFacingCopy.humanizeReadinessStatus(rs));
+                out.put(
+                        "planReadinessCheckpointGuide",
+                        PlanReadinessStatus.NEEDS_HUMAN_DECISION.equals(rs)
+                                ? PlanningUserFacingCopy.readinessCheckpointGuideForDiscord()
+                                : "");
+            }
         }
         if (project != null && !project.isBlank()) {
             out.put("project", project);

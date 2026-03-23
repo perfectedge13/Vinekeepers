@@ -43,7 +43,7 @@ public final class PlanCritiqueSupport {
         AtomicInteger seq = new AtomicInteger(1);
         if (gaps != null) {
             for (DiscoveryGap g : gaps) {
-                out.add(fromGap(g, seq.getAndIncrement()));
+                out.add(fromGap(g, seq.getAndIncrement(), profile));
             }
         }
         if (plan != null) {
@@ -181,8 +181,8 @@ public final class PlanCritiqueSupport {
                             + current.length() + " chars; need at least " + MIN_CURRENT_STATE_CHARS + ").",
                     "requirements_spec.narrative"));
         }
-        String oq = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
-        if (oq.length() < MIN_OPEN_QUESTIONS_CHARS) {
+        String oq = PlanningArtifactTexts.effectiveOpenQuestions(plan);
+        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(oq) && oq.length() < MIN_OPEN_QUESTIONS_CHARS) {
             out.add(new PlanCritiqueFinding(
                     "crit-v2-oq-" + seq.getAndIncrement(),
                     "COVERAGE",
@@ -248,43 +248,54 @@ public final class PlanCritiqueSupport {
             return;
         }
         checkPlaceholderField(
+                profile,
                 plan,
                 out,
                 seq,
                 "requirements_spec.narrative.scope_summary",
                 PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"));
         checkPlaceholderField(
+                profile,
                 plan,
                 out,
                 seq,
                 "requirements_spec.narrative.acceptance_criteria",
                 PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
         checkPlaceholderField(
+                profile,
                 plan,
                 out,
                 seq,
                 "open_questions_block.backlog.open_questions",
-                PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"));
+                PlanningArtifactTexts.effectiveOpenQuestions(plan));
     }
 
     private static void checkPlaceholderField(
+            WorkProfileDefinition profile,
             FeaturePlanState plan,
             List<PlanCritiqueFinding> out,
             AtomicInteger seq,
             String path,
             String value) {
         if (PlanningPlaceholderDetection.looksLikePlaceholder(value)) {
+            String where = PlanningUserFacingCopy.describePlanningFieldRef(profile, path);
+            String whereClause =
+                    where.isBlank()
+                            ? ""
+                            : " (" + where + ")";
             out.add(new PlanCritiqueFinding(
                     "crit-ph-" + seq.getAndIncrement(),
                     "COVERAGE",
                     "MUST_FIX",
                     "PLACEHOLDER_PLANNING_FIELD",
-                    "Planning field still looks like a template or thin placeholder: " + path + ". Add concrete detail in this thread so drafts can expand.",
+                    "This planning section still looks like a thin template"
+                            + whereClause
+                            + ". Add concrete detail in this thread so drafts can expand.",
                     path));
         }
     }
 
-    private static PlanCritiqueFinding fromGap(DiscoveryGap g, int n) {
+    private static PlanCritiqueFinding fromGap(DiscoveryGap g, int n, WorkProfileDefinition profile) {
         String sev = mapGapSeverityToCritique(g.getSeverity());
         String cat = switch (g.getKind() != null ? g.getKind() : "") {
             case "WORKSPACE" -> "WORKSPACE";
@@ -293,12 +304,28 @@ public final class PlanCritiqueSupport {
         };
         String ref = gapRefPath(g);
         List<String> keys = ref.isBlank() ? List.of() : List.of(ref);
+        String face = g.getUserFacingDetail() != null ? g.getUserFacingDetail().trim() : "";
+        String reason = g.getReason() != null ? g.getReason().trim() : "";
+        String msg;
+        if (!face.isBlank()) {
+            msg = face;
+        } else if (!reason.isBlank()) {
+            msg = reason;
+        } else {
+            String pathLabel =
+                    PlanningUserFacingCopy.describePlanningFieldPath(
+                            profile, g.getArtifactId(), g.getSectionId(), g.getFieldId());
+            msg =
+                    !pathLabel.isBlank()
+                            ? "Still needed: " + pathLabel + "."
+                            : PlanningUserFacingCopy.defaultDiscoveryGapMessage(g.getKind());
+        }
         return new PlanCritiqueFinding(
                 "crit-gap-" + n,
                 cat,
                 sev,
                 "DISCOVERY_GAP_" + (g.getKind() != null ? g.getKind() : "UNKNOWN"),
-                g.getReason() != null ? g.getReason() : "",
+                msg,
                 ref,
                 PlanCritiqueFinding.defaultBlocksApproval(sev),
                 keys);

@@ -185,19 +185,6 @@ public final class ExpandPlanningDraftsAction implements com.vinekeepers.workflo
                     "risk_summary",
                     PlanningDraftSupport.buildRiskDraft(request));
         }
-        if (profile.findSection("open_questions_block", "backlog").isPresent()) {
-            plan = planStateStore.getByContextId(contextId).orElse(plan);
-            maybeReplace(
-                    upsert,
-                    event,
-                    base,
-                    plan,
-                    "open_questions_block",
-                    "backlog",
-                    "open_questions",
-                    PlanningDraftSupport.buildOpenQuestionsDraft(request));
-        }
-
         return "OK";
     }
 

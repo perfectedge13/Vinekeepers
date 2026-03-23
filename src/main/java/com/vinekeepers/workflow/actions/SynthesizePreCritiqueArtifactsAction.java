@@ -104,15 +104,6 @@ public final class SynthesizePreCritiqueArtifactsAction implements com.vinekeepe
         }
 
         plan = planStateStore.getByContextId(contextId).orElse(plan);
-        if (isEmptyField(plan, "open_questions_block", "backlog", "open_questions")) {
-            upsert.run(event, base, Map.of(
-                    "artifactId", "open_questions_block",
-                    "sectionId", "backlog",
-                    "mode", "replace",
-                    "data", Map.of("open_questions", PlanningDraftSupport.buildOpenQuestionsDraft(request))));
-        }
-
-        plan = planStateStore.getByContextId(contextId).orElse(plan);
         ArtifactState decisions = plan.getArtifacts().get("decision_log");
         SectionState decSec = decisions != null ? decisions.getSectionsById().get("decisions") : null;
         boolean noDecisions = decSec == null || decSec.getEntries() == null || decSec.getEntries().isEmpty();

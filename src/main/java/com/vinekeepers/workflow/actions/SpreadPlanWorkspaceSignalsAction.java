@@ -62,6 +62,11 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
         out.put("repoWorkspaceStatusSummary", sb.toString());
         try {
             Map<String, Object> evidence = new LinkedHashMap<>();
+            evidence.put("contextId", plan.getContextId());
+            evidence.put("featureSlug", plan.getFeatureSlug() != null ? plan.getFeatureSlug() : "");
+            evidence.put("workspaceId", plan.getRepoWorkspaceId() != null ? plan.getRepoWorkspaceId() : "");
+            evidence.put("planningIntakeStage", plan.getPlanningIntakeStage().name());
+            evidence.put("blockingIssues", plan.countBlockingIssues());
             evidence.put("workspaceStatus", statusName.isBlank() ? "unknown" : statusName);
             evidence.put("localPathPresent", pathOk);
             evidence.put("repoRef", plan.getRepoRef() != null ? plan.getRepoRef() : "");

@@ -47,7 +47,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary");
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
         String risks = PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary");
-        String openQ = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
+        String openQ = PlanningArtifactTexts.effectiveOpenQuestions(plan);
         int issueCount = plan.getIssues() != null ? plan.getIssues().size() : 0;
 
         out.put("architectThreadMessage", buildArchitect(outline, decisions, arch, comps));
@@ -90,7 +90,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         } else {
             sb.append("_No validation approach recorded yet._");
         }
-        sb.append("\n\n**Open issues recorded:** ").append(issueCount);
+        sb.append("\n\n**Tracked issues on the plan:** ").append(issueCount);
         return sb.toString();
     }
 

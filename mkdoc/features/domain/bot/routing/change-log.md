@@ -8,12 +8,12 @@
 
 ## 2026-03-19
 
-- **Feature room response policy (room vs thread):** Router returns the primary coordinator bot id only for the feature **room** channel; for the **intake/spec thread** id it returns all four participant configuredBotIds in role order for **messages**, and the **coordinator only** for **component interactions**. Tests: `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_returnsFourParticipantBotIdsInRoleOrder`, `routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly`.
+- **Feature room response policy (room vs thread):** Router returns the primary coordinator configuredBotId for both the feature **room** channel and the **intake/spec thread** (messages and component interactions), when coordinator resolution succeeds. Tests: `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly`.
 - **Documentation:** **how-it-works** / **contracts** / feature **summary** now describe the real evaluation order (filter pass, then feature-room overrides, then lifecycle, then deduped filters).
 
 ## 2026-03-18
 
-- **Multi-bot feature room routing:** Router depends on optional **FeatureRoomStateStore**. When **FeatureRoomState** exists for the event's room (resolved by room channel id or delivery target id), Router returns **all four participant configuredBotIds** in stable order (arrietty, architect, auditor, scribe). When no feature room state for the channel, legacy single-owner or filter-based routing applies. Tests: RouterTest routeWithFeatureRoomStore_roomChannelId_returnsFourParticipantBotIds, routeWithFeatureRoomStore_threadResolutionByDeliveryTargetId_returnsFourParticipantBotIds, routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable.
+- **Multi-bot feature room routing:** Router depends on optional **FeatureRoomStateStore**. When **FeatureRoomState** exists for the event channel (room or intake thread, resolved by channel id or delivery target id), Router returns the **primary coordinator** configuredBotId for planning ingress; participant roles remain for permissions and outbound **asRole** delivery, not for widening inbound routing. When no feature room state for the channel, legacy single-owner or filter-based routing applies. Tests: RouterTest `routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_noFeatureRoomForChannel_usesLegacySingleOwnerWhenApplicable`.
 
 ## 2026-03-13
 

@@ -4,6 +4,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Workflow action facade for one planning-room cycle; delegates to {@link PlanningCyclePipeline}.
@@ -13,7 +14,7 @@ public final class ExecutePlanningRoomCycleAction implements com.vinekeepers.wor
     private final PlanningCyclePipeline pipeline;
 
     public ExecutePlanningRoomCycleAction(PlanningCyclePipeline pipeline) {
-        this.pipeline = pipeline != null ? pipeline : new PlanningCyclePipeline(null, null, null);
+        this.pipeline = Objects.requireNonNull(pipeline, "PlanningCyclePipeline");
     }
 
     @Override

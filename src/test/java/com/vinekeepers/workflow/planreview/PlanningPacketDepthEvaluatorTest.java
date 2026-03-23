@@ -71,6 +71,17 @@ class PlanningPacketDepthEvaluatorTest {
         assertTrue(r.ok(), r.reason());
     }
 
+    @Test
+    void evaluate_v2Profile_allowsReadyToImplementWhenNoOpenQuestionsRemain() {
+        WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        String exploration = "word ".repeat(30);
+        String narrative = "state ".repeat(20);
+        FeaturePlanState plan = minimalV2PlanWithoutOpenQuestions(exploration, narrative, RICH_FEATURE);
+        PlanningPacketDepthEvaluator.DepthResult r =
+                PlanningPacketDepthEvaluator.evaluate(plan, reg.get("software_feature_planning_v2").orElseThrow());
+        assertTrue(r.ok(), r.reason());
+    }
+
     private static FeaturePlanState minimalPlanWithNarrative(String explorationBody, String currentState, String featureSummary) {
         Map<String, Object> reqValues = new LinkedHashMap<>();
         reqValues.put("feature_summary", featureSummary);
@@ -185,6 +196,81 @@ class PlanningPacketDepthEvaluatorTest {
         arts.put("architecture_notes", archArt);
         arts.put("validation_plan", valArt);
         arts.put("open_questions_block", oqArt);
+        FeaturePlanState empty = new FeaturePlanState(
+                "ctx",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning_v2",
+                Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        return empty.withArtifacts(arts);
+    }
+
+    private static FeaturePlanState minimalV2PlanWithoutOpenQuestions(
+            String explorationBody, String currentState, String featureSummary) {
+        Map<String, Object> reqValues = new LinkedHashMap<>();
+        reqValues.put("feature_summary", featureSummary);
+        reqValues.put("current_state_summary", currentState);
+        SectionState reqSec = new SectionState("narrative", SectionState.STATUS_DRAFT, reqValues, List.of());
+        ArtifactState reqArt = new ArtifactState("requirements_spec", Map.of("narrative", reqSec));
+
+        Map<String, Object> exValues = new LinkedHashMap<>();
+        exValues.put("exploration_body", explorationBody);
+        SectionState exSec = new SectionState("analysis", SectionState.STATUS_DRAFT, exValues, List.of());
+        ArtifactState exArt = new ArtifactState("request_exploration", Map.of("analysis", exSec));
+
+        Map<String, Object> archValues = new LinkedHashMap<>();
+        archValues.put("components_impacted", "src/main/java/com/example/AuthService.java");
+        archValues.put(
+                "architecture_summary",
+                "Service layer coordinates token issuance; persistence boundary stays behind repository interfaces.");
+        SectionState archSec = new SectionState("impact", SectionState.STATUS_DRAFT, archValues, List.of());
+        ArtifactState archArt = new ArtifactState("architecture_notes", Map.of("impact", archSec));
+
+        Map<String, Object> valValues = new LinkedHashMap<>();
+        valValues.put(
+                "validation_notes",
+                "Run mvn test and integration checks that exercise the authentication flows described in this plan, "
+                        + "including negative cases and refresh handling. "
+                        + "Add regression coverage for session expiry edge cases observed in staging.");
+        SectionState valSec = new SectionState("checks", SectionState.STATUS_DRAFT, valValues, List.of());
+        ArtifactState valArt = new ArtifactState("validation_plan", Map.of("checks", valSec));
+
+        Map<String, ArtifactState> arts = new LinkedHashMap<>();
+        arts.put("requirements_spec", reqArt);
+        arts.put("request_exploration", exArt);
+        arts.put("architecture_notes", archArt);
+        arts.put("validation_plan", valArt);
         FeaturePlanState empty = new FeaturePlanState(
                 "ctx",
                 "f",

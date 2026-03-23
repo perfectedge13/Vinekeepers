@@ -2,7 +2,7 @@
 
 # Coverage
 
-Unit tests cover Luna gathering state, YAML-configured mention routing, the legacy workflow test harness, the Cursor adapter implementation (including error parsing, auth, and transport), the launch tool, the cloud-run monitor, structured discovery support, Phase B discovery workflow actions, and assumption/issue classification.
+Unit tests cover Luna gathering state, YAML-configured mention routing, the legacy workflow test harness, the Cursor adapter implementation (including error parsing, auth, and transport), the launch tool, the cloud-run monitor, structured discovery support, Phase B discovery workflow actions, assumption/issue classification, Phase C critique/readiness actions, plain-English planning copy (**PlanningUserFacingCopy**, **PlanningPromptFormatter**), and planning packet depth.
 
 # Test list
 
@@ -46,5 +46,10 @@ Unit tests cover Luna gathering state, YAML-configured mention routing, the lega
 | UNIT-CLASSIFY-ASSUMPTION-OR-ISSUE-ACTION | ClassifyAssumptionOrIssueActionTest | com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueActionTest | — | Verify rule-based append_plan_issue vs append_plan_assumption from discovery answer text |
 | UNIT-ARRIETTY-ROOM-WORKFLOW-YAML | ArriettyRoomWorkflowYamlTest | com.vinekeepers.config.ArriettyRoomWorkflowYamlTest | — | Verify arrietty_room branch next indices are within the compiled step list |
 | UNIT-PLANNING-PACKET-DEPTH-EVALUATOR | PlanningPacketDepthEvaluatorTest | com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluatorTest | — | Verify depth word counts and evaluate thresholds |
+| UNIT-PLANNING-PROMPT-FORMATTER | PlanningPromptFormatterTest | com.vinekeepers.workflow.planning.PlanningPromptFormatterTest | — | Verify plain-English missing-field and internal-path summaries from work profile metadata |
+| UNIT-PLANNING-USER-FACING-COPY | PlanningUserFacingCopyTest | com.vinekeepers.workflow.planreview.PlanningUserFacingCopyTest | — | Verify humanized critique/readiness/status labels and profile field titles for internal paths |
+| UNIT-PHASE-C-PLAN-ACTIONS | PhaseCPlanActionsTest | com.vinekeepers.workflow.actions.PhaseCPlanActionsTest | — | Verify run_plan_critique_and_readiness and persist_plan_approval update FeaturePlanState |
+| UNIT-PLAN-READINESS-EVALUATOR | PlanReadinessEvaluatorTest | com.vinekeepers.workflow.planreview.PlanReadinessEvaluatorTest | — | Verify readiness classification from gaps, findings, and plan issues |
+| UNIT-PLAN-CRITIQUE-SUBSTANCE | PlanCritiqueSupportTest | com.vinekeepers.workflow.planreview.PlanCritiqueSupportTest | — | Verify MUST_FIX substance findings block readiness until request/outline/validation meet minimums |
 | UNIT-RUN-LLM-PLANNING-SYNTHESIS-JSON | RunLlmPlanningSynthesisActionJsonTest | com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisActionJsonTest | — | Verify JSON extraction from assistant content for synthesis |
 

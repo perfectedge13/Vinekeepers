@@ -12,6 +12,7 @@ import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -62,6 +63,12 @@ class PhaseCPlanActionsTest {
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
                 .run(null, Map.of("contextId", "c1", "humanDiscoveryCompleted", "true"), Map.of());
         assertTrue(spread.containsKey("planReadinessStatus"));
+        assertTrue(spread.containsKey("planReadinessStatusLabel"));
+        assertTrue(spread.containsKey("planReadinessCheckpointGuide"));
+        assertEquals(
+                PlanningUserFacingCopy.humanizeReadinessStatus(String.valueOf(spread.get("planReadinessStatus"))),
+                spread.get("planReadinessStatusLabel"));
+        assertEquals("", spread.get("planReadinessCheckpointGuide"));
         assertEquals("", spread.get("planCritiqueError"));
         FeaturePlanState p = store.getByContextId("c1").orElseThrow();
         assertTrue(p.getPlanCritiqueSnapshot() != null);

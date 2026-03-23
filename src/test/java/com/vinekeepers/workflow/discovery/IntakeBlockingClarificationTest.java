@@ -34,13 +34,23 @@ class IntakeBlockingClarificationTest {
     void qualityGate_acceptsCanonicalGapDetail() {
         assertTrue(
                 ClarificationPromptQualityGate.passes(
-                        "For **Decision** (entry 1): ADR-style: decision, context, consequences."));
+                        "**Decision** (item 1 in this list) — reply in **one message** with: "
+                                + "What you decided; the situation or constraints behind it; and what that means for the work ahead "
+                                + "(trade-offs, follow-ups, or options you ruled out). Plain sentences are fine — we store this on the plan."));
     }
 
     @Test
     void buildIntakeBlockingClarification_oneQuestionFromFirstHighGap() throws JsonProcessingException {
+        String rowDetail =
+                "**Decision** (item %d in this list) — reply in **one message** with: What was decided and why.";
         String json =
-                "[{\"gapId\":\"gap-a\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 0\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"For **Decision** (entry 1): ADR-style: decision, context, consequences.\"},{\"gapId\":\"gap-b\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 1\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"For **Decision** (entry 2): ADR-style: decision, context, consequences.\"},{\"gapId\":\"gap-c\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"For **Decision** (entry 3): ADR-style: decision, context, consequences.\"}]";
+                "[{\"gapId\":\"gap-a\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 0\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
+                        + String.format(rowDetail, 1)
+                        + "\"},{\"gapId\":\"gap-b\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 1\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
+                        + String.format(rowDetail, 2)
+                        + "\"},{\"gapId\":\"gap-c\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
+                        + String.format(rowDetail, 3)
+                        + "\"}]";
         @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>)
@@ -48,8 +58,8 @@ class IntakeBlockingClarificationTest {
         String prompt = (String) spread.get("discoveryCurrentQuestionPrompt");
         assertNotNull(prompt);
         assertFalse(prompt.contains("Planning check-in"));
-        assertTrue(prompt.contains("entry 1") || prompt.contains("(entry 1)"));
-        assertFalse(prompt.contains("entry 2"));
+        assertTrue(prompt.contains("item 1"));
+        assertFalse(prompt.contains("item 2"));
         assertEquals("[]", spread.get("discoveryBundledApplyJson"));
         assertEquals("REQUIRED_FIELD", spread.get("discoveryApplyKind"));
     }
@@ -83,12 +93,12 @@ class IntakeBlockingClarificationTest {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var action = new BuildInsightDiscoveryAgendaAction(new FeaturePlanStateStore(), reg);
         String json =
-                "[{\"gapId\":\"g1\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"For **Decision** (entry 1): ADR-style: decision, context, consequences.\"}]";
+                "[{\"gapId\":\"g1\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"**Decision** (item 1 in this list) — reply in **one message** with: What was decided and why.\"}]";
         @SuppressWarnings("unchecked")
         Map<String, Object> out =
                 (Map<String, Object>) action.run(new Event("e", "k", Map.of()), Map.of("discoveryGapsJson", json), Map.of());
         String prompt = (String) out.get("discoveryCurrentQuestionPrompt");
-        assertTrue(prompt.contains("ADR-style"));
+        assertTrue(prompt.contains("one message"));
         assertFalse(prompt.contains("Planning check-in"));
     }
 

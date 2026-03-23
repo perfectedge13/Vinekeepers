@@ -311,22 +311,6 @@ public final class GeneratePlanningProposalsAction implements com.vinekeepers.wo
                 confirmQueue.add(id);
             }
         }
-        if (isFieldEmpty(plan, "open_questions_block", "backlog", "open_questions")) {
-            String draft = PlanningDraftSupport.buildOpenQuestionsDraft(request);
-            String id = "prop-" + seq.getAndIncrement();
-            proposals.add(new PlanningProposal(
-                    id,
-                    "open_questions_block",
-                    "backlog",
-                    "open_questions",
-                    draft,
-                    "MEDIUM",
-                    "CONFIRM",
-                    List.of("INITIAL_REQUEST"),
-                    "Starter open questions; reply **OK**/**continue** to keep, or replace with your list.",
-                    ""));
-            confirmQueue.add(id);
-        }
     }
 
     private static List<String> buildSources(boolean includeReadme, String readme, List<String> sampleFiles) {

@@ -12,10 +12,10 @@ import com.vinekeepers.state.planning.RoomParticipant;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,7 +24,7 @@ class PostPlanningPacketThreadActionTest {
 
     @Test
     void secondPostWithSameBodySkipsDiscordSendAndSetsFlag() {
-        AtomicInteger sends = new AtomicInteger();
+        List<String> sent = new ArrayList<>();
         FeatureRoomStateStore roomStore = new FeatureRoomStateStore();
         roomStore.put(
                 new FeatureRoomState(
@@ -41,7 +41,7 @@ class PostPlanningPacketThreadActionTest {
                         Instant.now()));
 
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), roomStore);
-        router.registerSender("orch", (ch, m, body) -> sends.incrementAndGet(), null);
+        router.registerSender("orch", (ch, m, body) -> sent.add(body), null);
 
         FeaturePlanStateStore planStore = new FeaturePlanStateStore();
         planStore.put(minimalPlan("ctx1"));
@@ -56,7 +56,8 @@ class PostPlanningPacketThreadActionTest {
         assertEquals("false", spread1.get("planningPacketSkippedDuplicate"));
         int chunks = Integer.parseInt(spread1.get("planningPacketChunkCount").toString());
         assertTrue(chunks > 0);
-        assertEquals(chunks, sends.get());
+        assertEquals(chunks + 1, sent.size());
+        assertTrue(sent.get(0).contains("posting the planning packet now"));
 
         Map<String, Object> state2 = new LinkedHashMap<>(state);
         state2.putAll(spread1);
@@ -65,7 +66,7 @@ class PostPlanningPacketThreadActionTest {
         assertEquals("false", spread2.get("planningPacketPosted"));
         assertEquals("true", spread2.get("planningPacketSkippedDuplicate"));
         assertEquals(spread1.get("planningPacketPostedVersion"), spread2.get("planningPacketPostedVersion"));
-        assertEquals(chunks, sends.get());
+        assertEquals(chunks + 1, sent.size());
         String skipReason = String.valueOf(spread2.get("planningPacketSkipReason"));
         assertTrue(
                 skipReason.contains("unchanged"),
@@ -74,7 +75,7 @@ class PostPlanningPacketThreadActionTest {
 
     @Test
     void postsWhenReviewReadyEvenIfDepthFlagFalse() {
-        AtomicInteger sends = new AtomicInteger();
+        List<String> sent = new ArrayList<>();
         FeatureRoomStateStore roomStore = new FeatureRoomStateStore();
         roomStore.put(
                 new FeatureRoomState(
@@ -90,7 +91,7 @@ class PostPlanningPacketThreadActionTest {
                         "u",
                         Instant.now()));
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), roomStore);
-        router.registerSender("orch3", (ch, m, body) -> sends.incrementAndGet(), null);
+        router.registerSender("orch3", (ch, m, body) -> sent.add(body), null);
         FeaturePlanStateStore planStore = new FeaturePlanStateStore();
         planStore.put(minimalPlan("ctx3"));
         PostPlanningPacketThreadAction action = new PostPlanningPacketThreadAction(router, planStore);
@@ -103,12 +104,13 @@ class PostPlanningPacketThreadActionTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) action.run(ev, state, Map.of());
         assertEquals("true", spread.get("planningPacketPosted"));
-        assertTrue(sends.get() > 0);
+        assertTrue(sent.size() > 1);
+        assertTrue(sent.get(0).contains("readiness checks"));
     }
 
     @Test
     void forceRepostSendsAgain() {
-        AtomicInteger sends = new AtomicInteger();
+        List<String> sent = new ArrayList<>();
         FeatureRoomStateStore roomStore = new FeatureRoomStateStore();
         roomStore.put(
                 new FeatureRoomState(
@@ -124,7 +126,7 @@ class PostPlanningPacketThreadActionTest {
                         "u",
                         Instant.now()));
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), roomStore);
-        router.registerSender("orch2", (ch, m, body) -> sends.incrementAndGet(), null);
+        router.registerSender("orch2", (ch, m, body) -> sent.add(body), null);
         FeaturePlanStateStore planStore = new FeaturePlanStateStore();
         planStore.put(minimalPlan("ctx2"));
         PostPlanningPacketThreadAction action = new PostPlanningPacketThreadAction(router, planStore);
@@ -140,7 +142,7 @@ class PostPlanningPacketThreadActionTest {
         Map<String, Object> state2 = new LinkedHashMap<>(state);
         state2.putAll(spread1);
         action.run(ev, state2, Map.of("forceRepost", "true"));
-        assertEquals(chunks * 2, sends.get());
+        assertEquals((chunks + 1) * 2, sent.size());
     }
 
     private static Map<String, Object> baseWorkflowState() {

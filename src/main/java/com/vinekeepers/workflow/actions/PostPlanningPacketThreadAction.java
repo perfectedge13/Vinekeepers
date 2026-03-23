@@ -8,6 +8,8 @@ import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningRole;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +24,11 @@ import java.util.Optional;
  * Posts the full planning packet to the intake/spec thread in one or more Discord messages.
  */
 public final class PostPlanningPacketThreadAction implements com.vinekeepers.workflow.WorkflowAction {
+
+    private static final Logger log = LoggerFactory.getLogger(PostPlanningPacketThreadAction.class);
+    private static final String PRE_POST_NOTICE =
+            "**Update:** I'm posting the planning packet now and then running readiness checks. "
+                    + "That can take about a minute.";
 
     private final ReplySender replySender;
     private final FeaturePlanStateStore planStore;
@@ -92,7 +99,10 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
 
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
         String repo = firstNonBlank(plan.getRepoRef(), getString(state, "project"));
-        String full = PlanningThreadPacketFormatter.buildFullPacketBody(plan, request, repo);
+        String full =
+                PlanningThreadPacketFormatter.buildFullPacketBody(
+                        plan, request, repo, getString(state, "planningRepoEvidenceJson"));
+
         String fingerprint = sha256Hex(normalizePacketForFingerprint(full));
         boolean forceRepost = truthy(getString(bind, "forceRepost"));
         String lastFp = getString(state, "planningPacketLastPostedFingerprint");
@@ -119,6 +129,9 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             spread.put("planningPacketPostError", "Empty planning packet.");
             return spread;
         }
+        Optional<String> noticeErr =
+                outboundDeliveryRouter.sendAsRoleExplicit(sendTarget, null, PRE_POST_NOTICE, PlanningRole.ORCHESTRATOR);
+        noticeErr.ifPresent(err -> log.warn("Planning packet pre-post notice not delivered: {}", err));
         for (String chunk : chunks) {
             Optional<String> err =
                     outboundDeliveryRouter.sendAsRoleExplicit(sendTarget, null, chunk, PlanningRole.ORCHESTRATOR);

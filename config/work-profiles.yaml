@@ -73,7 +73,9 @@ profiles:
                 label: Decision
                 type: text
                 required: true
-                promptHint: What was decided and why.
+                promptHint: >-
+                  What you decided; the situation or constraints behind it; and what that means for the work ahead
+                  (trade-offs, follow-ups, or options you ruled out). Plain sentences are fine — we store this on the plan.
       - artifactId: overall_plan
         title: Overall plan
         ownerRoles: [ARCHITECT]
@@ -292,7 +294,9 @@ profiles:
                 label: Decision
                 type: text
                 required: true
-                promptHint: "ADR-style: decision, context, consequences."
+                promptHint: >-
+                  Record what you decided; what situation or constraints led to it; and what that choice means
+                  for the work ahead (trade-offs, follow-ups, or things ruled out).
       - artifactId: overall_plan
         title: Overall plan
         ownerRoles: [ARCHITECT]

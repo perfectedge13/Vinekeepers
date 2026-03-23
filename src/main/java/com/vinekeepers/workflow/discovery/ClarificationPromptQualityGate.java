@@ -64,6 +64,9 @@ public final class ClarificationPromptQualityGate {
         if (lower.contains("planning check-in")) {
             return false;
         }
+        if (lower.startsWith("reply with") && lower.length() < 48) {
+            return false;
+        }
         // Standalone weak title lines
         String stripped = t.replace("*", "").trim().toLowerCase(Locale.ROOT);
         if (WEAK_STANDALONE_LABELS.contains(stripped)) {

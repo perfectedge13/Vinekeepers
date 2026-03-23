@@ -1,11 +1,11 @@
 package com.vinekeepers.workflow.planreview;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanAssumption;
-import com.vinekeepers.state.planning.PlanDecision;
 import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.PlanIssueStatus;
-import com.vinekeepers.state.planning.PlanRisk;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,9 +22,19 @@ public final class PlanningThreadPacketFormatter {
 
     private static final int SECTION_SOFT_MAX = 1200;
 
+    private static final ObjectMapper REPO_EVIDENCE_JSON = new ObjectMapper();
+
     private PlanningThreadPacketFormatter() {}
 
     public static String buildFullPacketBody(FeaturePlanState plan, String requestFallback, String repoFallback) {
+        return buildFullPacketBody(plan, requestFallback, repoFallback, null);
+    }
+
+    /**
+     * @param repoEvidenceJson optional {@code planningRepoEvidenceJson} from workflow state (may be blank).
+     */
+    public static String buildFullPacketBody(
+            FeaturePlanState plan, String requestFallback, String repoFallback, String repoEvidenceJson) {
         if (plan == null) {
             return "";
         }
@@ -47,7 +57,7 @@ public final class PlanningThreadPacketFormatter {
         String arch = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary"), SECTION_SOFT_MAX);
         String comps = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted"), SECTION_SOFT_MAX);
         String risksArt = truncate(PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary"), SECTION_SOFT_MAX);
-        String openQ = truncate(PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"), SECTION_SOFT_MAX);
+        String openQ = truncate(PlanningArtifactTexts.effectiveOpenQuestions(plan), SECTION_SOFT_MAX);
         String decisionsArt = truncate(PlanningArtifactTexts.allRepeatableFieldLines(plan, "decision_log", "decisions", "decision_text"), SECTION_SOFT_MAX * 2);
 
         StringBuilder sb = new StringBuilder();
@@ -92,7 +102,71 @@ public final class PlanningThreadPacketFormatter {
         appendSection(sb, "**Validation strategy**", orPlaceholder(validation));
         appendSection(sb, "**Project context**", orPlaceholder(context));
         appendSection(sb, "**Readiness snapshot**", formatReadinessSection(plan));
-        return sb.toString().trim();
+        String core = sb.toString().trim();
+        String grounding = summarizeRepoEvidenceForHumans(repoEvidenceJson);
+        if (grounding.isBlank()) {
+            return core;
+        }
+        StringBuilder out = new StringBuilder(core);
+        appendSection(out, "**Repo / workspace (grounding)**", grounding);
+        return out.toString().trim();
+    }
+
+    /**
+     * Compact markdown-friendly summary of {@code planningRepoEvidenceJson} for packets, critique copy, and orchestrator text.
+     */
+    public static String summarizeRepoEvidenceForHumans(String json) {
+        if (json == null || json.isBlank()) {
+            return "";
+        }
+        String t = json.trim();
+        if ("{}".equals(t)) {
+            return "";
+        }
+        try {
+            JsonNode n = REPO_EVIDENCE_JSON.readTree(t);
+            StringBuilder b = new StringBuilder();
+            lineIf(b, "Plan context", textOrEmpty(n, "contextId"));
+            lineIf(b, "Feature", textOrEmpty(n, "featureSlug"));
+            lineIf(b, "Repo", textOrEmpty(n, "repoRef"));
+            lineIf(b, "Workspace id", textOrEmpty(n, "workspaceId"));
+            lineIf(b, "Workspace status", textOrEmpty(n, "workspaceStatus"));
+            if (n.path("localPathPresent").asBoolean(false)) {
+                b.append("- Local clone path is recorded for exploration.\n");
+            } else {
+                b.append("- No local clone path yet — drafting may rely on request text only.\n");
+            }
+            String stage = textOrEmpty(n, "planningIntakeStage");
+            if (!stage.isBlank()) {
+                b.append("- Intake stage: **").append(stage).append("**.\n");
+            }
+            if (n.path("blockingIssues").isIntegralNumber() && n.path("blockingIssues").asInt() > 0) {
+                b.append("- Blocking issues on plan: **").append(n.path("blockingIssues").asInt()).append("**.\n");
+            }
+            String notes = textOrEmpty(n, "accessNotes");
+            if (!notes.isBlank()) {
+                b.append("- Access notes: ")
+                        .append(notes.length() > 220 ? notes.substring(0, 217) + "…" : notes)
+                        .append('\n');
+            }
+            return b.toString().trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static void lineIf(StringBuilder b, String label, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        b.append("- ").append(label).append(": `").append(value).append("`.\n");
+    }
+
+    private static String textOrEmpty(JsonNode n, String field) {
+        if (n == null || !n.has(field) || n.get(field).isNull()) {
+            return "";
+        }
+        return n.get(field).asText("").trim();
     }
 
     private static String formatAssumptionsSection(FeaturePlanState plan) {
@@ -105,7 +179,12 @@ public final class PlanningThreadPacketFormatter {
     }
 
     private static String formatAssumptionLine(PlanAssumption a) {
-        return "• [" + a.getStatus() + "/" + a.getSeverity() + "] " + a.getStatement().trim();
+        return "• ["
+                + PlanningUserFacingCopy.humanizeAssumptionStatus(a.getStatus())
+                + " / "
+                + PlanningUserFacingCopy.humanizeGovernanceSeverity(a.getSeverity())
+                + "] "
+                + a.getStatement().trim();
     }
 
     private static String formatIssuesSection(FeaturePlanState plan) {
@@ -120,20 +199,29 @@ public final class PlanningThreadPacketFormatter {
     }
 
     private static String formatIssueLine(PlanIssue i) {
-        String head = PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()) ? "**BLOCKING** " : "";
+        String head =
+                PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus())
+                        ? "**Blocking issue** — "
+                        : "";
+        String st = PlanningUserFacingCopy.humanizeIssueStatus(i.getStatus());
+        String sev = PlanningUserFacingCopy.humanizeGovernanceSeverity(i.getSeverity());
         String title = i.getTitle() != null ? i.getTitle().trim() : "";
         String det = i.getDetail() != null ? i.getDetail().trim() : "";
         if (!det.isBlank() && !det.equals(title)) {
-            return "• " + head + "[" + i.getStatus() + "/" + i.getSeverity() + "] " + title + " — " + det;
+            return "• " + head + "[" + st + " / " + sev + "] " + title + " — " + det;
         }
-        return "• " + head + "[" + i.getStatus() + "/" + i.getSeverity() + "] " + (title.isBlank() ? i.getText() : title);
+        String body = !title.isBlank() ? title : (!det.isBlank() ? det : "Issue details pending.");
+        return "• " + head + "[" + st + " / " + sev + "] " + body;
     }
 
     private static String formatRisksSection(FeaturePlanState plan, String artifactFallback) {
         if (!plan.getRisks().isEmpty()) {
             return plan.getRisks().stream()
                     .map(
-                            r -> "• [" + r.getStatus() + "] " + r.getStatement().trim()
+                            r -> "• ["
+                                    + PlanningUserFacingCopy.humanizeRiskDecisionStatus(r.getStatus())
+                                    + "] "
+                                    + r.getStatement().trim()
                                     + (r.getImpact().isBlank() ? "" : " (impact: " + r.getImpact() + ")"))
                     .collect(Collectors.joining("\n"));
         }
@@ -146,7 +234,11 @@ public final class PlanningThreadPacketFormatter {
     private static String formatDecisionsSection(FeaturePlanState plan, String artifactFallback) {
         if (!plan.getDecisions().isEmpty()) {
             return plan.getDecisions().stream()
-                    .map(d -> "• [" + d.getStatus() + "] " + d.getDecision().trim())
+                    .map(
+                            d -> "• ["
+                                    + PlanningUserFacingCopy.humanizeRiskDecisionStatus(d.getStatus())
+                                    + "] "
+                                    + d.getDecision().trim())
                     .collect(Collectors.joining("\n"));
         }
         if (artifactFallback != null && !artifactFallback.isBlank()) {
@@ -173,7 +265,9 @@ public final class PlanningThreadPacketFormatter {
         StringBuilder sb = new StringBuilder();
         if (c != null) {
             sb.append("**Readiness:** ")
-                    .append(c.getReadinessStatus() != null ? c.getReadinessStatus() : "unknown")
+                    .append(
+                            PlanningUserFacingCopy.humanizeReadinessStatus(
+                                    c.getReadinessStatus() != null ? c.getReadinessStatus() : "unknown"))
                     .append("\n");
             if (c.getConfidenceScore() >= 0) {
                 sb.append("**Confidence score:** ")
@@ -181,7 +275,9 @@ public final class PlanningThreadPacketFormatter {
                         .append("\n");
             }
             if (c.getLevel() != null && !c.getLevel().isBlank()) {
-                sb.append("**Level:** ").append(c.getLevel()).append("\n");
+                sb.append("**Confidence level:** ")
+                        .append(PlanningUserFacingCopy.humanizeGovernanceSeverity(c.getLevel()))
+                        .append("\n");
             }
             if (c.getConfidenceReasons() != null && !c.getConfidenceReasons().isEmpty()) {
                 sb.append("**Reasons:**\n");

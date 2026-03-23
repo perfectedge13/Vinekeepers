@@ -114,4 +114,50 @@ class ExecutePlanningRoomCycleActionSummaryTest {
         assertTrue(summary.contains("invalid JSON"));
         assertFalse(summary.contains("In good shape"));
     }
+
+    @Test
+    void orchestratorSummaryMentionsNextStepWhenReadyToPostPacket() {
+        FeaturePlanState plan = new FeaturePlanState(
+                "c",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "Ship audit export",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning",
+                Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        var ranked = PlanningQuestionRankingPolicy.rank(null, List.of(), 3);
+        String summary =
+                com.vinekeepers.workflow.planning.PlanningCyclePipeline.buildOrchestratorSummary(
+                        plan, true, "", ranked, 1, true, false, "", false, false);
+        assertTrue(summary.contains("Next I'll post the packet and run readiness checks."));
+    }
 }

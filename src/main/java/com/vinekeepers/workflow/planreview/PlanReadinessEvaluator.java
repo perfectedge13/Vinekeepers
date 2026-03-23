@@ -27,7 +27,7 @@ public final class PlanReadinessEvaluator {
 
     /**
      * @param workflowState optional workflow map for {@code planningPacketPosted} / {@code planningPacketPostedVersion};
-     *                        when null, packet-posted is inferred true for backward-compatible unit tests.
+     *                        when null, packet-posted is inferred only from {@link FeaturePlanState#getPacketPostedAt()}.
      */
     public static PlanConfidence evaluate(
             FeaturePlanState plan,
@@ -53,7 +53,7 @@ public final class PlanReadinessEvaluator {
             return true;
         }
         if (workflowState == null) {
-            return true;
+            return false;
         }
         if ("true".equalsIgnoreCase(String.valueOf(workflowState.get("planningPacketPosted")))) {
             return true;

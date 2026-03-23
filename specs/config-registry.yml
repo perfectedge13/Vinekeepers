@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T20:45:00Z"
+  updated_utc: "2026-03-23T00:20:00Z"
 
 project:
   id: vinekeepers
@@ -57,9 +57,10 @@ assets:
       retained transitional; lifecycleBotName in step bind; Arrietty production workflowRef arrietty_room_v2 runs hydrate_planning_session,
       ensure_repo_workspace, spread_plan_workspace_signals in the v2 planning phase before linear_workflow_ref arrietty_room_legacy;
       v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted, planningRepoEvidenceJson, canonicalPlanningIntakeStage;
-      create_thread storeIn deliveryChannelId; capture_field trimAndLower; done step e.g. "Launching now. See <#{{channelId}}>.";
+      create_thread storeIn deliveryChannelId; capture_field trimAndLower;       done step e.g. "Launching now. See <#{{channelId}}>.";
       optional workflow steps provision_room_participants and initialize_feature_room_state for multi-bot feature room;
       four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys;
+      arrietty_room_legacy launch success path ends with one post_channel_message plus done (no redundant duplicate terminal pair);
       operator DevOps bot workflowRef devops_deploy and routing discordChannels for ops channel id at top of file)
     requires: [REQ-CONFIG-001, REQ-LUNA-001, REQ-GADGET-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING, FEAT-DEVOPS-GADGET]

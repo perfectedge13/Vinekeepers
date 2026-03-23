@@ -63,7 +63,7 @@ public final class PlanningPacketDepthEvaluator {
         String current = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "current_state_summary");
         String feature = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
-        String openQ = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
+        String openQ = PlanningArtifactTexts.effectiveOpenQuestions(plan);
         String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
 
         int exWords = wordCount(exploration);
@@ -105,13 +105,17 @@ public final class PlanningPacketDepthEvaluator {
         if (workspaceReady && !componentsLookCodeBacked(comps)) {
             return new DepthResult(
                     false,
-                    "Architecture components_impacted needs concrete code paths or extensions (repo workspace is ready).");
+                    "Under **Architecture — components affected**, list concrete file paths, packages, or extensions"
+                            + " (the repo workspace is ready, so we expect code-backed touchpoints).");
         }
 
-        if (!openQ.isBlank() && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
+        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
+                && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
             return new DepthResult(false, "Open questions list is too short or template-like.");
         }
-        if (!openQ.isBlank() && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
+        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
+                && !openQ.isBlank()
+                && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
             return new DepthResult(false, "Open questions still look like starter template text.");
         }
 
@@ -129,7 +133,7 @@ public final class PlanningPacketDepthEvaluator {
         String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         Set<String> requestTokens = significantTokens(request);
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
-        String openQ = PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
+        String openQ = PlanningArtifactTexts.effectiveOpenQuestions(plan);
         String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
         String exploration = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
         int exWords = wordCount(exploration);
@@ -138,13 +142,17 @@ public final class PlanningPacketDepthEvaluator {
         if (workspaceReady && !componentsLookCodeBacked(comps)) {
             return new DepthResult(
                     false,
-                    "Architecture components_impacted needs concrete code paths or extensions (repo workspace is ready).");
+                    "Under **Architecture — components affected**, list concrete file paths, packages, or extensions"
+                            + " (the repo workspace is ready, so we expect code-backed touchpoints).");
         }
 
-        if (!openQ.isBlank() && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
+        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
+                && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
             return new DepthResult(false, "Open questions list is too short or template-like.");
         }
-        if (!openQ.isBlank() && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
+        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
+                && !openQ.isBlank()
+                && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
             return new DepthResult(false, "Open questions still look like starter template text.");
         }
 

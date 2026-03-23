@@ -7,6 +7,7 @@ import com.vinekeepers.devops.DeployTargetRegistry;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContextStore;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ResourceLock("systemProperties")
 class StartAnsibleDeployActionTest {
 
     @Test

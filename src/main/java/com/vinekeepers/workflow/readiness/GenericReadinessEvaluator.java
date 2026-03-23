@@ -10,6 +10,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.workflow.planning.PlanningPlaceholderDetection;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -45,7 +46,7 @@ public final class GenericReadinessEvaluator {
         for (ReadinessAnyOfGroup group : profile.getReadinessAnyOfGroups()) {
             boolean any = false;
             for (ReadinessPathRule rule : group.getRules()) {
-                PlanningPacketDepthEvaluator.DepthResult one = checkPathRule(plan, request, rule);
+                PlanningPacketDepthEvaluator.DepthResult one = checkPathRule(profile, plan, request, rule);
                 if (one.ok()) {
                     any = true;
                     break;
@@ -53,7 +54,9 @@ public final class GenericReadinessEvaluator {
             }
             if (!any) {
                 return new PlanningPacketDepthEvaluator.DepthResult(
-                        false, "Readiness anyOf group failed (see narrative/exploration constraints).");
+                        false,
+                        "At least one readiness group still needs stronger detail—expand request exploration or narrative"
+                                + " sections so each group has at least one field that meets the word-count rules.");
             }
         }
 
@@ -72,7 +75,7 @@ public final class GenericReadinessEvaluator {
                             field.getEchoWordSlack(),
                             field.isSkipReadinessIfBlank(),
                             field.getReadinessChecks());
-                    PlanningPacketDepthEvaluator.DepthResult r = checkPathRule(plan, request, synthetic);
+                    PlanningPacketDepthEvaluator.DepthResult r = checkPathRule(profile, plan, request, synthetic);
                     if (!r.ok()) {
                         return r;
                     }
@@ -111,15 +114,16 @@ public final class GenericReadinessEvaluator {
                         if (pat != null
                                 && !pat.isBlank()
                                 && low.contains(pat.toLowerCase(Locale.ROOT).trim())) {
+                            String label =
+                                    PlanningUserFacingCopy.describePlanningFieldPath(
+                                            profile,
+                                            art.getArtifactId(),
+                                            sec.getSectionId(),
+                                            field.getFieldId());
                             return new PlanningPacketDepthEvaluator.DepthResult(
                                     false,
-                                    "Field "
-                                            + art.getArtifactId()
-                                            + "."
-                                            + sec.getSectionId()
-                                            + "."
-                                            + field.getFieldId()
-                                            + " contains disallowed placeholder text.");
+                                    (label.isBlank() ? "A planning field" : label)
+                                            + " still contains disallowed placeholder wording from the work profile.");
                         }
                     }
                 }
@@ -129,7 +133,7 @@ public final class GenericReadinessEvaluator {
     }
 
     private static PlanningPacketDepthEvaluator.DepthResult checkPathRule(
-            FeaturePlanState plan, String request, ReadinessPathRule rule) {
+            WorkProfileDefinition profile, FeaturePlanState plan, String request, ReadinessPathRule rule) {
         String text = PlanningArtifactTexts.artifactField(plan, rule.getArtifactId(), rule.getSectionId(), rule.getFieldId());
         if (text == null) {
             text = "";
@@ -141,10 +145,12 @@ public final class GenericReadinessEvaluator {
 
         int words = PlanningPacketDepthEvaluator.wordCount(text);
         if (rule.getMinWords() != null && words < rule.getMinWords()) {
+            String label =
+                    PlanningUserFacingCopy.describePlanningFieldPath(
+                            profile, rule.getArtifactId(), rule.getSectionId(), rule.getFieldId());
             return new PlanningPacketDepthEvaluator.DepthResult(
                     false,
-                    "Field "
-                            + rule.pathLabel()
+                    (label.isBlank() ? "A planning field" : label)
                             + " is too thin ("
                             + words
                             + " words; need at least "
@@ -156,8 +162,13 @@ public final class GenericReadinessEvaluator {
             String c = check != null ? check.trim().toLowerCase(Locale.ROOT) : "";
             if ("placeholder".equals(c)) {
                 if (PlanningPlaceholderDetection.looksLikePlaceholder(text)) {
+                    String label =
+                            PlanningUserFacingCopy.describePlanningFieldPath(
+                                    profile, rule.getArtifactId(), rule.getSectionId(), rule.getFieldId());
                     return new PlanningPacketDepthEvaluator.DepthResult(
-                            false, "Field " + rule.pathLabel() + " still uses hollow or placeholder phrasing.");
+                            false,
+                            (label.isBlank() ? "A planning field" : label)
+                                    + " still uses hollow or placeholder phrasing.");
                 }
             } else if ("hollow_exploration".equals(c)) {
                 if (PlanningPlaceholderDetection.looksLikeHollowExploration(text)) {
@@ -172,9 +183,13 @@ public final class GenericReadinessEvaluator {
             int slack = rule.getEchoWordSlack() != null ? rule.getEchoWordSlack() : 10;
             int baseMin = rule.getMinWords() != null ? rule.getMinWords() : 0;
             if (overlap >= rule.getMaxEchoOverlapWithRequest() && words < baseMin + slack) {
+                String label =
+                        PlanningUserFacingCopy.describePlanningFieldPath(
+                                profile, rule.getArtifactId(), rule.getSectionId(), rule.getFieldId());
                 return new PlanningPacketDepthEvaluator.DepthResult(
                         false,
-                        "Field " + rule.pathLabel() + " echoes the raw request without enough added substance.");
+                        (label.isBlank() ? "A planning field" : label)
+                                + " echoes the raw request without enough added substance.");
             }
         }
 

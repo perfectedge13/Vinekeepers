@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-22
+
+- **Canonical planning projections and readiness seam:** **`FeaturePlanState`** remains the durable source for packet timing (**`packetPostedAt`**, fingerprint/chunk fields) and **`PlanConfidence`**; **`PlanReadinessEvaluator`** treats “packet posted” as authoritative from plan state when workflow spread omits it. **`hydrate_planning_session`** projects **`planningPacketPosted`**, **`planningPacketPostedVersion`**, and **`planReadinessStatus`** from persisted plan when present; **`evaluate_planning_approval_gate`** prefers stored **`PlanConfidence`** for the approval-ready check. Specs: **state-registry**, **workflow-registry**; tests: **PlanReadinessEvaluatorTest**, **HydratePlanningSessionActionTest**, **SpreadPlanWorkspaceSignalsActionTest**.
+
 ## 2026-03-19 (Phase C state)
 
 - **Planning gate models:** **PlanCritiqueFinding**, **PlanCritiqueSnapshot**, **PlanReadinessStatus**, **PlanApprovalStatus**; **PlanConfidence** extended with **readinessStatus** and **computedAt**; **FeaturePlanState** carries optional critique snapshot and **withPlanConfidence** / **withPlanApproval** / **withPlanCritiqueSnapshot**.

@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanReadinessEvaluatorTest {
 
@@ -36,14 +38,15 @@ class PlanReadinessEvaluatorTest {
 
     @Test
     void needsHumanWhenIssuesPresent() {
-        FeaturePlanState p = minPlan().withAppendedIssue(PlanIssue.fromLegacyText("i1", "risk", T));
+        FeaturePlanState p =
+                posted(minPlan()).withAppendedIssue(PlanIssue.fromLegacyText("i1", "risk", T));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(p, List.of(), List.of(), T);
         assertEquals(PlanReadinessStatus.CONDITIONALLY_READY, c.getReadinessStatus());
     }
 
     @Test
     void readyWhenClean() {
-        PlanConfidence c = PlanReadinessEvaluator.evaluate(minPlan(), List.of(), List.of(), T);
+        PlanConfidence c = PlanReadinessEvaluator.evaluate(posted(minPlan()), List.of(), List.of(), T);
         assertEquals(PlanReadinessStatus.READY, c.getReadinessStatus());
         assertEquals("HIGH", c.getLevel());
     }
@@ -54,6 +57,42 @@ class PlanReadinessEvaluatorTest {
                 "1", "PROCESS", "MUST_FIX", "X", "fix profile", ""));
         PlanConfidence c = PlanReadinessEvaluator.evaluate(minPlan(), List.of(), f, T);
         assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
+    }
+
+    @Test
+    void readyWhenPacketPostedInferredFromWorkflowVersion() {
+        PlanConfidence c = PlanReadinessEvaluator.evaluate(
+                minPlan(), List.of(), List.of(), T, Map.of("planningPacketPostedVersion", 1));
+        assertEquals(PlanReadinessStatus.READY, c.getReadinessStatus());
+    }
+
+    @Test
+    void inferPacketPosted_prefersPlanOverWorkflow() {
+        assertTrue(PlanReadinessEvaluator.inferPacketPostedOnPlan(
+                posted(minPlan()), Map.of("planningPacketPosted", "false")));
+    }
+
+    @Test
+    void inferPacketPosted_falseWithoutPlanTimestampOrWorkflowSignals() {
+        assertFalse(PlanReadinessEvaluator.inferPacketPostedOnPlan(minPlan(), null));
+        assertFalse(PlanReadinessEvaluator.inferPacketPostedOnPlan(minPlan(), Map.of()));
+    }
+
+    @Test
+    void inferPacketPosted_trueFromWorkflowBooleanString() {
+        assertTrue(PlanReadinessEvaluator.inferPacketPostedOnPlan(
+                minPlan(), Map.of("planningPacketPosted", "TRUE")));
+    }
+
+    @Test
+    void inferPacketPosted_invalidVersionStringIsFalse() {
+        assertFalse(PlanReadinessEvaluator.inferPacketPostedOnPlan(
+                minPlan(), Map.of("planningPacketPostedVersion", "nope")));
+    }
+
+    /** Readiness treats an unposted packet as not ready; mirror post step recording on the plan. */
+    private static FeaturePlanState posted(FeaturePlanState plan) {
+        return plan.withPacketPosted(T, "", "test-fp", 1);
     }
 
     private static FeaturePlanState minPlan() {

@@ -27,6 +27,7 @@ import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedCla
 import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
+import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -206,7 +207,8 @@ public final class PlanningCyclePipeline {
                         clarificationStuck,
                         stuckHint != null ? stuckHint : "",
                         userInputRequired,
-                        structuredParseFailed));
+                        structuredParseFailed,
+                        getString(state, "planningRepoEvidenceJson")));
         spread.put(
                 "planningRevisionNeeded",
                 (!depthOk || userInputRequired || structuredParseFailed) ? "true" : "false");
@@ -414,7 +416,8 @@ public final class PlanningCyclePipeline {
                         clarificationStuck,
                         stuckHint != null ? stuckHint : "",
                         userInputRequired,
-                        structuredParseFailedFinalize));
+                        structuredParseFailedFinalize,
+                        getString(state, "planningRepoEvidenceJson")));
         spread.put(
                 "planningRevisionNeeded",
                 (!depthOk || userInputRequired || structuredParseFailedFinalize) ? "true" : "false");
@@ -1176,7 +1179,7 @@ public final class PlanningCyclePipeline {
         } else if (structuredParseFailed) {
             sb.append("Holding until coordinator roles return valid structured JSON for this pass.");
         } else if (depthOk) {
-            sb.append("Draft looks solid enough to move forward.");
+            sb.append("Draft looks solid enough to move forward. Next I'll post the planning packet and run readiness checks.");
         } else {
             sb.append("Still tightening the draft: ")
                     .append(truncateOneLine(depthReason != null ? depthReason : "details pending", 140));
@@ -1218,6 +1221,32 @@ public final class PlanningCyclePipeline {
             String stuckHint,
             boolean userInputRequired,
             boolean structuredParseFailed) {
+        return buildOrchestratorSummary(
+                plan,
+                depthOk,
+                depthReason,
+                ranked,
+                cycleIteration,
+                readyToPostPacket,
+                clarificationStuck,
+                stuckHint,
+                userInputRequired,
+                structuredParseFailed,
+                null);
+    }
+
+    public static String buildOrchestratorSummary(
+            FeaturePlanState plan,
+            boolean depthOk,
+            String depthReason,
+            RankedClarification ranked,
+            int cycleIteration,
+            boolean readyToPostPacket,
+            boolean clarificationStuck,
+            String stuckHint,
+            boolean userInputRequired,
+            boolean structuredParseFailed,
+            String planningRepoEvidenceJson) {
         String req = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         String gist = req.length() > 200 ? req.substring(0, 199) + "…" : req;
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
@@ -1232,12 +1261,16 @@ public final class PlanningCyclePipeline {
             sb.append(gist);
         }
         sb.append(workspaceSummaryLine(plan));
+        String repoDigest = PlanningThreadPacketFormatter.summarizeRepoEvidenceForHumans(planningRepoEvidenceJson);
+        if (!repoDigest.isBlank()) {
+            sb.append("\n\n**Repo signals:**\n").append(repoDigest);
+        }
 
         sb.append("\n\n**Draft:** ");
         if (userInputRequired) {
             sb.append("I'm holding the thread here until we clear one detail — see below.");
         } else if (readyToPostPacket) {
-            sb.append("Ready to drop the full write-up in this thread for your review.");
+            sb.append("Ready to drop the full write-up in this thread for your review. Next I'll post the packet and run readiness checks.");
         } else if (structuredParseFailed) {
             sb.append(
                     "The last structured planner pass returned invalid JSON; I need a clean pass before treating the draft as reliable.");

@@ -5,12 +5,14 @@ import com.vinekeepers.devops.DeployTargetCompose;
 import com.vinekeepers.devops.DeployTargetRegistry;
 import com.vinekeepers.events.Event;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@ResourceLock("systemProperties")
 class DeployResolveProjectActionTest {
 
     @Test

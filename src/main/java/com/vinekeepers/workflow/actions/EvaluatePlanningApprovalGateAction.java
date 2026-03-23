@@ -46,6 +46,14 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         boolean depthOk = "true".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
         String readinessSpread = getString(state, "planReadinessStatus");
         boolean ready = PlanReadinessStatus.READY.equals(readinessSpread);
+        if (plan != null
+                && plan.getPlanConfidence() != null
+                && plan.getPlanConfidence().getReadinessStatus() != null
+                && !plan.getPlanConfidence().getReadinessStatus().isBlank()) {
+            ready =
+                    PlanReadinessStatus.READY.equals(
+                            PlanReadinessStatus.legacySpreadValue(plan.getPlanConfidence().getReadinessStatus()));
+        }
         boolean humanOk = intakeDiscoveryCompleteForApproval(plan, state);
         boolean noPendingClarification = !"true".equalsIgnoreCase(String.valueOf(state.get("planningUserInputRequired")));
 

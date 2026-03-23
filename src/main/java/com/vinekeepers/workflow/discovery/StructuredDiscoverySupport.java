@@ -261,9 +261,13 @@ public final class StructuredDiscoverySupport {
 
     public static Map<String, Object> buildAgendaSpread(String gapsJson) throws JsonProcessingException {
         List<DiscoveryGap> gaps = parseGapsJson(gapsJson);
+        List<DiscoveryGap> sorted = new ArrayList<>(gaps);
+        sorted.sort(GAP_COMPARATOR);
         List<DiscoveryQuestion> questions = new ArrayList<>();
         AtomicInteger q = new AtomicInteger(1);
-        gaps.stream().sorted(GAP_COMPARATOR).forEach(g -> questions.add(toQuestion(g, q.getAndIncrement())));
+        if (!sorted.isEmpty()) {
+            questions.add(toQuestion(sorted.get(0), q.getAndIncrement()));
+        }
         DiscoveryAgenda agenda =
                 new DiscoveryAgenda(questions, gaps.size(), questions.isEmpty() ? "" : questions.get(0).getQuestionId(),
                         Instant.now().toString());
@@ -373,7 +377,7 @@ public final class StructuredDiscoverySupport {
                     "orchestrator",
                     g.getSeverity(),
                     prompt,
-                    "NONE",
+                    "WORKSPACE",
                     "",
                     "",
                     "",
@@ -426,7 +430,7 @@ public final class StructuredDiscoverySupport {
                     "orchestrator",
                     g.getSeverity(),
                     discoveryPromptBody(g),
-                    "NONE",
+                    "WORKSPACE",
                     "",
                     "",
                     "",

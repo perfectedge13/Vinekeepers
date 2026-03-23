@@ -27,9 +27,16 @@ public final class PlanningPromptFormatter {
         String label = field.getLabel() != null && !field.getLabel().isBlank()
                 ? field.getLabel()
                 : "this item";
-        String rowNote = repeatableRowIndex >= 0 ? " (entry " + (repeatableRowIndex + 1) + ")" : "";
         StringBuilder sb = new StringBuilder();
-        sb.append("For **").append(label).append("**").append(rowNote).append(": ");
+        if (repeatableRowIndex >= 0) {
+            sb.append("**")
+                    .append(label)
+                    .append("** (item ")
+                    .append(repeatableRowIndex + 1)
+                    .append(" in this list) — reply in **one message** with: ");
+        } else {
+            sb.append("**").append(label).append("**: ");
+        }
         if (field.getPromptHint() != null && !field.getPromptHint().isBlank()) {
             sb.append(field.getPromptHint().trim());
         } else {

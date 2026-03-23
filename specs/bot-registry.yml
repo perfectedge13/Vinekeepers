@@ -130,7 +130,7 @@ requirements:
     acceptance:
       criteria:
         - Router.match(event) returns list of matching bot ids; Router depends on LifecycleContextStore and handlesOwnedSpaces map (setHandlesOwnedSpacesByBotId); handlesMap built from bot.getConnectorIdentity("discord").getAttribute("handlesOwnedSpaces") per bot
-        - When FeatureRoomState exists for the event channel and that channel is the feature room's intake/spec thread id, Router returns four participant configuredBotIds in deterministic role order via FeatureRoomStateStore.getParticipantBotIds
+        - When FeatureRoomState exists for the event channel and that channel is the feature room's intake/spec thread id, Router returns only the primary coordinator configuredBotId (same coordinator resolution as the room channel; messages and interactions on the intake/spec thread are coordinator-owned)
         - When FeatureRoomState exists for the event channel and that channel is the feature room channel (not the intake thread), Router returns only the primary coordinator configuredBotId (FeatureRoomStateStore.resolveCoordinatorConfiguredBotId)
         - When event has channelId and LifecycleContextStore has a context for that channel whose owner bot has handlesOwnedSpaces, only that owner bot is returned (single-owner precedence)
         - When no feature room applies and channelId does not match a lifecycle channel but matches a lifecycle delivery target id, Router resolves the lifecycle owner the same as for the parent channel (single-owner when handlesOwnedSpaces)

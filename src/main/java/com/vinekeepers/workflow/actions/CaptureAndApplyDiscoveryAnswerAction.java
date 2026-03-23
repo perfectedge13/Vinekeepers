@@ -2,6 +2,7 @@ package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.planning.LightweightPlanningReply;
 
@@ -41,6 +42,9 @@ public final class CaptureAndApplyDiscoveryAnswerAction implements com.vinekeepe
             new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, state, bind);
             return "OK";
         }
+        if ("WORKSPACE".equalsIgnoreCase(kind != null ? kind : "")) {
+            return applyWorkspaceDiscoveryNote(contextId, answer);
+        }
         if (!"REQUIRED_FIELD".equalsIgnoreCase(kind != null ? kind : "")) {
             return "OK_SKIP_APPLY";
         }
@@ -68,6 +72,26 @@ public final class CaptureAndApplyDiscoveryAnswerAction implements com.vinekeepe
         upsertBind.put("mode", mode);
         upsertBind.put("data", Map.of(fieldId, answer));
         return upsert.run(event, mergedState, upsertBind);
+    }
+
+    private Object applyWorkspaceDiscoveryNote(String contextId, String answer) {
+        FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
+        if (plan == null) {
+            return "No plan for context.";
+        }
+        String prev = plan.getRepoAccessNotes() != null ? plan.getRepoAccessNotes().trim() : "";
+        String line = "Coordinator discovery answer: " + answer.trim();
+        String merged = prev.isBlank() ? line : prev + "\n" + line;
+        if (merged.length() > 6000) {
+            merged = merged.substring(0, 5997) + "…";
+        }
+        planStateStore.update(
+                plan.withWorkspaceLinkage(
+                        plan.getRepoWorkspaceId(),
+                        plan.getRepoWorkspaceStatus(),
+                        plan.getRepoLocalPath(),
+                        merged));
+        return "OK";
     }
 
     private static String getString(Map<String, Object> map, String key) {

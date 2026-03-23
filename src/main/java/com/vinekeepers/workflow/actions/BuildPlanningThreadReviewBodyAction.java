@@ -45,7 +45,12 @@ public final class BuildPlanningThreadReviewBodyAction implements com.vinekeeper
 
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
         String repo = firstNonBlank(plan.getRepoRef(), getString(state, "project"));
-        String body = truncate(PlanningThreadPacketFormatter.buildFullPacketBody(plan, request, repo), TOTAL_CAP);
+        String body =
+                truncate(
+                        PlanningThreadPacketFormatter.buildFullPacketBody(
+                                plan, request, repo, getString(state, "planningRepoEvidenceJson")),
+                        TOTAL_CAP);
+
         spread.put("planningThreadReviewBody", body);
         return spread;
     }

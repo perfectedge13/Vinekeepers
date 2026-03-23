@@ -12,6 +12,7 @@ import com.vinekeepers.state.planning.PlanRisk;
 import com.vinekeepers.state.planning.PlanRiskDecisionStatus;
 import com.vinekeepers.workflow.discovery.StructuredDiscoverySupport;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -77,7 +78,18 @@ public final class PlanGovernanceDeriver {
         String reason = g.getReason() != null ? g.getReason() : "";
         String title = reason.length() > 160 ? reason.substring(0, 159) + "…" : reason;
         if (title.isBlank()) {
-            title = "Gap " + g.getGapId();
+            String u = Objects.toString(g.getUserFacingDetail(), "").trim();
+            if (!u.isBlank()) {
+                title = u.length() > 160 ? u.substring(0, 159) + "…" : u;
+            } else {
+                String pathLabel =
+                        PlanningUserFacingCopy.describePlanningFieldPath(
+                                null, g.getArtifactId(), g.getSectionId(), g.getFieldId());
+                title =
+                        !pathLabel.isBlank()
+                                ? "Needs attention: " + pathLabel
+                                : "Planning item needs your input";
+            }
         }
         String detail = !Objects.toString(g.getUserFacingDetail(), "").isBlank()
                 ? g.getUserFacingDetail()
@@ -203,7 +215,7 @@ public final class PlanGovernanceDeriver {
         }
         String openQ =
                 PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions");
-        if (!openQ.isBlank()) {
+        if (!openQ.isBlank() && !PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)) {
             for (String line : openQ.split("\\R")) {
                 String t = line.replaceFirst("^[-*•]\\s*", "").trim();
                 if (t.length() >= 4) {

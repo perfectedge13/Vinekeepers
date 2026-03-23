@@ -2,6 +2,7 @@ package com.vinekeepers.bot;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.vinekeepers.events.Event;
@@ -11,6 +12,7 @@ import com.vinekeepers.state.planning.FeatureRoomState;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import com.vinekeepers.state.planning.PlanningRole;
 import com.vinekeepers.state.planning.RoomParticipant;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -324,7 +326,11 @@ class RouterTest {
 
     @Test
     void routeWithLifecycleStore_ownedChannel_logsOwnershipMismatchWarningWhenOwnerDoesNotHaveHandlesOwnedSpaces() {
-        Logger routerLogger = (Logger) LoggerFactory.getLogger(Router.class);
+        Assumptions.assumeTrue(
+                LoggerFactory.getILoggerFactory() instanceof LoggerContext,
+                "Logback LoggerContext required to capture Router logs");
+        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger routerLogger = lc.getLogger(Router.class.getName());
         ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
         listAppender.start();
         routerLogger.addAppender(listAppender);

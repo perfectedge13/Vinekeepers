@@ -47,3 +47,14 @@ Steps:
 
 Resolution: Rewire the reply sender in `Bootstrap`, or update the workflow or reasoner so one stage produces the expected user-facing reply.
 
+## Coordinator intake thread shows internal paths or enum-like tokens
+
+Cause: Older planning packet, critique, or readiness formatting echoed artifact ids, YAML paths, or internal status tokens in Discord text.
+
+Steps:
+1. Confirm the deployment includes **`PlanningUserFacingCopy`** and updated **`PlanningThreadPacketFormatter`**, **`PlanCritiqueSupport`**, **`RunPlanCritiqueAndReadinessAction`**, **`PlanningPacketDepthEvaluator`**, and **`GenericReadinessEvaluator`** (see **workflow-registry** and **cursor-gathering** feature docs).
+2. Check **`config/work-profiles.yaml`** for human-readable field titles used when mapping internal paths.
+3. Compare thread copy with **`planReadinessStatus`** in workflow state: branches stay machine-readable; only template/interpolation should show plain-language labels.
+
+Resolution: Upgrade to the build that routes coordinator Discord copy through **`PlanningUserFacingCopy`**; if a new gap appears, trace the emitting action and extend **`PlanningUserFacingCopy`** or the work profile rather than surfacing raw ids in YAML templates.
+

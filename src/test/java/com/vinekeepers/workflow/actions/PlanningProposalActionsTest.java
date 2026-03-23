@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanningProposalActionsTest {
@@ -83,5 +84,22 @@ class PlanningProposalActionsTest {
         var plan = store.getByContextId("cr1").orElseThrow();
         var body = plan.getArtifacts().get("overall_plan").getSectionsById().get("outline").getValues().get("plan_body");
         assertTrue(body.toString().contains("Feature X"));
+    }
+
+    @Test
+    void generateProposals_v2DoesNotQueueOpenQuestionsAsEditableDraft() {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "gp-v2", "channelId", "ch", "codeChange", "Support model overrides by workflow step"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+        var gen = new GeneratePlanningProposalsAction(store, reg);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> out = (Map<String, Object>) gen.run(null, Map.of("contextId", "gp-v2"), Map.of());
+        assertFalse(((String) out.get("planningProposalsJson")).contains("\"artifactId\":\"open_questions_block\""));
     }
 }

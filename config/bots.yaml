@@ -150,7 +150,7 @@ workflows:
       - when:
           key: coordinatorKickoff
           value: 'true'
-        next: 73
+        next: 70
       - when:
           key: planningIntakeThread
           value: 'true'
@@ -386,7 +386,7 @@ workflows:
       - when:
           key: planReadinessStatus
           value: BLOCKED
-        next: 63
+        next: 67
       - when:
           key: planReadinessStatus
           value: NEEDS_REVISION
@@ -440,9 +440,10 @@ workflows:
       action: post_channel_message
       bind:
         content: '**Pre-launch review** (planning packet posted above in one or more
-          messages)
+          messages). This block is **readiness + critique** on the draft — your **approve
+          / revise / reject** choices only appear after this passes the workflow gates.
 
-          **Status:** {{planReadinessStatus}}
+          **Status:** {{planReadinessStatusLabel}}
 
           {{planReadinessSummary}}
 
@@ -578,9 +579,9 @@ workflows:
       - when:
           key: launchSucceeded
           value: 'false'
-        next: 63
+        next: 67
       - when: else
-        next: 78
+        next: 75
     - type: call_action
       action: post_channel_message
       bind:
@@ -597,12 +598,6 @@ workflows:
         target: room
     - type: done
       message: Planning blocked; not launching.
-    - type: done
-      message: Planning rejected; not launching.
-    - type: done
-      message: Continue planning by replying in plain text in this intake thread.
-    - type: done
-      message: '{{roomAction}}'
     - type: call_action
       action: coordinator_intake_bootstrap
       storeSpread: true
@@ -620,8 +615,9 @@ workflows:
       bind:
         content: '**Human review requested**
 
+          {{planReadinessCheckpointGuide}}
 
-          Readiness: **{{planReadinessStatus}}**
+          **Status:** {{planReadinessStatusLabel}}
 
           {{planReadinessSummary}}
 
@@ -634,8 +630,13 @@ workflows:
         asRole: orchestrator
         target: thread
     - type: prompt_for_field
-      prompt: Readiness needs your decision. Continue to launch approval or revise
-        the plan first?
+      prompt: '**Pick what happens next** (still **not** a code launch — only routing the workflow).
+
+        • **Continue to approval** → you get **Approve / Approve with risks / Revise / Reject** for this packet.
+
+        • **Revise plan first** → another drafting round; you will return here afterward.
+
+        Use the button that matches what you want.'
       storeIn: readinessProceedRaw
       intent: present_choices
       choices:
@@ -650,7 +651,7 @@ workflows:
       - when:
           key: readinessProceedRaw
           value: proceed
-        next: 79
+        next: 76
       - when:
           key: readinessProceedRaw
           value: revise
@@ -671,7 +672,7 @@ workflows:
         - discoveryBundledApplyJson
         - intakeChoice
       - when: else
-        next: 73
+        next: 70
     - type: call_action
       action: acknowledge_readiness_human_decision
       storeSpread: true
@@ -679,14 +680,6 @@ workflows:
       branches:
       - when: else
         next: 53
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{launchMessage}}'
-        asRole: orchestrator
-        target: thread
-    - type: done
-      message: '{{launchMessage}}'
     - type: call_action
       action: post_channel_message
       bind:
@@ -898,8 +891,7 @@ workflows:
       bind:
         intakeThreadId: '{{deliveryChannelId}}'
     - type: done
-      message: Feature room is ready. Continue in the intake/spec thread above to
-        complete the plan, approval, and launch.
+      message: 'Feature room is ready. Continue in the **intake/spec** thread (<#{{deliveryChannelId}}>) to finish the plan, get approval, and launch.'
     - type: done
       message: Could not create room.
     - type: done

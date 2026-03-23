@@ -21,6 +21,24 @@ public final class PlanningDraftSupport {
     private PlanningDraftSupport() {
     }
 
+    /** Short plain-language explanation for Discord / drafts (raw enum names are confusing). */
+    public static String humanizeRepoWorkspaceStatus(String statusName) {
+        if (statusName == null || statusName.isBlank()) {
+            return "";
+        }
+        try {
+            return switch (RepoWorkspaceStatus.valueOf(statusName.trim())) {
+                case UNRESOLVED -> "Not resolved yet";
+                case RESOLVED_LOCAL -> "Local path resolved";
+                case MATERIALIZED -> "Materialized (files on disk)";
+                case UNAVAILABLE -> "Unavailable";
+                case FAILED -> "Failed";
+            };
+        } catch (IllegalArgumentException e) {
+            return statusName.trim();
+        }
+    }
+
     public static boolean workspaceLikelyReady(String statusName) {
         if (statusName == null || statusName.isBlank()) {
             return false;
@@ -118,7 +136,9 @@ public final class PlanningDraftSupport {
             sb.append("Repository: ").append(plan.getRepoRef()).append(". ");
         }
         if (plan.getRepoWorkspaceStatus() != null && !plan.getRepoWorkspaceStatus().isBlank()) {
-            sb.append("Workspace status: ").append(plan.getRepoWorkspaceStatus()).append(". ");
+            sb.append("Workspace status: ")
+                    .append(humanizeRepoWorkspaceStatus(plan.getRepoWorkspaceStatus()))
+                    .append(". ");
         }
         if (readmeSnippet != null && !readmeSnippet.isBlank()) {
             sb.append("\n").append(readmeSnippet.trim());
@@ -156,20 +176,6 @@ public final class PlanningDraftSupport {
             String t = request.trim();
             sb.append("- Request-specific: ").append(t.length() > 200 ? t.substring(0, 200) + "…" : t).append("\n");
         }
-        return sb.toString();
-    }
-
-    /** Draft open-questions placeholder to be replaced during discovery. */
-    public static String buildOpenQuestionsDraft(String request) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Review the following after drafts are generated:\n");
-        sb.append("- Confirm scope boundaries and out-of-scope items.\n");
-        sb.append("- Any product or API contracts that must stay stable?\n");
-        if (request != null && !request.isBlank()) {
-            String t = request.trim();
-            sb.append("- Clarify ambiguities in: ").append(t.length() > 120 ? t.substring(0, 120) + "…" : t).append("\n");
-        }
-        sb.append("Replace with **None — ready to implement** only if nothing is uncertain.\n");
         return sb.toString();
     }
 

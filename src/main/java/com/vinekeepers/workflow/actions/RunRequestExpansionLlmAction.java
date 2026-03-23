@@ -205,35 +205,6 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
                                 "data",
                                 Map.of("validation_notes", val)));
             }
-            JsonNode oq = root.path("candidate_open_questions");
-            if (oq.isArray() && !oq.isEmpty()) {
-                StringBuilder ob = new StringBuilder();
-                for (JsonNode n : oq) {
-                    if (n.isTextual()) {
-                        String q = n.asText().trim();
-                        if (!q.isBlank()) {
-                            if (ob.length() > 0) {
-                                ob.append("\n");
-                            }
-                            ob.append("- ").append(q);
-                        }
-                    }
-                }
-                if (ob.length() > 0) {
-                    upsertAction.run(
-                            event,
-                            base,
-                            Map.of(
-                                    "artifactId",
-                                    "open_questions_block",
-                                    "sectionId",
-                                    "backlog",
-                                    "mode",
-                                    "replace",
-                                    "data",
-                                    Map.of("open_questions", ob.toString())));
-                }
-            }
             String design = text(root, "design_options");
             if (!design.isBlank()) {
                 upsertAction.run(
