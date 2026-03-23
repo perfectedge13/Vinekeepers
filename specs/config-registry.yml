@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T12:00:00Z"
+  updated_utc: "2026-03-23T23:45:00Z"
 
 project:
   id: vinekeepers
@@ -44,7 +44,10 @@ assets:
   - id: ASSET-CONFIG-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/config/ConfigLoader.java
-    role: Load bot definitions, routing, workflows; dual-read identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy top-level keys; normalize to ConnectorIdentity per connector; Discord mention filters from YAML
+    role: >-
+      Load bot definitions, routing, workflows; dual-read identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy
+      top-level keys; normalize to ConnectorIdentity per connector; Discord mention filters from YAML are matched by Router
+      against normalized mention tokens (REQ-BOT-001)
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-BOTS-YAML
@@ -185,8 +188,9 @@ requirements:
           and strict single-question, non-meta clarification UX; gap questionTemplate values that read as generic meta or completeness prompts
           are ignored at evaluation time
         - >-
-          bots.yaml arrietty_room_v2 orchestrator templates interpolate planningRoomCycleErrorUserMessage (plain-language cycle
-          error line) alongside planning depth fields in the draft-blocked path, and keep pre-launch review copy scoped as a short
+          bots.yaml arrietty_room_v2 rs_post_draft branches only on planningPostDraftAction (fail-closed default planning_blocked);
+          cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; orchestrator templates interpolate
+          planningRoomCycleErrorUserMessage alongside planning depth fields where relevant, and pre-launch review copy stays a short
           checklist when the full planning packet is already in-thread
         - >-
           arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace
@@ -234,6 +238,12 @@ requirements:
           intent: Verify handlesOwnedSpaces absent in bot YAML yields false on BotDefinition
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildBotsParsesHandlesOwnedSpacesAbsentAsFalse
+          preconditions: []
+        - id: UNIT-ARRIETTY-V2-WORKFLOW-YAML
+          title: ArriettyV2WorkflowYamlTest
+          intent: >-
+            Verify arrietty_room_v2 YAML shape, planningPostDraftAction-only post-assess branching, and coordinator template contracts
+          testClass: com.vinekeepers.config.ArriettyV2WorkflowYamlTest
           preconditions: []
 
 features:

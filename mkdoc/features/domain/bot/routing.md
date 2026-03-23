@@ -12,11 +12,11 @@ Route events to bots by routing rules (REQ-BOT-001). `Router` evaluates all `Rou
 
 | Asset | Role | Path |
 |-------|------|------|
-| ASSET-ROUTER | Match events to bots by routing rules and ownership; depends on LifecycleContextStore and optional FeatureRoomStateStore; feature room: room channel → coordinator only; intake thread **messages** and **interactions** → coordinator only when coordinator resolves; else participant configuredBotIds in role order; when lifecycle context exists and owner has handlesOwnedSpaces, single-owner precedence when applicable; when owner lacks handlesOwnedSpaces, logs warning and uses filter-based routing; discordAuthors by actorId or actorUsername; DEBUG log when no bot matched | src/main/java/com/vinekeepers/bot/Router.java |
+| ASSET-ROUTER | Match events to bots by routing rules and ownership; depends on LifecycleContextStore and optional FeatureRoomStateStore; feature room: room channel → coordinator only; intake thread **messages** and **interactions** → coordinator only when coordinator resolves; else participant configuredBotIds in role order; when lifecycle context exists and owner has handlesOwnedSpaces, single-owner precedence when applicable; when owner lacks handlesOwnedSpaces, logs warning and uses filter-based routing; discordAuthors by actorId or actorUsername; structured **INFO** log when no bot matched (channelId, authorId, actorUsername, mentions, ingestBotId, truncated textPrefix) | src/main/java/com/vinekeepers/bot/Router.java |
 | ASSET-ROUTING | One routing policy rule (filter + botId) | src/main/java/com/vinekeepers/bot/RoutingRule.java |
 | ASSET-EVENT-FILTER | Filter events by criteria | src/main/java/com/vinekeepers/bot/EventFilter.java |
 | ASSET-ROUTING-FILTER | Apply routing filters to events; for Discord, `discordTrigger` and `discordMention` apply only to message events; `discordAuthors` and `discordChannels` apply to all Discord events | src/main/java/com/vinekeepers/bot/RoutingFilter.java |
-| ASSET-NORMALIZED-EVENT-CONTEXT | Normalize payloads for routing and session decisions; exposes `actorId` and `actorUsername` (e.g. from payload author/authorId) | src/main/java/com/vinekeepers/bot/NormalizedEventContext.java |
+| ASSET-NORMALIZED-EVENT-CONTEXT | Normalize payloads for routing and session decisions; exposes `actorId` and `actorUsername` (e.g. from payload author/authorId); for Discord text, collects user/bot mention snowflakes only from `<@…>` / `<@!…>` with numeric ids (ignores `<@&…>` and non-snowflake bracket tokens) | src/main/java/com/vinekeepers/bot/NormalizedEventContext.java |
 
 # Sub-pages
 

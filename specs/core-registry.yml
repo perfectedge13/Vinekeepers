@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T12:00:00Z"
+  updated_utc: "2026-03-23T22:30:00Z"
 
 project:
   id: vinekeepers
@@ -240,7 +240,7 @@ requirements:
       errors: []
     acceptance:
       criteria:
-        - Engine subscribes to event bus and dispatches to bots by routing rules
+        - Engine subscribes to event bus and dispatches to bots by routing rules (Router); Discord message mention and trigger matching semantics follow REQ-BOT-001
         - For Discord message events, engine adds bots that have a workflow runner and stateStore state with WAITING_INPUT for the event's session key (waiting-session routing) so workflows resume in the same conversation
         - Engine uses registered runners and runner.runResult(event, stateStore, botId) for workflow execution
         - Engine gives the reasoner workflow reply context, current session state, and the last normalized user message

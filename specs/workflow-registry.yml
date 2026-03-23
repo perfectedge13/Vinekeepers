@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T12:00:00Z"
+  updated_utc: "2026-03-23T23:45:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -409,9 +409,35 @@ assets:
       planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
       planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true;
       alongside machine planningRoomCycleError codes, spreads planningRoomCycleErrorUserMessage (PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine)
-      for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens
+      for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens;
+      PlanningPostDraftGovernor derives planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
+      AUTONOMOUS_REDRAFT) plus planningPostDraftNoticeMarkdown and material/revision baselines so Arrietty v2 post-assess YAML
+      routes only on that action (no truthy planningUserInputRequired/planningReadyToPostPacket convergence); finalizePlanningCycleSpread
+      persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute)
     requires:
       - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-POST-DRAFT-GOVERNOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningPostDraftGovernor.java
+    role: >-
+      Post-draft routing governor: derives PlanningPostDraftAction from clarification, depth, parse health, ledger repeat, and
+      material-change signals (merged user answer, repo evidence hash, assumption count, critique blocking count, draft
+      fingerprint when canonical exploration/summary text changed); revision situation fingerprint stops unchanged non-posting
+      loops; optional forced user ask when stalled with a ledger question; AUTONOMOUS_REDRAFT only when material changed
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-POST-DRAFT-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningPostDraftAction.java
+    role: Enum spread values for v2 planning_assess_clarification rulesets (explicit redraft arm included)
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW-STEPS
   - id: ASSET-PLANNING-GAP-EVALUATOR
@@ -1597,9 +1623,10 @@ assets:
     role: >-
       Planning packet depth gate: when WorkProfileDefinition has declarative readiness (readiness.anyOfGroups and/or field
       richness keys), runs GenericReadinessEvaluator then supplemental checks (workspace/components, open questions, validation
-      specificity); accepts "None — ready to implement" when no unresolved questions remain; otherwise legacy all-in-one
-      heuristics (word counts, placeholder/anti-echo, etc.); user-facing depth reasons describe architecture/components in
-      plain language (no raw field ids)
+      specificity); relaxOpenQuestionSupplementalChecks(state) skips thin/placeholder open_questions supplemental checks when
+      planningCanonicalUserInputRequired is false and the unresolved ledger has no OPEN blocking row; accepts "None — ready to implement"
+      when no unresolved questions remain; otherwise legacy all-in-one heuristics (word counts, placeholder/anti-echo, etc.);
+      user-facing depth reasons describe architecture/components in plain language (no raw field ids)
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1642,7 +1669,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningPacketDepthAction.java
     role: >-
       Workflow action evaluate_planning_packet_depth — resolves WorkProfileDefinition from plan profileId and
-      PlanningPacketDepthEvaluator.evaluate(plan, profile); storeSpread planningPacketDepthOk, planningPacketDepthReason,
+      PlanningPacketDepthEvaluator.evaluate(plan, profile, relaxOpenQuestionSupplementalChecks(state));
+      storeSpread planningPacketDepthOk, planningPacketDepthReason,
       planningPacketDepthRetryRecommended, planningReviewReady/reviewReady aligned with depth + no pending clarification;
       derive_plan_governance runs before this step in YAML so depth/post see merged governance lists
     requires:
@@ -1772,10 +1800,13 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/RunLlmPlanningSynthesisAction.java
     role: >-
       Workflow action run_llm_planning_synthesis — optional LLM JSON upserts into plan artifacts via UpsertArtifactSectionDataAction;
-      storeSpread planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
+      ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), a single recommended_action aligned with
+      post-draft routing semantics, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
+      planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
       failures return ERROR-prefixed or exception messages without hanging
     requires:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
       - REQ-LUNA-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
@@ -1785,11 +1816,14 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/RunRequestExpansionLlmAction.java
     role: >-
       Workflow action run_request_expansion_llm — structured JSON expansion into exploration_body and narrative/architecture
-      fields; candidate questions stay in follow-up/exploration signals instead of the user-facing open_questions artifact;
-      storeSpread planningExpansionSource, planningExpansionFallbackUsed, planningExpansionFromLlm, etc.; invoked inside
-      execute_planning_room_cycle before deterministic build_request_exploration
+      fields; ChatGPT system prompt requires repo_evidence_this_pass tiers, recommended_action enum, single question_if_needed,
+      and caps follow-ups to one (optional follow_up_decisions only when bounded UI); forbids naming repo touchpoints not observed
+      in supplied evidence; user payload may include planningRepoEvidenceJson
+      and optional RAG snippets when present in workflow state; storeSpread planningExpansionSource, planningExpansionFallbackUsed,
+      planningExpansionFromLlm, etc.; invoked inside execute_planning_room_cycle before deterministic build_request_exploration
     requires:
       - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
       - REQ-LUNA-001
     feature_ids:
       - FEAT-CURSOR-GATHERING
@@ -2308,6 +2342,8 @@ requirements:
         - ASSET-OPENAI-PLANNING-PROGRESS-POSTER
         - ASSET-SPREAD-PLAN-WORKSPACE-SIGNALS-ACTION
         - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
+        - ASSET-PLANNING-POST-DRAFT-ACTION
+        - ASSET-PLANNING-POST-DRAFT-GOVERNOR
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
         - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
         - ASSET-PLAN-GOVERNANCE-DERIVER
@@ -2316,8 +2352,9 @@ requirements:
         - ASSET-PLAN-READINESS-CALCULATOR
         - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
         - ASSET-PLANNING-THREAD-PACKET-FORMATTER
-        - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
         - ASSET-RUN-LLM-PLANNING-SYNTHESIS-ACTION
+        - ASSET-RUN-REQUEST-EXPANSION-LLM-ACTION
+        - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
         - ASSET-PERSIST-PLAN-APPROVAL-ACTION
         - ASSET-APPEND-PLAN-REQUIREMENT-ACTION
         - ASSET-APPEND-PLAN-ASSUMPTION-ACTION
@@ -2684,7 +2721,10 @@ requirements:
       turn budget, and critique context; when allowClarificationAfterCritique is enabled, critique can trigger another clarification
       sweep without abandoning single-question specificity; coordinator clarification follows a strict contract (one concrete blocking
       question when a required fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved
-      plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
+      plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. PlanningPostDraftGovernor derives
+      planningPostDraftAction for v2 post-assess rulesets (no legacy boolean-first routing); autonomous redraft is allowed only after
+      listed material changes or a new revision situation; packet depth defers generic open-question filler blocking to clarification
+      state when canonical user input is not required and the unresolved ledger has no OPEN blocking row.
     status: active
     priority: high
     type: functional
@@ -2722,6 +2762,19 @@ requirements:
           from FeaturePlanState (governance merge + artifacts), not ad-hoc LLM churn for the clarification slot; when no unresolved questions
           remain, packet depth and critique accept the ready-to-implement sentinel instead of requiring an editable draft list
         - >-
+          PlanningPostDraftGovernor spreads planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
+          AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, and durable material/revision baselines in workflow session state so an
+          unchanged non-posting revision situation cannot re-enter autonomous drafting without a merged user answer, new repo evidence,
+          new assumptions, new critique blocking findings, or materially different canonical draft/exploration text
+        - >-
+          evaluate_planning_packet_depth invokes PlanningPacketDepthEvaluator with relaxOpenQuestionSupplementalChecks derived from
+          workflow state so thin artifact open_questions text alone does not fail depth when planningCanonicalUserInputRequired is false
+          and the unresolved ledger has no OPEN blocking item
+        - >-
+          run_request_expansion_llm and run_llm_planning_synthesis system prompts require repo evidence tiers, a single recommended_action,
+          at most one question_if_needed, and forbid generic multi-question open-question brainstorming; touchpoints must not be asserted
+          as observed unless present in supplied repo evidence for that pass
+        - >-
           For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
           ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
           CoordinatorClarificationEnginePolicy (maxClarificationTurns, repoEvidenceAskThreshold, allowAssumeAndContinue,
@@ -2751,8 +2804,10 @@ requirements:
           planningRepoEvidenceJson, canonicalPlanningIntakeStage, and user-facing review / launch copy keys
         - >-
           arrietty_room_v2 uses named phases plus embedded configurable_steps segments; configurable_steps persist isolated segment
-          cursors, kickoff routes through planning_ingress/planning_kickoff, draft-blocked recovery loops through planning_redraft_notice,
-          and clarification uses the explicit planning_clarification phase; ArriettyV2WorkflowYamlTest guards phase ownership and bans
+          cursors; kickoff routes through planning_ingress/planning_kickoff; after planning_assess_clarification, rs_post_draft rulesets
+          branch only on planningPostDraftAction (fail-closed default planning_blocked); cap_post_draft_blocked reaches planning_redraft_notice
+          only for AUTONOMOUS_REDRAFT after material change per governor; clarification uses the explicit planning_clarification phase when
+          the coordinator must ask the operator; ArriettyV2WorkflowYamlTest guards phase ownership, post-assess branching, and bans
           linear_workflow_ref in production config
         - >-
           When coordinator planning reaches the ready-to-move-forward path, user-facing progress copy says the next long
@@ -2811,6 +2866,8 @@ requirements:
         - ASSET-VISIBLE-DELTA-TRACKER
         - ASSET-USER-COPY-CONTEXT
         - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
+        - ASSET-PLANNING-POST-DRAFT-ACTION
+        - ASSET-PLANNING-POST-DRAFT-GOVERNOR
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-PLANNING-USER-FACING-COPY
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
@@ -2822,7 +2879,9 @@ requirements:
         - ASSET-PLAN-READINESS-CALCULATOR
         - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
         - ASSET-PLANNING-THREAD-PACKET-FORMATTER
+        - ASSET-RUN-LLM-PLANNING-SYNTHESIS-ACTION
         - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
+        - ASSET-RUN-REQUEST-EXPANSION-LLM-ACTION
         - ASSET-POST-PLANNING-PACKET-THREAD-ACTION
       symbols: []
     validation:
@@ -2914,8 +2973,32 @@ requirements:
         - id: UNIT-PLANNING-CYCLE-PIPELINE-CANONICAL-CLARIFICATION
           title: PlanningCyclePipelineCanonicalClarificationTest
           intent: >-
-            Verify PlanningCyclePipeline canonical_v1 clarification gating, ledger stray handling, and strict blocking-question contract helpers
+            Verify PlanningCyclePipeline canonical_v1 clarification gating, planningPostDraftAction spread, split-path autonomous pass
+            completion parity, material redraft gates, ledger stray handling, and strict blocking-question contract helpers
           testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineCanonicalClarificationTest
+          preconditions: []
+        - id: UNIT-PLANNING-POST-DRAFT-GOVERNOR
+          title: PlanningPostDraftGovernorTest
+          intent: >-
+            Verify post-draft action derivation, material-change detection, revision-situation repeat blocking, and notice markdown
+          testClass: com.vinekeepers.workflow.planning.PlanningPostDraftGovernorTest
+          preconditions: []
+        - id: UNIT-PLANNING-PACKET-DEPTH-EVALUATOR-RELAX-OPEN-Q
+          title: PlanningPacketDepthEvaluatorTest
+          intent: >-
+            Verify open-question supplemental depth checks relax when canonical clarification is clear and ledger has no OPEN blocking row
+          testClass: com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluatorTest
+          preconditions: []
+        - id: UNIT-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
+          title: EvaluatePlanningPacketDepthActionTest
+          intent: Verify evaluate_planning_packet_depth passes relaxOpenQuestionSupplementalChecks and spreads depth outcomes
+          testClass: com.vinekeepers.workflow.actions.EvaluatePlanningPacketDepthActionTest
+          preconditions: []
+        - id: UNIT-PLANNING-LLM-PROMPT-CONTRACT
+          title: PlanningLlmPromptContractTest
+          intent: >-
+            Verify expansion and synthesis planning prompts enforce repo-grounding tiers, single recommended_action, and one-question contract
+          testClass: com.vinekeepers.workflow.actions.PlanningLlmPromptContractTest
           preconditions: []
         - id: UNIT-CLARIFICATION-ENGINE-ASSESSOR
           title: ClarificationEngineAssessorTest
@@ -2979,8 +3062,9 @@ requirements:
           Bot id luna and routing filter discordMention luna; optional discordAuthors in routing restricts Luna to
           listed Discord users (numeric id or username, e.g. novawilde13_72571)
         - >-
-          Luna routing activates when Discord messages reference @Luna in text or mention metadata and satisfy
-          discordAuthors when configured
+          Luna routing activates when Discord messages reference @Luna in plain text, include luna in gateway mention
+          metadata, or include Luna's user id via numeric user/bot angle-bracket mentions in message text (per REQ-BOT-001;
+          role pings and fake bracket names do not count), and satisfy discordAuthors when configured
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
         - >-
           Arrietty template bot (id arrietty) with workflowRef arrietty_room_v2 and handlesOwnedSpaces true for lifecycle
@@ -3639,6 +3723,8 @@ features:
       - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
       - ASSET-GENERIC-READINESS-EVALUATOR
       - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
+      - ASSET-PLANNING-POST-DRAFT-ACTION
+      - ASSET-PLANNING-POST-DRAFT-GOVERNOR
       - ASSET-PLANNING-USER-FACING-COPY
       - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
       - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION

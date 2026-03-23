@@ -86,7 +86,9 @@ public final class PlanningCyclePipeline {
              * Raw ranker signal before canonical repair ({@link #ensureRankedForOpenCanonicalGap}); spread as {@code
              * planningLlmUserInputSuggested}.
              */
-            boolean llmUserInputSuggested) {}
+            boolean llmUserInputSuggested,
+            /** Budget exhausted on a blocking coordinator gap ({@link ClarificationResolutionDecision#BLOCK_AS_UNIMPLEMENTABLE}). */
+            boolean hardClarificationBlock) {}
 
     private final OpenAiChatClient openAiChatClient;
     private final FeaturePlanStateStore planStateStore;
@@ -198,6 +200,18 @@ public final class PlanningCyclePipeline {
         }
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
+        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
+            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
+        }
+
+        applyPostDraftGovernor(
+                state, spread, plan, clr, profile, userInputRequired, readyToPost, depthOk, structuredParseFailed, depthReason);
+
+        DeliberationEngine.applyDerivedDeliberationSpread(spread);
+        spread.put("planningAssumptionsUsed", String.valueOf(rankedLlm.assumptionsToRecord().size()));
+
+        boolean effectiveUser = "true".equalsIgnoreCase(getString(spread, "planningUserInputRequired"));
+        boolean effectiveReady = "true".equalsIgnoreCase(getString(spread, "planningReadyToPostPacket"));
         boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
         String stuckHint = getString(spread, "planningClarificationStuckHint");
         spread.put(
@@ -208,29 +222,12 @@ public final class PlanningCyclePipeline {
                         depthReason,
                         ranked,
                         cycleIteration,
-                        readyToPost,
+                        effectiveReady,
                         clarificationStuck,
                         stuckHint != null ? stuckHint : "",
-                        userInputRequired,
+                        effectiveUser,
                         structuredParseFailed,
                         getString(state, "planningRepoEvidenceJson")));
-        spread.put(
-                "planningRevisionNeeded",
-                (!depthOk || userInputRequired || structuredParseFailed) ? "true" : "false");
-
-        spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
-        spread.put(
-                "planningPhase",
-                userInputRequired
-                        ? "WAITING_FOR_CLARIFICATION"
-                        : (readyToPost ? "READY_FOR_REVIEW" : "REVISING"));
-        PlanningReadinessSpread.applyCycleReadiness(spread, readyToPost, userInputRequired);
-        DeliberationEngine.applyDerivedDeliberationSpread(spread);
-        spread.put("planningAssumptionsUsed", String.valueOf(rankedLlm.assumptionsToRecord().size()));
-
-        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
-            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
-        }
         String rolePassErr =
                 spread.get("planningRolePassLastError") != null
                         ? spread.get("planningRolePassLastError").toString()
@@ -251,7 +248,7 @@ public final class PlanningCyclePipeline {
                         depthOk,
                         depthReason,
                         ranked,
-                        userInputRequired,
+                        effectiveUser,
                         spread.get("planningRoomCycleErrorUserMessage") != null
                                 ? spread.get("planningRoomCycleErrorUserMessage").toString()
                                 : "",
@@ -411,6 +408,27 @@ public final class PlanningCyclePipeline {
         }
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
+        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
+            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
+        }
+
+        applyPostDraftGovernor(
+                state,
+                spread,
+                plan,
+                clrFin,
+                profileFin,
+                userInputRequired,
+                readyToPost,
+                depthOk,
+                structuredParseFailedFinalize,
+                depthReason);
+
+        DeliberationEngine.applyDerivedDeliberationSpread(spread);
+        spread.put("planningAssumptionsUsed", String.valueOf(rankedLlmFin.assumptionsToRecord().size()));
+
+        boolean effectiveUserFin = "true".equalsIgnoreCase(getString(spread, "planningUserInputRequired"));
+        boolean effectiveReadyFin = "true".equalsIgnoreCase(getString(spread, "planningReadyToPostPacket"));
         boolean clarificationStuck = "true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"));
         String stuckHint = getString(spread, "planningClarificationStuckHint");
         spread.put(
@@ -421,29 +439,12 @@ public final class PlanningCyclePipeline {
                         depthReason,
                         ranked,
                         cycleIteration,
-                        readyToPost,
+                        effectiveReadyFin,
                         clarificationStuck,
                         stuckHint != null ? stuckHint : "",
-                        userInputRequired,
+                        effectiveUserFin,
                         structuredParseFailedFinalize,
                         getString(state, "planningRepoEvidenceJson")));
-        spread.put(
-                "planningRevisionNeeded",
-                (!depthOk || userInputRequired || structuredParseFailedFinalize) ? "true" : "false");
-
-        spread.put("planningReadyToPostPacket", readyToPost ? "true" : "false");
-        spread.put(
-                "planningPhase",
-                userInputRequired
-                        ? "WAITING_FOR_CLARIFICATION"
-                        : (readyToPost ? "READY_FOR_REVIEW" : "REVISING"));
-        PlanningReadinessSpread.applyCycleReadiness(spread, readyToPost, userInputRequired);
-        DeliberationEngine.applyDerivedDeliberationSpread(spread);
-        spread.put("planningAssumptionsUsed", String.valueOf(rankedLlmFin.assumptionsToRecord().size()));
-
-        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
-            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
-        }
         String rolePassErr =
                 spread.get("planningRolePassLastError") != null
                         ? spread.get("planningRolePassLastError").toString()
@@ -464,7 +465,7 @@ public final class PlanningCyclePipeline {
                         depthOk,
                         depthReason,
                         ranked,
-                        userInputRequired,
+                        effectiveUserFin,
                         spread.get("planningRoomCycleErrorUserMessage") != null
                                 ? spread.get("planningRoomCycleErrorUserMessage").toString()
                                 : "",
@@ -485,6 +486,14 @@ public final class PlanningCyclePipeline {
 
         enrichUserCopyAndProgressLog(state, spread);
         finishProgressFingerprint(state, spread);
+        String cycleErrFin = getString(spread, "planningRoomCycleError");
+        if (cycleErrFin == null || cycleErrFin.isBlank()) {
+            spread.put("planningAutonomousFirstPassCompleted", "true");
+            FeaturePlanState persistedFin = planStateStore.getByContextId(contextId).orElse(null);
+            if (persistedFin != null) {
+                planStateStore.update(persistedFin.withAutonomousPlanningPassCompleted(true));
+            }
+        }
         return spread;
     }
 
@@ -568,6 +577,12 @@ public final class PlanningCyclePipeline {
                             semanticAllowed,
                             getString(state, "planningRepoEvidenceJson"),
                             critiqueSweep);
+            boolean hardClarificationBlock =
+                    assessedFinal.stream()
+                            .anyMatch(
+                                    ag ->
+                                            ag.decision()
+                                                    == ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE);
             List<CoordinatorClarificationGapEvaluator.OpenGap> openRawFinal =
                     CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
                             plan, coord, aggregatedFollowUps, semanticAllowed);
@@ -612,7 +627,8 @@ public final class PlanningCyclePipeline {
                 plan = planStateStore.getByContextId(contextId).orElse(plan);
             }
             boolean canonicalPending = topAskFinal != null;
-            return new ClarificationRoundOutcome(plan, rankedLlm, upsert, canonicalPending, llmUserInputSuggested);
+            return new ClarificationRoundOutcome(
+                    plan, rankedLlm, upsert, canonicalPending, llmUserInputSuggested, hardClarificationBlock);
         }
         rankedLlm =
                 PlanningQuestionRankingPolicy.rank(
@@ -630,7 +646,92 @@ public final class PlanningCyclePipeline {
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
         plan = ClarificationCoordinatorLedger.persist(planStateStore, contextId, plan, List.of(), null);
-        return new ClarificationRoundOutcome(plan, rankedLlm, upsert, false, rankedLlm.userInputRequired());
+        return new ClarificationRoundOutcome(plan, rankedLlm, upsert, false, rankedLlm.userInputRequired(), false);
+    }
+
+    private void applyPostDraftGovernor(
+            Map<String, Object> persistedSessionState,
+            Map<String, Object> spread,
+            FeaturePlanState plan,
+            ClarificationRoundOutcome clr,
+            WorkProfileDefinition profile,
+            boolean userInputRequired,
+            boolean readyToPost,
+            boolean depthOk,
+            boolean structuredParseFailed,
+            String depthReason) {
+        Map<String, Object> signal = new LinkedHashMap<>();
+        if (persistedSessionState != null) {
+            signal.putAll(persistedSessionState);
+        }
+        if (spread != null) {
+            signal.putAll(spread);
+        }
+        String cycleErr = getString(spread, "planningRoomCycleError");
+        if (cycleErr == null) {
+            cycleErr = "";
+        }
+        PlanningPostDraftGovernor.Result gov =
+                PlanningPostDraftGovernor.derive(
+                        persistedSessionState != null ? persistedSessionState : Map.of(),
+                        signal,
+                        plan,
+                        clr.upsert().ledger(),
+                        userInputRequired,
+                        readyToPost,
+                        depthOk,
+                        structuredParseFailed,
+                        depthReason != null ? depthReason : "",
+                        cycleErr,
+                        clr.hardClarificationBlock());
+        boolean effectiveUser = userInputRequired || gov.forceUserInputRequired();
+        if (gov.forceUserInputRequired()) {
+            spread.put("planningUserInputRequired", "true");
+            if (profile.getCoordinatorClarification().isCanonicalV1()) {
+                spread.put("planningCanonicalUserInputRequired", "true");
+            }
+            String qt = getString(spread, "planningClarificationQuestionText");
+            if (qt == null || qt.isBlank()) {
+                String fromLedger =
+                        PlanningPostDraftGovernor.firstOpenPlanningQuestionTextOrEmpty(clr.upsert().ledger());
+                if (!fromLedger.isBlank()) {
+                    spread.put("planningClarificationQuestionText", fromLedger);
+                }
+            }
+        } else {
+            spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
+        }
+        boolean effectiveReady = depthOk && !effectiveUser && !structuredParseFailed;
+        if (gov.action() == PlanningPostDraftAction.BLOCK) {
+            spread.put("planningUserInputRequired", "false");
+            spread.put("planningCanonicalUserInputRequired", "false");
+            effectiveReady = false;
+        }
+        spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
+        spread.put(
+                "planningPhase",
+                effectiveUser
+                        ? "WAITING_FOR_CLARIFICATION"
+                        : (effectiveReady ? "READY_FOR_REVIEW" : "REVISING"));
+        spread.put(
+                "planningRevisionNeeded",
+                (!depthOk || effectiveUser || structuredParseFailed) ? "true" : "false");
+        PlanningReadinessSpread.applyCycleReadiness(spread, effectiveReady, effectiveUser);
+        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, gov.action().name());
+        spread.put(
+                PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY,
+                gov.noticeMarkdown() != null ? gov.noticeMarkdown() : "");
+        boolean wantsRevision = !effectiveReady && !effectiveUser;
+        String situation =
+                PlanningPostDraftGovernor.revisionSituationFingerprint(
+                        depthOk,
+                        structuredParseFailed,
+                        depthReason != null ? depthReason : "",
+                        effectiveUser,
+                        effectiveReady,
+                        clr.upsert().ledger());
+        PlanningPostDraftGovernor.writePersistenceKeys(
+                spread, signal, plan, effectiveReady, wantsRevision, situation);
     }
 
     static boolean resolvePlanningUserInputRequired(
@@ -922,7 +1023,9 @@ public final class PlanningCyclePipeline {
         new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
 
         planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
-        PlanningPacketDepthEvaluator.DepthResult dr = PlanningPacketDepthEvaluator.evaluate(planPtr, profile);
+        boolean relaxOpenQ = PlanningPacketDepthEvaluator.relaxOpenQuestionSupplementalChecks(work);
+        PlanningPacketDepthEvaluator.DepthResult dr =
+                PlanningPacketDepthEvaluator.evaluate(planPtr, profile, relaxOpenQ);
         boolean depthOk = dr.ok();
         String depthReason = dr.reason() != null ? dr.reason() : "";
         spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
@@ -1502,6 +1605,13 @@ public final class PlanningCyclePipeline {
         m.put("planningDirtyPassCount", "0");
         m.put("userCopyProgressLine", "");
         m.put("userCopyCoordinatorProgress", "");
+        m.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.BLOCK.name());
+        m.put(PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY, "");
+        m.put(PlanningPostDraftGovernor.BASELINE_REPO_HASH_KEY, "");
+        m.put(PlanningPostDraftGovernor.BASELINE_ASSUMPTION_COUNT_KEY, "");
+        m.put(PlanningPostDraftGovernor.BASELINE_CRITIQUE_BLOCKING_KEY, "");
+        m.put(PlanningPostDraftGovernor.BASELINE_DRAFT_FP_KEY, "");
+        m.put(PlanningPostDraftGovernor.LAST_REVISION_SITUATION_KEY, "");
         return m;
     }
 

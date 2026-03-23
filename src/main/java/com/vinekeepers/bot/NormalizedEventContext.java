@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
 public final class NormalizedEventContext {
 
     private static final Pattern DISPLAY_MENTION_PATTERN = Pattern.compile("(?<!\\S)@([A-Za-z0-9._-]+)");
-    private static final Pattern DISCORD_ID_MENTION_PATTERN = Pattern.compile("<@!?([^>]+)>");
+    /** User/bot mentions only; excludes Discord role pings ({@literal <@&id>}). */
+    private static final Pattern DISCORD_USER_OR_BOT_MENTION_PATTERN = Pattern.compile("<@!?([0-9]+)>");
 
     private final String sourceType;
     private final String eventType;
@@ -193,7 +194,7 @@ public final class NormalizedEventContext {
         mentions.addAll(normalizeTokens(listOfStrings(payload.get("mentions"))));
         if (text != null && !text.isBlank()) {
             collectMatches(mentions, DISPLAY_MENTION_PATTERN.matcher(text));
-            collectMatches(mentions, DISCORD_ID_MENTION_PATTERN.matcher(text));
+            collectMatches(mentions, DISCORD_USER_OR_BOT_MENTION_PATTERN.matcher(text));
         }
         return List.copyOf(mentions);
     }

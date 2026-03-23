@@ -47,7 +47,9 @@ public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.
         if (workProfileRegistry != null && plan != null && plan.getProfileId() != null && !plan.getProfileId().isBlank()) {
             profile = workProfileRegistry.get(plan.getProfileId()).orElse(null);
         }
-        PlanningPacketDepthEvaluator.DepthResult r = PlanningPacketDepthEvaluator.evaluate(plan, profile);
+        boolean relaxOpenQ = PlanningPacketDepthEvaluator.relaxOpenQuestionSupplementalChecks(state);
+        PlanningPacketDepthEvaluator.DepthResult r =
+                PlanningPacketDepthEvaluator.evaluate(plan, profile, relaxOpenQ);
         spread.put("planningPacketDepthOk", r.ok() ? "true" : "false");
         spread.put("planningPacketDepthReason", r.reason() != null ? r.reason() : "");
         spread.put("planningPacketDepthRetryRecommended", r.ok() ? "false" : "true");

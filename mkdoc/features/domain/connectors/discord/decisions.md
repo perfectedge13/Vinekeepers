@@ -18,3 +18,11 @@ Decision: Keep mention metadata on the internal Discord event payload and docume
 
 Consequence: Routing can match configured bot mentions from payload metadata or normalized text, and connector tests now treat the `mentions` payload field as part of the contract.
 
+## 2026-03-23 — User/bot mentions only (gateway + normalized text)
+
+Context: Role pings (`<@&roleId>`) and non-snowflake angle-bracket bodies must not satisfy `discordMention` filters; server nicknames should not let a human mimic a bot's configured mention string.
+
+Decision: **NormalizedEventContext** parses only `<@` / `<@!` plus numeric snowflakes from message text; **JdaDiscordGateway** fills `mentions` from mentioned Discord users (id, username, global display name) and does not add member server nicknames.
+
+Consequence: Ops-channel allowlists and `discordMention` routing stay aligned with real Discord user/bot mentions; Router logs a structured INFO line when no routing rule matches (including `ingestBotId` and a short text prefix).
+

@@ -5,8 +5,10 @@ import org.yaml.snakeyaml.Yaml;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -121,6 +123,69 @@ class ArriettyV2WorkflowYamlTest {
                         "legacy kickoff solicitation prompt must stay deleted");
             }
         }
+    }
+
+    @Test
+    void arriettyPostAssessRoutesOnPlanningPostDraftActionOnly() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, List<Map<String, Object>>> rulesets =
+                (Map<String, List<Map<String, Object>>>) room.get("rulesets");
+        List<Map<String, Object>> rs = rulesets.get("rs_post_draft");
+        assertTrue(rs != null && !rs.isEmpty(), "rs_post_draft must exist");
+        Set<String> actions = new HashSet<>();
+        for (Map<String, Object> rule : rs) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> when = (Map<String, Object>) rule.get("when");
+            assertTrue(when != null && when.containsKey("equals"), "post-assess rules must use equals (planningPostDraftAction only)");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> eq = (Map<String, Object>) when.get("equals");
+            assertEquals("planningPostDraftAction", String.valueOf(eq.get("key")));
+            actions.add(String.valueOf(eq.get("value")));
+        }
+        assertEquals(
+                Set.of(
+                        "ASK_ONE_QUESTION",
+                        "POST_PACKET",
+                        "ASSUME_AND_CONTINUE",
+                        "AUTONOMOUS_REDRAFT",
+                        "BLOCK"),
+                actions,
+                "post-assess must map each PlanningPostDraftAction explicitly (no legacy boolean fallthrough)");
+    }
+
+    @Test
+    void arriettyPlanningAssessFailsClosedToBlockedWithoutImplicitRedraft() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> phases = (Map<String, Object>) room.get("phases");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> assess = (Map<String, Object>) phases.get("planning_assess_clarification");
+        assertEquals("planning_blocked", String.valueOf(assess.get("defaultNextPhase")));
+    }
+
+    @Test
+    void arriettyRedraftNoticeUsesDynamicPostDraftNoticeOnly() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_post_draft_blocked");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bind = (Map<String, Object>) cap.get("bind");
+        assertEquals("{{planningPostDraftNoticeMarkdown}}", String.valueOf(bind.get("content")));
     }
 
     @Test

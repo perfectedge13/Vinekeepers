@@ -562,11 +562,6 @@ public final class JdaDiscordGateway implements DiscordGateway {
             collectMentionToken(mentions, user.getName());
             collectMentionToken(mentions, user.getGlobalName());
         }
-        for (Member member : message.getMentions().getMembers()) {
-            if (member != null) {
-                collectMentionToken(mentions, member.getEffectiveName());
-            }
-        }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("channelId", event.getChannel().getId());
         payload.put("threadId", threadId != null ? threadId : "");

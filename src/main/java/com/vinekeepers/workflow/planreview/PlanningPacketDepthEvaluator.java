@@ -2,6 +2,7 @@ package com.vinekeepers.workflow.planreview;
 
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.workflow.planning.PlanningPlaceholderDetection;
 import com.vinekeepers.workflow.readiness.GenericReadinessEvaluator;
 
@@ -10,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -32,8 +34,23 @@ public final class PlanningPacketDepthEvaluator {
 
     public record DepthResult(boolean ok, String reason) {}
 
+    /**
+     * When canonical coordinator clarification does not require the user and no OPEN blocking ledger row remains, skip
+     * thin/placeholder supplemental checks on the free-text open_questions artifact (clarification engine owns severity).
+     */
+    public static boolean relaxOpenQuestionSupplementalChecks(Map<String, Object> state) {
+        if (state == null) {
+            return false;
+        }
+        Object canon = state.get("planningCanonicalUserInputRequired");
+        if (canon != null && "true".equalsIgnoreCase(canon.toString().trim())) {
+            return false;
+        }
+        return !UnresolvedItemLedger.readFrom(state).hasOpenBlockingSeverity();
+    }
+
     public static DepthResult evaluate(FeaturePlanState plan) {
-        return evaluate(plan, null);
+        return evaluate(plan, null, false);
     }
 
     /**
@@ -42,6 +59,16 @@ public final class PlanningPacketDepthEvaluator {
      * Otherwise runs the legacy all-in-one depth gate (v1 profiles).
      */
     public static DepthResult evaluate(FeaturePlanState plan, WorkProfileDefinition profile) {
+        return evaluate(plan, profile, false);
+    }
+
+    /**
+     * Same as {@link #evaluate(FeaturePlanState, WorkProfileDefinition)} but when {@code relaxOpenQuestionSupplemental} is
+     * true, skips supplemental open-question thin/placeholder checks (canonical clarification already clear — severity
+     * belongs in the clarification engine, not packet depth).
+     */
+    public static DepthResult evaluate(
+            FeaturePlanState plan, WorkProfileDefinition profile, boolean relaxOpenQuestionSupplemental) {
         if (plan == null) {
             return new DepthResult(false, "No plan loaded.");
         }
@@ -50,12 +77,12 @@ public final class PlanningPacketDepthEvaluator {
             if (!declarative.ok()) {
                 return declarative;
             }
-            return supplementalAfterDeclarative(plan);
+            return supplementalAfterDeclarative(plan, relaxOpenQuestionSupplemental);
         }
-        return evaluateLegacy(plan);
+        return evaluateLegacy(plan, relaxOpenQuestionSupplemental);
     }
 
-    private static DepthResult evaluateLegacy(FeaturePlanState plan) {
+    private static DepthResult evaluateLegacy(FeaturePlanState plan, boolean relaxOpenQuestionSupplemental) {
         String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         Set<String> requestTokens = significantTokens(request);
 
@@ -109,14 +136,16 @@ public final class PlanningPacketDepthEvaluator {
                             + " (the repo workspace is ready, so we expect code-backed touchpoints).");
         }
 
-        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
-                && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
-            return new DepthResult(false, "Open questions list is too short or template-like.");
-        }
-        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
-                && !openQ.isBlank()
-                && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
-            return new DepthResult(false, "Open questions still look like starter template text.");
+        if (!relaxOpenQuestionSupplemental) {
+            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
+                    && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
+                return new DepthResult(false, "Open questions list is too short or template-like.");
+            }
+            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
+                    && !openQ.isBlank()
+                    && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
+                return new DepthResult(false, "Open questions still look like starter template text.");
+            }
         }
 
         if (!validationLooksFeatureSpecific(validation, requestTokens, request)) {
@@ -129,7 +158,8 @@ public final class PlanningPacketDepthEvaluator {
     }
 
     /** Supplemental checks after declarative profile rules pass (workspace, open questions, validation specificity). */
-    private static DepthResult supplementalAfterDeclarative(FeaturePlanState plan) {
+    private static DepthResult supplementalAfterDeclarative(
+            FeaturePlanState plan, boolean relaxOpenQuestionSupplemental) {
         String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         Set<String> requestTokens = significantTokens(request);
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
@@ -146,14 +176,16 @@ public final class PlanningPacketDepthEvaluator {
                             + " (the repo workspace is ready, so we expect code-backed touchpoints).");
         }
 
-        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
-                && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
-            return new DepthResult(false, "Open questions list is too short or template-like.");
-        }
-        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
-                && !openQ.isBlank()
-                && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
-            return new DepthResult(false, "Open questions still look like starter template text.");
+        if (!relaxOpenQuestionSupplemental) {
+            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
+                    && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
+                return new DepthResult(false, "Open questions list is too short or template-like.");
+            }
+            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
+                    && !openQ.isBlank()
+                    && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
+                return new DepthResult(false, "Open questions still look like starter template text.");
+            }
         }
 
         if (!validationLooksFeatureSpecific(validation, requestTokens, request)) {

@@ -33,6 +33,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             You are a planning assistant for software feature intake. Reply with a single JSON object only, no markdown fences.
             Schema:
             {
+              "repo_evidence_this_pass": "observed | inferred_unverified | not_inspected",
               "upserts": [
                 {
                   "artifactId": "requirements_spec",
@@ -41,11 +42,19 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                   "data": { "fieldId": "value string" }
                 }
               ],
-              "follow_up_questions": [ "short question?" ]
+              "top_unresolved_gap": "string or empty",
+              "recommended_action": "ASK_ONE_QUESTION | ASSUME_AND_CONTINUE | POST_PACKET | BLOCK",
+              "question_if_needed": "single string — empty unless recommended_action is ASK_ONE_QUESTION",
+              "explicit_assumptions": ["short strings"],
+              "follow_up_questions": []
             }
+            Always leave follow_up_questions empty; put any single clarification in question_if_needed only.
             Use only artifact/section ids that exist in the profile snapshot. Prefer enriching current_state_summary,
             feature_summary, scope_summary, user_stories, acceptance_criteria, open_questions. Keep values concise.
-            If nothing should change, return {"upserts":[],"follow_up_questions":[]}.
+            Separate observed repo facts this pass from inference and unknowns; do not name paths/packages unless observed.
+            At most one clarification question per response, only in question_if_needed.
+            If nothing should change, return {"upserts":[],"follow_up_questions":[],"explicit_assumptions":[],
+            "question_if_needed":"","top_unresolved_gap":"","recommended_action":"POST_PACKET","repo_evidence_this_pass":"not_inspected"}.
             """;
 
     private final OpenAiChatClient openAiChatClient;
@@ -143,6 +152,12 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                         }
                     }
                 }
+            }
+            String qNeeded = root.path("question_if_needed").asText("").trim();
+            if (followUps.isEmpty() && !qNeeded.isBlank()) {
+                followUps.add(qNeeded);
+            } else if (followUps.size() > 1) {
+                followUps = new ArrayList<>(followUps.subList(0, 1));
             }
             UpsertArtifactSectionDataAction upsertAction = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
             Map<String, Object> base = new LinkedHashMap<>();

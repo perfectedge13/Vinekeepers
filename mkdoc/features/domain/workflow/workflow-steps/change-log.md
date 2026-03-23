@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **Planner post-assess routing (`planningPostDraftAction`):** **`PlanningPostDraftGovernor`** derives explicit next actions after assess; **`config/bots.yaml`** `arrietty_room_v2` **`rs_post_draft`** uses **`equals planningPostDraftAction`** only (fail-closed default **`planning_blocked`**). Material baselines + revision fingerprints stop blind autonomous redrafts; expansion/synthesis ChatGPT system prompts require repo-evidence tiers, **`question_if_needed`** (single), and **`recommended_action`**. **`PlanningPacketDepthEvaluator`** accepts **`relaxOpenQuestionSupplemental`** when canonical clarification is clear. Tests: **`PlanningPostDraftGovernorTest`**, **`PlanningLlmPromptContractTest`**, **`ArriettyV2WorkflowYamlTest`**, **`WorkflowRulesEngineTest`**. Specs: **`workflow-registry`**, **`config-registry`**, **`state-registry`**.
+
 ## 2026-03-22
 
 - **Qdrant-backed planning RAG:** Optional **`prep_planning_repo_grounding`** after **`ensure_repo_workspace`** loads **`.vinekeepers/repo-grounding.parquet`**, chunks the checkout, embeds missing content hashes via OpenAI, upserts into Qdrant (payload **repo_ref** + **branch**), exports merged Parquet, and spreads **`planningRag*`** keys and **`planningRagRetrievalText`**. **`spread_plan_workspace_signals`** merges RAG diagnostics into **`planningRepoEvidenceJson`**. **`run_llm_planning_synthesis`** consumes retrieval text when **`planningRagAvailable`**. **`OpenAiChatClient.embedTexts`** supports batched embeddings. New types under **`workflow/planning/rag/`**. Tests: **`PlanningRagConfigTest`**, **`RepoGroundingParquetStoreTest`**, **`RepoFileChunkerTest`**, **`GitRepoBranchResolverTest`**, **`PlanningRepoGroundingServiceTest`**, **`PrepPlanningRepoGroundingActionTest`**. Specs: **workflow-registry**, **env-registry**, **state-registry**, **config-registry**, **core-registry**; docs: **architecture**, **env**, **core**, **cursor-gathering**, **README**.

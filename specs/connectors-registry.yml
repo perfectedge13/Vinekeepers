@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-20T20:00:00Z"
+  updated_utc: "2026-03-23T22:30:00Z"
 
 project:
   id: vinekeepers
@@ -119,7 +119,8 @@ assets:
       defer, send with components; interaction events include threadId when the channel is a ThreadChannel (aligns
       thread session keys with message events); getSelfUserId and addPermissionOverride for lifecycle room;
       DiscordIngressModes select message vs interaction listeners independently; outbound-only when both modes none;
-      OWNED_SPACES filters via DiscordOwnedSpacePredicate
+      OWNED_SPACES filters via DiscordOwnedSpacePredicate; message mention metadata lists lowercase snowflake id plus
+      account username and global display name for mentioned users (guild member nicknames / effective display names are not added)
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-DISCORD-GATEWAY-CONTRACT
@@ -245,6 +246,10 @@ requirements:
       criteria:
         - DiscordEventSource exists and implements EventSource and emits events onto the event bus
         - DiscordEventSource can pass Discord mention metadata and author (authorId, author) through the internal event payload for routing
+        - >-
+          JdaDiscordGateway message mention metadata includes each mentioned user's snowflake id and lowercase account
+          username and global display name when present; guild member nicknames (effective/server display names) are not
+          added so mention-based routing is not spoofed by a nickname matching another bot's configured discordMention
         - Per-bot Discord identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces, optional ingress); ConfigLoader parses identities.discord.ingress; DiscordConnectorAdapter registers sender and gateway when token present
         - "OutboundDeliveryRouter resolves sender from delivery target (channel or thread id): LifecycleContextStore getByDeliveryTargetId(targetId) when present yields context then configuredBotId and that bot's sender; else resolve by channelId; absent context uses default sender"
         - "Lifecycle sender resolution: for a channel with lifecycle context, delivery uses the configured bot's sender only; when no sender is registered for that bot, do not send and log error (no silent fallback to another bot)"

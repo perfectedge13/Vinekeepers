@@ -100,6 +100,19 @@ class WorkflowRulesEngineTest {
     }
 
     @Test
+    void alwaysMatchesWhenTrue() {
+        Map<String, Object> state = Map.of("x", "false");
+        List<Map<String, Object>> rules =
+                List.of(
+                        Map.of(
+                                "when",
+                                Map.of("always", true),
+                                "then",
+                                List.of(Map.of("transition", "fallback"))));
+        assertEquals("fallback", WorkflowRulesEngine.firstMatchingTransition(state, rules).orElseThrow());
+    }
+
+    @Test
     void ledgerHasBlockingOpenMatchesSeverity() {
         Map<String, Object> state = new LinkedHashMap<>();
         UnresolvedItemLedger ledger =

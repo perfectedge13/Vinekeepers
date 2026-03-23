@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **User/bot mention routing alignment:** `discordMention` matches only supported user/bot mention tokens. **NormalizedEventContext** parses numeric snowflakes from `<@id>` and `<@!id>` in message text only; role pings `<@&id>` and other angle-bracket bodies are ignored. **JdaDiscordGateway** mention metadata uses Discord user id plus account username and global display name (no guild nicknames). **Router** logs a structured **INFO** line when no rule matches (channelId, authorId, actorUsername, mentions, ingestBotId, truncated textPrefix). Tests: RouterTest, NormalizedEventContextTest. Specs (bot, connectors, config, core, workflow) and README aligned; ops channel routing for gadget unchanged in `config/bots.yaml`.
+
 ## 2026-03-20
 
 - **Discord ingress policy:** Per-bot **DiscordIngressModes** (message vs interaction) from optional `identities.discord.ingress` or defaults from YAML routing + `handlesOwnedSpaces`. Lifecycle owners without routing use **owned_spaces** messages and **own_messages** interactions so duplicate general-message publication from multiple bot tokens no longer double-runs intake; **JdaDiscordGateway** registers listeners independently; **DiscordOwnedSpacePredicate** uses **FeatureRoomStateStore** / **LifecycleContextStore** from **ConnectorContext**. **VinekeepersEngine** dedupes duplicate Discord message/interaction ids within a short TTL; **create_channel** skips create when state already holds a reusable channel id. Tests: DiscordIngressModesTest, DiscordOwnedSpacePredicateTest, VinekeepersEngineTest, CreateChannelActionTest; specs and README updated.

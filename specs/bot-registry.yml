@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T20:45:00Z"
+  updated_utc: "2026-03-23T22:30:00Z"
 
 project:
   id: vinekeepers
@@ -44,7 +44,8 @@ assets:
       returns coordinator only; lifecycle resolved by channelId then getByDeliveryTargetId(channelId); when lifecycle
       context exists and owner has handlesOwnedSpaces, single-owner precedence; setHandlesOwnedSpacesByBotId(map);
       discordAuthors match by actorId or actorUsername; Discord mention and trigger apply only to message events;
-      interaction events use author/channel only
+      interaction events use author/channel only; when no rule matches, logs structured INFO including ingestBotId and
+      truncated message text prefix alongside channel, author, and mention diagnostics
     requires: [REQ-BOT-001, REQ-CORE-003]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-ROUTING
@@ -68,7 +69,11 @@ assets:
   - id: ASSET-NORMALIZED-EVENT-CONTEXT
     kind: source
     path: src/main/java/com/vinekeepers/bot/NormalizedEventContext.java
-    role: Normalize event payloads for routing and session decisions, including actorId and actorUsername (from payload author/authorId), mention extraction, and optional interaction payload (interactionId, token, customId, values)
+    role: >-
+      Normalize event payloads for routing and session decisions, including actorId and actorUsername (from payload
+      author/authorId), mention extraction (metadata plus message text: numeric user/bot snowflakes in angle brackets only;
+      role-style `<@&id>` and non-numeric bracket bodies excluded), and optional interaction payload (interactionId,
+      token, customId, values)
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-TOOL-POLICY
@@ -144,6 +149,8 @@ requirements:
         - Normalized event context exposes actorId and actorUsername (e.g. from payload author/authorId) for routing
         - discordTrigger and discordMention are enforced only for Discord message events; for Discord interaction events routing uses author, channel, and other criteria only (no trigger/mention check)
         - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text (message events only)
+        - Angle-bracket tokens in message text add mention tokens only for Discord user/bot snowflakes (`<@digits>`, `<@!digits>`); role pings (`<@&digits>`) and non-numeric bracket bodies do not count toward discordMention matching
+        - When no routing rule matches, Router logs at INFO with structured fields (source, kind, channelId, authorId, actorUsername, mentions, ingestBotId when present, truncated text prefix)
         - discordAuthors filters match when event author (actorId or actorUsername normalized) is in the configured list
       examples: []
     traceability:
@@ -270,11 +277,65 @@ requirements:
           testClass: com.vinekeepers.bot.RouterTest
           testMethod: routePreservesOrderOfRoutingRules
           preconditions: []
+        - id: UNIT-ROUTER-NO-MATCH-INFO-DIAG
+          title: RouterTest
+          intent: Verify Router emits structured INFO when no rule matches (ingestBotId, truncated text prefix, channel, author, mentions)
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeLogsInfoWithDiagnosticsWhenNoRuleMatches
+          preconditions: []
         - id: UNIT-ROUTER-LIFECYCLE-PRECEDENCE-OVER-FILTER
           title: RouterTest
           intent: Verify lifecycle single-owner returns only owner even when additional routings would match
           testClass: com.vinekeepers.bot.RouterTest
           testMethod: routeLifecyclePrecedenceOverFilterWhenOwnerHasHandlesOwnedSpaces
+          preconditions: []
+        - id: UNIT-ROUTER-OPS-GADGET-DIRECT-MENTION
+          title: RouterTest
+          intent: Verify gadget matches ops allowlisted channel with gadget mention while Luna rule is present
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeMatchesGadgetInOpsChannelWhenDirectGadgetMentionMetadata
+          preconditions: []
+        - id: UNIT-ROUTER-OPS-LUNA-EXCLUDED
+          title: RouterTest
+          intent: Verify Luna routing is excluded on ops channel even when Luna appears in mention metadata or text
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeExcludesLunaInOpsChannelWhenConfiguredExcludeMatches
+          preconditions: []
+        - id: UNIT-ROUTER-IGNORE-NONNUMERIC-BRACKET-MENTION
+          title: RouterTest
+          intent: Verify discordMention is not satisfied by fake non-numeric angle-bracket tokens in message text
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeDoesNotMatchDiscordMentionFromNonNumericAngleBracketText
+          preconditions: []
+        - id: UNIT-ROUTER-IGNORE-ROLE-PING-FOR-ID-MENTION
+          title: RouterTest
+          intent: Verify role-style `<@&id>` in text does not satisfy a discordMention filter keyed by the same digits
+          testClass: com.vinekeepers.bot.RouterTest
+          testMethod: routeDoesNotMatchUserIdMentionFilterFromRolePingInText
+          preconditions: []
+        - id: UNIT-NORMALIZED-CONTEXT-ROLE-MENTIONS-IGNORED
+          title: NormalizedEventContextTest
+          intent: Verify role pings in message text do not populate normalized mentions
+          testClass: com.vinekeepers.bot.NormalizedEventContextTest
+          testMethod: mentionsFromTextIgnoreRoleStyleAngleBrackets
+          preconditions: []
+        - id: UNIT-NORMALIZED-CONTEXT-USER-ID-BRACKET
+          title: NormalizedEventContextTest
+          intent: Verify user/bot snowflake angle-bracket mentions are normalized into mention tokens
+          testClass: com.vinekeepers.bot.NormalizedEventContextTest
+          testMethod: mentionsFromTextIncludeNumericUserOrBotIdFromAngleBrackets
+          preconditions: []
+        - id: UNIT-NORMALIZED-CONTEXT-NO-PSEUDO-BRACKET-NAME
+          title: NormalizedEventContextTest
+          intent: Verify non-numeric angle-bracket bodies do not become name mention tokens
+          testClass: com.vinekeepers.bot.NormalizedEventContextTest
+          testMethod: mentionsFromTextDoNotTreatPseudoUserAngleBracketsAsNames
+          preconditions: []
+        - id: UNIT-NORMALIZED-CONTEXT-MENTIONS-MERGE
+          title: NormalizedEventContextTest
+          intent: Verify payload mention list merges with @display tokens from text
+          testClass: com.vinekeepers.bot.NormalizedEventContextTest
+          testMethod: mentionsMergePayloadListWithParsedText
           preconditions: []
     anti_patterns:
       - Do not hardcode bot ids (e.g. Arrietty) in Router or engine; use config-driven handlesOwnedSpaces and lifecycle context for ownership routing.

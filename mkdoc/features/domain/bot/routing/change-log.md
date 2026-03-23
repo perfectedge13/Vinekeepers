@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **`discordMention` token rules:** Only numeric user/bot snowflakes in `<@id>` / `<@!id>` (from text normalization and gateway `mentions` metadata) satisfy `discordMention`; role pings and pseudo-name bracket tokens do not. **Router** no-match diagnostics are a structured **INFO** log including `ingestBotId` and a truncated `textPrefix` (replaces prior DEBUG-only no-match line). **NormalizedEventContext** / **JdaDiscordGateway** behavior aligned with connectors Discord decision (2026-03-23). Tests: RouterTest, NormalizedEventContextTest.
+
 ## 2026-03-22
 
 - **Coordinator-only intake thread (messages + interactions):** When **FeatureRoomState** matches the intake/spec thread and a primary coordinator id resolves, **Router** returns that coordinator only for both **message** and **interaction** events (single planning ingress). Participant list fallback remains when coordinator id is missing. Tests: `routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly`, `routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly`. **Documentation:** feature summary, **how-it-works**, **contracts**, and **architecture** runtime flow aligned with `Router.route()`.
@@ -27,7 +31,7 @@
 ## 2026-03-10
 
 - **discordAuthors: numeric id and username:** Router `discordAuthors` now supports both **numeric Discord user id** (stable, matches `actorId`) and **username** (matches `actorUsername`, case-insensitive). Prefer numeric id when available. Config comment in `config/bots.yaml` documents the behavior.
-- **DEBUG when no bot matched:** When no bot matches an event, the router logs at DEBUG: source, kind, authorId, actorUsername, mentions, channelId—for troubleshooting routing (e.g. discordAuthors or discordMention not matching).
+- **DEBUG when no bot matched:** *(Superseded 2026-03-23: see INFO structured no-match log.)* When no bot matched, the router previously logged at DEBUG with source, kind, authorId, actorUsername, mentions, channelId.
 
 ## 2026-03-09
 

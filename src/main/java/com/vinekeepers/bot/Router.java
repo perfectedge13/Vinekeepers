@@ -177,9 +177,21 @@ public final class Router {
         }
 
         if (filterBotIds.isEmpty() && event != null && context != null) {
-            log.debug("No bot matched: source={}, kind={}, authorId={}, actorUsername={}, mentions={}, channelId={}",
-                    context.getSourceType(), context.getEventType(), context.getActorId(), context.getActorUsername(),
-                    context.getMentions(), context.getChannelId());
+            String textPrefix = context.getText();
+            if (textPrefix != null && textPrefix.length() > 160) {
+                textPrefix = textPrefix.substring(0, 160) + "…";
+            }
+            Object ingestBotId = context.getMetadata().get("ingestBotId");
+            log.info(
+                    "No routing rule matched: source={}, kind={}, channelId={}, authorId={}, actorUsername={}, mentions={}, ingestBotId={}, textPrefix={}",
+                    context.getSourceType(),
+                    context.getEventType(),
+                    context.getChannelId(),
+                    context.getActorId(),
+                    context.getActorUsername(),
+                    context.getMentions(),
+                    ingestBotId != null ? String.valueOf(ingestBotId) : "",
+                    textPrefix != null ? textPrefix : "");
         }
         return dedupe(filterBotIds);
     }

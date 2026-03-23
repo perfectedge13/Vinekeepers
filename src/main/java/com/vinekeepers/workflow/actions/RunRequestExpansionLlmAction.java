@@ -33,22 +33,27 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             You are a planning assistant. Reply with a single JSON object only, no markdown fences.
             Schema:
             {
+              "repo_evidence_this_pass": "observed | inferred_unverified | not_inspected",
               "current_state": "string",
               "proposed_behavior": "string",
               "config_model": "string",
               "selection_granularity": "string",
               "change_type": "string",
               "compatibility_fallback": "string",
-              "impacted_components": "string (concrete paths, packages, or file patterns when repo context exists)",
-              "candidate_open_questions": ["short question?"],
+              "impacted_components": "string — only concrete paths/packages if repo_evidence_this_pass is observed; otherwise say unknown or name assumptions explicitly",
+              "top_unresolved_gap": "string or empty if none",
+              "recommended_action": "ASK_ONE_QUESTION | ASSUME_AND_CONTINUE | POST_PACKET | BLOCK",
+              "question_if_needed": "single string — at most one clarification question; empty unless recommended_action is ASK_ONE_QUESTION",
+              "explicit_assumptions": ["short assumption strings when inferring"],
               "validation_concerns": "string",
               "design_options": "optional string",
-              "follow_up_decisions": [ { "id": "d1", "question": "text", "choice_a": "a", "choice_b": "b", "choice_c": "optional" } ],
+              "follow_up_decisions": "optional array with at most one object { id, question, choice_a, choice_b, choice_c } — only for bounded-choice UI; otherwise omit",
               "upserts": [ { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "fieldId": "value" } } ]
             }
+            Ground every factual claim: separate what you observed in the repo snapshot this pass vs what you inferred vs unknown.
+            Do not fabricate file paths or packages when repo_evidence_this_pass is not observed.
+            Prefer question_if_needed for any clarification; never emit multiple questions across follow_up_decisions and question_if_needed.
             Populate fields from the user's feature request and repo snapshot. Avoid echoing the request verbatim as the only content.
-            Use impacted_components with real code-ish tokens (e.g. src/, .java, package segments) when a repo path is provided.
-            If unsure, still propose concrete verification steps in validation_concerns referencing the request themes.
             """;
 
     private final PlanningContentGenerator generator;
@@ -109,7 +114,7 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             return spread;
         }
 
-        String userPayload = buildUserPayload(plan, profileId);
+        String userPayload = buildUserPayload(plan, profileId, state);
         String model = firstNonBlank(getString(bind, "llmModel"), getString(state, "workflowLlmModel"));
         Long timeout = parseTimeoutMs(firstNonBlank(getString(bind, "llmTimeoutMs"), getString(state, "workflowLlmTimeoutMs")));
 
@@ -230,13 +235,18 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             int appliedExtras = applyUpsertsArray(upsertAction, event, base, root.path("upserts"));
 
             List<String> followUps = new ArrayList<>();
+            String qIfNeeded = text(root, "question_if_needed");
+            if (!qIfNeeded.isBlank()) {
+                followUps.add(qIfNeeded);
+            }
             JsonNode fd = root.path("follow_up_decisions");
-            if (fd.isArray()) {
+            if (fd.isArray() && followUps.size() < 1) {
                 for (JsonNode n : fd) {
                     if (n.isObject()) {
                         String q = n.path("question").asText("").trim();
                         if (!q.isBlank()) {
                             followUps.add(q);
+                            break;
                         }
                     }
                 }
@@ -345,32 +355,25 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         appendBul(sb, "**Impacted components**", text(root, "impacted_components"));
         appendBul(sb, "**Validation concerns**", text(root, "validation_concerns"));
         appendBul(sb, "**Design options**", text(root, "design_options"));
-        JsonNode oq = root.path("candidate_open_questions");
-        if (oq.isArray() && oq.size() > 0) {
-            List<String> oqLines = new ArrayList<>();
-            for (JsonNode n : oq) {
+        appendBul(sb, "**Repo evidence (this pass)**", text(root, "repo_evidence_this_pass"));
+        appendBul(sb, "**Top unresolved gap**", text(root, "top_unresolved_gap"));
+        appendBul(sb, "**Recommended action**", text(root, "recommended_action"));
+        String qNeeded = text(root, "question_if_needed");
+        if (!qNeeded.isBlank()) {
+            sb.append("**Clarification (single)**\n").append(qNeeded).append("\n\n");
+        }
+        JsonNode asm = root.path("explicit_assumptions");
+        if (asm.isArray() && asm.size() > 0) {
+            sb.append("**Explicit assumptions**\n");
+            for (JsonNode n : asm) {
                 if (n.isTextual()) {
                     String t = n.asText().trim();
                     if (!t.isBlank()) {
-                        oqLines.add(t);
+                        sb.append("- ").append(t).append("\n");
                     }
                 }
             }
-            sb.append("**Open questions (candidates)**\n");
-            if (oqLines.size() >= 2) {
-                sb.append("| # | Question |\n|:-:|----------|\n");
-                for (int i = 0; i < oqLines.size(); i++) {
-                    String cell = oqLines.get(i).replace("|", "\\|").replace('\r', ' ').replace('\n', ' ');
-                    if (cell.length() > 280) {
-                        cell = cell.substring(0, 279) + "…";
-                    }
-                    sb.append("| ").append(i + 1).append(" | ").append(cell).append(" |\n");
-                }
-            } else {
-                for (String line : oqLines) {
-                    sb.append("- ").append(line).append("\n");
-                }
-            }
+            sb.append("\n");
         }
         return sb.toString().trim();
     }
@@ -402,13 +405,26 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         return m;
     }
 
-    private static String buildUserPayload(FeaturePlanState plan, String profileId) {
+    private static String buildUserPayload(FeaturePlanState plan, String profileId, Map<String, Object> state) {
         Map<String, Object> snap = new LinkedHashMap<>();
         snap.put("profileId", profileId);
         snap.put("initialRequest", plan.getInitialRequest());
         snap.put("repoRef", plan.getRepoRef());
         snap.put("repoLocalPath", plan.getRepoLocalPath());
         snap.put("existingExploration", PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body"));
+        if (state != null) {
+            String ev = getString(state, "planningRepoEvidenceJson");
+            if (ev != null && !ev.isBlank()) {
+                snap.put("repo_evidence_snapshot", ev);
+            }
+            if ("true".equalsIgnoreCase(String.valueOf(state.get("planningRagAvailable")))) {
+                String rag =
+                        state.get("planningRagRetrievalText") != null ? state.get("planningRagRetrievalText").toString() : "";
+                if (rag != null && !rag.isBlank()) {
+                    snap.put("repo_grounding_snippets", rag);
+                }
+            }
+        }
         try {
             return "Planning expansion context (JSON):\n" + JSON.writerWithDefaultPrettyPrinter().writeValueAsString(snap);
         } catch (JsonProcessingException e) {

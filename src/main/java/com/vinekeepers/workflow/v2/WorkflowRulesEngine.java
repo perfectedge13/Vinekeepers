@@ -117,6 +117,7 @@ public final class WorkflowRulesEngine {
                                     || truthy(getString(state, "planningApprovalReady")));
             case "ledgerHasBlockingOpen" ->
                     Boolean.TRUE.equals(value) && UnresolvedItemLedger.readFrom(state).hasOpenBlockingSeverity();
+            case "always" -> Boolean.TRUE.equals(value);
             default -> false;
         };
     }

@@ -2,7 +2,7 @@
 
 # Overview
 
-`Router` evaluates each incoming `Event` against configured `Routing` rules through `EventFilter` and `RoutingFilter`. `NormalizedEventContext` extracts connector-specific payload details into a shared view (including `actorId` and `actorUsername` from payload author/authorId) so filters can match fields such as actor, channel, text, mentions, repository, and labels consistently. For Discord, `discordTrigger` and `discordMention` are enforced only for message events; for Discord interaction events routing uses author, channel, and other criteria only (no trigger or mention check).
+`Router` evaluates each incoming `Event` against configured `Routing` rules through `EventFilter` and `RoutingFilter`. `NormalizedEventContext` extracts connector-specific payload details into a shared view (including `actorId` and `actorUsername` from payload author/authorId) so filters can match fields such as actor, channel, text, mentions, repository, and labels consistently. For Discord **messages**, `discordMention` uses payload `mentions` plus text tokens that are numeric user/bot snowflakes after `<@` or `<@!` only (not `<@&…>` roles). For Discord, `discordTrigger` and `discordMention` are enforced only for message events; for Discord interaction events routing uses author, channel, and other criteria only (no trigger or mention check). When the filter pass yields no bots, Router emits a structured **INFO** log (channelId, authorId, actorUsername, mentions, ingestBotId, truncated message prefix) for operations visibility.
 
 # Flow
 

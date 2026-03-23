@@ -253,6 +253,146 @@ class RouterTest {
     }
 
     @Test
+    void routeMatchesGadgetInOpsChannelWhenDirectGadgetMentionMetadata() {
+        String opsChannelId = "1484800775342391378";
+        RoutingFilter luna = new RoutingFilter(
+                Set.of("novawilde13_72571"),
+                Set.of(),
+                Set.of(opsChannelId),
+                null,
+                "luna",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        RoutingFilter gadget = new RoutingFilter(
+                Set.of(),
+                Set.of(opsChannelId),
+                Set.of(),
+                null,
+                "gadget",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        router.addRouting(new RoutingRule(luna, "luna"));
+        router.addRouting(new RoutingRule(gadget, "gadget"));
+        Event event = new Event("discord:g:guild", "message", Map.of(
+                "channelId", opsChannelId,
+                "author", "novawilde13_72571",
+                "authorId", "111",
+                "content", "@Gadget deploy",
+                "mentions", List.of("gadget")));
+        assertEquals(List.of("gadget"), router.route(event));
+    }
+
+    @Test
+    void routeExcludesLunaInOpsChannelWhenConfiguredExcludeMatches() {
+        String opsChannelId = "1484800775342391378";
+        RoutingFilter luna = new RoutingFilter(
+                Set.of("novawilde13_72571"),
+                Set.of(),
+                Set.of(opsChannelId),
+                null,
+                "luna",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        RoutingFilter gadget = new RoutingFilter(
+                Set.of(),
+                Set.of(opsChannelId),
+                Set.of(),
+                null,
+                "gadget",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        router.addRouting(new RoutingRule(luna, "luna"));
+        router.addRouting(new RoutingRule(gadget, "gadget"));
+        Event event = new Event("discord:g:guild", "message", Map.of(
+                "channelId", opsChannelId,
+                "author", "novawilde13_72571",
+                "content", "Hey @Luna help",
+                "mentions", List.of("luna")));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeDoesNotMatchDiscordMentionFromNonNumericAngleBracketText() {
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, "luna", Set.of(), Set.of(), Set.of());
+        router.addRouting(new RoutingRule(filter, "luna"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("content", "Hello <@luna> ping"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeDoesNotMatchUserIdMentionFilterFromRolePingInText() {
+        String userId = "123456789012345678";
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, userId, Set.of(), Set.of(), Set.of());
+        router.addRouting(new RoutingRule(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("content", "Mods <@&" + userId + "> please"));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeMatchesDiscordMentionNumericIdFromAngleBracketText() {
+        String userId = "123456789012345678";
+        RoutingFilter filter = new RoutingFilter(
+                Set.of(), Set.of(), null, userId, Set.of(), Set.of(), Set.of());
+        router.addRouting(new RoutingRule(filter, "bot-a"));
+        Event event = new Event("discord:g:ch", "message",
+                Map.of("content", "Hey <@" + userId + "> help"));
+        assertEquals(List.of("bot-a"), router.route(event));
+    }
+
+    @Test
+    void routeLogsInfoWithDiagnosticsWhenNoRuleMatches() {
+        Assumptions.assumeTrue(
+                LoggerFactory.getILoggerFactory() instanceof LoggerContext,
+                "Logback LoggerContext required to capture Router logs");
+        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger routerLogger = lc.getLogger(Router.class.getName());
+        Level prior = routerLogger.getLevel();
+        routerLogger.setLevel(Level.INFO);
+        ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+        listAppender.start();
+        routerLogger.addAppender(listAppender);
+        try {
+            RoutingFilter filter = new RoutingFilter(
+                    Set.of(), Set.of("other-channel"), null, null, Set.of(), Set.of(), Set.of());
+            router.addRouting(new RoutingRule(filter, "bot-x"));
+            String longText = "x".repeat(200);
+            Event event = new Event("discord:g:guild", "message", Map.of(
+                    "channelId", "ch-diag",
+                    "authorId", "author-42",
+                    "author", "alice",
+                    "content", longText,
+                    "mentions", List.of("someone"),
+                    "ingestBotId", "gadget"));
+            assertTrue(router.route(event).isEmpty());
+
+            List<ILoggingEvent> infos = listAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.INFO)
+                    .filter(e -> e.getFormattedMessage().contains("No routing rule matched"))
+                    .toList();
+            assertTrue(infos.size() >= 1, "Expected no-match INFO log; got: " + listAppender.list);
+            String msg = infos.get(0).getFormattedMessage();
+            assertTrue(msg.contains("ch-diag"), msg);
+            assertTrue(msg.contains("author-42"), msg);
+            assertTrue(msg.contains("alice"), msg);
+            assertTrue(msg.contains("gadget"), msg);
+            assertTrue(msg.contains("someone"), msg);
+            assertTrue(msg.contains("…"), msg);
+        } finally {
+            routerLogger.detachAppender(listAppender);
+            listAppender.stop();
+            routerLogger.setLevel(prior);
+        }
+    }
+
+    @Test
     void routeDoesNotMatchGadgetWhenChannelNotInAllowlist() {
         RoutingFilter filter = new RoutingFilter(
                 Set.of(), Set.of("ops-chan"), null, "gadget", Set.of(), Set.of(), Set.of());

@@ -166,6 +166,30 @@ class PlanningCyclePipelineCanonicalClarificationTest {
     }
 
     @Test
+    void semanticClarificationAllowed_trueWhenSplitPathSpreadMarksFirstPass() {
+        assertTrue(
+                PlanningCyclePipeline.semanticClarificationAllowed(
+                        null, Map.of("planningAutonomousFirstPassCompleted", "true"), false));
+    }
+
+    @Test
+    void semanticClarificationAllowed_trueWhenDraftingCompletesThisInvocation() {
+        assertTrue(PlanningCyclePipeline.semanticClarificationAllowed(null, Map.of(), true));
+    }
+
+    @Test
+    void semanticClarificationAllowed_trueWhenPlanRecordsCompletedAutonomousPass() {
+        FeaturePlanState plan = bareFeaturePlan().withAutonomousPlanningPassCompleted(true);
+        assertTrue(PlanningCyclePipeline.semanticClarificationAllowed(plan, Map.of(), false));
+    }
+
+    @Test
+    void semanticClarificationAllowed_falseWithoutPassSignals() {
+        FeaturePlanState plan = bareFeaturePlan();
+        assertFalse(PlanningCyclePipeline.semanticClarificationAllowed(plan, Map.of(), false));
+    }
+
+    @Test
     void ensureRankedRepairsWhenRankerDropsShortCanonicalTemplate() {
         CoordinatorClarificationGapRule rule =
                 new CoordinatorClarificationGapRule("g_low", false, "ok", List.of("x"), List.of(), List.of());
@@ -291,5 +315,45 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static FeaturePlanState bareFeaturePlan() {
+        return new FeaturePlanState(
+                "c",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "Short request",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning",
+                Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23 — Discord user/bot mentions only (routing + gateway)
+
+**Context:** Role pings and non-snowflake angle tokens must not satisfy `discordMention`; server nicknames must not mimic configured mention strings; operators need clear logs when no route matches. **Decision:** Keep mention matching aligned with **NormalizedEventContext** text parsing and **JdaDiscordGateway** mention metadata (see connectors Discord decision of the same date). **Router** logs no-match at **INFO** with structured fields including `ingestBotId` and a short `textPrefix`. **Consequence:** Ops-channel allowlists and mention filters stay aligned with real Discord user/bot mentions; troubleshooting no-match cases no longer requires DEBUG.
+
 ## 2026-03-13 — RoutingRule and ordered policy list
 
 **Context:** Routing needed a clear model for one rule (filter + botId) and an ordered list so config order defines evaluation. **Decision:** Replace the prior routing type with **RoutingRule** as the single rule model; Router holds an ordered list of RoutingRule; ConfigLoader builds this list from YAML routing entries. **Consequence:** Routing.java removed; RoutingRule.java holds filter and botId; routing behavior (lifecycle owner precedence, filter-based matching) unchanged; docs and contracts updated to reference RoutingRule and ordered policy list.
@@ -21,6 +25,6 @@
 # Selected decisions (prior)
 
 - Routing is evaluated over a normalized event view so Discord and GitHub payloads can share one filter model.
-- Discord mention activation is treated as routing input and may come from payload metadata or parsed `@mention` text.
+- Discord mention activation is treated as routing input from payload user/bot mention metadata and from parsed numeric `<@…>` / `<@!…>` snowflakes in text (not roles or arbitrary bracket tokens).
 - Bot runtime definition and tool policy are documented separately because routing selects bots before execution policy applies.
 
