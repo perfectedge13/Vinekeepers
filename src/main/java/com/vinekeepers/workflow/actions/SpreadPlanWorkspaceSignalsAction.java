@@ -5,6 +5,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.repo.RepoWorkspaceStatus;
+import com.vinekeepers.workflow.planning.ClarificationEngineAssessor;
 import com.vinekeepers.workflow.planning.PlanningDraftSupport;
 
 import java.util.LinkedHashMap;
@@ -75,11 +76,35 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
             if (!notes.isBlank()) {
                 evidence.put("accessNotes", notes);
             }
+            evidence.put(
+                    "repoGroundingScore",
+                    ClarificationEngineAssessor.repoEvidenceGroundingScore(plan, null));
+            mergePlanningRagEvidence(evidence, state);
             out.put("planningRepoEvidenceJson", JSON.writeValueAsString(evidence));
         } catch (Exception e) {
             out.put("planningRepoEvidenceJson", "{}");
         }
         return out;
+    }
+
+    private static void mergePlanningRagEvidence(Map<String, Object> evidence, Map<String, Object> state) {
+        if (state == null) {
+            return;
+        }
+        putEvidenceString(evidence, state, "planningRagEnabled");
+        putEvidenceString(evidence, state, "planningRagAvailable");
+        putEvidenceString(evidence, state, "planningRagSource");
+        putEvidenceString(evidence, state, "planningRagError");
+        putEvidenceString(evidence, state, "planningRagIndexedNewCount");
+        putEvidenceString(evidence, state, "planningRagChunkScanCount");
+        putEvidenceString(evidence, state, "planningRagSearchLatencyMs");
+    }
+
+    private static void putEvidenceString(Map<String, Object> evidence, Map<String, Object> state, String key) {
+        Object v = state.get(key);
+        if (v != null && !v.toString().isBlank()) {
+            evidence.put(key, v.toString());
+        }
     }
 
     private static boolean isMaterialized(String statusName) {

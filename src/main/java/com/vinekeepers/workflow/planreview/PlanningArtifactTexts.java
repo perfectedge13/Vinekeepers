@@ -3,10 +3,15 @@ package com.vinekeepers.workflow.planreview;
 import com.vinekeepers.profile.ArtifactState;
 import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.PlanIssue;
+import com.vinekeepers.state.planning.PlanIssueStatus;
+import com.vinekeepers.state.planning.PlanRisk;
+import com.vinekeepers.state.planning.PlanRiskDecisionStatus;
 
 import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -98,20 +103,50 @@ public final class PlanningArtifactTexts {
      * Unresolved-question lines safe to show in the planning packet (drops meta/completeness filler and internal errors).
      */
     public static List<String> substantiveUnresolvedQuestionLines(FeaturePlanState plan) {
-        if (plan == null || plan.getUnresolvedQuestions().isEmpty()) {
+        if (plan == null) {
             return List.of();
         }
-        List<String> out = new ArrayList<>();
+        LinkedHashSet<String> order = new LinkedHashSet<>();
         for (String q : plan.getUnresolvedQuestions()) {
             if (q == null || q.isBlank()) {
                 continue;
             }
             String t = q.trim();
             if (ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine(t)) {
-                out.add(t);
+                order.add(t);
             }
         }
-        return List.copyOf(out);
+        for (PlanIssue i : plan.getIssues()) {
+            if (i == null) {
+                continue;
+            }
+            String st = i.getStatus();
+            if (!PlanIssueStatus.OPEN.equals(st) && !PlanIssueStatus.BLOCKING.equals(st)) {
+                continue;
+            }
+            String line = firstNonBlankIssueLine(i);
+            if (!line.isBlank() && ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine(line)) {
+                order.add(line);
+            }
+        }
+        for (PlanRisk r : plan.getRisks()) {
+            if (r == null || !PlanRiskDecisionStatus.OPEN.equals(r.getStatus())) {
+                continue;
+            }
+            String line = r.getStatement() != null ? r.getStatement().trim() : "";
+            if (!line.isBlank() && ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine(line)) {
+                order.add(line);
+            }
+        }
+        return List.copyOf(order);
+    }
+
+    private static String firstNonBlankIssueLine(PlanIssue i) {
+        String t = i.getTitle() != null ? i.getTitle().trim() : "";
+        if (!t.isBlank()) {
+            return t;
+        }
+        return i.getDetail() != null ? i.getDetail().trim() : "";
     }
 
     public static String effectiveOpenQuestions(FeaturePlanState plan) {

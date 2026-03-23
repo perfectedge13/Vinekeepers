@@ -8,6 +8,7 @@ import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -31,7 +32,6 @@ class EvaluatePlanningApprovalGateActionTest {
         state.put("planningPacketPostedVersion", "1");
         state.put("planningPacketDepthOk", "true");
         state.put("planReadinessStatus", "READY");
-        state.put("humanDiscoveryCompleted", "true");
         state.put("planningUserInputRequired", "false");
         @SuppressWarnings("unchecked")
         Map<String, Object> spread =
@@ -53,7 +53,6 @@ class EvaluatePlanningApprovalGateActionTest {
         state.put("planningPacketPostedVersion", "1");
         state.put("planningPacketDepthOk", "false");
         state.put("planReadinessStatus", "READY");
-        state.put("humanDiscoveryCompleted", "true");
         state.put("planningUserInputRequired", "false");
         @SuppressWarnings("unchecked")
         Map<String, Object> spread =
@@ -116,6 +115,7 @@ class EvaluatePlanningApprovalGateActionTest {
                         t,
                         t);
         return base.withPacketPosted(t, "", "fp", 1)
+                .withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null)
                 .withCritiqueLifecycleStatus(PlanCritiqueLifecycleStatus.COMPLETE);
     }
 }

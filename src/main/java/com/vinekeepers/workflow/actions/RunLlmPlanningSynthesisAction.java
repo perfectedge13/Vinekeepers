@@ -99,7 +99,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             return spread;
         }
 
-        String userPayload = buildUserPayload(plan, profileId);
+        String userPayload = buildUserPayload(plan, profileId, state);
         String model = firstNonBlank(getString(bind, "llmModel"), getString(state, "workflowLlmModel"));
         Long timeoutMs = parseTimeoutMs(firstNonBlank(getString(bind, "llmTimeoutMs"), getString(state, "workflowLlmTimeoutMs")));
         String raw;
@@ -214,7 +214,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         return t;
     }
 
-    private static String buildUserPayload(FeaturePlanState plan, String profileId) {
+    private static String buildUserPayload(FeaturePlanState plan, String profileId, Map<String, Object> state) {
         Map<String, Object> snap = new LinkedHashMap<>();
         snap.put("profileId", profileId);
         snap.put("initialRequest", plan.getInitialRequest());
@@ -227,6 +227,12 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         snap.put("acceptance_criteria", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
         snap.put("open_questions", PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"));
         snap.put("plan_body", PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"));
+        if (state != null && "true".equalsIgnoreCase(String.valueOf(state.get("planningRagAvailable")))) {
+            String rag = state.get("planningRagRetrievalText") != null ? state.get("planningRagRetrievalText").toString() : "";
+            if (rag != null && !rag.isBlank()) {
+                snap.put("repo_grounding_snippets", rag);
+            }
+        }
         try {
             return "Profile snapshot (JSON):\n" + JSON.writerWithDefaultPrettyPrinter().writeValueAsString(snap);
         } catch (JsonProcessingException e) {

@@ -69,7 +69,8 @@ public final class GetStructuredDiscoveryGapsAction implements com.vinekeepers.w
         }
         try {
             boolean firstAutonomousDone =
-                    "true".equalsIgnoreCase(getString(state, "planningAutonomousFirstPassCompleted"));
+                    "true".equalsIgnoreCase(getString(state, "planningAutonomousFirstPassCompleted"))
+                            || plan.isAutonomousPlanningPassCompleted();
             List<DiscoveryGap> gaps =
                     StructuredDiscoverySupport.collectGaps(plan, profile, !firstAutonomousDone);
             return StructuredDiscoverySupport.spreadFromGaps(gaps);

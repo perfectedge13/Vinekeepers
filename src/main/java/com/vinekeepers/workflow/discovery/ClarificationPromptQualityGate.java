@@ -163,7 +163,7 @@ public final class ClarificationPromptQualityGate {
         return "";
     }
 
-    static boolean passes(String text) {
+    public static boolean passes(String text) {
         if (text == null || text.isBlank()) {
             return false;
         }
@@ -203,6 +203,12 @@ public final class ClarificationPromptQualityGate {
                 return d.trim();
             }
         }
+        if ("REQUIRED_FIELD".equalsIgnoreCase(kind)) {
+            String requiredFieldFallback = synthesizeRequiredFieldPrompt(gap);
+            if (!requiredFieldFallback.isBlank()) {
+                return requiredFieldFallback;
+            }
+        }
         String reason = gap.getReason();
         if (reason == null || reason.isBlank() || isInternalMechanismDetail(reason)) {
             return "";
@@ -214,5 +220,61 @@ public final class ClarificationPromptQualityGate {
         return "Before we can finalize the plan, we need one thing: "
                 + r
                 + " Reply in plain text in this thread.";
+    }
+
+    private static String synthesizeRequiredFieldPrompt(DiscoveryGap gap) {
+        String artifactId = safeToken(gap.getArtifactId());
+        String sectionId = safeToken(gap.getSectionId());
+        String fieldId = safeToken(gap.getFieldId());
+        if ("open_questions_block".equals(artifactId)
+                && "backlog".equals(sectionId)
+                && "open_questions".equals(fieldId)) {
+            return "Before we can finalize the plan, tell us which unknowns still need confirmation before "
+                    + "implementation. Put one item per line when possible, or reply \"None — ready to implement\" "
+                    + "if nothing remains. Reply in plain text in this thread.";
+        }
+        String area = describeRequiredFieldArea(artifactId, sectionId, fieldId);
+        if (area.isBlank()) {
+            return "";
+        }
+        return "Before we can finalize the plan, tell us what should go in "
+                + area
+                + ". Reply in plain text in this thread.";
+    }
+
+    private static String describeRequiredFieldArea(String artifactId, String sectionId, String fieldId) {
+        if (!fieldId.isBlank()) {
+            return "the " + titleCaseSnake(fieldId) + " field on the plan";
+        }
+        if (!sectionId.isBlank()) {
+            return "the " + titleCaseSnake(sectionId) + " section of the plan";
+        }
+        if (!artifactId.isBlank()) {
+            return "the " + titleCaseSnake(artifactId) + " section of the plan";
+        }
+        return "";
+    }
+
+    private static String safeToken(String value) {
+        return value != null ? value.trim() : "";
+    }
+
+    private static String titleCaseSnake(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String[] parts = value.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(part.substring(0, 1).toUpperCase(Locale.ROOT))
+                    .append(part.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return sb.toString();
     }
 }

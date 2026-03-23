@@ -1,13 +1,10 @@
 package com.vinekeepers.workflow.planning;
 
 /**
- * Configurable coordinator passes (Architect / Auditor / Scribe); order is driven by
- * {@link ConfigurablePassRunner} from workflow bind/state.
+ * Configurable coordinator passes for Arrietty-owned planning.
  */
 public enum PlanningCoordinatorRole {
-    ARCHITECT,
-    AUDITOR,
-    SCRIBE;
+    ARRIETTY;
 
     String systemPromptBlock() {
         String schema = """
@@ -24,24 +21,19 @@ public enum PlanningCoordinatorRole {
                 If nothing should change, return {"upserts":[],"follow_up_questions":[]}.
                 """;
         return switch (this) {
-            case ARCHITECT -> "You are the Architect for feature intake. Propose structure: impacted components, "
-                    + "config vs runtime boundaries, and design tradeoffs. Prefer architecture_notes.impact, "
-                    + "overall_plan.outline, and append decision_log.decisions when recording options.\n" + schema;
-            case AUDITOR -> "You are the Auditor. Critique risks, mitigations, backward compatibility, edge cases, "
-                    + "and whether validation coverage matches the request. Prefer risk_register.main, "
-                    + "validation_plan.checks, and open_questions_block.backlog for gaps that block safe implementation.\n"
+            case ARRIETTY -> "You are Arrietty, the sole planning coordinator for this feature room. "
+                    + "You must preserve the coverage previously split across architecture, audit, and scribe passes. "
+                    + "Produce a coherent planning draft that covers requirements_spec.narrative, architecture_notes.impact, "
+                    + "risk_register.main, open_questions_block.backlog, decision_log.decisions, overall_plan.outline, "
+                    + "validation_plan.checks, project_context.context, and request_exploration.analysis when the snapshot "
+                    + "supports improving them. Keep the draft concrete, internally consistent, and implementation-ready.\n"
                     + schema;
-            case SCRIBE -> "You are the Scribe. Consolidate narrative clarity: requirements_spec.narrative "
-                    + "(feature summary, scope, stories, acceptance), project_context.context, and tighten wording "
-                    + "without changing agreed facts.\n" + schema;
         };
     }
 
     String userTaskHint() {
         return switch (this) {
-            case ARCHITECT -> "Update architecture and plan outline from the snapshot; keep proposals concrete.";
-            case AUDITOR -> "Stress-test the draft for implementation risk and validation gaps.";
-            case SCRIBE -> "Make the packet readable and internally consistent.";
+            case ARRIETTY -> "Update the full planning packet as one coordinator pass without dropping architecture, risk, validation, or narrative coverage.";
         };
     }
 }

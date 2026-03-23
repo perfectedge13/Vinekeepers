@@ -12,6 +12,7 @@ import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 import org.junit.jupiter.api.Test;
 
@@ -60,9 +61,10 @@ class PhaseCPlanActionsTest {
                         "mode", "replace",
                         "data", Map.of("validation_notes", "Automated UI tests; manual screen reader pass; contrast checker; "
                                 + "staging soak before production flag."))));
+        store.update(store.getByContextId("c1").orElseThrow().withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, null));
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
-                .run(null, Map.of("contextId", "c1", "humanDiscoveryCompleted", "true"), Map.of());
+                .run(null, Map.of("contextId", "c1"), Map.of());
         assertTrue(spread.containsKey("planReadinessStatus"));
         assertTrue(spread.containsKey("planReadinessStatusLabel"));
         assertTrue(spread.containsKey("planReadinessCheckpointGuide"));
@@ -114,10 +116,12 @@ class PhaseCPlanActionsTest {
                         "sectionId", "narrative",
                         "mode", "merge",
                         "data", Map.of("acceptance_criteria", "- PDF renders; - metadata present; - audit log export works."))));
+        store.update(
+                store.getByContextId("c-review").orElseThrow().withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, null));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
-                .run(null, Map.of("contextId", "c-review", "humanDiscoveryCompleted", "true"), Map.of());
+                .run(null, Map.of("contextId", "c-review"), Map.of());
         assertEquals("", spread.get("planCritiqueError"));
         String body = (String) spread.get("planningThreadReviewBody");
         assertTrue(body.contains("Phase 1: data model"));
@@ -269,6 +273,8 @@ class PhaseCPlanActionsTest {
                                 "sectionId", "outline",
                                 "mode", "replace",
                                 "data", Map.of("plan_body", "Enough text for critique to run."))));
+        store.update(
+                store.getByContextId("c-ground").orElseThrow().withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null));
         String evidence = "{\"contextId\":\"c-ground\",\"repoRef\":\"org/demo\",\"featureSlug\":\"feat\"}";
         @SuppressWarnings("unchecked")
         Map<String, Object> spread =
@@ -279,8 +285,6 @@ class PhaseCPlanActionsTest {
                                         Map.of(
                                                 "contextId",
                                                 "c-ground",
-                                                "humanDiscoveryCompleted",
-                                                "true",
                                                 "planningPacketPosted",
                                                 "true",
                                                 "planningRepoEvidenceJson",

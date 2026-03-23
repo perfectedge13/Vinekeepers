@@ -36,7 +36,7 @@ profiles:
     artifacts:
       - artifactId: requirements_spec
         title: Requirements specification
-        ownerRoles: [ORCHESTRATOR, SCRIBE]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: narrative
@@ -61,7 +61,7 @@ profiles:
                 promptHint: Bullet-style criteria; required before approval.
       - artifactId: decision_log
         title: Decision log
-        ownerRoles: [ARCHITECT, ORCHESTRATOR]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: false
         sections:
           - sectionId: decisions
@@ -78,7 +78,7 @@ profiles:
                   (trade-offs, follow-ups, or options you ruled out). Plain sentences are fine — we store this on the plan.
       - artifactId: overall_plan
         title: Overall plan
-        ownerRoles: [ARCHITECT]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: outline
@@ -93,7 +93,7 @@ profiles:
                 promptHint: High-level steps and sequencing.
       - artifactId: validation_plan
         title: Validation plan
-        ownerRoles: [AUDITOR]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: checks
@@ -108,7 +108,7 @@ profiles:
                 promptHint: How correctness will be verified.
       - artifactId: project_context
         title: Project context
-        ownerRoles: [SCRIBE]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: false
         sections:
           - sectionId: context
@@ -128,6 +128,11 @@ profiles:
     title: Software feature planning (v2)
     coordinatorClarification:
       mode: canonical_v1
+      engine:
+        maxClarificationTurns: 5
+        repoEvidenceAskThreshold: 0.42
+        allowAssumeAndContinue: true
+        allowClarificationAfterCritique: true
       gaps:
         - id: config_vs_runtime_scope
           blocking: false
@@ -193,7 +198,7 @@ profiles:
     artifacts:
       - artifactId: requirements_spec
         title: Requirements specification
-        ownerRoles: [ORCHESTRATOR, SCRIBE]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: narrative
@@ -230,7 +235,7 @@ profiles:
                 promptHint: Testable criteria; bullets.
       - artifactId: architecture_notes
         title: Architecture and design
-        ownerRoles: [ARCHITECT, ORCHESTRATOR]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: impact
@@ -250,7 +255,7 @@ profiles:
                 promptHint: Approach, constraints, and notable design choices.
       - artifactId: risk_register
         title: Risks and issues
-        ownerRoles: [AUDITOR, ORCHESTRATOR]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: main
@@ -267,7 +272,7 @@ profiles:
                   (packets can render a scan table).
       - artifactId: open_questions_block
         title: Open questions
-        ownerRoles: [ORCHESTRATOR, SCRIBE]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: backlog
@@ -288,7 +293,7 @@ profiles:
                   multiple). Use "None — ready to implement" if truly none.
       - artifactId: decision_log
         title: Decision log
-        ownerRoles: [ARCHITECT, ORCHESTRATOR]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: decisions
@@ -305,7 +310,7 @@ profiles:
                   the work ahead (trade-offs, follow-ups, or things ruled out).
       - artifactId: overall_plan
         title: Overall plan
-        ownerRoles: [ARCHITECT]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: outline
@@ -320,7 +325,7 @@ profiles:
                 promptHint: Sequenced implementation steps tied to the repo.
       - artifactId: validation_plan
         title: Validation plan
-        ownerRoles: [AUDITOR]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: checks
@@ -337,7 +342,7 @@ profiles:
                   for this feature.
       - artifactId: request_exploration
         title: Request exploration
-        ownerRoles: [ORCHESTRATOR, ARCHITECT]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: true
         sections:
           - sectionId: analysis
@@ -360,7 +365,7 @@ profiles:
                   validation). Filled automatically before the packet; edit if wrong.
       - artifactId: project_context
         title: Project context
-        ownerRoles: [SCRIBE]
+        ownerRoles: [ORCHESTRATOR]
         requiredForApproval: false
         sections:
           - sectionId: context

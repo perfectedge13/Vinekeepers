@@ -93,32 +93,26 @@ class FeatureRoomStateStoreTest {
 
     @Test
     void getParticipantBotIds_returnsStableOrderFromParticipantList() {
-        List<RoomParticipant> participants = List.of(
-                participant(PlanningRole.ORCHESTRATOR, "arrietty", "inst-o"),
-                participant(PlanningRole.ARCHITECT, "architect", "inst-a"),
-                participant(PlanningRole.AUDITOR, "auditor", "inst-u"),
-                participant(PlanningRole.SCRIBE, "scribe", "inst-s"));
+        List<RoomParticipant> participants = List.of(participant(PlanningRole.ORCHESTRATOR, "arrietty", "inst-o"));
         FeatureRoomState state = new FeatureRoomState(
                 "ctx-1", "f1", null, "ch-1", "thread-1", null, null, "INTAKE_READY",
                 participants, null, Instant.now());
         store.put(state);
         List<String> ids = store.getParticipantBotIds(state);
-        assertEquals(List.of("arrietty", "architect", "auditor", "scribe"), ids);
+        assertEquals(List.of("arrietty"), ids);
     }
 
     @Test
     void getParticipantBotIds_whenParticipantsInWrongOrder_returnsRoleOrderOrchestratorArchitectAuditorScribe() {
         List<RoomParticipant> wrongOrder = List.of(
                 participant(PlanningRole.SCRIBE, "scribe", "inst-s"),
-                participant(PlanningRole.ORCHESTRATOR, "arrietty", "inst-o"),
-                participant(PlanningRole.AUDITOR, "auditor", "inst-u"),
-                participant(PlanningRole.ARCHITECT, "architect", "inst-a"));
+                participant(PlanningRole.ORCHESTRATOR, "arrietty", "inst-o"));
         FeatureRoomState state = new FeatureRoomState(
                 "ctx-1", "f1", null, "ch-1", "thread-1", null, null, "INTAKE_READY",
                 wrongOrder, null, Instant.now());
         store.put(state);
         List<String> ids = store.getParticipantBotIds(state);
-        assertEquals(List.of("arrietty", "architect", "auditor", "scribe"), ids);
+        assertEquals(List.of("arrietty", "scribe"), ids);
     }
 
     @Test
@@ -133,8 +127,7 @@ class FeatureRoomStateStoreTest {
     @Test
     void resolveCoordinatorConfiguredBotId_returnsPrimaryCoordinatorWhenSet() {
         List<RoomParticipant> participants = List.of(
-                participant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", true),
-                participant(PlanningRole.ARCHITECT, "architect", "i-a", false));
+                participant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", true));
         FeatureRoomState state = roomState("ctx-1", "ch-1", "t-1", "f1", participants);
         assertEquals("arrietty", FeatureRoomStateStore.resolveCoordinatorConfiguredBotId(state).orElse(null));
     }

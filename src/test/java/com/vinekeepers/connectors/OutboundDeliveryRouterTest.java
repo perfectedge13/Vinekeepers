@@ -218,54 +218,48 @@ class OutboundDeliveryRouterTest {
     void sendAsRole_resolvesRoleToBotAndSendsViaThatBot() {
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         FeatureRoomState roomState = new FeatureRoomState(
                 "ctx-1", null, null, "room-ch-1", "thread-1", null, null, "INTAKE_READY",
                 participants, null, null);
         featureStore.put(roomState);
         OutboundDeliveryRouter routerWithFeature = new OutboundDeliveryRouter(lifecycleContextStore, featureStore);
         routerWithFeature.setDefaultSender(defaultSender);
-        RecordingSender scribeSender = new RecordingSender();
-        routerWithFeature.registerSender("scribe", scribeSender, null);
+        RecordingSender arriettySender = new RecordingSender();
+        routerWithFeature.registerSender("arrietty", arriettySender, null);
 
-        routerWithFeature.sendAsRole("room-ch-1", null, "Scribe report", PlanningRole.SCRIBE);
+        routerWithFeature.sendAsRole("room-ch-1", null, "Coordinator report", PlanningRole.ORCHESTRATOR);
 
-        assertEquals(1, scribeSender.sendCalls.get());
-        assertEquals("room-ch-1", scribeSender.lastChannelId);
-        assertEquals("Scribe report", scribeSender.lastContent);
+        assertEquals(1, arriettySender.sendCalls.get());
+        assertEquals("room-ch-1", arriettySender.lastChannelId);
+        assertEquals("Coordinator report", arriettySender.lastContent);
     }
 
     @Test
     void sendAsRole_whenTargetIsThread_resolvesByDeliveryTargetId() {
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         FeatureRoomState roomState = new FeatureRoomState(
                 "ctx-1", null, null, "room-ch", "intake-thread-99", null, null, "INTAKE_READY",
                 participants, null, null);
         featureStore.put(roomState);
         OutboundDeliveryRouter routerWithFeature = new OutboundDeliveryRouter(lifecycleContextStore, featureStore);
         routerWithFeature.setDefaultSender(defaultSender);
-        RecordingSender architectSender = new RecordingSender();
-        routerWithFeature.registerSender("architect", architectSender, null);
+        RecordingSender arriettySender = new RecordingSender();
+        routerWithFeature.registerSender("arrietty", arriettySender, null);
 
-        routerWithFeature.sendAsRole("intake-thread-99", null, "Architect reply", PlanningRole.ARCHITECT);
+        routerWithFeature.sendAsRole("intake-thread-99", null, "Arrietty reply", PlanningRole.ORCHESTRATOR);
 
-        assertEquals(1, architectSender.sendCalls.get());
-        assertEquals("Architect reply", architectSender.lastContent);
+        assertEquals(1, arriettySender.sendCalls.get());
+        assertEquals("Arrietty reply", arriettySender.lastContent);
     }
 
     @Test
     void sendAsRole_whenNoFeatureRoomOrNullRole_fallsBackToStandardSend() {
         OutboundDeliveryRouter routerWithFeature = new OutboundDeliveryRouter(lifecycleContextStore, null);
         routerWithFeature.setDefaultSender(defaultSender);
-        routerWithFeature.sendAsRole("ch-1", null, "content", PlanningRole.SCRIBE);
+        routerWithFeature.sendAsRole("ch-1", null, "content", PlanningRole.ORCHESTRATOR);
         assertEquals(1, defaultSender.sendCalls.get());
     }
 

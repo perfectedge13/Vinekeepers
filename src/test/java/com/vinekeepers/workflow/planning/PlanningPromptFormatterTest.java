@@ -4,6 +4,7 @@ import com.vinekeepers.profile.ArtifactDefinition;
 import com.vinekeepers.profile.FieldDefinition;
 import com.vinekeepers.profile.SectionDefinition;
 import com.vinekeepers.profile.WorkProfileDefinition;
+import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -40,6 +41,32 @@ class PlanningPromptFormatterTest {
         FieldDefinition f = sec.getFields().get(0);
         String p = PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, -1);
         assertFalse(p.toLowerCase().contains("open questions"));
+    }
+
+    @Test
+    void requiredFieldPromptForOpenQuestionsUsesClarificationSafeWording() {
+        FieldDefinition field = new FieldDefinition(
+                "open_questions",
+                "Open questions",
+                "text",
+                true,
+                "Unknowns to confirm, one per line.");
+        SectionDefinition section = new SectionDefinition(
+                "backlog",
+                "Unresolved questions",
+                false,
+                true,
+                List.of(field));
+        ArtifactDefinition artifact = new ArtifactDefinition(
+                "open_questions_block",
+                "Open questions",
+                List.of(),
+                true,
+                List.of(section));
+        String prompt = PlanningPromptFormatter.requiredFieldPrompt(artifact, section, field, -1);
+        assertTrue(prompt.contains("None — ready to implement"));
+        assertFalse(prompt.toLowerCase().contains("open questions"));
+        assertTrue(ClarificationPromptQualityGate.passes(prompt));
     }
 
     @Test

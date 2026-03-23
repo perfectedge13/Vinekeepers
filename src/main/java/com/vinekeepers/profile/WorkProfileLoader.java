@@ -108,7 +108,37 @@ public final class WorkProfileLoader {
                 }
             }
         }
-        return new CoordinatorClarificationSettings(mode, gaps);
+        CoordinatorClarificationEnginePolicy engine = parseCoordinatorClarificationEngine(m);
+        return new CoordinatorClarificationSettings(mode, gaps, engine);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static CoordinatorClarificationEnginePolicy parseCoordinatorClarificationEngine(Map<String, Object> coordinatorRoot) {
+        if (coordinatorRoot == null) {
+            return CoordinatorClarificationEnginePolicy.defaultPolicy();
+        }
+        Object engineNode = coordinatorRoot.get("engine");
+        Map<String, Object> em =
+                engineNode instanceof Map<?, ?> map ? (Map<String, Object>) map : coordinatorRoot;
+        Integer maxTurnsObj = intObject(em.get("maxClarificationTurns"));
+        int maxTurns =
+                maxTurnsObj != null
+                        ? maxTurnsObj
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxClarificationTurns();
+        Double threshold = doubleObject(em.get("repoEvidenceAskThreshold"));
+        double thr =
+                threshold != null
+                        ? threshold
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getRepoEvidenceAskThreshold();
+        boolean allowAssume =
+                em.containsKey("allowAssumeAndContinue")
+                        ? booleanVal(em.get("allowAssumeAndContinue"))
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowAssumeAndContinue();
+        boolean allowCrit =
+                em.containsKey("allowClarificationAfterCritique")
+                        ? booleanVal(em.get("allowClarificationAfterCritique"))
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowClarificationAfterCritique();
+        return new CoordinatorClarificationEnginePolicy(maxTurns, thr, allowAssume, allowCrit);
     }
 
     @SuppressWarnings("unchecked")

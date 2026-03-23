@@ -55,6 +55,12 @@ public final class FeaturePlanState {
     private final int intakeKickoffPostedVersion;
     private final String intakeKickoffPostedFingerprint;
     private final String planningOrchestrationFailureReason;
+    /** Canonical flag: at least one autonomous planning room cycle completed successfully for this plan. */
+    private final boolean autonomousPlanningPassCompleted;
+    /** Count of coordinator clarification questions surfaced (canonical engine). */
+    private final int clarificationTurnsCompleted;
+    /** Short audit lines for clarification engine outcomes (budget, assume, defer). */
+    private final List<String> clarificationOutcomeHistory;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -139,6 +145,9 @@ public final class FeaturePlanState {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null);
     }
 
@@ -183,7 +192,10 @@ public final class FeaturePlanState {
             Instant planningIntakeStageEnteredAt,
             Integer intakeKickoffPostedVersion,
             String intakeKickoffPostedFingerprint,
-            String planningOrchestrationFailureReason) {
+            String planningOrchestrationFailureReason,
+            Boolean autonomousPlanningPassCompleted,
+            Integer clarificationTurnsCompleted,
+            List<String> clarificationOutcomeHistory) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
         this.featureId = featureId;
         this.featureSlug = featureSlug;
@@ -231,6 +243,11 @@ public final class FeaturePlanState {
                 intakeKickoffPostedFingerprint != null ? intakeKickoffPostedFingerprint : "";
         this.planningOrchestrationFailureReason =
                 planningOrchestrationFailureReason != null ? planningOrchestrationFailureReason : "";
+        this.autonomousPlanningPassCompleted = Boolean.TRUE.equals(autonomousPlanningPassCompleted);
+        this.clarificationTurnsCompleted =
+                clarificationTurnsCompleted != null && clarificationTurnsCompleted >= 0 ? clarificationTurnsCompleted : 0;
+        this.clarificationOutcomeHistory =
+                clarificationOutcomeHistory != null ? List.copyOf(clarificationOutcomeHistory) : List.of();
         this.createdAt = effectiveCreated;
         this.updatedAt = updatedAt != null ? updatedAt : this.createdAt;
     }
@@ -353,7 +370,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     /**
@@ -401,7 +421,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withPlanConfidence(PlanConfidence confidence) {
@@ -446,7 +469,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withPlanApproval(PlanApproval approval) {
@@ -491,7 +517,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withPlanCritiqueSnapshot(PlanCritiqueSnapshot snapshot) {
@@ -538,7 +567,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withCritiqueLifecycleStatus(String status) {
@@ -583,7 +615,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withPacketPosted(
@@ -632,7 +667,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     /**
@@ -685,7 +723,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     private FeaturePlanState copy(
@@ -737,7 +778,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public String getContextId() {
@@ -904,6 +948,184 @@ public final class FeaturePlanState {
         return planningOrchestrationFailureReason;
     }
 
+    public boolean isAutonomousPlanningPassCompleted() {
+        return autonomousPlanningPassCompleted;
+    }
+
+    public int getClarificationTurnsCompleted() {
+        return clarificationTurnsCompleted;
+    }
+
+    public List<String> getClarificationOutcomeHistory() {
+        return clarificationOutcomeHistory;
+    }
+
+    public FeaturePlanState withAutonomousPlanningPassCompleted(boolean completed) {
+        if (completed == this.autonomousPlanningPassCompleted) {
+            return this;
+        }
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                completed,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
+    }
+
+    /**
+     * Records one surfaced clarification question for budget accounting (canonical engine).
+     */
+    public FeaturePlanState withClarificationQuestionSurfaced(String auditLine) {
+        int next = clarificationTurnsCompleted + 1;
+        List<String> hist = appendHistory(clarificationOutcomeHistory, auditLine);
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                next,
+                hist);
+    }
+
+    public FeaturePlanState withClarificationEngineNote(String auditLine) {
+        if (auditLine == null || auditLine.isBlank()) {
+            return this;
+        }
+        List<String> hist = appendHistory(clarificationOutcomeHistory, auditLine.trim());
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                hist);
+    }
+
+    private static List<String> appendHistory(List<String> prior, String line) {
+        List<String> n = new ArrayList<>(prior != null ? prior : List.of());
+        n.add(line);
+        int cap = 32;
+        if (n.size() > cap) {
+            n = new ArrayList<>(n.subList(n.size() - cap, n.size()));
+        }
+        return List.copyOf(n);
+    }
+
     /**
      * Move to a new intake stage (updates {@code planningIntakeStageEnteredAt} when {@code enteredAt} is non-null).
      */
@@ -951,7 +1173,10 @@ public final class FeaturePlanState {
                 at,
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withIntakeKickoffPosted(int version, String fingerprint) {
@@ -996,7 +1221,10 @@ public final class FeaturePlanState {
                 planningIntakeStageEnteredAt,
                 version,
                 fingerprint != null ? fingerprint : "",
-                planningOrchestrationFailureReason);
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public FeaturePlanState withPlanningOrchestrationFailure(String reason) {
@@ -1042,7 +1270,10 @@ public final class FeaturePlanState {
                 Instant.now(),
                 intakeKickoffPostedVersion,
                 intakeKickoffPostedFingerprint,
-                r);
+                r,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory);
     }
 
     public int countBlockingIssues() {

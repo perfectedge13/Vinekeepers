@@ -64,6 +64,7 @@ import com.vinekeepers.workflow.actions.BuildRequestExplorationAction;
 import com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesAction;
 import com.vinekeepers.workflow.actions.CaptureAndApplyDiscoveryAnswerAction;
 import com.vinekeepers.workflow.actions.ClassifyAssumptionOrIssueAction;
+import com.vinekeepers.workflow.actions.ClassifyPlanningIngressAction;
 import com.vinekeepers.workflow.actions.CoordinatorIntakeBootstrapAction;
 import com.vinekeepers.workflow.actions.CreateChannelAction;
 import com.vinekeepers.workflow.actions.CreateLifecycleContextAction;
@@ -90,6 +91,7 @@ import com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceAction;
 import com.vinekeepers.workflow.actions.PlanningFinalizePlanningCycleAction;
 import com.vinekeepers.workflow.actions.PlanningRunExpansionPhaseAction;
 import com.vinekeepers.workflow.actions.PlanningRunInnerRoundAction;
+import com.vinekeepers.workflow.actions.PrepPlanningRepoGroundingAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PostPlanningProgressIfChangedAction;
 import com.vinekeepers.workflow.actions.PersistPlanApprovalAction;
@@ -106,6 +108,7 @@ import com.vinekeepers.workflow.actions.ProvisionRoomParticipantsAction;
 import com.vinekeepers.workflow.actions.RecomputePlanProgressAction;
 import com.vinekeepers.workflow.actions.ResolveProposalConfirmationAction;
 import com.vinekeepers.workflow.actions.SetPlanSectionStatusAction;
+import com.vinekeepers.workflow.actions.SetPlanningIntakeStageAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
 import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
 import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
@@ -330,6 +333,7 @@ public final class Bootstrap {
         registry.register("initialize_feature_plan_state", new InitializeFeaturePlanStateAction(
                 featurePlanStateStore, featureRoomStateStore, workProfileRegistry));
         registry.register("hydrate_planning_session", new HydratePlanningSessionAction(featureRoomStateStore, featurePlanStateStore));
+        registry.register("classify_planning_ingress", new ClassifyPlanningIngressAction());
         registry.register("generate_planning_proposals", new GeneratePlanningProposalsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("apply_auto_planning_proposals", new ApplyAutoPlanningProposalsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("build_proposal_confirm_prompt", new BuildProposalConfirmPromptAction(featurePlanStateStore, workProfileRegistry));
@@ -351,7 +355,8 @@ public final class Bootstrap {
         registry.register("capture_and_apply_discovery_answer", new CaptureAndApplyDiscoveryAnswerAction(featurePlanStateStore, workProfileRegistry));
         registry.register("classify_assumption_or_issue", new ClassifyAssumptionOrIssueAction(featurePlanStateStore));
         registry.register("recompute_plan_progress", new RecomputePlanProgressAction(featurePlanStateStore, workProfileRegistry));
-        registry.register("mark_intake_discovery_complete", new MarkIntakeDiscoveryCompleteAction());
+        registry.register("mark_intake_discovery_complete", new MarkIntakeDiscoveryCompleteAction(featurePlanStateStore));
+        registry.register("set_planning_intake_stage", new SetPlanningIntakeStageAction(featurePlanStateStore));
         registry.register(
                 "coordinator_intake_bootstrap",
                 new CoordinatorIntakeBootstrapAction(outboundDeliveryRouter, featurePlanStateStore));
@@ -375,6 +380,9 @@ public final class Bootstrap {
         registry.register("ensure_repo_workspace", new EnsureRepoWorkspaceAction(
                 repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore,
                 outboundDeliveryRouter));
+        registry.register(
+                "prep_planning_repo_grounding",
+                new PrepPlanningRepoGroundingAction(openAiChatClient, featurePlanStateStore));
         registry.register("spread_plan_workspace_signals", new SpreadPlanWorkspaceSignalsAction(featurePlanStateStore));
         registry.register(
                 "evaluate_planning_packet_depth",
@@ -394,7 +402,13 @@ public final class Bootstrap {
                 "merge_planning_clarification_choice",
                 new MergePlanningClarificationChoiceAction(featurePlanStateStore, workProfileRegistry));
         registry.register(
+                "run_arrietty_planning_pass",
+                new RunArchitectPlanningPassAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+        registry.register(
                 "run_architect_planning_pass",
+                new RunArchitectPlanningPassAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "run_planning_pass",
                 new RunArchitectPlanningPassAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
         registry.register(
                 "run_auditor_planning_pass",

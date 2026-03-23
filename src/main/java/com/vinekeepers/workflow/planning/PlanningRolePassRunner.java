@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Runs one OpenAI-backed planning pass for Architect (Hypatia), Auditor (Toad), or Scribe (Nyx) roles.
+ * Runs one OpenAI-backed Arrietty planning pass.
  * Delegates execution to {@link StructuredLlmArtifactUpsertPass}.
  */
 public final class PlanningRolePassRunner {

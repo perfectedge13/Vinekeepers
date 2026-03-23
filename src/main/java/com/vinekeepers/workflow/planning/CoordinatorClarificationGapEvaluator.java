@@ -30,7 +30,19 @@ public final class CoordinatorClarificationGapEvaluator {
      */
     public static List<OpenGap> evaluateOpenGaps(
             FeaturePlanState plan, CoordinatorClarificationSettings settings, List<String> llmHints) {
-        if (plan == null || settings == null || !settings.isCanonicalV1()) {
+        return evaluateOpenGaps(plan, settings, llmHints, true);
+    }
+
+    /**
+     * @param semanticGapsAllowed when false, returns no open gaps (hard / workspace-only path is handled outside this
+     *     evaluator; post-draft clarification sets this true once drafting has run).
+     */
+    public static List<OpenGap> evaluateOpenGaps(
+            FeaturePlanState plan,
+            CoordinatorClarificationSettings settings,
+            List<String> llmHints,
+            boolean semanticGapsAllowed) {
+        if (plan == null || settings == null || !settings.isCanonicalV1() || !semanticGapsAllowed) {
             return List.of();
         }
         String canonical = buildCanonicalResolutionText(plan);

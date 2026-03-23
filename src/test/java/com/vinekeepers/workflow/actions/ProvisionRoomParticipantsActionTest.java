@@ -1,7 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
 import com.vinekeepers.bot.RuntimeBotInstance;
-import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.state.planning.PlanningRole;
 import org.junit.jupiter.api.Test;
@@ -36,7 +35,7 @@ class ProvisionRoomParticipantsActionTest {
     }
 
     @Test
-    void runReturnsFourParticipantsWithExpectedShape() {
+    void runReturnsCoordinatorParticipantWithExpectedShape() {
         StateStore stateStore = new StateStore();
         String orchestratorInstanceId = "arrietty-reuse123";
         stateStore.put("bot_instance:" + orchestratorInstanceId,
@@ -49,7 +48,7 @@ class ProvisionRoomParticipantsActionTest {
         assertTrue(result instanceof List);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> participants = (List<Map<String, Object>>) result;
-        assertEquals(4, participants.size());
+        assertEquals(1, participants.size());
 
         List<String> requiredKeys = List.of("role", "configuredBotId", "runtimeBotInstanceId", "displayName", "primaryCoordinator");
         for (Map<String, Object> entry : participants) {
@@ -65,20 +64,6 @@ class ProvisionRoomParticipantsActionTest {
         assertEquals("Arrietty", orch.get("displayName"));
         assertEquals(Boolean.TRUE, orch.get("primaryCoordinator"));
 
-        Map<String, Object> architect = participants.get(1);
-        assertEquals(PlanningRole.ARCHITECT.name(), architect.get("role"));
-        assertEquals("architect", architect.get("configuredBotId"));
-        assertTrue(architect.get("runtimeBotInstanceId").toString().startsWith("architect-"));
-        assertEquals("Architect", architect.get("displayName"));
-        assertEquals(Boolean.FALSE, architect.get("primaryCoordinator"));
-
-        Map<String, Object> auditor = participants.get(2);
-        assertEquals(PlanningRole.AUDITOR.name(), auditor.get("role"));
-        assertEquals("auditor", auditor.get("configuredBotId"));
-
-        Map<String, Object> scribe = participants.get(3);
-        assertEquals(PlanningRole.SCRIBE.name(), scribe.get("role"));
-        assertEquals("scribe", scribe.get("configuredBotId"));
     }
 
     @Test
@@ -97,7 +82,7 @@ class ProvisionRoomParticipantsActionTest {
     }
 
     @Test
-    void runStoresNewInstancesForArchitectAuditorScribeInStateStore() {
+    void runDoesNotProvisionAdditionalPlanningBotInstances() {
         StateStore stateStore = new StateStore();
         String orchId = "arrietty-xxxxxxxx";
         stateStore.put("bot_instance:" + orchId,
@@ -110,10 +95,7 @@ class ProvisionRoomParticipantsActionTest {
         List<String> botInstanceKeys = stateStore.keys().stream()
                 .filter(k -> k.startsWith("bot_instance:"))
                 .toList();
-        assertEquals(4, botInstanceKeys.size(), "pre-seeded arrietty plus architect, auditor, scribe instances");
-        assertTrue(botInstanceKeys.stream().anyMatch(k -> k.contains("architect-")));
-        assertTrue(botInstanceKeys.stream().anyMatch(k -> k.contains("auditor-")));
-        assertTrue(botInstanceKeys.stream().anyMatch(k -> k.contains("scribe-")));
+        assertEquals(1, botInstanceKeys.size(), "only the pre-seeded Arrietty instance should remain");
     }
 
     @Test

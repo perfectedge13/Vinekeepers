@@ -4,7 +4,7 @@
 
 ## 2026-03-22
 
-- **Planning / readiness copy in config:** **`config/work-profiles.yaml`** field hints and profile text support clearer coordinator prompts (including decision-log gaps). **`config/bots.yaml`** Arrietty / coordinator thread copy stays aligned with **`PlanningUserFacingCopy`** / **`PlanningPromptFormatter`** outputs. Specs: **config-registry** (**ASSET-BOTS-YAML**, **ASSET-WORK-PROFILES-YAML**); tests: **ArriettyRoomWorkflowYamlTest**, **PlanningPromptFormatterTest**, **PlanningUserFacingCopyTest**.
+- **Planning / readiness copy in config:** **`config/work-profiles.yaml`** field hints and profile text support clearer coordinator prompts (including decision-log gaps). **`config/bots.yaml`** Arrietty / coordinator thread copy stays aligned with **`PlanningUserFacingCopy`** / **`PlanningPromptFormatter`** outputs. Specs: **config-registry** (**ASSET-BOTS-YAML**, **ASSET-WORK-PROFILES-YAML**); tests: **ArriettyV2WorkflowYamlTest**, **PlanningPromptFormatterTest**, **PlanningUserFacingCopyTest**.
 
 ## 2026-03-18
 

@@ -16,6 +16,13 @@
 3. Optionally place a `.env` file in the project root for connector or adapter configuration.
 4. Run `com.vinekeepers.VinekeepersApp` from the IDE or your normal Java launch path.
 
+## Optional planning RAG (Qdrant)
+
+1. Run a Qdrant instance reachable from the engine (set **`QDRANT_URL`** or **`VINEKEEPERS_QDRANT_URL`** and optional API key in `.env`).
+2. Ensure **`OPENAI_API_KEY`** is set; embedding model defaults are documented in **`.env.example`** and the **env** feature dossier.
+3. To disable RAG entirely, set **`VINEKEEPERS_PLANNING_RAG=false`**; the planning graph continues without retrieval.
+4. Confirm production **`arrietty_room_v2`** (or your ingress) declares **`prep_planning_repo_grounding`** only when you want the extra step after **`ensure_repo_workspace`** (see **`config/bots.yaml`** and **`ArriettyV2WorkflowYamlTest`**).
+
 ## Verify conversational workflow configuration
 
 1. Confirm the target bot has the correct `conversationMode` and `sessionKeyStrategy` in `config/bots.yaml`.

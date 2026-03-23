@@ -2,13 +2,13 @@
 
 ## Summary
 
-Runs the spec-driven **implementation** workflow. The orchestrator enforces the workflow: runs gate commands and launches one sub-agent per step (discovery, plan_change, implement, update_tests, update_specs, mk, output, etc.).
+Runs the spec-driven **implementation** workflow. The orchestrator enforces the workflow: runs gate commands, launches one sub-agent per step, passes `change_context` into `implement`, and passes a cumulative handoff into `update_readme` (**README.md only**); the **mk** step handles the docs dir.
 
 ## Key points
 
 - Read **nova-code.yml** for run_order; do not skip steps (except branch_removal_rename when no removal/rename).
 - Run **gates** (schema_gate, drift_gate, pre_change_lock, post_schema) yourself; for steps with a `location`, call **mcp_task**.
-- Pass **user request** and **handoff** (e.g. plan_change output, implement changed files) into each sub-agent. For **mk**, handoff must include plan_change and implement.
+- Pass **user request** and structured **handoff** into each sub-agent. `implement` requires `change_context`; `update_readme` requires cumulative handoff and **edits README.md only**; `mk` syncs the docs dir and requires `plan_change` plus `implement`.
 - **Output** step produces the final report.
 
 ## Diagram
@@ -23,13 +23,15 @@ flowchart TB
   G --> H[implement]
   H --> I[update_tests]
   I --> J[update_specs]
-  J --> K[post_schema]
-  K --> L[traceability]
-  L --> M[run_tests]
-  M --> N[build_check]
-  N --> O[reconcile]
-  O --> P[mk]
-  P --> Q[output]
+  J --> K[update_readme]
+  K --> L[post_schema]
+  L --> M[traceability]
+  M --> N[run_tests]
+  N --> O[build_check]
+  O --> P[reconcile]
+  P --> Q[mk]
+  Q --> R[docs_gate]
+  R --> S[output]
 ```
 
 ## Sub-skills
@@ -69,7 +71,7 @@ This skill runs the spec-driven **implementation** workflow. You are the **orche
 2. **For each step ID in run_order**, in order:
    - **If the step is a gate** (schema_gate, drift_gate, pre_change_lock, post_schema, or gates inside removal_rename_sequence): **you** run the gate command from the workflow (e.g. `npm run validate-specs`, `npm run validate-drift`). On failure: **STOP**, output a **Spec Drift Issue**, do not launch further sub-agents.
    - **If the step is a step** (has a `location` in the workflow): **call the mcp_task tool** (see "Using Cursor sub-agents" below) to run that step. Do not run the sub-skill yourself.
-3. **Handoff:** Pass the **user request** into each sub-agent task. Optionally pass a short summary from the previous sub-agent (e.g. plan_change output) so the next has context. Sub-agents can read the repo as needed. **For the mk step:** you **must** pass a **structured cumulative handoff** so the mk workflow can map coding changes to 0..n feature updates: include **plan_change** (impacted registry spec file paths, impacted asset paths/ids) and **implement** (list of changed file paths). Collect these from the plan_change and implement sub-agents' results before launching the mk step.
+3. **Handoff:** Pass the **user request** into each sub-agent task. Optionally pass a short summary from the previous sub-agent (e.g. plan_change output) so the next has context. **plan_change** returns impact set (impacted registries, impacted assets, removal_or_rename) **and change_context** (a compressed markdown bundle of relevant spec + mkdoc for the request). For the **implement** step, handoff **must** include **change_context** (from plan_change result) so implement can use requirements, anti_patterns, and doc excerpts without re-reading full specs and mkdoc. Sub-agents can read the repo as needed. **For the update_readme step:** pass a **structured cumulative handoff** so the sub-agent can classify impact without a broad repo scan: include **plan_change** (impacted registry spec file paths, impacted asset paths/ids, change_context when available), **implement** (list of changed source file paths), **update_tests** (list of changed test file paths), and **update_specs** (impacted spec paths plus short summary of doc-facing deltas when available). That step **only edits README.md**; the **mk** step syncs the docs dir (e.g. mkdoc). **For the mk step:** you **must** pass a **structured cumulative handoff** so the mk workflow can map coding changes to 0..n feature updates: include **plan_change** (impacted registry spec file paths, impacted asset paths/ids) and **implement** (list of changed file paths). Collect these from the relevant sub-agents' results before launching each downstream step.
 4. **Branch (removal/rename):** When the step is `branch_removal_rename` and plan_change set removal_or_rename, run the **removal_rename_sequence** from the workflow: for each step in that sequence, either run the gate yourself or launch a sub-agent for the step's location (one sub-agent per step of the sequence). Then rejoin run_order at the next step.
 5. **Output:** The last step is **output**. Its sub-agent produces the final report (per output-format). Return that report to the user.
 
@@ -78,7 +80,7 @@ This skill runs the spec-driven **implementation** workflow. You are the **orche
 - **prompt:** A single task description that includes:
   1. Step id and instruction: "Run the nova-code step **&lt;step_id&gt;**. Open and follow the sub-skill at **&lt;location&gt;** (from the workflow)."
   2. Context: "User request: &lt;exact user request&gt;."
-  3. Handoff (for steps after plan_change): "Previous step result: &lt;short summary&gt;" (e.g. plan_change: impacted registries, removal_or_rename; implement: list of changed files). For the **mk** step, handoff is **required** and must include plan_change (impacted registry paths, impacted asset paths/ids) and implement (list of changed file paths).
+  3. Handoff (for steps after plan_change): "Previous step result: &lt;short summary&gt;" (e.g. plan_change: impacted registries, removal_or_rename, **change_context**; implement: list of changed files). For **implement**, include **change_context** (from plan_change) in handoff so the sub-agent has compressed spec + mkdoc context. For **update_readme** (README.md only; not mkdocs), handoff is **required** and must include plan_change (impacted registries/assets and change_context when available), implement (changed source file paths), update_tests (changed test file paths), and update_specs (impacted spec paths and doc-facing summary when available). For the **mk** step, handoff is **required** and must include plan_change (impacted registry paths, impacted asset paths/ids) and implement (list of changed file paths).
   4. Required output: "Return: Pass or Fail, and one short line describing what you did or what changed."
 - **description:** Short label for the task, e.g. "nova-code step: &lt;step_id&gt;".
 

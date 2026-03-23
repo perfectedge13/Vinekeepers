@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * Minimal OpenAI-compatible chat-completions client (JSON in / out). Used for optional planning synthesis.
@@ -101,6 +102,76 @@ public final class OpenAiChatClient {
 
     public boolean isConfigured() {
         return apiKey != null && !apiKey.isBlank();
+    }
+
+    /**
+     * OpenAI embeddings API ({@code /embeddings}). Returns one vector per input string in order; empty list on
+     * unconfigured client or HTTP/shape errors (caller treats as failure).
+     */
+    public List<float[]> embedTexts(List<String> inputs, String modelOverride, Long timeoutMsOverride) {
+        if (!isConfigured() || inputs == null || inputs.isEmpty()) {
+            return List.of();
+        }
+        String useModel = modelOverride != null && !modelOverride.isBlank() ? modelOverride.trim() : model;
+        long requestMs = timeoutMsOverride != null && timeoutMsOverride > 0
+                ? timeoutMsOverride
+                : planningRequestTimeoutMs();
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("model", useModel);
+            body.put("input", inputs);
+            String jsonBody = JSON.writeValueAsString(body);
+            URI uri = URI.create(baseUrl + "/embeddings");
+            HttpRequest.Builder b = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofMillis(requestMs))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
+            HttpResponse<String> resp = httpClient.send(b.build(), HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
+                log.warn("OpenAI embeddings HTTP {}: {}", resp.statusCode(), truncate(resp.body(), 500));
+                return List.of();
+            }
+            JsonNode root = JSON.readTree(resp.body());
+            JsonNode data = root.path("data");
+            if (!data.isArray() || data.isEmpty()) {
+                log.warn("OpenAI embeddings: empty data");
+                return List.of();
+            }
+            TreeMap<Integer, float[]> byIndex = new TreeMap<>();
+            for (JsonNode item : data) {
+                int idx = item.path("index").asInt(-1);
+                if (idx < 0 || idx >= inputs.size()) {
+                    log.warn("OpenAI embeddings: bad index in response");
+                    return List.of();
+                }
+                JsonNode emb = item.path("embedding");
+                if (!emb.isArray() || emb.isEmpty()) {
+                    return List.of();
+                }
+                float[] vec = new float[emb.size()];
+                for (int j = 0; j < emb.size(); j++) {
+                    vec[j] = (float) emb.get(j).asDouble();
+                }
+                byIndex.put(idx, vec);
+            }
+            if (byIndex.size() != inputs.size()) {
+                log.warn("OpenAI embeddings: missing indices");
+                return List.of();
+            }
+            List<float[]> out = new ArrayList<>(inputs.size());
+            for (int i = 0; i < inputs.size(); i++) {
+                float[] vec = byIndex.get(i);
+                if (vec == null) {
+                    return List.of();
+                }
+                out.add(vec);
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("OpenAI embeddings failed: {} — {}", e.getClass().getSimpleName(), truncate(e.getMessage(), 200));
+            return List.of();
+        }
     }
 
     /**

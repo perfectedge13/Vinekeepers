@@ -34,7 +34,7 @@ Guardrails are now a selectively applied rule: **@.cursor/rules/guardrails.mdc**
 | **run-tests.md** | Run project test command; full output and counts; Pass/Fail/Blocked. |
 | **static-analysis.md** | Run project build-check command (compile/build verification; legacy static_analysis alias supported); Pass/Fail. |
 | **reconcile.md** | Reconcile specs, code, and README; no dangling refs; fix or raise issues. |
-| **update-readme.md** | Review all 12 impacted artifact categories; update only impacted (incl. README/docs). Do not assume only code changes. |
+| **update-readme.md** | Classify all 12 artifact categories for README accuracy from cumulative handoff; **edit root README.md only** (docs dir / mkdoc is the **mk** step). |
 
 Workflows set `location: .cursor/skills/common/<file>.md` for these steps.
 

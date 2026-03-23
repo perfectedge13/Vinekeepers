@@ -2,6 +2,12 @@
 
 # Entries
 
+## 2026-03-22 — Optional Qdrant planning RAG (degrade, do not block)
+
+- **Context:** Coordinator planning benefits from repo-local retrieval during synthesis, but not every deployment runs Qdrant or wants embedding cost on every intake.
+- **Decision:** Implement **`prep_planning_repo_grounding`** as an opt-in graph step (ingress **`legacy_action`**) after **`ensure_repo_workspace`**. Use Parquet (**.vinekeepers/repo-grounding.parquet**) as a content-hash cache, Qdrant as the vector store with repo/branch payload filters, and OpenAI embeddings only for missing hashes. Spread **`planningRag*`** state for diagnostics and evidence; **`run_llm_planning_synthesis`** includes **`planningRagRetrievalText`** only when **`planningRagAvailable`**. **`VINEKEEPERS_PLANNING_RAG=false`** or invalid Qdrant/OpenAI config must leave planning non-RAG without failing the workflow.
+- **Consequence:** Operators enable RAG via env + YAML; **`ArriettyV2WorkflowYamlTest`**-style guards document where the step is declared in production config.
+
 ## 2026-03-22 — Planning OpenAI progress in Discord and safe payload logs
 
 - **Context:** Coordinator planning makes several OpenAI HTTP calls; operators need thread-visible progress without exposing secrets in Discord or logs.

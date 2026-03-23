@@ -12,4 +12,10 @@ services:
       - "8080:8080"
     volumes:
       - ./config:/app/config
+      # Gadget / run_deploy_compose: also mount the host Docker socket and every compose
+      # workingDirectory from config/deploy-targets.yaml at the same path (e.g. repo root
+      # as /app, plus /opt/stacks/neo4j and /opt/stacks/wikijs for the sample targets).
+      # See README.md → Docker → Gadget / run_deploy_compose on Docker.
+      # - /var/run/docker.sock:/var/run/docker.sock
+      # - .:/app
     restart: unless-stopped

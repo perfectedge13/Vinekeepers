@@ -417,10 +417,7 @@ class RouterTest {
     void routeWithFeatureRoomStore_roomChannelId_returnsCoordinatorOnly() {
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         FeatureRoomState roomState = new FeatureRoomState(
                 "ctx-1", "feat-1", null, "room-ch-1", "thread-intake", null, null, "INTAKE_READY",
                 participants, null, Instant.now());
@@ -437,10 +434,7 @@ class RouterTest {
     void routeWithFeatureRoomStore_intakeThreadId_message_returnsCoordinatorOnly() {
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         FeatureRoomState roomState = new FeatureRoomState(
                 "ctx-1", "feat-1", null, "room-ch-parent", "thread-456", null, null, "INTAKE_READY",
                 participants, null, Instant.now());
@@ -456,10 +450,7 @@ class RouterTest {
     void routeWithFeatureRoomStore_intakeThreadId_interaction_returnsCoordinatorOnly() {
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         featureStore.put(new FeatureRoomState(
                 "ctx-1", "feat-1", null, "room-ch-parent", "thread-456", null, null, "INTAKE_READY",
                 participants, null, Instant.now()));
@@ -496,10 +487,7 @@ class RouterTest {
         lifecycleStore.put(new LifecycleContext("ctx-life", sharedCh, Instant.now(), null, "luna", null, null, null));
         FeatureRoomStateStore featureStore = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         featureStore.put(new FeatureRoomState(
                 "ctx-feat", "feat-1", null, sharedCh, "thread-intake", null, null, "INTAKE_READY",
                 participants, null, Instant.now()));

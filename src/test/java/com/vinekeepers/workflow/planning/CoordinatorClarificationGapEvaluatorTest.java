@@ -133,6 +133,26 @@ class CoordinatorClarificationGapEvaluatorTest {
     }
 
     @Test
+    void semanticGapsDisallowedReturnsNoOpenGaps() {
+        CoordinatorClarificationSettings settings =
+                new CoordinatorClarificationSettings(
+                        CoordinatorClarificationMode.CANONICAL_V1,
+                        List.of(
+                                new CoordinatorClarificationGapRule(
+                                        "g1",
+                                        false,
+                                        "Question about config vs runtime?",
+                                        List.of("config", "runtime"),
+                                        List.of(),
+                                        List.of("config-driven", "config only"))));
+        FeaturePlanState plan = minimalPlan("ctx", "do something");
+        List<CoordinatorClarificationGapEvaluator.OpenGap> open =
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
+                        plan, settings, List.of("Should we change config or runtime?"), false);
+        assertTrue(open.isEmpty());
+    }
+
+    @Test
     void narrowGapOpensFromCanonicalAllOfWhenFirstResolved() {
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(

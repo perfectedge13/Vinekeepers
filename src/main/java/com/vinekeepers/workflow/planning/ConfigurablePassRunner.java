@@ -17,7 +17,7 @@ public final class ConfigurablePassRunner {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final List<PlanningCoordinatorRole> DEFAULT_ORDER =
-            List.of(PlanningCoordinatorRole.ARCHITECT, PlanningCoordinatorRole.AUDITOR, PlanningCoordinatorRole.SCRIBE);
+            List.of(PlanningCoordinatorRole.ARRIETTY);
 
     private ConfigurablePassRunner() {}
 
@@ -69,8 +69,18 @@ public final class ConfigurablePassRunner {
         if (token == null) {
             return null;
         }
+        String normalized = token.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return null;
+        }
+        if ("ARCHITECT".equals(normalized)
+                || "AUDITOR".equals(normalized)
+                || "SCRIBE".equals(normalized)
+                || "PLANNER".equals(normalized)) {
+            return PlanningCoordinatorRole.ARRIETTY;
+        }
         try {
-            return PlanningCoordinatorRole.valueOf(token.trim().toUpperCase(Locale.ROOT));
+            return PlanningCoordinatorRole.valueOf(normalized);
         } catch (IllegalArgumentException e) {
             return null;
         }

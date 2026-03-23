@@ -45,4 +45,10 @@ Unit tests cover workflow definition parsing, step result helpers, workflow acti
 | UNIT-CREATE-THREAD-ACTION | CreateThreadActionTest | com.vinekeepers.workflow.actions.CreateThreadActionTest | — | Verify create_thread delegates to SpaceOperationsRegistry by source prefix; THREAD_CREATE_FAILED when no ops or failure |
 | UNIT-SPACE-OPERATIONS-REGISTRY | SpaceOperationsRegistryTest | com.vinekeepers.connectors.SpaceOperationsRegistryTest | — | Verify SpaceOperationsRegistry register and get by connector id |
 | UNIT-DISCORD-SPACE-OPERATIONS | DiscordSpaceOperationsTest | com.vinekeepers.connectors.DiscordSpaceOperationsTest | — | Verify DiscordSpaceOperations createRoom and createThread (normalizeChannelName, setDeliveryTargetId) |
+| UNIT-PLANNING-RAG-CONFIG | PlanningRagConfigTest | com.vinekeepers.workflow.planning.rag.PlanningRagConfigTest | — | Verify planning RAG env toggles, Qdrant URL resolution, graceful disable when configuration is incomplete |
+| UNIT-REPO-GROUNDING-PARQUET-STORE | RepoGroundingParquetStoreTest | com.vinekeepers.workflow.planning.rag.RepoGroundingParquetStoreTest | — | Verify Parquet cache read/write round-trip for repo grounding chunk records |
+| UNIT-REPO-FILE-CHUNKER | RepoFileChunkerTest | com.vinekeepers.workflow.planning.rag.RepoFileChunkerTest | — | Verify repository file chunking and content-hash stability for RAG indexing |
+| UNIT-GIT-REPO-BRANCH-RESOLVER | GitRepoBranchResolverTest | com.vinekeepers.workflow.planning.rag.GitRepoBranchResolverTest | — | Verify git branch resolution for repo+branch-scoped RAG cache and Qdrant payload filters |
+| UNIT-PLANNING-REPO-GROUNDING-SERVICE | PlanningRepoGroundingServiceTest | com.vinekeepers.workflow.planning.rag.PlanningRepoGroundingServiceTest | — | Verify RAG prep spreads, degraded paths when workspace or deps missing, and successful index/search wiring with mocks |
+| UNIT-PREP-PLANNING-REPO-GROUNDING-ACTION | PrepPlanningRepoGroundingActionTest | com.vinekeepers.workflow.actions.PrepPlanningRepoGroundingActionTest | — | Verify prep_planning_repo_grounding guards delegate to service |
 

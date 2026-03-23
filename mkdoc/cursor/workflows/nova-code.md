@@ -2,7 +2,7 @@
 
 ## Summary
 
-Spec-driven implementation workflow. Discovery → gates → execution loop (plan_change through reconcile, then mk, docs_gate, output). Branch `removal_rename_sequence` when `plan_change` sets `removal_or_rename`.
+Spec-driven implementation workflow. Discovery → gates → execution loop (plan_change through reconcile, then mk, docs_gate, output). The `update_readme` step uses cumulative handoff to classify impact and **updates root README.md only**; the **mk** step syncs the docs dir (e.g. mkdoc). Branch `removal_rename_sequence` when `plan_change` sets `removal_or_rename`.
 
 ## Sequence
 

@@ -84,17 +84,17 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         WorkProfileDefinition profile = workProfileRegistry.get(profileId).orElse(null);
 
         try {
-            List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
+            List<DiscoveryGap> gaps =
+                    StructuredDiscoverySupport.collectGaps(plan, profile, !plan.isAutonomousPlanningPassCompleted());
             List<PlanCritiqueFinding> findings = new ArrayList<>(PlanCritiqueSupport.buildFindings(plan, profile, gaps));
-            boolean discoveryDone =
-                    "true".equalsIgnoreCase(String.valueOf(state != null ? state.get("humanDiscoveryCompleted") : null));
-            if (plan.getPlanningIntakeStage() == PlanningIntakeStage.GATHERING_CONTEXT && !discoveryDone) {
+            if (plan.getPlanningIntakeStage() == PlanningIntakeStage.GATHERING_CONTEXT
+                    && !plan.isAutonomousPlanningPassCompleted()) {
                 findings.add(0, new PlanCritiqueFinding(
                         "crit-intake-disc-1",
                         "PROCESS",
                         "MUST_FIX",
                         "INTAKE_DISCOVERY_INCOMPLETE",
-                        "Finish the first planning questions in this thread (reply to the prompt above) before we can move to approval.",
+                        "Finish the first autonomous drafting pass in this thread (planning cycle) before we can move to approval.",
                         ""));
             }
             Instant now = Instant.now();
@@ -149,11 +149,15 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                 confidence.getConfidenceScore(),
                                 confidence.getConfidenceReasons());
             }
-            FeaturePlanState next = plan.withPlanCritiqueSnapshot(snapshot).withPlanConfidence(confidenceForStore);
+            FeaturePlanState next =
+                    plan.withPlanCritiqueSnapshot(snapshot)
+                            .withPlanConfidence(confidenceForStore)
+                            .withPlanningIntakeStage(PlanningIntakeStage.READINESS_GATE, null);
             planStateStore.update(next);
 
             Map<String, Object> spread = new LinkedHashMap<>();
             spread.put("planCritiqueError", "");
+            spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.READINESS_GATE.name());
             if (PlanReadinessStatus.READY.equals(legacyStatus)) {
                 spread.put("planningCritiqueAutoRevisionCount", "0");
             } else if (critiqueAutoReplansCapped) {
@@ -164,6 +168,13 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                 spread.put("planningCritiqueAutoRevisionCount", prevCtr);
             }
             putReadinessStatus(spread, legacyStatus);
+            boolean critiqueWantsClarification =
+                    findings.stream()
+                            .anyMatch(
+                                    f -> f.isBlocksApproval()
+                                            && "MUST_FIX".equalsIgnoreCase(f.getSeverity())
+                                            && !"INTAKE_DISCOVERY_INCOMPLETE".equalsIgnoreCase(f.getCode()));
+            spread.put("planningCritiqueOpenClarificationSweep", critiqueWantsClarification ? "true" : "false");
             spread.put("planConfidenceLevel", confidenceForStore.getLevel() != null ? confidenceForStore.getLevel() : "");
             spread.put(
                     "planConfidenceScore",
@@ -187,6 +198,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             } catch (JsonProcessingException ignored) {
                 m.put("planCritiqueFindingsJson", "[]");
             }
+            m.put("planningCritiqueOpenClarificationSweep", "false");
             putAssumptionIssueSummaries(m, plan);
             mergePlanningThreadReview(m, event, state, bind);
             return m;

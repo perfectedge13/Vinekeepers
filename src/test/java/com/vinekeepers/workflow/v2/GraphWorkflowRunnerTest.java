@@ -250,4 +250,83 @@ class GraphWorkflowRunnerTest {
         assertTrue(res.isCompleted());
         assertEquals("Embedded planning rejected.", res.getReplyMessage());
     }
+
+    @Test
+    void configurableStepsPauseResumeUsesCapabilitySpecificCursor() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "p");
+        Map<String, Object> phases = new LinkedHashMap<>();
+        phases.put("p", Map.of("pipeline", List.of("cap_a", "cap_b"), "defaultNextPhase", "done"));
+        phases.put("done", Map.of("pipeline", List.of(), "terminal", true));
+        wf.put("phases", phases);
+        wf.put(
+                "capabilities",
+                Map.of(
+                        "cap_a",
+                        Map.of(
+                                "kind",
+                                "configurable_steps",
+                                "steps",
+                                List.of(
+                                        Map.of("type", "prompt_for_field", "prompt", "Question A", "storeIn", "firstAnswer"),
+                                        Map.of("type", "capture_field", "storeIn", "firstAnswer"),
+                                        Map.of("type", "done", "message", ""))),
+                        "cap_b",
+                        Map.of(
+                                "kind",
+                                "configurable_steps",
+                                "steps",
+                                List.of(
+                                        Map.of("type", "prompt_for_field", "prompt", "Question B", "storeIn", "secondAnswer"),
+                                        Map.of("type", "capture_field", "storeIn", "secondAnswer"),
+                                        Map.of("type", "done", "message", "")))));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("outer_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model, reg, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, "channel", Map.of(), null);
+
+        StateStore store = new StateStore();
+        Event first =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "start"));
+        WorkflowRunResult firstRes = runner.runResult(first, store, "b");
+        assertTrue(firstRes.isWaiting());
+        assertEquals("firstAnswer", firstRes.getWaitingForField());
+
+        Event second =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "one"));
+        WorkflowRunResult secondRes = runner.runResult(second, store, "b");
+        assertTrue(secondRes.isWaiting());
+        assertEquals("secondAnswer", secondRes.getWaitingForField());
+
+        String key = "bot:b:conv:ch1";
+        var midState = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class);
+        assertTrue(midState.isPresent());
+        assertEquals("one", midState.get().get("firstAnswer"));
+        assertEquals("cap_b", midState.get().get(GraphWorkflowRunner.ACTIVE_STEPS_CAPABILITY_KEY));
+        assertEquals(null, midState.get().get("__v2_stepscap:cap_a:status"));
+
+        Event third =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "two"));
+        WorkflowRunResult thirdRes = runner.runResult(third, store, "b");
+        assertTrue(thirdRes.isCompleted());
+
+        var finalState = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class);
+        assertTrue(finalState.isPresent());
+        assertEquals("one", finalState.get().get("firstAnswer"));
+        assertEquals("two", finalState.get().get("secondAnswer"));
+        assertEquals("__v2_done", finalState.get().get(GraphWorkflowRunner.PHASE_KEY));
+    }
 }

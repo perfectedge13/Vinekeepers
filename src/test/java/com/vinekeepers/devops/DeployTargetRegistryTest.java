@@ -75,4 +75,17 @@ class DeployTargetRegistryTest {
         assertEquals(2, p.getCompose().getServices().size());
         assertEquals(ComposeHostExecutor.CURSOR_AGENT, p.getCompose().getExecutor());
     }
+
+    @Test
+    void loadShippedManifestIncludesNeo4jAndWikiJsComposeTargets() {
+        DeployTargetRegistry reg = DeployTargetRegistry.load(Path.of("config", "deploy-targets.yaml"));
+        DeployTarget neo = reg.findById("neo4j").orElseThrow();
+        assertTrue(neo.getCompose().isConfigured());
+        assertEquals("/opt/stacks/neo4j", neo.getCompose().getWorkingDirectory());
+        assertTrue(neo.getCompose().allowsService("neo4j"));
+        DeployTarget wiki = reg.findById("wikijs").orElseThrow();
+        assertTrue(wiki.getCompose().isConfigured());
+        assertEquals("/opt/stacks/wikijs", wiki.getCompose().getWorkingDirectory());
+        assertTrue(wiki.getCompose().allowsService("wikijs"));
+    }
 }

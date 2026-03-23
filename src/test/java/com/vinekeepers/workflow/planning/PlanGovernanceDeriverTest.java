@@ -61,6 +61,7 @@ class PlanGovernanceDeriverTest {
                         null,
                         null,
                         null);
+        plan = plan.withAutonomousPlanningPassCompleted(true);
         FeaturePlanState next = PlanGovernanceDeriver.derive(plan, profile);
         assertTrue(
                 next.getIssues().stream().anyMatch(i -> i.getId().startsWith("gap:")),

@@ -23,6 +23,13 @@ class HostComposeOpsRunnerTest {
     }
 
     @Test
+    void buildDockerComposeRestartWithServices() {
+        DeployTargetCompose c = new DeployTargetCompose("dc.yml", "/w", List.of("web", "api"), ComposeHostExecutor.DIRECT);
+        List<String> cmd = HostComposeOpsRunner.buildDockerComposeCommandForTest(c, ComposeOperation.RESTART, List.of("web"));
+        assertEquals(List.of("docker", "compose", "-f", "dc.yml", "restart", "web"), cmd);
+    }
+
+    @Test
     void buildCursorPromptContainsDockerCompose() {
         DeployTargetCompose c = new DeployTargetCompose("dc.yml", "/w", List.of("svc"), ComposeHostExecutor.DIRECT);
         String prompt = HostComposeOpsRunner.buildCursorPromptForTest(c, ComposeOperation.PS, List.of());

@@ -1,5 +1,11 @@
 # Diagrams
 
+# Architecture
+
+See [Vinekeepers architecture](../../../../architecture.md) for system context. This feature sits in the workflow + devops packages and uses Discord as the operator surface.
+
+# Feature flow
+
 ```mermaid
 flowchart LR
   Discord[Discord] --> Router[Router]

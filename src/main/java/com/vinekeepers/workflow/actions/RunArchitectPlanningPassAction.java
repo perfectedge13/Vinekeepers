@@ -13,7 +13,7 @@ import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Thin wrapper: Architect / Hypatia pass (see {@link PlanningRolePassRunner}). */
+/** Thin wrapper for the consolidated Arrietty planning pass. */
 public final class RunArchitectPlanningPassAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final OpenAiChatClient client;
@@ -29,7 +29,7 @@ public final class RunArchitectPlanningPassAction implements com.vinekeepers.wor
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return runRole(PlanningCoordinatorRole.ARCHITECT, client, planStore, profiles, event, state, bind);
+        return runRole(PlanningCoordinatorRole.ARRIETTY, client, planStore, profiles, event, state, bind);
     }
 
     static Map<String, Object> runRole(

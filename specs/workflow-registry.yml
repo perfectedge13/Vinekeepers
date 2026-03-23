@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T23:45:00Z"
+  updated_utc: "2026-03-23T12:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -76,6 +76,33 @@ dependencies:
         - REQ-WORKFLOW-002
         - REQ-LUNA-001
         - REQ-GADGET-001
+    - id: DEP-PARQUET-AVRO
+      kind: library
+      name: parquet-avro
+      scope: runtime
+      criticality: required
+      spec: org.apache.parquet:parquet-avro
+      install_hint: Maven dependency for planning RAG Parquet cache
+      used_by_requirements:
+        - REQ-WORKFLOW-001
+    - id: DEP-HADOOP-COMMON
+      kind: library
+      name: hadoop-common
+      scope: runtime
+      criticality: required
+      spec: org.apache.hadoop:hadoop-common
+      install_hint: Maven dependency (Path API for Parquet I/O)
+      used_by_requirements:
+        - REQ-WORKFLOW-001
+    - id: DEP-AVRO
+      kind: library
+      name: avro
+      scope: runtime
+      criticality: required
+      spec: org.apache.avro:avro
+      install_hint: Maven dependency for Parquet/Avro stack
+      used_by_requirements:
+        - REQ-WORKFLOW-001
 assets:
   - id: ASSET-BOOTSTRAP
     kind: source
@@ -85,13 +112,13 @@ assets:
       handlesOwnedSpaces map from loaded bots to Router; construct FeaturePlanStateStore, RepoWorkspaceStateStore,
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
-      resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, spread_plan_workspace_signals,
+      resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
       derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
       planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
-      post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
+      post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan actions, coordinator_intake_bootstrap,
-      mark_intake_discovery_complete,
+      mark_intake_discovery_complete, classify_planning_ingress, set_planning_intake_stage,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
       append/set plan actions; register resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose;
@@ -134,8 +161,8 @@ assets:
     role: >-
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
-      workflowRef arrietty_room_v2 whose planning phase runs hydrate_planning_session, ensure_repo_workspace, and
-      spread_plan_workspace_signals before linear_workflow_ref to arrietty_room_legacy, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
+      workflowRef arrietty_room_v2 whose planning ingress may run hydrate_planning_session, ensure_repo_workspace,
+      optional prep_planning_repo_grounding (Parquet cache + Qdrant + planningRag* spreads), and spread_plan_workspace_signals before direct v2-owned planning phases, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
       blank/empty; operator bot (e.g. id gadget) with workflowRef devops_deploy, routing discordMention and discordChannels allowlist
       ops channel id in discordChannels (see comment block top of config/bots.yaml); Luna routing optional discordChannelsExclude
       for that ops channel id
@@ -359,7 +386,7 @@ assets:
       runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
       planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls; ranks clarifications with ledger fingerprint
       filtering; optional selective rerun after merge (skips expansion, one inner round); ConfigurablePassRunner resolves
-      architect/auditor/scribe order from planningRolePassOrder bind; sets planningPhase READY_FOR_REVIEW when draft is
+      the Arrietty planning pass from planningRolePassOrder bind (legacy architect/auditor/scribe tokens collapse to the same pass); sets planningPhase READY_FOR_REVIEW when draft is
       review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
       derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
       mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
@@ -369,8 +396,11 @@ assets:
       aligns with unresolved plan state (governance + artifact text), not free-form LLM filler; canonical coordinator questions use
       plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
       post_planning_progress_if_changed; legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering;
-      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode; PlanningQuestionRankingPolicy.rank uses
-      maxQuestions budget 1 for coordinator LLM follow-up ranking and canonical repair paths; planningCycleUserVisibleFailure maps
+      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;       PlanningQuestionRankingPolicy.rank uses
+      maxQuestions budget 1 for coordinator LLM follow-up ranking and canonical repair paths; ClarificationEngineAssessor runs after
+      draft/gap evaluation for canonical_v1, using repo-grounding evidence strength, CoordinatorClarificationEnginePolicy thresholds,
+      clarification-turn budget, and critique follow-up state to choose ClarificationResolutionDecision before surfacing a question;
+      planningCycleUserVisibleFailure maps
       planningRoomCycleError through PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine and LLM error/skip lines through
       humanizePlanningCycleFailureFragment; planningOrchestratorRoundSummary and
       planningCycleProgressSummary branch on the same resolved planningUserInputRequired gate as workflow YAML (not ranked
@@ -409,10 +439,21 @@ assets:
       - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW
+  - id: ASSET-CLARIFICATION-ENGINE-ASSESSOR
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/ClarificationEngineAssessor.java
+    role: >-
+      Post-draft coordinator clarification assessor for canonical_v1 gaps: combines repo-grounding signals, engine-policy
+      thresholds, clarification-turn budget, and critique-follow-up state to choose ASK_USER vs ASSUME_AND_CONTINUE /
+      LOW_PRIORITY_DEFER / BLOCK_AS_UNIMPLEMENTABLE before a single question is surfaced
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
   - id: ASSET-PLANNING-COORDINATOR-ROLE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningCoordinatorRole.java
-    role: Architect / Auditor / Scribe coordinator pass enum with LLM prompt blocks for StructuredLlmArtifactUpsertPass
+    role: Arrietty coordinator pass enum with the consolidated LLM prompt block for StructuredLlmArtifactUpsertPass
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -422,7 +463,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/ConfigurablePassRunner.java
     role: >-
       Parses planningRolePassOrder from bind/state (JSON array or comma list) into ordered PlanningCoordinatorRole list;
-      defaults to architect, auditor, scribe
+      defaults to the single Arrietty pass and maps legacy architect/auditor/scribe tokens to that pass
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -456,7 +497,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/StructuredLlmArtifactUpsertPass.java
     role: >-
       Generic LLM JSON upsert pass over feature-plan artifacts; used by PlanningRolePassRunner; supplies OpenAiCallContext
-      per pass so OpenAiChatClient emits Discord progress and server logs for architect/auditor/scribe calls
+      per pass so OpenAiChatClient emits Discord progress and server logs for Arrietty-owned planning calls
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -689,8 +730,9 @@ assets:
     kind: config
     path: config/deploy-targets.yaml
     role: >-
-      Deploy targets list (targets with id, label, playbook relative to ansible root, optional compose file, workingDirectory,
-      composeServices allowlist, hostOpsExecutor direct or cursor_agent)
+      Deploy targets list (targets with id, label, optional playbook relative to ansible root when Ansible is used, optional
+      compose file, host workingDirectory for stack cwd, composeServices allowlist, hostOpsExecutor direct or cursor_agent); compose-only
+      entries omit playbook; shipped examples neo4j and wikijs under /opt/stacks paths
     requires:
       - REQ-CONFIG-001
       - REQ-GADGET-001
@@ -701,7 +743,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/devops/HostComposeOpsRunner.java
     role: >-
-      docker compose up/down/restart/ps or cursor agent non-interactive prompt for compose ops; streams output to Discord;
+      docker compose up/stop/restart/ps or cursor agent non-interactive prompt for compose ops; streams output to Discord;
+      direct executor uses manifest workingDirectory as ProcessBuilder directory; cursor_agent passes same path as --workspace;
       DEPLOY_HOST_OPS_DISABLED (GADGET_HOST_OPS_DISABLED alias) kill switch
     requires:
       - REQ-GADGET-001
@@ -1015,6 +1058,52 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/PrepPlanningRepoGroundingAction.java
+    role: >-
+      Workflow action prep_planning_repo_grounding — after ensure_repo_workspace, loads .vinekeepers/repo-grounding.parquet when present,
+      chunks the checkout, embeds only missing content hashes (OpenAI embeddings) into a single Qdrant collection with payload filter repo_ref + branch,
+      exports merged Parquet, and spreads planningRag* keys plus retrieval text; continues without RAG when config or services are unavailable;
+      RunLlmPlanningSynthesisAction may consume planningRagRetrievalText when planningRagAvailable
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-RAG-GROUNDING
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/rag/PlanningRepoGroundingService.java
+    role: >-
+      Planning repo RAG orchestration under workflow/planning/rag: PlanningRagConfig (env toggles and limits), QdrantPlanningClient (HTTP),
+      RepoGroundingParquetStore (.vinekeepers/repo-grounding.parquet load/export), RepoFileChunker, GitRepoBranchResolver (repo + branch scope for cache and Qdrant payload filter),
+      GroundingChunkRecord rows; embeds only missing content hashes via OpenAiChatClient.embedTexts; continues without RAG when disabled or deps invalid
+    requires:
+      - REQ-LUNA-001
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CLASSIFY-PLANNING-INGRESS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/ClassifyPlanningIngressAction.java
+    role: >-
+      Workflow action classify_planning_ingress — normalizes planningIngressMode for v2 graphs (SYNTHETIC_KICKOFF, USER_MESSAGE,
+      APPROVAL_INTERACTION, USER_INTERACTION, UNKNOWN) from explicit spreads, event kind, active capability, awaiting field, and
+      canonical intake stage so phases branch on intent instead of legacy step positions
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-SET-PLANNING-INTAKE-STAGE-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/SetPlanningIntakeStageAction.java
+    role: >-
+      Workflow action set_planning_intake_stage — persists PlanningIntakeStage on FeaturePlanState by contextId and spreads
+      canonicalPlanningIntakeStage for phase-owned v2 workflows
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/UpsertArtifactSectionDataAction.java
@@ -1042,7 +1131,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPromptFormatter.java
     role: >-
       Maps work profile labels and optional field promptHint to plain-English missing-field and discovery copy (avoids raw artifact paths in user text);
-      requiredFieldPrompt weaves label + repeatable index + hint (or a generic concrete-detail fallback when hint absent);
+      requiredFieldPrompt weaves label + repeatable index + hint (or a generic concrete-detail fallback when hint absent),
+      with clarification-safe wording for open_questions_block so the intake ask survives the quality gate;
       coordinator clarification orchestration lines stay actionable (what to answer next) and avoid meta completeness prompts when
       the contract calls for a single blocking fact; frames structured-input asks as explicit questions and complements PlanningUserFacingCopy for coordinator-facing
       critique/readiness labels and decision prompts
@@ -1103,7 +1193,7 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/MarkIntakeDiscoveryCompleteAction.java
     role: >-
-      Workflow action mark_intake_discovery_complete — spreads humanDiscoveryCompleted=true after Phase B discovery
+      Workflow action mark_intake_discovery_complete — advances canonicalPlanningIntakeStage to DRAFTING after Phase B discovery
       converges on the linear intake path when coordinator_intake_bootstrap did not run (e.g. planningIntakeThread branch);
       coordinator_intake_bootstrap sets the same spread on synthetic kickoff; gates run_plan_critique_and_readiness until set
     requires:
@@ -1118,7 +1208,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/CoordinatorIntakeBootstrapAction.java
     role: >-
       Workflow action coordinator_intake_bootstrap — idempotent discovery kickoff post to intake thread (fingerprinted body vs
-      FeaturePlanState), spreads humanDiscoveryCompleted, updates PlanningIntakeStage to DRAFTING on first successful post;
+      FeaturePlanState), spreads canonicalPlanningIntakeStage, updates PlanningIntakeStage to DRAFTING on first successful post;
       skips duplicate sends when fingerprint unchanged
     requires:
       - REQ-WORKFLOW-001
@@ -1144,11 +1234,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/BuildRolePlanningThreadMessagesAction.java
     role: >-
-      Workflow action build_role_planning_thread_messages — spreads architectThreadMessage, auditorThreadMessage,
-      scribeThreadMessage from FeaturePlanState artifacts for post_channel_message asRole steps; architect appends Decisions
-      as PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable when bullet lines parse to two or more rows; auditor orders
-      risk register (table when parseable), open questions (table when parseable), validation body, then a plain-language tracked-issues count;
-      scribe uses markdown tables for user stories and acceptance criteria when at least two bullet lines parse
+      Legacy helper action for role-labeled planning thread copy; production Arrietty planning now posts a consolidated
+      coordinator packet, but this helper remains available for compatibility with older workflows/tests
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1313,7 +1400,7 @@ assets:
       Rejects generic flesh-out, meta, completeness-only, and vague open-questions clarification copy so intake and coordinator paths
       ask one concrete blocking question tied to a required missing fact; exposes isInternalMechanismDetail and
       isSubstantiveOpenQuestionLine for filtering stack/parse noise and packet open-question lists; synthesizeFromGap avoids echoing
-      internal gap reason text; used on the intake blocking clarification path inside StructuredDiscoverySupport
+      internal gap reason text and uses plain-language required-field fallbacks instead of raw missing-field tokens; used on the intake blocking clarification path inside StructuredDiscoverySupport
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1392,7 +1479,7 @@ assets:
       planCritiqueFindingsJson, planCritiqueSummary (plain-language severity + field-area hints via
       PlanningUserFacingCopy; when repo evidence exists and the planning packet is already visible in-thread, appends a short pointer
       instead of repeating full repo grounding); adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
-      FeaturePlanState PlanningIntakeStage is GATHERING_CONTEXT and humanDiscoveryCompleted is not true (complements canonical
+      FeaturePlanState PlanningIntakeStage is GATHERING_CONTEXT (complements canonical
       intake stage with legacy spread); bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path;
       planningCritiqueAutoRevisionCount tracks NEEDS_REVISION-driven full replan attempts; after threshold spreads NEEDS_HUMAN_DECISION
       and persists PlanConfidence with the same status so auto critique→replan loops stop without silent storms
@@ -1409,7 +1496,7 @@ assets:
     role: >-
       OpenAI-compatible chat/completions HTTP client (java.net.http); env OPENAI_API_KEY, OPENAI_BASE_URL (preferred) or
       OPENAI_API_BASE_URL, OPENAI_PLANNING_MODEL, OPENAI_PLANNING_TIMEOUT_MS (planning calls) or OPENAI_HTTP_REQUEST_TIMEOUT_MS,
-      OPENAI_HTTP_CONNECT_TIMEOUT_MS; optional OpenAiPlanningProgressSink notifies before each HTTP call when
+      OPENAI_HTTP_CONNECT_TIMEOUT_MS; exposes embedTexts for batched /embeddings calls (planning RAG); optional OpenAiPlanningProgressSink notifies before each HTTP call when
       OpenAiCallContext.activitySummary is non-blank; planning calls pass call context from expansion, synthesis, role passes,
       and similar paths; logs per-call duration at INFO when context present; when OPENAI_LOG_PLANNING_BODIES is not false,
       logs truncated redacted system prompt, user payload, and assistant text (or failure hint) with max length from
@@ -1458,7 +1545,9 @@ assets:
     role: >-
       Workflow action spread_plan_workspace_signals — reads FeaturePlanState workspace linkage after ensure_repo_workspace;
       storeSpread repoWorkspaceReady, repoLocalPathPresent, repoWorkspaceStatusSummary, planningRepoEvidenceJson (workspace status,
-      local path flag, repo ref, optional access notes) for branching and templates
+      local path flag, repo ref, optional access notes, clarification repoGroundingScore, and when present in workflow state
+      planningRagEnabled/planningRagAvailable/planningRagSource/planningRagError/planningRagIndexedNewCount/planningRagChunkScanCount/planningRagSearchLatencyMs)
+      for branching and templates
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1674,7 +1763,7 @@ assets:
     role: >-
       Thin workflow-action facade; constructor requires non-null PlanningCyclePipeline (fail-fast); delegates run to
       pipeline.execute. execute_planning_room_cycle — iterative planning room: run_request_expansion_llm (optional) then
-      build_request_exploration, architect/auditor/scribe LLM passes (OpenAI-compatible), expand_planning_drafts +
+      build_request_exploration, a single Arrietty LLM planning pass (OpenAI-compatible), expand_planning_drafts +
       run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; PlanningQuestionRankingPolicy for defaults
       vs at most one clarification round;       storeSpread planningPhase (READY_FOR_REVIEW when review-ready, not launch approval),
       planningReviewReady/reviewReady, deliberationPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
@@ -1743,9 +1832,10 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/EvaluatePlanningApprovalGateAction.java
     role: >-
       Workflow action evaluate_planning_approval_gate — storeSpread planningReadyForApproval / planningApprovalReady / approvalReady
-      when packet posted version, depth, READY readiness, intake discovery complete (humanDiscoveryCompleted true OR
-      FeaturePlanState planningIntakeStage past GATHERING_CONTEXT), no pending clarification, and PlanningApprovalGateSupport
-      canonical checks pass; refreshes planningReviewReady/reviewReady (dual legacy signals) for posted packet view with human-readable gate reasons
+          when packet posted version, depth, READY readiness, intake discovery complete (PlanningIntakeStage beyond
+      GATHERING_CONTEXT and CLARIFYING, or FeaturePlanState.autonomousPlanningPassCompleted true), no pending clarification, and
+      PlanningApprovalGateSupport canonical checks pass; refreshes planningReviewReady/reviewReady (dual legacy signals) for posted
+      packet view with human-readable gate reasons
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1755,7 +1845,7 @@ assets:
   - id: ASSET-RUN-ARCHITECT-PLANNING-PASS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/RunArchitectPlanningPassAction.java
-    role: Thin workflow action run_architect_planning_pass — single PlanningRolePassRunner ARCHITECT LLM upsert pass
+    role: Backward-compatible alias to the consolidated Arrietty planning pass
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1765,7 +1855,7 @@ assets:
   - id: ASSET-RUN-AUDITOR-PLANNING-PASS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/RunAuditorPlanningPassAction.java
-    role: Thin workflow action run_auditor_planning_pass — AUDITOR role pass
+    role: Backward-compatible alias to the consolidated Arrietty planning pass
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1775,7 +1865,7 @@ assets:
   - id: ASSET-RUN-SCRIBE-PLANNING-PASS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/RunScribePlanningPassAction.java
-    role: Thin workflow action run_scribe_planning_pass — SCRIBE role pass
+    role: Backward-compatible alias to the consolidated Arrietty planning pass
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1981,11 +2071,11 @@ requirements:
           call_action step may set storeSpread true; when the invoked action returns a Map, ConfigurableWorkflowRunner
           merges entries into workflow state before advancing (StepResult.advanceSpread)
         - >-
-          Bootstrap registers workflow actions initialize_feature_plan_state, hydrate_planning_session, start_coordinator_planning,
-          ensure_repo_workspace, spread_plan_workspace_signals,
+          Bootstrap registers workflow actions initialize_feature_plan_state,           hydrate_planning_session, start_coordinator_planning,
+          ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
           derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
           planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
-          post_planning_progress_if_changed, merge_planning_clarification_choice, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
+          post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
           get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
           resolve_proposal_confirmation, synthesize_plan_drafts,           get_structured_discovery_gaps, build_discovery_agenda,
@@ -2032,7 +2122,7 @@ requirements:
           expand_planning_drafts replaces placeholder-heavy artifact fields with request- and repo-grounded drafts
         - >-
           spread_plan_workspace_signals spreads repoWorkspaceReady, repoLocalPathPresent, repoWorkspaceStatusSummary, and
-          planningRepoEvidenceJson from FeaturePlanState after ensure_repo_workspace
+          planningRepoEvidenceJson from FeaturePlanState after ensure_repo_workspace; planningRepoEvidenceJson merges selected planningRag* keys from workflow state when prep_planning_repo_grounding has run
         - >-
           execute_planning_room_cycle (PlanningCyclePipeline) spreads planningAutonomousFirstPassCompleted true when the cycle
           completes without planningRoomCycleError
@@ -2053,9 +2143,9 @@ requirements:
           counts as posted; with a null workflow map, spread keys without persisted packetPostedAt do not imply posted
         - >-
           run_plan_critique_and_readiness prepends a MUST_FIX intake finding when PlanningIntakeStage is GATHERING_CONTEXT and
-          humanDiscoveryCompleted is not true; PlanCritiqueSupport still maps structured discovery gaps into critique findings
+          PlanningIntakeStage remains GATHERING_CONTEXT; PlanCritiqueSupport still maps structured discovery gaps into critique findings
         - >-
-          evaluate_planning_approval_gate treats coordinator discovery as satisfied when humanDiscoveryCompleted is true or
+          evaluate_planning_approval_gate treats coordinator discovery as satisfied when canonical PlanningIntakeStage has advanced beyond
           planningIntakeStage on FeaturePlanState is not GATHERING_CONTEXT, alongside posted packet, depth, READY readiness,
           no pending clarification, and PlanningApprovalGateSupport.validateApproveAllowed
         - >-
@@ -2063,7 +2153,11 @@ requirements:
           evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator
         - >-
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
-          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely
+          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely; when planningRagAvailable is true in workflow state, includes planningRagRetrievalText in the synthesis prompt context
+        - >-
+          prep_planning_repo_grounding (PrepPlanningRepoGroundingAction + PlanningRepoGroundingService) runs after a materialized checkout path exists on FeaturePlanState;
+          loads .vinekeepers/repo-grounding.parquet when present before embedding; indexes only missing chunk hashes into Qdrant with payload scoped by repo ref and branch;
+          writes merged Parquet back; spreads planningRag* diagnostics and retrieval text; no-ops or degrades without failing the workflow when VINEKEEPERS_PLANNING_RAG is false or Qdrant/OpenAI/cache configuration is unusable
         - >-
           Planning OpenAI completions that supply OpenAiCallContext with a non-blank activitySummary notify
           OpenAiPlanningProgressSink before the HTTP request; Bootstrap wires OpenAiPlanningProgressPoster so enabled runs post
@@ -2097,8 +2191,8 @@ requirements:
           PlanningThreadPacketFormatter renders governance and multi-line bullets as markdown tables where applicable, soft-truncates
           long sections with an explicit display-length footnote, and splits oversized bodies into labeled Discord chunks
         - >-
-          build_role_planning_thread_messages uses the same table helper for architect decisions, auditor risks/open questions, and
-          scribe stories/acceptance when two or more bullet lines parse
+          build_role_planning_thread_messages remains available as a compatibility helper for legacy role-labeled packets,
+          though production Arrietty planning now posts a single consolidated coordinator packet
         - >-
           build_planning_thread_review_body emits concise "packet already above" copy when planningPacketPosted,
           planningPacketSkippedDuplicate, or planningPacketPostedVersion > 0; otherwise caps the full formatted packet for the spread
@@ -2142,6 +2236,8 @@ requirements:
         - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
         - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
         - ASSET-ENSURE-REPO-WORKSPACE-ACTION
+        - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
+        - ASSET-PLANNING-RAG-GROUNDING
         - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
@@ -2449,7 +2545,7 @@ requirements:
           preconditions: []
         - id: UNIT-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
           title: BuildRolePlanningThreadMessagesActionTest
-          intent: Verify architect/auditor/scribe thread copy includes markdown tables and section ordering from plan artifacts
+          intent: Verify the legacy role-thread helper still formats sectioned packet copy from plan artifacts
           testClass: com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesActionTest
           preconditions: []
         - id: UNIT-SYNTHESIZE-PLAN-DRAFTS-ACTION
@@ -2478,6 +2574,36 @@ requirements:
             Verify spread_plan_workspace_signals defaults when store or contextId missing and planningRepoEvidenceJson when
             workspace is materialized
           testClass: com.vinekeepers.workflow.actions.SpreadPlanWorkspaceSignalsActionTest
+          preconditions: []
+        - id: UNIT-PLANNING-RAG-CONFIG
+          title: PlanningRagConfigTest
+          intent: Verify planning RAG env toggles, Qdrant URL resolution, and graceful disable when configuration is incomplete
+          testClass: com.vinekeepers.workflow.planning.rag.PlanningRagConfigTest
+          preconditions: []
+        - id: UNIT-REPO-GROUNDING-PARQUET-STORE
+          title: RepoGroundingParquetStoreTest
+          intent: Verify Parquet cache read/write round-trip for repo grounding chunk records
+          testClass: com.vinekeepers.workflow.planning.rag.RepoGroundingParquetStoreTest
+          preconditions: []
+        - id: UNIT-REPO-FILE-CHUNKER
+          title: RepoFileChunkerTest
+          intent: Verify repository file chunking and content-hash stability for RAG indexing
+          testClass: com.vinekeepers.workflow.planning.rag.RepoFileChunkerTest
+          preconditions: []
+        - id: UNIT-GIT-REPO-BRANCH-RESOLVER
+          title: GitRepoBranchResolverTest
+          intent: Verify git branch resolution for repo+branch-scoped RAG cache and Qdrant payload filters
+          testClass: com.vinekeepers.workflow.planning.rag.GitRepoBranchResolverTest
+          preconditions: []
+        - id: UNIT-PLANNING-REPO-GROUNDING-SERVICE
+          title: PlanningRepoGroundingServiceTest
+          intent: Verify RAG prep spreads, degraded paths when workspace or deps missing, and successful index/search wiring with mocks
+          testClass: com.vinekeepers.workflow.planning.rag.PlanningRepoGroundingServiceTest
+          preconditions: []
+        - id: UNIT-PREP-PLANNING-REPO-GROUNDING-ACTION
+          title: PrepPlanningRepoGroundingActionTest
+          intent: Verify prep_planning_repo_grounding action guards (plan store, context, plan row, local path) delegate to service
+          testClass: com.vinekeepers.workflow.actions.PrepPlanningRepoGroundingActionTest
           preconditions: []
         - id: UNIT-OPENAI-CHAT-CLIENT
           title: OpenAiChatClientTest
@@ -2517,8 +2643,11 @@ requirements:
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; OPEN ledger items after upsert drive
       planningUserInputRequired; canonical_v1 profiles reconcile OPEN items from profile coordinatorClarification gaps before upsert;
-      coordinator clarification follows a strict contract (one concrete blocking question when a required fact is missing; no generic
-      meta/completeness prompts; open-question substance grounded in unresolved plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
+      post-draft ClarificationEngineAssessor applies engine policy (ask vs assume-and-continue vs defer vs block) using repo evidence,
+      turn budget, and critique context; when allowClarificationAfterCritique is enabled, critique can trigger another clarification
+      sweep without abandoning single-question specificity; coordinator clarification follows a strict contract (one concrete blocking
+      question when a required fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved
+      plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
     status: active
     priority: high
     type: functional
@@ -2552,17 +2681,33 @@ requirements:
           when user input is required, with generic/meta/completeness lines filtered; unresolved open-question lists in packets derive
           from FeaturePlanState (governance merge + artifacts), not ad-hoc LLM churn for the clarification slot; when no unresolved questions
           remain, packet depth and critique accept the ready-to-implement sentinel instead of requiring an editable draft list
+        - >-
+          For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
+          ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
+          CoordinatorClarificationEnginePolicy (maxClarificationTurns, repoEvidenceAskThreshold, allowAssumeAndContinue,
+          allowClarificationAfterCritique) plus repo-grounding signals on FeaturePlanState; surfaced questions still respect the
+          maxQuestions=1 coordinator ranking contract
+        - >-
+          Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
+          informs clarification assessment and ranking so strong on-repo support can reduce unnecessary user asks per policy thresholds
+        - >-
+          Launch approval readiness treats intake as satisfied when FeaturePlanState.autonomousPlanningPassCompleted is true or when
+          PlanningIntakeStage has left GATHERING_CONTEXT and CLARIFYING, reducing sole reliance on a separate human “discovery complete” marker
+        - >-
+          classify_planning_ingress and set_planning_intake_stage actions are registered for v2 YAML to normalize ingress mode and
+          persist canonical intake stage transitions on FeaturePlanState
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
         - >-
-          Production Arrietty uses arrietty_room_v2 (workflowSchema v2) whose planning phase pipeline runs hydrate_planning_session,
-          ensure_repo_workspace, spread_plan_workspace_signals, then linear_workflow_ref to arrietty_room_legacy (full linear coordinator
-          graph); v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted, planningRepoEvidenceJson,
-          canonicalPlanningIntakeStage among user-facing keys; rollback is switching workflowRef back to arrietty_room_legacy with type configured
+          Production Arrietty uses arrietty_room_v2 (workflowSchema v2) whose explicit lifecycle phases own hydrate_planning_session,
+          ensure_repo_workspace, optional prep_planning_repo_grounding (Qdrant + Parquet RAG when configured in ingress YAML),
+          spread_plan_workspace_signals, structured discovery, clarification, critique, approval, and launch
+          inside the v2 graph; v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted,
+          planningRepoEvidenceJson, canonicalPlanningIntakeStage, and user-facing review / launch copy keys
         - >-
-          arrietty_room_legacy branch next targets must not jump to terminal done steps (launch/done inserts shift indices);
-          coordinatorKickoff routes to stable index 73 coordinator_intake_bootstrap then branch to main planning; draft-blocked
-          recovery runs another planning round (not kickoff loop); clarification uses plain-text path only; ArriettyRoomWorkflowYamlTest
-          guards branch-to-done and coordinator entry anchors (73=bootstrap, 74=branch; execute_planning_room_cycle at step index 26)
+          arrietty_room_v2 uses named phases plus embedded configurable_steps segments; configurable_steps persist isolated segment
+          cursors, kickoff routes through planning_ingress/planning_kickoff, draft-blocked recovery loops through planning_redraft_notice,
+          and clarification uses the explicit planning_clarification phase; ArriettyV2WorkflowYamlTest guards phase ownership and bans
+          linear_workflow_ref in production config
         - >-
           When coordinator planning reaches the ready-to-move-forward path, user-facing progress copy says the next long
           step is posting the planning packet and running readiness checks, and post_planning_packet_thread emits a brief
@@ -2608,6 +2753,10 @@ requirements:
         - ASSET-WORKFLOW-TEMPLATE-INTERPOLATOR
         - ASSET-PLANNING-CYCLE-PIPELINE
         - ASSET-PLANNING-GAP-EVALUATOR
+        - ASSET-COORDINATOR-CLARIFICATION-GAP-EVALUATOR
+        - ASSET-CLARIFICATION-ENGINE-ASSESSOR
+        - ASSET-CLASSIFY-PLANNING-INGRESS-ACTION
+        - ASSET-SET-PLANNING-INTAKE-STAGE-ACTION
         - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
         - ASSET-GENERIC-READINESS-EVALUATOR
         - ASSET-VISIBLE-DELTA-TRACKER
@@ -2719,6 +2868,18 @@ requirements:
             Verify PlanningCyclePipeline canonical_v1 clarification gating, ledger stray handling, and strict blocking-question contract helpers
           testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineCanonicalClarificationTest
           preconditions: []
+        - id: UNIT-CLARIFICATION-ENGINE-ASSESSOR
+          title: ClarificationEngineAssessorTest
+          intent: >-
+            Verify post-draft clarification assessment: policy thresholds, repo-evidence bias, turn budget, critique re-entry, and
+            ClarificationResolutionDecision outcomes
+          testClass: com.vinekeepers.workflow.planning.ClarificationEngineAssessorTest
+          preconditions: []
+        - id: UNIT-COORDINATOR-CLARIFICATION-GAP-EVALUATOR
+          title: CoordinatorClarificationGapEvaluatorTest
+          intent: Verify canonical_v1 gap evaluation, merge satisfaction, and quality-gate suppression of generic gap templates
+          testClass: com.vinekeepers.workflow.planning.CoordinatorClarificationGapEvaluatorTest
+          preconditions: []
         - id: UNIT-PLANNING-THREAD-PACKET-FORMATTER-V2
           title: PlanningThreadPacketFormatterTest
           intent: Verify planning packet tables, truncation footnote, Discord chunk labels, and open-question presentation
@@ -2774,7 +2935,7 @@ requirements:
         - bots.yaml specifies workflow type configured and workflowRef luna_cursor for luna
         - >-
           Arrietty template bot (id arrietty) with workflowRef arrietty_room_v2 and handlesOwnedSpaces true for lifecycle
-          room; arrietty_room_legacy linear workflow may include create_thread step with storeIn deliveryChannelId and optional branch
+          room; configured workflows may include create_thread step with storeIn deliveryChannelId and optional branch
           on THREAD_CREATE_FAILED; create_thread uses lifecycle owner gateway when channel has context; after success
           setDeliveryTargetId updates store when contextId present; LifecycleContext.withDeliveryChannelId and
           LifecycleContextStore.setDeliveryTargetId (ignores null/blank/sentinel); done step may use main-room redirect
@@ -2827,7 +2988,7 @@ requirements:
           coordinator workflow runs once in the thread without a user wake-up message, and completes in the main channel; Phase B/C
           (generate_planning_proposals, apply_auto_planning_proposals, confirm loop via build_proposal_confirm_prompt and
           resolve_proposal_confirmation, guided discovery, critique/readiness, approval choices, role posts,
-          launch_cursor_run; synthesize_plan_drafts remains for legacy YAML) run in arrietty_room_legacy (via v2 delegate) from that kickoff and when the user messages the intake thread: hydrate_planning_session
+          launch_cursor_run; synthesize_plan_drafts remains as a legacy helper) run in arrietty_room_v2 from that kickoff and when the user messages the intake thread: hydrate_planning_session
           (storeSpread) branches on planningIntakeThread; thread path uses session key bot:arrietty:conv:threadId with
           conversationMode conversational so the workflow does not reset after terminal launch; room channel path keeps
           the legacy capture_field room command branch
@@ -2840,9 +3001,9 @@ requirements:
           CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true; confirm cancel branches to cancelled done step; channel create failure
           branches to could-not-create-room done step
         - >-
-          arrietty_room_legacy runs ensure_repo_workspace and spread_plan_workspace_signals immediately after hydrate_planning_session;
+          arrietty_room_v2 runs ensure_repo_workspace, optional prep_planning_repo_grounding when declared in ingress YAML, and spread_plan_workspace_signals immediately after hydrate_planning_session;
           execute_planning_room_cycle runs run_request_expansion_llm (optional) then build_request_exploration; optional
-          run_llm_planning_synthesis when OPENAI_API_KEY is set; derive_plan_governance and evaluate_planning_packet_depth run before post_planning_packet_thread in YAML
+          run_llm_planning_synthesis when OPENAI_API_KEY is set (may consume planningRagRetrievalText when planningRagAvailable); derive_plan_governance and evaluate_planning_packet_depth run before post_planning_packet_thread in YAML
       examples: []
     traceability:
       assets:
@@ -2888,6 +3049,8 @@ requirements:
         - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
         - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
         - ASSET-ENSURE-REPO-WORKSPACE-ACTION
+        - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
+        - ASSET-PLANNING-RAG-GROUNDING
         - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
         - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
@@ -2944,9 +3107,9 @@ requirements:
           testMethod: buildRouterParsesDiscordMentionRouting
           preconditions: []
         - id: UNIT-ARRIETTY-ROOM-WORKFLOW-YAML
-          title: ArriettyRoomWorkflowYamlTest
-          intent: Verify arrietty_room_legacy branch indices and coordinator entry steps in config/bots.yaml
-          testClass: com.vinekeepers.config.ArriettyRoomWorkflowYamlTest
+          title: ArriettyV2WorkflowYamlTest
+          intent: Verify arrietty_room_v2 is the sole production workflow owner and that production config bans linear_workflow_ref delegation
+          testClass: com.vinekeepers.config.ArriettyV2WorkflowYamlTest
           preconditions: []
         - id: UNIT-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
           title: CoordinatorIntakeBootstrapActionTest
@@ -3233,11 +3396,12 @@ requirements:
     title: DevOps deploy — Discord menu, Ansible and Docker Compose, thread progress
     statement: >-
       Operator bot (e.g. id gadget) with Discord token env GADGET_DISCORD_TOKEN; routing uses discordMention and discordChannels
-      allowlist (ops channel id); workflow devops_deploy uses extract_event for channelId, main menu (Ansible deploy vs compose up/stop/ps or Cancel),
+      allowlist (ops channel id); workflow devops_deploy uses extract_event for channelId, main menu (Ansible deploy vs compose up/stop/restart/ps or Cancel),
       choiceProvider deployTargets from config/deploy-targets.yaml, branch choices main/develop/other with resolve_deploy_branch,
       create_thread for progress thread (thread name deploy-progress), start_ansible_deploy to run ansible-playbook asynchronously
       and run_deploy_compose for docker compose or optional cursor agent executor; OutboundDeliveryRouter.sendAs workflow bot id from state;
-      progress falls back to parent channel when THREAD_CREATE_FAILED
+      progress falls back to parent channel when THREAD_CREATE_FAILED; compose-only targets may omit playbook and use host
+      workingDirectory paths (e.g. /opt/stacks/neo4j, /opt/stacks/wikijs) so docker compose resolves the stack file on the deploy host
     status: active
     priority: medium
     type: functional
@@ -3259,8 +3423,14 @@ requirements:
           AnsiblePlaybookDeployRunner invokes ansible-playbook with -e project_id, branch, gadget_project, gadget_branch, and manifest
           extraVars; respects DEPLOY_ANSIBLE_DISABLED/GADGET_ANSIBLE_DISABLED for dry run; posts via sendAs workflow bot id from state
         - >-
-          HostComposeOpsRunner runs allowlisted docker compose operations per target manifest; DEPLOY_HOST_OPS_DISABLED disables host ops;
-          optional hostOpsExecutor cursor_agent uses Cursor Agent CLI with non-interactive flags
+          HostComposeOpsRunner runs allowlisted docker compose up/stop/restart/ps per target manifest; uses compose workingDirectory as
+          host cwd for ProcessBuilder (direct) or as Cursor agent --workspace (cursor_agent); DEPLOY_HOST_OPS_DISABLED disables host ops
+        - >-
+          config/bots.yaml workflows.devops_deploy main menu includes compose_restart; branch step next indices reference valid step
+          indices (DevopsDeployWorkflowYamlTest)
+        - >-
+          Shipped config/deploy-targets.yaml includes compose-only neo4j and wikijs targets with host stack workingDirectory and
+          allowlisted services
         - >-
           ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies
           ansible tree, sets GADGET_ANSIBLE_ROOT / DEPLOY_ANSIBLE_ROOT, installs ansible via apt on Ubuntu Jammy runtime (not Alpine pip)
@@ -3290,7 +3460,7 @@ requirements:
           preconditions: []
         - id: UNIT-GADGET-PROJECT-REGISTRY
           title: DeployTargetRegistryTest
-          intent: Verify YAML load and findById for deploy targets including compose fields
+          intent: Verify YAML load and findById including compose fields; shipped manifest neo4j/wikijs host stack paths
           testClass: com.vinekeepers.devops.DeployTargetRegistryTest
           preconditions: []
         - id: UNIT-START-GADGET-DEPLOY
@@ -3316,8 +3486,13 @@ requirements:
           preconditions: []
         - id: UNIT-HOST-COMPOSE-OPS-RUNNER
           title: HostComposeOpsRunnerTest
-          intent: Verify argv and prompt building for compose and cursor agent paths without invoking docker
+          intent: Verify docker compose argv for up/stop/restart/ps and cursor prompt building without invoking docker
           testClass: com.vinekeepers.devops.HostComposeOpsRunnerTest
+          preconditions: []
+        - id: UNIT-DEVOPS-DEPLOY-WORKFLOW-YAML
+          title: DevopsDeployWorkflowYamlTest
+          intent: Guard devops_deploy YAML branch next indices; main menu exposes compose_restart
+          testClass: com.vinekeepers.config.DevopsDeployWorkflowYamlTest
           preconditions: []
         - id: UNIT-DEPLOY-COMPOSE-SERVICES-CHOICE
           title: DeployComposeServicesChoiceProviderTest
@@ -3408,6 +3583,10 @@ features:
       - ASSET-PLANNING-RUN-EXPANSION-PHASE-ACTION
       - ASSET-PLANNING-RUN-INNER-ROUND-ACTION
       - ASSET-PLANNING-FINALIZE-PLANNING-CYCLE-ACTION
+      - ASSET-CLASSIFY-PLANNING-INGRESS-ACTION
+      - ASSET-SET-PLANNING-INTAKE-STAGE-ACTION
+      - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
+      - ASSET-PLANNING-RAG-GROUNDING
       - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
       - ASSET-GENERIC-READINESS-EVALUATOR
       - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
@@ -3466,6 +3645,8 @@ features:
       - ASSET-INITIALIZE-FEATURE-ROOM-STATE-ACTION
       - ASSET-INITIALIZE-FEATURE-PLAN-STATE-ACTION
       - ASSET-ENSURE-REPO-WORKSPACE-ACTION
+      - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
+      - ASSET-PLANNING-RAG-GROUNDING
       - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
       - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
       - ASSET-PLANNING-USER-FACING-COPY
@@ -3499,8 +3680,9 @@ features:
     doc_path: features/domain/workflow/devops-deploy.md
     summary: >-
       Operator bot offers a deploy menu in an allowlisted Discord channel, gathers deploy target and branch for Ansible,
-      optional Docker Compose up/stop/ps with allowlisted services, opens a status thread, and runs host operations with
-      progress posts as the workflow bot.
+      optional Docker Compose up/stop/restart/ps with allowlisted services (including compose_restart on the main menu), opens a
+      status thread, and runs host operations with progress posts as the workflow bot; shipped deploy-targets include compose-only
+      neo4j and wikijs stack examples with host workingDirectory wiring.
     requirement_ids:
       - REQ-GADGET-001
     asset_ids:

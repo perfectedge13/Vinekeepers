@@ -21,10 +21,7 @@ class DiscordOwnedSpacePredicateTest {
         FeatureRoomStateStore rooms = new FeatureRoomStateStore();
         String threadId = "thread-99";
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "r2", "B", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "r3", "C", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "r4", "D", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true));
         FeatureRoomState state = new FeatureRoomState(
                 "ctx-1", "feat-1", "slug", "room-1", threadId, "r/r", "req", "INTAKE_READY",
                 participants, "u1", Instant.now());
@@ -37,17 +34,14 @@ class DiscordOwnedSpacePredicateTest {
     }
 
     @Test
-    void architectNotCoordinator_stillAllowedInFeatureRoom() {
+    void nonParticipantBot_isNotAllowedInFeatureRoom() {
         FeatureRoomStateStore rooms = new FeatureRoomStateStore();
         List<RoomParticipant> participants = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "r2", "B", false),
-                new RoomParticipant(PlanningRole.AUDITOR, "auditor", "r3", "C", false),
-                new RoomParticipant(PlanningRole.SCRIBE, "scribe", "r4", "D", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true));
         rooms.put(new FeatureRoomState(
                 "ctx", "f", "s", "room", "th", "r", "x", "S", participants, "u", Instant.now()));
 
-        assertTrue(new DiscordOwnedSpacePredicate(rooms, null, "architect").allowsChannel("th"));
+        assertTrue(new DiscordOwnedSpacePredicate(rooms, null, "arrietty").allowsChannel("th"));
         assertFalse(new DiscordOwnedSpacePredicate(rooms, null, "stranger").allowsChannel("th"));
     }
 

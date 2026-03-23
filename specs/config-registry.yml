@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T23:50:00Z"
+  updated_utc: "2026-03-23T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -55,13 +55,13 @@ assets:
       preferred identity shape identities.discord.tokenEnvKey, handlesOwnedSpaces, and optional identities.discord.ingress (messages, interactions);
       legacy top-level discordTokenEnvKey/handlesOwnedSpaces deprecated but still accepted; defaultDiscordTokenEnvKey at root is
       retained transitional; lifecycleBotName in step bind; Arrietty production workflowRef arrietty_room_v2 runs hydrate_planning_session,
-      ensure_repo_workspace, spread_plan_workspace_signals in the v2 planning phase before linear_workflow_ref arrietty_room_legacy;
+      ensure_repo_workspace, optional prep_planning_repo_grounding (legacy_action) for Qdrant/Parquet planning RAG, spread_plan_workspace_signals, and the named planning lifecycle phases directly in the v2 graph;
       v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted, planningRepoEvidenceJson, canonicalPlanningIntakeStage;
       create_thread storeIn deliveryChannelId; capture_field trimAndLower;       done step e.g. "Launching now. See <#{{channelId}}>.";
-      optional workflow steps provision_room_participants and initialize_feature_room_state for multi-bot feature room;
-      four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys;
-      arrietty_room_legacy launch success path ends with one post_channel_message plus done (no redundant duplicate terminal pair);
-      coordinator posts in arrietty_room_legacy use refreshed copy (workspace kickoff, draft-blocked with {{planningRoomCycleErrorUserMessage}}
+      optional workflow steps provision_room_participants and initialize_feature_room_state for Arrietty-owned feature rooms;
+      feature-room planning uses Arrietty as the sole room participant/coordinator with sessionKeyStrategy thread for per-thread session keys;
+      arrietty_room_v2 launch success path ends with one post_channel_message plus done (no redundant duplicate terminal pair);
+      coordinator posts in arrietty_room_v2 use refreshed copy (workspace kickoff, draft-blocked with {{planningRoomCycleErrorUserMessage}}
       for humanized cycle errors plus depth reason, pre-launch checklist vs full packet framing, lifecycle launch line);
       operator DevOps bot workflowRef devops_deploy and routing discordChannels for ops channel id at top of file)
     requires: [REQ-CONFIG-001, REQ-LUNA-001, REQ-GADGET-001]
@@ -94,8 +94,15 @@ assets:
     role: >-
       Load work-profiles.yaml into WorkProfileRegistry; parses profile readiness.anyOfGroups, ReadinessPathRule rows,
       packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText, and field-level minWords,
-      maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks
+      maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks; parses coordinatorClarification.mode/gaps plus optional
+      coordinatorClarification.engine knobs (maxClarificationTurns, repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique)
     requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
+  - id: ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
+    kind: source
+    path: src/main/java/com/vinekeepers/profile/CoordinatorClarificationEnginePolicy.java
+    role: Typed defaults and YAML-backed policy for post-draft clarification budgets, repo-evidence ask threshold, assume/defer, and critique re-entry
+    requires: [REQ-CONFIG-001, REQ-WORKFLOW-002]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-READINESS-PATH-RULE
     kind: source
@@ -133,10 +140,10 @@ requirements:
         - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces, optional ingress) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
         - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId, target, targetChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
-        - Four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread workflow session keys
+        - Feature-room planning uses Arrietty as the sole room participant/coordinator with sessionKeyStrategy thread for per-thread workflow session keys
         - >-
-          Workflow map arrietty_room_v2 declares workflowSchema v2 with a planning phase pipeline (hydrate_planning_session,
-          ensure_repo_workspace, spread_plan_workspace_signals) before cap_linear_room delegates to arrietty_room_legacy
+          Workflow map arrietty_room_v2 declares workflowSchema v2 with explicit ingress, drafting, clarification, packet, critique,
+          approval, and launch phases; no production capability delegates to a sibling legacy workflow
         - Optional config/work-profiles.yaml defines work profiles (SnakeYAML); WorkProfileLoader loads profiles into WorkProfileRegistry for Bootstrap and planning actions
         - >-
           Work profiles may declare readiness.anyOfGroups and per-field richness keys (minWords, readinessChecks, echo overlap);
@@ -146,12 +153,17 @@ requirements:
           operators see concrete guidance instead of only internal labels
         - >-
           Work profile coordinatorClarification (canonical_v1 gap rules and mode) is the config contract for which missing facts
-          block Arrietty planning; runtime behavior pairs it with ledger reconciliation and strict single-question, non-meta clarification UX;
-          gap questionTemplate values that read as generic meta or completeness prompts are ignored at evaluation time
+          block Arrietty planning; optional coordinatorClarification.engine supplies clarification turn budget, repo-evidence ask threshold,
+          assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with ClarificationEngineAssessor, ledger reconciliation,
+          and strict single-question, non-meta clarification UX; gap questionTemplate values that read as generic meta or completeness prompts
+          are ignored at evaluation time
         - >-
-          bots.yaml arrietty_room_legacy orchestrator templates interpolate planningRoomCycleErrorUserMessage (plain-language cycle
+          bots.yaml arrietty_room_v2 orchestrator templates interpolate planningRoomCycleErrorUserMessage (plain-language cycle
           error line) alongside planning depth fields in the draft-blocked path, and keep pre-launch review copy scoped as a short
           checklist when the full planning packet is already in-thread
+        - >-
+          arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace
+          to enable Parquet-backed embedding cache and Qdrant retrieval (planningRag* workflow spreads) without blocking the graph when RAG is disabled or misconfigured
       examples: []
     traceability:
       assets:
@@ -161,6 +173,7 @@ requirements:
         - ASSET-BOT-DEFINITION
         - ASSET-WORK-PROFILES-YAML
         - ASSET-WORK-PROFILE-LOADER
+        - ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
         - ASSET-READINESS-PATH-RULE
         - ASSET-READINESS-ANY-OF-GROUP
       symbols: []
@@ -211,6 +224,7 @@ features:
       - ASSET-BOT-DEFINITION
       - ASSET-WORK-PROFILES-YAML
       - ASSET-WORK-PROFILE-LOADER
+      - ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
       - ASSET-READINESS-PATH-RULE
       - ASSET-READINESS-ANY-OF-GROUP
     status: active

@@ -115,51 +115,45 @@ class PostChannelMessageActionTest {
     void runWithAsRole_usesOutboundDeliveryRouterSendAsRole() {
         com.vinekeepers.state.planning.FeatureRoomStateStore featureStore = new com.vinekeepers.state.planning.FeatureRoomStateStore();
         java.util.List<com.vinekeepers.state.planning.RoomParticipant> participants = java.util.List.of(
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         com.vinekeepers.state.planning.FeatureRoomState roomState = new com.vinekeepers.state.planning.FeatureRoomState(
                 "ctx-1", null, null, "room-ch-1", null, null, null, "INTAKE_READY",
                 participants, null, null);
         featureStore.put(roomState);
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), featureStore);
         StringBuilder sent = new StringBuilder();
-        router.registerSender("scribe", (channelId, messageId, content) ->
+        router.registerSender("arrietty", (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content), null);
         router.setDefaultSender((ch, msg, content) -> sent.append("default"));
         PostChannelMessageAction action = new PostChannelMessageAction(router);
 
         Object result = action.run(null,
-                Map.of("channelId", "room-ch-1", "content", "Scribe summary", "asRole", "SCRIBE"),
+                Map.of("channelId", "room-ch-1", "content", "Coordinator summary", "asRole", "ORCHESTRATOR"),
                 Map.of());
 
         assertEquals("OK", result);
-        assertEquals("room-ch-1|Scribe summary", sent.toString());
+        assertEquals("room-ch-1|Coordinator summary", sent.toString());
     }
 
     @Test
     void runWithAsRoleFromBind_overridesState() {
         com.vinekeepers.state.planning.FeatureRoomStateStore featureStore = new com.vinekeepers.state.planning.FeatureRoomStateStore();
         java.util.List<com.vinekeepers.state.planning.RoomParticipant> participants = java.util.List.of(
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true),
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ARCHITECT, "architect", "i-a", "Architect", false),
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.AUDITOR, "auditor", "i-u", "Auditor", false),
-                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.SCRIBE, "scribe", "i-s", "Scribe", false));
+                new com.vinekeepers.state.planning.RoomParticipant(com.vinekeepers.state.planning.PlanningRole.ORCHESTRATOR, "arrietty", "i-o", "Arrietty", true));
         com.vinekeepers.state.planning.FeatureRoomState roomState = new com.vinekeepers.state.planning.FeatureRoomState(
                 "ctx-1", null, null, "room-ch-1", null, null, null, "INTAKE_READY",
                 participants, null, null);
         featureStore.put(roomState);
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore(), featureStore);
         StringBuilder sent = new StringBuilder();
-        router.registerSender("auditor", (channelId, messageId, content) ->
+        router.registerSender("arrietty", (channelId, messageId, content) ->
                 sent.append(channelId).append("|").append(content), null);
         router.setDefaultSender((ch, msg, content) -> sent.append("default"));
         PostChannelMessageAction action = new PostChannelMessageAction(router);
 
         action.run(null,
                 Map.of("channelId", "room-ch-1", "content", "Audit", "asRole", "ORCHESTRATOR"),
-                Map.of("asRole", "AUDITOR"));
+                Map.of("asRole", "ORCHESTRATOR"));
 
         assertEquals("room-ch-1|Audit", sent.toString());
     }

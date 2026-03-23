@@ -10,24 +10,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Workflow action: provision the four feature-room participants (Orchestrator reuses state.instanceId
- * from prior provision_bot_instance when valid, or the sole existing Arrietty runtime instance for the channel;
- * provisions architect, auditor, scribe). Returns List&lt;Map&lt;String,Object&gt;&gt;
- * for storeIn: featureRoomParticipants. Each entry has role, configuredBotId, runtimeBotInstanceId, displayName,
- * primaryCoordinator. Also stores RuntimeBotInstance in StateStore under bot_instance:{runtimeBotInstanceId}.
+ * Workflow action: provision the feature-room coordinator participant.
+ *
+ * <p>Arrietty reuses {@code state.instanceId} from a prior {@code provision_bot_instance} when valid, or the sole
+ * existing Arrietty runtime instance for the channel. Returns a one-entry {@code featureRoomParticipants} list with
+ * role, configuredBotId, runtimeBotInstanceId, displayName, and primaryCoordinator.
  */
 public final class ProvisionRoomParticipantsAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final String PREFIX = "bot_instance:";
 
     private static final String ORCHESTRATOR_BOT_ID = "arrietty";
-    private static final String ARCHITECT_BOT_ID = "architect";
-    private static final String AUDITOR_BOT_ID = "auditor";
-    private static final String SCRIBE_BOT_ID = "scribe";
 
     private final StateStore stateStore;
 
@@ -68,15 +64,6 @@ public final class ProvisionRoomParticipantsAction implements com.vinekeepers.wo
         Map<String, Object> orch = entry(PlanningRole.ORCHESTRATOR.name(), ORCHESTRATOR_BOT_ID, orchestratorInstanceId, "Arrietty", true);
         participants.add(orch);
 
-        for (String botId : new String[]{ARCHITECT_BOT_ID, AUDITOR_BOT_ID, SCRIBE_BOT_ID}) {
-            String displayName = displayNameFor(botId);
-            String instanceId = botId + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-            RuntimeBotInstance instance = new RuntimeBotInstance(instanceId, botId, displayName, channelId);
-            stateStore.put(PREFIX + instanceId, instance);
-            PlanningRole role = roleFor(botId);
-            participants.add(entry(role.name(), botId, instanceId, displayName, false));
-        }
-
         return participants;
     }
 
@@ -116,20 +103,6 @@ public final class ProvisionRoomParticipantsAction implements com.vinekeepers.wo
             return true;
         }
         return channelId.equals(inst.getChannelId());
-    }
-
-    private static String displayNameFor(String botId) {
-        if (ARCHITECT_BOT_ID.equals(botId)) return "Architect";
-        if (AUDITOR_BOT_ID.equals(botId)) return "Auditor";
-        if (SCRIBE_BOT_ID.equals(botId)) return "Scribe";
-        return botId;
-    }
-
-    private static PlanningRole roleFor(String botId) {
-        if (ARCHITECT_BOT_ID.equals(botId)) return PlanningRole.ARCHITECT;
-        if (AUDITOR_BOT_ID.equals(botId)) return PlanningRole.AUDITOR;
-        if (SCRIBE_BOT_ID.equals(botId)) return PlanningRole.SCRIBE;
-        return PlanningRole.ORCHESTRATOR;
     }
 
     private static Map<String, Object> entry(String role, String configuredBotId, String runtimeBotInstanceId, String displayName, boolean primaryCoordinator) {

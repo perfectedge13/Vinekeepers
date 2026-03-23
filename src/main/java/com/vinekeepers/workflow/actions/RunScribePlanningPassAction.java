@@ -8,7 +8,7 @@ import com.vinekeepers.workflow.planning.PlanningCoordinatorRole;
 
 import java.util.Map;
 
-/** Thin wrapper: Scribe / Nyx pass. */
+/** Backward-compatible alias for the consolidated Arrietty planning pass. */
 public final class RunScribePlanningPassAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private final OpenAiChatClient client;
@@ -25,6 +25,6 @@ public final class RunScribePlanningPassAction implements com.vinekeepers.workfl
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
         return RunArchitectPlanningPassAction.runRole(
-                PlanningCoordinatorRole.SCRIBE, client, planStore, profiles, event, state, bind);
+                PlanningCoordinatorRole.ARRIETTY, client, planStore, profiles, event, state, bind);
     }
 }

@@ -34,7 +34,8 @@ public final class PlanGovernanceDeriver {
         if (plan == null) {
             return null;
         }
-        List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile);
+        boolean workspaceOnly = plan != null && !plan.isAutonomousPlanningPassCompleted();
+        List<DiscoveryGap> gaps = StructuredDiscoverySupport.collectGaps(plan, profile, workspaceOnly);
         List<PlanIssue> mergedIssues = mergeIssuesFromGaps(plan, gaps);
         List<PlanRisk> mergedRisks = mergeRisks(plan);
         List<PlanDecision> mergedDecisions = mergeDecisions(plan);

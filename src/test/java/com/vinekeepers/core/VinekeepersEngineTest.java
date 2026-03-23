@@ -843,8 +843,7 @@ class VinekeepersEngineTest {
     void featureRoomIntakeThreadInteraction_invokesCoordinatorWorkflowOnly() {
         FeatureRoomStateStore frs = new FeatureRoomStateStore();
         List<RoomParticipant> parts = List.of(
-                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true),
-                new RoomParticipant(PlanningRole.ARCHITECT, "architect", "r2", "B", false));
+                new RoomParticipant(PlanningRole.ORCHESTRATOR, "arrietty", "r1", "A", true));
         frs.put(new FeatureRoomState(
                 "c1", "f1", null, "room-ch", "thread-int-eng", null, null, "INTAKE_READY",
                 parts, null, Instant.now()));
@@ -852,8 +851,7 @@ class VinekeepersEngineTest {
         engine = new VinekeepersEngine(router, stateStore, auditLogs::add);
 
         AtomicInteger arriettyRuns = new AtomicInteger();
-        AtomicInteger architectRuns = new AtomicInteger();
-        for (String id : List.of("arrietty", "architect")) {
+        for (String id : List.of("arrietty")) {
             BotDefinition b = new BotDefinition(
                     id,
                     new Persona(id, ""),
@@ -867,12 +865,7 @@ class VinekeepersEngineTest {
             arriettyRuns.incrementAndGet();
             return WorkflowRunResult.continueWithoutReply();
         });
-        engine.registerRunner("architect", (e, s, bid) -> {
-            architectRuns.incrementAndGet();
-            return WorkflowRunResult.continueWithoutReply();
-        });
         router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "arrietty"));
-        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "architect"));
 
         engine.onEvent(new Event("discord:g:1", "interaction", Map.of(
                 "channelId", "thread-int-eng",
@@ -882,6 +875,5 @@ class VinekeepersEngineTest {
                 "token", "t1")));
 
         assertEquals(1, arriettyRuns.get());
-        assertEquals(0, architectRuns.get());
     }
 }

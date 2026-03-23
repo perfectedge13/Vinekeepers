@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-18T12:00:00Z"
+  updated_utc: "2026-03-23T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -76,7 +76,8 @@ assets:
       FeatureRoomStateStore, FeaturePlanStateStore, RepoWorkspaceStateStore, RepoWorkspaceService and pass room store to
       Router and OutboundDeliveryRouter; register engine reply sender, sink, and ReplyTargetResolver by connector id;
       register workflow actions provision_room_participants, initialize_feature_room_state, initialize_feature_plan_state,
-      hydrate_planning_session, synthesize_plan_drafts, ensure_repo_workspace, upsert_artifact_section_data,
+      hydrate_planning_session, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
+      upsert_artifact_section_data,
       get_profile_missing_fields, structured discovery and plan critique/approval actions; action and sink registration
       stay in Bootstrap
     requires: [REQ-CORE-002, REQ-TOOLS-001, REQ-LUNA-001]
@@ -199,6 +200,9 @@ requirements:
         - Bootstrap wires engine, config loader, ConnectorRegistry; creates Discord adapter with DiscordConnectorConfig; calls adapter.registerBots(bots, context); Bootstrap registers engine reply sender and sink by connector id (e.g. engine.setReplySender("discord", outboundDeliveryRouter), registerSink("discord", DiscordAppReplySink)); engine/sink/cursor/action registration remain in Bootstrap
         - Bootstrap creates WorkflowRunner per bot via WorkflowRunnerFactory and registerRunner(botId, runner)
         - Bootstrap registers shared tools and passes ToolRunner into configured workflows
+        - >-
+          Bootstrap registers prep_planning_repo_grounding (PrepPlanningRepoGroundingAction with OpenAiChatClient and FeaturePlanStateStore)
+          for optional Qdrant-backed planning RAG after repo workspace materialization
       examples: []
     traceability:
       assets: [ASSET-APP, ASSET-BOOTSTRAP, ASSET-PACKAGE-MARKER]

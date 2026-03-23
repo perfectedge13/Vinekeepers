@@ -10,6 +10,7 @@ import com.vinekeepers.profile.SectionDefinition;
 import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.workflow.planning.PlanningPromptFormatter;
+import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.state.planning.DiscoveryAgenda;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.DiscoveryQuestion;
@@ -322,7 +323,11 @@ public final class StructuredDiscoverySupport {
         String raw = discoveryPromptBody(chosen);
         String prompt = ClarificationPromptQualityGate.sanitizeBlockingQuestion(raw, chosen);
         if (prompt.isBlank()) {
-            return emptyDiscoveryPromptSpread();
+            Map<String, Object> empty = emptyDiscoveryPromptSpread();
+            empty.put(
+                    "discoveryCurrentQuestionPrompt",
+                    PlanningArtifactTexts.NO_OPEN_QUESTIONS_READY + " Reply in plain text in this thread.");
+            return empty;
         }
         DiscoveryQuestion first = toQuestionWithPrompt(chosen, prompt, 1);
         List<DiscoveryQuestion> questions = List.of(first);
@@ -478,7 +483,11 @@ public final class StructuredDiscoverySupport {
         if (detail != null && !detail.isBlank()) {
             return detail;
         }
-        return "Discovery — " + g.getReason();
+        String reason = g.getReason();
+        if (reason != null && reason.contains("Missing required field")) {
+            return "";
+        }
+        return "Discovery — " + reason;
     }
 
     public static FeaturePlanState projectSectionStatuses(FeaturePlanState plan, WorkProfileDefinition profile) {

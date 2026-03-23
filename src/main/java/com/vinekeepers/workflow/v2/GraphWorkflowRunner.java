@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +36,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
 
     public static final String PHASE_KEY = "__v2_phaseId";
     public static final String PIPELINE_INDEX_KEY = "__v2_pipelineIndex";
+    public static final String ACTIVE_STEPS_CAPABILITY_KEY = "__v2_activeStepsCapabilityId";
 
     private static final String THREAD_PLANNING_IDLE_MESSAGE =
             "This intake/spec thread already completed the planning launch. "
@@ -204,7 +206,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
                     continue;
                 }
                 if ("configurable_steps".equalsIgnoreCase(capKind)) {
-                    WorkflowRunResult delegated = runConfigurableSteps(cap, event, stateStore, botId);
+                    WorkflowRunResult delegated = runConfigurableSteps(cap, event, stateStore, botId, stateKey, state);
                     state = stateStore.get(stateKey, ConfigurableWorkflowState.class).orElse(state);
                     if (delegated.isWaiting()) {
                         return delegated;
@@ -363,7 +365,12 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
      * and template policy (same merge behavior as {@link #runLinearWorkflowRef} for sibling workflows).
      */
     private WorkflowRunResult runConfigurableSteps(
-            WorkflowV2CapabilityModel cap, Event event, StateStore stateStore, String botId) {
+            WorkflowV2CapabilityModel cap,
+            Event event,
+            StateStore stateStore,
+            String botId,
+            String stateKey,
+            ConfigurableWorkflowState outerState) {
         List<Map<String, Object>> steps = cap.getSteps();
         if (steps == null || steps.isEmpty()) {
             return WorkflowRunResult.error(
@@ -386,7 +393,134 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
                         conversationMode,
                         sessionKeyStrategyName,
                         choiceProviderRegistry);
-        return inner.runResult(event, stateStore, botId);
+        StateStore isolatedStore = new StateStore();
+        ConfigurableWorkflowState segmentState = buildSegmentState(cap, outerState, stateKey, botId);
+        isolatedStore.put(stateKey, segmentState);
+        WorkflowRunResult result = inner.runResult(event, isolatedStore, botId);
+        ConfigurableWorkflowState updatedSegment =
+                isolatedStore.get(stateKey, ConfigurableWorkflowState.class).orElse(segmentState);
+        syncOuterStateFromSegment(outerState, cap, updatedSegment, stateKey, botId);
+        stateStore.put(stateKey, outerState);
+        return result;
+    }
+
+    private ConfigurableWorkflowState buildSegmentState(
+            WorkflowV2CapabilityModel cap,
+            ConfigurableWorkflowState outerState,
+            String stateKey,
+            String botId) {
+        ConfigurableWorkflowState segment = new ConfigurableWorkflowState(readSegmentStepIndex(outerState, cap.getId()));
+        segment.getData().putAll(new LinkedHashMap<>(outerState.getData()));
+        segment.put("__sessionKey", stateKey);
+        segment.put("__botId", botId);
+        restoreSegmentStatus(segment, outerState, cap.getId());
+        return segment;
+    }
+
+    private void syncOuterStateFromSegment(
+            ConfigurableWorkflowState outerState,
+            WorkflowV2CapabilityModel cap,
+            ConfigurableWorkflowState segmentState,
+            String stateKey,
+            String botId) {
+        String phaseId = stringOrBlank(outerState.get(PHASE_KEY));
+        String pipeIdx = stringOrBlank(outerState.get(PIPELINE_INDEX_KEY));
+        String activeStepsCap = stringOrBlank(outerState.get(ACTIVE_STEPS_CAPABILITY_KEY));
+        Map<String, Object> restored = new LinkedHashMap<>(segmentState.getData());
+        restored.put("__sessionKey", stateKey);
+        restored.put("__botId", botId);
+        if (!phaseId.isBlank()) {
+            restored.put(PHASE_KEY, phaseId);
+        }
+        if (!pipeIdx.isBlank()) {
+            restored.put(PIPELINE_INDEX_KEY, pipeIdx);
+        }
+        outerState.getData().clear();
+        outerState.getData().putAll(restored);
+        outerState.setStepIndex(0);
+        if (segmentState.getStatus() == ConfigurableWorkflowState.Status.WAITING_INPUT) {
+            outerState.markWaiting(segmentState.getWaitingForField(), segmentState.getPendingPrompt());
+            storeSegmentRuntime(outerState, cap.getId(), segmentState);
+            outerState.put(ACTIVE_STEPS_CAPABILITY_KEY, cap.getId());
+            return;
+        }
+        clearSegmentRuntime(outerState, cap.getId());
+        if (!activeStepsCap.isBlank() && activeStepsCap.equals(cap.getId())) {
+            outerState.put(ACTIVE_STEPS_CAPABILITY_KEY, "");
+        }
+        if (segmentState.getStatus() == ConfigurableWorkflowState.Status.ERROR) {
+            outerState.markError();
+            return;
+        }
+        outerState.markActive();
+    }
+
+    private static void restoreSegmentStatus(
+            ConfigurableWorkflowState segmentState, ConfigurableWorkflowState outerState, String capId) {
+        String rawStatus = stringOrBlank(outerState.get(segmentStateKey(capId, "status")));
+        if (rawStatus.isBlank()) {
+            segmentState.markActive();
+            return;
+        }
+        ConfigurableWorkflowState.Status status = parseStatus(rawStatus);
+        segmentState.setStatus(status);
+        segmentState.setWaitingForField(stringOrNull(outerState.get(segmentStateKey(capId, "waitingForField"))));
+        segmentState.setPendingPrompt(stringOrNull(outerState.get(segmentStateKey(capId, "pendingPrompt"))));
+        if (status == ConfigurableWorkflowState.Status.ACTIVE) {
+            segmentState.markActive();
+        }
+    }
+
+    private static void storeSegmentRuntime(
+            ConfigurableWorkflowState outerState, String capId, ConfigurableWorkflowState segmentState) {
+        outerState.put(segmentStateKey(capId, "stepIndex"), String.valueOf(segmentState.getStepIndex()));
+        outerState.put(segmentStateKey(capId, "status"), segmentState.getStatus().name());
+        outerState.put(
+                segmentStateKey(capId, "waitingForField"),
+                stringOrBlank(segmentState.getWaitingForField()));
+        outerState.put(
+                segmentStateKey(capId, "pendingPrompt"),
+                stringOrBlank(segmentState.getPendingPrompt()));
+    }
+
+    private static void clearSegmentRuntime(ConfigurableWorkflowState outerState, String capId) {
+        outerState.clearKeys(
+                List.of(
+                        segmentStateKey(capId, "stepIndex"),
+                        segmentStateKey(capId, "status"),
+                        segmentStateKey(capId, "waitingForField"),
+                        segmentStateKey(capId, "pendingPrompt")));
+    }
+
+    private static int readSegmentStepIndex(ConfigurableWorkflowState outerState, String capId) {
+        return parseInt(outerState.get(segmentStateKey(capId, "stepIndex")), 0);
+    }
+
+    private static String segmentStateKey(String capId, String field) {
+        return "__v2_stepscap:" + (capId != null ? capId : "") + ":" + field;
+    }
+
+    private static ConfigurableWorkflowState.Status parseStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return ConfigurableWorkflowState.Status.ACTIVE;
+        }
+        try {
+            return ConfigurableWorkflowState.Status.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return ConfigurableWorkflowState.Status.ACTIVE;
+        }
+    }
+
+    private static String stringOrBlank(Object raw) {
+        return raw != null ? raw.toString() : "";
+    }
+
+    private static String stringOrNull(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String value = raw.toString();
+        return value.isBlank() ? null : value;
     }
 
     private static String schemaFromWorkflowRoot(Map<String, Object> wm) {

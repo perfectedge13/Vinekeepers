@@ -58,8 +58,7 @@ public final class FeatureRoomStateStore {
     }
 
     /**
-     * Returns participant configured bot ids in stable order (Orchestrator first, then Architect, Auditor, Scribe).
-     * Participants are sorted by PlanningRole.ordinal() before building the list.
+     * Returns participant configured bot ids in stable planning-role order.
      */
     public List<String> getParticipantBotIds(FeatureRoomState state) {
         if (state == null || state.getParticipants().isEmpty()) return List.of();

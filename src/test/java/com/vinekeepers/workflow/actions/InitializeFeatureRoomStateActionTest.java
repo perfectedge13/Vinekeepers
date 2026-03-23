@@ -46,16 +46,17 @@ class InitializeFeatureRoomStateActionTest {
     @Test
     void runReturnsErrorWhenFeatureRoomParticipantsMissingRoles() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> twoOnly = List.of(validEntry(PlanningRole.ORCHESTRATOR, "arrietty", "i1"),
-                validEntry(PlanningRole.ARCHITECT, "architect", "i2"));
+        List<Map<String, Object>> twoOnly = List.of(
+                validEntry(PlanningRole.ORCHESTRATOR, "arrietty", "i1"),
+                validEntry(PlanningRole.ORCHESTRATOR, "arrietty-dup", "i2"));
         Object result = action.run(null, Map.of("featureRoomParticipants", twoOnly, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
-        assertEquals("Missing or invalid featureRoomParticipants (role contract requires exactly one AUDITOR).", result);
+        assertEquals("Missing or invalid featureRoomParticipants (duplicate role: ORCHESTRATOR).", result);
     }
 
     @Test
     void runReturnsErrorWhenEntryNotMap() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Object> bad = new ArrayList<>(validFourParticipants());
+        List<Object> bad = new ArrayList<>(validParticipants());
         bad.set(0, "not-a-map");
         Object result = action.run(null, Map.of("featureRoomParticipants", bad, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (each entry must be a map).", result);
@@ -64,28 +65,28 @@ class InitializeFeatureRoomStateActionTest {
     @Test
     void runReturnsErrorWhenEntryMissingRequiredKey() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
-        four.get(0).remove("role");
-        Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
+        List<Map<String, Object>> participants = new ArrayList<>(validParticipants());
+        participants.get(0).remove("role");
+        Object result = action.run(null, Map.of("featureRoomParticipants", participants, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (missing key: role).", result);
     }
 
     @Test
     void runReturnsErrorWhenEntryMissingPrimaryCoordinatorKey() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
-        four.get(0).remove("primaryCoordinator");
-        Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
+        List<Map<String, Object>> participants = new ArrayList<>(validParticipants());
+        participants.get(0).remove("primaryCoordinator");
+        Object result = action.run(null, Map.of("featureRoomParticipants", participants, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (missing key: primaryCoordinator).", result);
     }
 
     @Test
     void runReturnsErrorWhenDuplicateRole() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        List<Map<String, Object>> four = new ArrayList<>(validParticipants());
         Map<String, Object> secondOrch = validEntry(PlanningRole.ORCHESTRATOR, "dup", "i2");
         secondOrch.put("primaryCoordinator", false);
-        four.set(1, secondOrch);
+        four.add(secondOrch);
         Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (duplicate role: ORCHESTRATOR).", result);
     }
@@ -93,7 +94,8 @@ class InitializeFeatureRoomStateActionTest {
     @Test
     void runReturnsErrorWhenNonOrchestratorMarkedPrimaryCoordinator() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        List<Map<String, Object>> four = new ArrayList<>(validParticipants());
+        four.add(validEntry(PlanningRole.ARCHITECT, "architect", "i2"));
         four.get(0).put("primaryCoordinator", false);
         four.get(1).put("primaryCoordinator", true);
         Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
@@ -103,9 +105,8 @@ class InitializeFeatureRoomStateActionTest {
     @Test
     void runReturnsErrorWhenOrchestratorNotPrimaryCoordinator() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        List<Map<String, Object>> four = new ArrayList<>(validParticipants());
         four.get(0).put("primaryCoordinator", false);
-        four.get(1).put("primaryCoordinator", false);
         Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (exactly one primaryCoordinator required on ORCHESTRATOR).", result);
     }
@@ -113,7 +114,7 @@ class InitializeFeatureRoomStateActionTest {
     @Test
     void runReturnsErrorWhenRoleInvalid() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        List<Map<String, Object>> four = new ArrayList<>(validParticipants());
         four.get(0).put("role", "INVALID_ROLE");
         Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (invalid role: INVALID_ROLE).", result);
@@ -122,7 +123,7 @@ class InitializeFeatureRoomStateActionTest {
     @Test
     void runReturnsErrorWhenConfiguredBotIdBlank() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
-        List<Map<String, Object>> four = new ArrayList<>(validFourParticipants());
+        List<Map<String, Object>> four = new ArrayList<>(validParticipants());
         four.get(0).put("configuredBotId", "");
         Object result = action.run(null, Map.of("featureRoomParticipants", four, "contextId", "ctx-1", "channelId", "ch-1"), Map.of());
         assertEquals("Missing or invalid featureRoomParticipants (configuredBotId and runtimeBotInstanceId must be non-blank).", result);
@@ -132,7 +133,7 @@ class InitializeFeatureRoomStateActionTest {
     void runReturnsErrorWhenContextIdMissing() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Object result = action.run(null,
-                Map.of("featureRoomParticipants", validFourParticipants(), "channelId", "ch-1"),
+                Map.of("featureRoomParticipants", validParticipants(), "channelId", "ch-1"),
                 Map.of());
         assertEquals("Missing contextId for initialize_feature_room_state.", result);
     }
@@ -141,7 +142,7 @@ class InitializeFeatureRoomStateActionTest {
     void runReturnsErrorWhenRoomChannelIdMissing() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Object result = action.run(null,
-                Map.of("featureRoomParticipants", validFourParticipants(), "contextId", "ctx-1"),
+                Map.of("featureRoomParticipants", validParticipants(), "contextId", "ctx-1"),
                 Map.of());
         assertEquals("Missing roomChannelId/channelId for initialize_feature_room_state.", result);
     }
@@ -150,7 +151,7 @@ class InitializeFeatureRoomStateActionTest {
     void runBuildsFeatureRoomStateAndPutsInStore() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Map<String, Object> state = new LinkedHashMap<>();
-        state.put("featureRoomParticipants", validFourParticipants());
+        state.put("featureRoomParticipants", validParticipants());
         state.put("contextId", "ctx-init");
         state.put("channelId", "room-ch-123");
         state.put("deliveryChannelId", "thread-456");
@@ -172,7 +173,7 @@ class InitializeFeatureRoomStateActionTest {
         assertEquals("feat-1", roomState.getFeatureId());
         assertEquals("add-auth", roomState.getFeatureSlug());
         assertEquals("user-1", roomState.getCreatedBy());
-        assertEquals(4, roomState.getParticipants().size());
+        assertEquals(1, roomState.getParticipants().size());
         assertEquals(PlanningRole.ORCHESTRATOR, roomState.getParticipants().get(0).getRole());
         assertEquals("arrietty", roomState.getParticipants().get(0).getConfiguredBotId());
     }
@@ -181,7 +182,7 @@ class InitializeFeatureRoomStateActionTest {
     void runReadsParticipantsFromBindWhenNotInState() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Map<String, Object> bind = new LinkedHashMap<>();
-        bind.put("featureRoomParticipants", validFourParticipants());
+        bind.put("featureRoomParticipants", validParticipants());
         bind.put("contextId", "ctx-bind");
         bind.put("roomChannelId", "ch-bind");
 
@@ -195,7 +196,7 @@ class InitializeFeatureRoomStateActionTest {
     void runWhenFeatureIdMissing_generatesFeatPlusHex() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Map<String, Object> state = new LinkedHashMap<>();
-        state.put("featureRoomParticipants", validFourParticipants());
+        state.put("featureRoomParticipants", validParticipants());
         state.put("contextId", "ctx-gen");
         state.put("channelId", "room-ch");
         state.put("deliveryChannelId", "thread-1");
@@ -222,7 +223,7 @@ class InitializeFeatureRoomStateActionTest {
     void runWhenFeatureSlugMissing_generatesNonBlankSlug() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Map<String, Object> state = new LinkedHashMap<>();
-        state.put("featureRoomParticipants", validFourParticipants());
+        state.put("featureRoomParticipants", validParticipants());
         state.put("contextId", "ctx-slug");
         state.put("channelId", "room-ch");
         state.put("deliveryChannelId", "thread-1");
@@ -247,7 +248,7 @@ class InitializeFeatureRoomStateActionTest {
     void runWhenFeatureIdAndFeatureSlugSupplied_preservesThem() {
         InitializeFeatureRoomStateAction action = new InitializeFeatureRoomStateAction(featureRoomStateStore);
         Map<String, Object> state = new LinkedHashMap<>();
-        state.put("featureRoomParticipants", validFourParticipants());
+        state.put("featureRoomParticipants", validParticipants());
         state.put("contextId", "ctx-preserve");
         state.put("channelId", "room-ch");
         state.put("deliveryChannelId", "thread-1");
@@ -275,11 +276,7 @@ class InitializeFeatureRoomStateActionTest {
         return m;
     }
 
-    private static List<Map<String, Object>> validFourParticipants() {
-        return List.of(
-                validEntry(PlanningRole.ORCHESTRATOR, "arrietty", "inst-o"),
-                validEntry(PlanningRole.ARCHITECT, "architect", "inst-a"),
-                validEntry(PlanningRole.AUDITOR, "auditor", "inst-u"),
-                validEntry(PlanningRole.SCRIBE, "scribe", "inst-s"));
+    private static List<Map<String, Object>> validParticipants() {
+        return List.of(validEntry(PlanningRole.ORCHESTRATOR, "arrietty", "inst-o"));
     }
 }

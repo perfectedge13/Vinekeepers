@@ -129,18 +129,15 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         return spread;
     }
 
-    /**
-     * Coordinator synthetic kickoff advances {@link PlanningIntakeStage} to drafting; manual threads rely on
-     * {@code humanDiscoveryCompleted} after structured discovery.
-     */
     private static boolean intakeDiscoveryCompleteForApproval(FeaturePlanState plan, Map<String, Object> state) {
-        if ("true".equalsIgnoreCase(String.valueOf(state.get("humanDiscoveryCompleted")))) {
-            return true;
-        }
         if (plan == null) {
             return false;
         }
-        return plan.getPlanningIntakeStage() != PlanningIntakeStage.GATHERING_CONTEXT;
+        if (plan.isAutonomousPlanningPassCompleted()) {
+            return true;
+        }
+        return plan.getPlanningIntakeStage() != PlanningIntakeStage.GATHERING_CONTEXT
+                && plan.getPlanningIntakeStage() != PlanningIntakeStage.CLARIFYING;
     }
 
     private static int parseInt(String s, int dflt) {

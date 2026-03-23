@@ -14,11 +14,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Workflow action: read featureRoomParticipants from state (transient list of maps), validate role contract
- * (exactly one ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE; non-blank configuredBotId/runtimeBotInstanceId),
- * convert to typed {@link RoomParticipant}, build {@link FeatureRoomState} and put in store.
- * Bind/state: contextId, roomChannelId (channelId), intakeThreadId (deliveryChannelId), repo, initialRequest
- * (codeChange), featureId, featureSlug, createdBy.
+ * Workflow action: read featureRoomParticipants from state (transient list of maps), validate the Arrietty-only
+ * room contract (exactly one ORCHESTRATOR marked primaryCoordinator; non-blank configuredBotId/runtimeBotInstanceId),
+ * convert to typed {@link RoomParticipant}, build {@link FeatureRoomState}, and put it in store.
  */
 public final class InitializeFeatureRoomStateAction implements com.vinekeepers.workflow.WorkflowAction {
 
@@ -45,9 +43,6 @@ public final class InitializeFeatureRoomStateAction implements com.vinekeepers.w
         }
         List<RoomParticipant> participants = new ArrayList<>();
         EnumMap<PlanningRole, Integer> roleCounts = new EnumMap<>(PlanningRole.class);
-        for (PlanningRole r : PlanningRole.values()) {
-            roleCounts.put(r, 0);
-        }
         int primaryTrueCount = 0;
 
         for (Object item : list) {
@@ -92,18 +87,14 @@ public final class InitializeFeatureRoomStateAction implements com.vinekeepers.w
             participants.add(new RoomParticipant(role, configuredBotId, runtimeBotInstanceId, displayName, primaryCoordinator));
         }
 
-        for (PlanningRole required : PlanningRole.values()) {
-            if (roleCounts.get(required) != 1) {
-                return "Missing or invalid featureRoomParticipants (role contract requires exactly one "
-                        + required.name() + ").";
-            }
+        if (roleCounts.getOrDefault(PlanningRole.ORCHESTRATOR, 0) != 1) {
+            return "Missing or invalid featureRoomParticipants (role contract requires exactly one ORCHESTRATOR).";
         }
         if (primaryTrueCount != 1) {
             return "Missing or invalid featureRoomParticipants (exactly one primaryCoordinator required on ORCHESTRATOR).";
         }
-        if (list.size() != PlanningRole.values().length) {
-            return "Missing or invalid featureRoomParticipants (expected " + PlanningRole.values().length
-                    + " entries, got " + list.size() + ").";
+        if (list.size() != 1) {
+            return "Missing or invalid featureRoomParticipants (expected 1 entry, got " + list.size() + ").";
         }
 
         participants.sort(Comparator.comparingInt(p -> p.getRole().ordinal()));

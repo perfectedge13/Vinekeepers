@@ -8,5 +8,5 @@
 
 1. From implement output, identify **new or changed behavior** (new paths, modified paths, summary).
 2. **Add unit tests** for new behavior; **update tests** for changed behavior.
-3. Run the test command from **specs/specs.yml** `validation.commands.test` if present, else **@.cursor/project.yml** `validation_defaults.test`; if neither is set, report "validation not configured."
+3. Do **not** run the project test command in this step. The workflow's separate **run_tests** step handles test execution.
 4. Return: **Pass** or **Fail** (one short line); list of new/updated test file paths.

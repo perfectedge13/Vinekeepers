@@ -27,6 +27,11 @@ public final class PlanningPromptFormatter {
             SectionDefinition section,
             FieldDefinition field,
             int repeatableRowIndex) {
+        if (isOpenQuestionsField(artifact, section, field)) {
+            return "**Question:** Which unknowns still need confirmation before implementation? "
+                    + "Put one item per line when possible. If nothing remains, reply with "
+                    + "\"None — ready to implement\" so we can save it on the plan.";
+        }
         String label = field.getLabel() != null && !field.getLabel().isBlank()
                 ? field.getLabel()
                 : "this item";
@@ -48,6 +53,16 @@ public final class PlanningPromptFormatter {
             sb.append("send the specific text or decision to store on the plan.");
         }
         return sb.toString();
+    }
+
+    private static boolean isOpenQuestionsField(
+            ArtifactDefinition artifact, SectionDefinition section, FieldDefinition field) {
+        if (artifact == null || section == null || field == null) {
+            return false;
+        }
+        return "open_questions_block".equals(artifact.getArtifactId())
+                && "backlog".equals(section.getSectionId())
+                && "open_questions".equals(field.getFieldId());
     }
 
     public static String repeatableSectionEmptyPrompt(ArtifactDefinition artifact, SectionDefinition section) {

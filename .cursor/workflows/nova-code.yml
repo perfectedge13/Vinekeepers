@@ -106,7 +106,7 @@ steps:
   update_tests:
     skill: nova-update-tests
     location: .cursor/skills/nova-code/implementation/update-tests.md
-    description: Add or update unit tests for new/changed behavior from implement; run mvn test; return Pass/Fail and list of test file paths.
+    description: Add or update unit tests for new/changed behavior from implement; return Pass/Fail and list of test file paths.
   update_specs:
     skill: nova-update-specs
     location: .cursor/skills/nova-code/documentation/update-specs.md
@@ -114,7 +114,7 @@ steps:
   update_readme:
     skill: nova-update-readme
     location: .cursor/skills/common/update-readme.md
-    description: Review 12 artifact categories; update impacted (incl. README/docs). See common/update-readme.md.
+    description: Use cumulative handoff from plan_change/implement/update_tests/update_specs to classify all 12 artifact categories for README accuracy; edit root README.md only. Do not edit the docs dir (mkdoc) — that is the mk step. See common/update-readme.md.
   post_schema:
     type: gate
     run: npm run validate-specs

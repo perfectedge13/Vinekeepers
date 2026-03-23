@@ -35,48 +35,6 @@ bots:
       ingress:
         messages: owned_spaces
         interactions: own_messages
-- id: architect
-  persona:
-    name: Architect
-    systemPrompt: You are Architect, a feature room participant. In the intake/spec
-      thread, you contribute visible design and structure proposals when the workflow
-      drives role turns; the main room stays coordinator-led so you do not auto-reply
-      to generic room traffic.
-  sessionKeyStrategy: thread
-  workflow:
-    type: configured
-    params:
-      workflowRef: architect_intro
-  identities:
-    discord:
-      tokenEnvKey: ARCHITECT_DISCORD_TOKEN
-- id: auditor
-  persona:
-    name: Auditor
-    systemPrompt: You are Auditor, a feature room participant. Minimal workflow; you
-      reply only when invoked via action.
-  sessionKeyStrategy: thread
-  workflow:
-    type: configured
-    params:
-      workflowRef: auditor_intro
-  identities:
-    discord:
-      tokenEnvKey: AUDITOR_DISCORD_TOKEN
-- id: scribe
-  persona:
-    name: Scribe
-    systemPrompt: You are Scribe, a feature room participant. In the intake/spec thread,
-      you post consolidation and status when the workflow drives role turns; the room
-      channel defaults to the orchestrator for summaries.
-  sessionKeyStrategy: thread
-  workflow:
-    type: configured
-    params:
-      workflowRef: scribe_intro
-  identities:
-    discord:
-      tokenEnvKey: SCRIBE_DISCORD_TOKEN
 - id: gadget
   persona:
     name: Gadget
@@ -107,564 +65,6 @@ routing:
     discordChannels:
     - '1484800775342391378'
 workflows:
-  architect_intro:
-    steps:
-    - type: done
-      message: ''
-  auditor_intro:
-    steps:
-    - type: done
-      message: ''
-  scribe_intro:
-    steps:
-    - type: done
-      message: ''
-  arrietty_room_legacy:
-    llm:
-      provider: openai
-      model: gpt-5.4-mini-2026-03-17
-      timeoutMs: 120000
-    steps:
-    - type: branch
-      branches:
-      - when:
-          key: repoWorkspaceReady
-          value: 'true'
-        next: 1
-      - when: else
-        next: 1
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: "**Workspace** — {{repoWorkspaceStatusSummary}}\n\nI'm pulling repo\
-          \ context and drafting the plan from your request. I'll only interrupt\
-          \ if something blocks progress. Short updates will appear here, and the\
-          \ full planning packet will post here when it's ready. If the workspace\
-          \ is still coming online, snippets from disk may be limited."
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when:
-          key: coordinatorKickoff
-          value: 'true'
-        next: 70
-      - when:
-          key: planningIntakeThread
-          value: 'true'
-        next: 3
-      - when: else
-        next: 66
-    - type: call_action
-      action: get_profile_missing_fields
-      storeIn: profileMissingSummary
-    - type: call_action
-      action: generate_planning_proposals
-      storeSpread: true
-    - type: call_action
-      action: apply_auto_planning_proposals
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: planningHasConfirmPending
-          value: 'true'
-        next: 7
-      - when: else
-        next: 15
-    - type: call_action
-      action: build_proposal_confirm_prompt
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: proposalConfirmPrompt
-          operator: nonblank
-        next: 9
-      - when: else
-        next: 15
-    - type: prompt_for_field
-      prompt: '{{proposalConfirmPrompt}}'
-      storeIn: discoveryAnswerRaw
-    - type: capture_field
-      storeIn: discoveryAnswerRaw
-    - type: call_action
-      action: resolve_proposal_confirmation
-      storeSpread: true
-    - type: call_action
-      action: classify_assumption_or_issue
-    - type: call_action
-      action: recompute_plan_progress
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: planningHasConfirmPending
-          value: 'true'
-        next: 7
-        clear:
-        - discoveryAnswerRaw
-      - when: else
-        next: 15
-    - type: call_action
-      action: get_structured_discovery_gaps
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: discoveryHasOpenGaps
-          value: 'true'
-        next: 17
-      - when: else
-        next: 25
-    - type: call_action
-      action: build_insight_discovery_agenda
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: discoveryCurrentQuestionPrompt
-          operator: nonblank
-        next: 19
-      - when: else
-        next: 25
-    - type: prompt_for_field
-      prompt: '{{discoveryCurrentQuestionPrompt}}'
-      storeIn: discoveryAnswerRaw
-    - type: capture_field
-      storeIn: discoveryAnswerRaw
-    - type: call_action
-      action: capture_and_apply_discovery_answer
-    - type: call_action
-      action: classify_assumption_or_issue
-    - type: call_action
-      action: recompute_plan_progress
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: discoveryBlockingIssueMode
-          value: 'true'
-        next: 25
-      - when:
-          key: discoveryHasOpenGaps
-          value: 'true'
-        next: 17
-        clear:
-        - discoveryAnswerRaw
-      - when: else
-        next: 25
-    - type: call_action
-      action: mark_intake_discovery_complete
-      storeSpread: true
-    - type: call_action
-      action: execute_planning_room_cycle
-      storeSpread: true
-    - type: call_action
-      action: post_planning_progress_if_changed
-      storeSpread: true
-      bind:
-        content: '**Update:** {{userCopyCoordinatorProgress}}'
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when:
-          key: planningClarificationStuck
-          value: 'true'
-        next: 29
-      - when: else
-        next: 31
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{planningClarificationStuckHint}}'
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when: else
-        next: 31
-    - type: branch
-      branches:
-      - when:
-          key: planningUserInputRequired
-          value: 'true'
-        next: 32
-      - when: else
-        next: 49
-    - type: branch
-      branches:
-      - when: else
-        next: 33
-    - type: prompt_for_field
-      prompt: '{{planningOrchestratorRoundSummary}}'
-      storeIn: planningClarificationRaw
-    - type: capture_field
-      storeIn: planningClarificationRaw
-    - type: branch
-      branches:
-      - when: else
-        next: 36
-    - type: call_action
-      action: merge_planning_clarification_choice
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: planningClarificationMergeOk
-          value: 'true'
-        next: 38
-      - when: else
-        next: 40
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: Thanks — I've recorded that and I'm folding it into the draft. You'll
-          see another short update when this pass finishes.
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when: else
-        next: 26
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: I could not apply that clarification — {{planningClarificationMergeError}}.
-          Please send a short plain-text reply in this thread.
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when: else
-        next: 32
-        clear:
-        - planningClarificationRaw
-    - type: branch
-      branches:
-      - when:
-          key: planningReadyToPostPacket
-          value: 'true'
-        next: 43
-      - when: else
-        next: 51
-    - type: call_action
-      action: derive_plan_governance
-      storeSpread: true
-    - type: call_action
-      action: evaluate_planning_packet_depth
-      storeSpread: true
-    - type: call_action
-      action: post_planning_packet_thread
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: planningPacketSkippedDuplicate
-          value: 'true'
-        next: 46
-      - when: else
-        next: 48
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{planningPacketSkipReason}}'
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when: else
-        next: 48
-    - type: call_action
-      action: run_plan_critique_and_readiness
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: planReadinessStatus
-          value: BLOCKED
-        next: 67
-      - when:
-          key: planReadinessStatus
-          value: NEEDS_REVISION
-        next: 26
-        clear:
-        - discoveryAnswerRaw
-        - planApprovalDecision
-        - planningProposalsJson
-        - planningConfirmQueueJson
-        - proposalConfirmPrompt
-        - proposalConfirmProposalId
-        - proposalConfirmArtifactId
-        - proposalConfirmSectionId
-        - proposalConfirmFieldId
-        - proposalConfirmProposedValue
-        - planningHasConfirmPending
-        - readinessProceedRaw
-        - discoveryBundledApplyJson
-        - intakeChoice
-        - planningClarificationRaw
-        - planningPacketPostedVersion
-      - when:
-          key: planReadinessStatus
-          value: NEEDS_HUMAN_DECISION
-        next: 75
-      - when: else
-        next: 53
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '**Draft blocked — packet not posted**
-
-          {{planningRoomCycleErrorUserMessage}}
-
-          {{planningPacketDepthReason}}
-
-          **What helps next:** Reply in this thread with more detail, constraints, or risks in plain text and I will run another planning pass. If depth checks suggest another pass, say **yes** to retry when asked — no slash-commands needed.'
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when: else
-        next: 26
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '**Pre-launch review** — the **Planning packet** above is the full draft; this message is a **short checklist** only.
-
-          **Status:** {{planReadinessStatusLabel}}
-
-          {{planReadinessSummary}}
-
-          **Assumptions** — {{planAssumptionsSummary}}
-
-          **Issues / risks** — {{planIssuesSummary}}
-
-          **Critique** — {{planCritiqueSummary}}
-
-          {{planningThreadReviewBuildError}}
-
-          _When the gates clear, you will get **Approve / Approve with risks / Revise / Reject** — nothing launches until you pick one._
-
-          '
-        asRole: orchestrator
-        target: thread
-    - type: call_action
-      action: evaluate_planning_approval_gate
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: planningReadyForApproval
-          value: 'true'
-        next: 57
-      - when: else
-        next: 55
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '**Approval held** — {{planningApprovalGateReason}}
-
-          We will run another planning round to strengthen the packet before you approve.'
-        asRole: orchestrator
-        target: thread
-    - type: branch
-      branches:
-      - when: else
-        next: 26
-    - type: prompt_for_field
-      prompt: Approve implementation launch?
-      storeIn: planApprovalDecision
-      intent: present_choices
-      choices:
-      - id: approve
-        label: Approve
-      - id: approve_with_risks
-        label: Approve with risks
-      - id: revise
-        label: Revise plan
-      - id: reject
-        label: Reject
-    - type: capture_field
-      storeIn: planApprovalDecision
-    - type: branch
-      branches:
-      - when:
-          key: planApprovalDecision
-          value: approve
-        next: 60
-      - when:
-          key: planApprovalDecision
-          value: approve_with_risks
-        next: 60
-      - when:
-          key: planApprovalDecision
-          value: revise
-        next: 26
-        clear:
-        - discoveryAnswerRaw
-        - planApprovalDecision
-        - planningProposalsJson
-        - planningConfirmQueueJson
-        - proposalConfirmPrompt
-        - proposalConfirmProposalId
-        - proposalConfirmArtifactId
-        - proposalConfirmSectionId
-        - proposalConfirmFieldId
-        - proposalConfirmProposedValue
-        - planningHasConfirmPending
-        - readinessProceedRaw
-        - discoveryBundledApplyJson
-        - intakeChoice
-        - planningClarificationRaw
-        - planningPacketPostedVersion
-        - planningRoomCycleIteration
-      - when:
-          key: planApprovalDecision
-          value: reject
-        next: 60
-      - when: else
-        next: 60
-    - type: call_action
-      action: persist_plan_approval
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request
-          summary is in the planning packet above.'
-        asRole: orchestrator
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: Lifecycle room is ready. Launching the Cursor run from the approved planning
-          packet in this feature room.
-        asRole: orchestrator
-        target: room
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout
-          up to ~2 minutes). A success or failure message follows in this thread.'
-        asRole: orchestrator
-        target: thread
-    - type: call_action
-      action: launch_cursor_run
-      bind: {}
-      storeSpread: true
-    - type: branch
-      branches:
-      - when:
-          key: launchSucceeded
-          value: 'false'
-        next: 67
-      - when: else
-        next: 75
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: 'Planning is blocked right now — {{planCritiqueError}}
-
-          {{planReadinessSummary}}'
-        asRole: orchestrator
-        target: thread
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: Planning blocked — cannot launch until workspace/gaps are resolved.
-          See intake/spec thread.
-        asRole: orchestrator
-        target: room
-    - type: done
-      message: Planning blocked; not launching.
-    - type: call_action
-      action: coordinator_intake_bootstrap
-      storeSpread: true
-    - type: branch
-      branches:
-      - when: else
-        next: 3
-        clear:
-        - coordinatorKickoff
-        - planningIngressMode
-        - discoveryAnswerRaw
-        - intakeChoice
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '**Human review requested**
-
-          {{planReadinessCheckpointGuide}}
-
-          **Status:** {{planReadinessStatusLabel}}
-
-          {{planReadinessSummary}}
-
-          **Critique (high level)** — {{planCritiqueSummary}}
-
-          '
-        asRole: orchestrator
-        target: thread
-    - type: prompt_for_field
-      prompt: '**Pick what happens next** (still **not** a code launch — only routing the workflow).
-
-        • **Continue to approval** → you get **Approve / Approve with risks / Revise / Reject** for this packet.
-
-        • **Revise plan first** → another drafting round; you will return here afterward.
-
-        Use the button that matches what you want.'
-      storeIn: readinessProceedRaw
-      intent: present_choices
-      choices:
-      - id: proceed
-        label: Continue to approval
-      - id: revise
-        label: Revise plan first
-    - type: capture_field
-      storeIn: readinessProceedRaw
-    - type: branch
-      branches:
-      - when:
-          key: readinessProceedRaw
-          value: proceed
-        next: 76
-      - when:
-          key: readinessProceedRaw
-          value: revise
-        next: 3
-        clear:
-        - readinessProceedRaw
-        - discoveryAnswerRaw
-        - planApprovalDecision
-        - planningProposalsJson
-        - planningConfirmQueueJson
-        - proposalConfirmPrompt
-        - proposalConfirmProposalId
-        - proposalConfirmArtifactId
-        - proposalConfirmSectionId
-        - proposalConfirmFieldId
-        - proposalConfirmProposedValue
-        - planningHasConfirmPending
-        - discoveryBundledApplyJson
-        - intakeChoice
-      - when: else
-        next: 70
-    - type: call_action
-      action: acknowledge_readiness_human_decision
-      storeSpread: true
-    - type: branch
-      branches:
-      - when: else
-        next: 53
-    - type: call_action
-      action: post_channel_message
-      bind:
-        content: '{{launchMessage}}'
-        asRole: orchestrator
-        target: thread
-    - type: done
-      message: '{{launchMessage}}'
   arrietty_room_v2:
     workflowSchema: v2
     llm:
@@ -693,21 +93,122 @@ workflows:
       - deliberationPhase
       - canonicalPlanningIntakeStage
       - planningIngressMode
+      - planningEventKind
+      - planningActiveCapabilityId
+      - planningAwaitingField
       - planningAutonomousFirstPassCompleted
       - planningRepoEvidenceJson
+      - repoWorkspaceStatusSummary
+      - project
+      - proposalConfirmPrompt
+      - discoveryCurrentQuestionPrompt
+      - planningClarificationQuestionText
+      - planningClarificationOrchestratorPrompt
+      - planningClarificationStuckHint
+      - planningOrchestratorRoundSummary
+      - planningClarificationMergeError
+      - planningRoomCycleErrorUserMessage
+      - planningPacketDepthReason
+      - planningPacketSkipReason
+      - planReadinessStatus
+      - planReadinessStatusLabel
+      - planReadinessSummary
+      - planAssumptionsSummary
+      - planIssuesSummary
+      - planCritiqueSummary
+      - planningThreadReviewBuildError
+      - planningApprovalGateReason
+      - planReadinessCheckpointGuide
+      - launchMessage
     deliberation:
       label: planning_packet_deliberation
       profileHint: software_feature_planning
-    entryPhase: planning
+    entryPhase: planning_ingress
     phases:
-      planning:
+      planning_ingress:
         pipeline:
         - cap_hydrate_planning_session
         - cap_ensure_repo_workspace
         - cap_spread_plan_workspace_signals
-        - cap_linear_room
+        - cap_classify_planning_ingress
+        rulesRef: rs_ingress
+        defaultNextPhase: planning_prepare
+      planning_kickoff:
+        pipeline:
+        - cap_coordinator_intake_bootstrap
+        defaultNextPhase: planning_prepare
+      planning_prepare:
+        pipeline:
+        - cap_planning_prepare
+        defaultNextPhase: planning_autonomous_draft
+      planning_autonomous_draft:
+        pipeline:
+        - cap_set_stage_drafting
+        - cap_planning_run_expansion
+        - cap_planning_run_inner_round
+        - cap_planning_finalize_cycle_spread
+        rulesRef: rs_autonomous_draft
+        defaultNextPhase: planning_redraft_notice
+      planning_redraft_notice:
+        pipeline:
+        - cap_post_draft_blocked
+        defaultNextPhase: planning_autonomous_draft
+      planning_clarification:
+        pipeline:
+        - cap_set_stage_clarifying
+        - cap_planning_clarification
+        defaultNextPhase: planning_autonomous_draft
+      planning_packet:
+        pipeline:
+        - cap_derive_plan_governance
+        - cap_evaluate_planning_packet_depth
+        - cap_post_planning_packet_thread
+        defaultNextPhase: planning_critique
+      planning_critique:
+        pipeline:
+        - cap_set_stage_critiquing
+        - cap_run_plan_critique_and_readiness
+        rulesRef: rs_critique
+        defaultNextPhase: planning_preapproval_review
+      planning_human_review:
+        pipeline:
+        - cap_planning_human_review
+        rulesRef: rs_human_review
+        defaultNextPhase: planning_preapproval_review
+      planning_preapproval_review:
+        pipeline:
+        - cap_set_stage_readiness_gate
+        - cap_post_prelaunch_review
+        - cap_evaluate_planning_approval_gate
+        rulesRef: rs_preapproval_review
+        defaultNextPhase: planning_approval_hold
+      planning_approval_hold:
+        pipeline:
+        - cap_post_approval_hold
+        defaultNextPhase: planning_revision_reset
+      planning_revision_reset:
+        pipeline:
+        - cap_planning_revision_reset
+        defaultNextPhase: planning_autonomous_draft
+      planning_approval:
+        pipeline:
+        - cap_set_stage_awaiting_approval
+        - cap_planning_approval
+        rulesRef: rs_approval
+      planning_launch:
+        pipeline:
+        - cap_planning_launch
         defaultNextPhase: done
+      planning_blocked:
+        pipeline:
+        - cap_set_stage_failed
+        - cap_post_blocked_thread
+        - cap_post_blocked_room
+        defaultNextPhase: failed
       done:
+        pipeline: []
+        terminal: true
+      failed:
         pipeline: []
         terminal: true
     capabilities:
@@ -722,10 +223,561 @@ workflows:
         kind: legacy_action
         action: spread_plan_workspace_signals
         storeSpread: true
-      cap_linear_room:
-        kind: linear_workflow_ref
-        workflowRef: arrietty_room_legacy
-    rulesets: {}
+      cap_classify_planning_ingress:
+        kind: legacy_action
+        action: classify_planning_ingress
+        storeSpread: true
+      cap_coordinator_intake_bootstrap:
+        kind: legacy_action
+        action: coordinator_intake_bootstrap
+        storeSpread: true
+      cap_set_stage_drafting:
+        kind: legacy_action
+        action: set_planning_intake_stage
+        bind:
+          stage: DRAFTING
+        storeSpread: true
+      cap_set_stage_clarifying:
+        kind: legacy_action
+        action: set_planning_intake_stage
+        bind:
+          stage: CLARIFYING
+        storeSpread: true
+      cap_set_stage_critiquing:
+        kind: legacy_action
+        action: set_planning_intake_stage
+        bind:
+          stage: CRITIQUING
+        storeSpread: true
+      cap_set_stage_readiness_gate:
+        kind: legacy_action
+        action: set_planning_intake_stage
+        bind:
+          stage: READINESS_GATE
+        storeSpread: true
+      cap_set_stage_awaiting_approval:
+        kind: legacy_action
+        action: set_planning_intake_stage
+        bind:
+          stage: AWAITING_APPROVAL
+        storeSpread: true
+      cap_set_stage_failed:
+        kind: legacy_action
+        action: set_planning_intake_stage
+        bind:
+          stage: FAILED
+        storeSpread: true
+      cap_planning_prepare:
+        kind: configurable_steps
+        steps:
+        - type: call_action
+          action: get_profile_missing_fields
+          storeIn: profileMissingSummary
+        - type: call_action
+          action: generate_planning_proposals
+          storeSpread: true
+        - type: call_action
+          action: apply_auto_planning_proposals
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: planningHasConfirmPending
+              value: 'true'
+            next: 4
+          - when: else
+            next: 12
+        - type: call_action
+          action: build_proposal_confirm_prompt
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: proposalConfirmPrompt
+              operator: nonblank
+            next: 6
+          - when: else
+            next: 12
+        - type: prompt_for_field
+          prompt: '{{proposalConfirmPrompt}}'
+          storeIn: discoveryAnswerRaw
+        - type: capture_field
+          storeIn: discoveryAnswerRaw
+        - type: call_action
+          action: resolve_proposal_confirmation
+          storeSpread: true
+        - type: call_action
+          action: classify_assumption_or_issue
+        - type: call_action
+          action: recompute_plan_progress
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: planningHasConfirmPending
+              value: 'true'
+            next: 4
+            clear:
+            - discoveryAnswerRaw
+          - when: else
+            next: 12
+        - type: call_action
+          action: get_structured_discovery_gaps
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: discoveryHasOpenGaps
+              value: 'true'
+            next: 14
+          - when: else
+            next: 22
+        - type: call_action
+          action: build_insight_discovery_agenda
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: discoveryCurrentQuestionPrompt
+              operator: nonblank
+            next: 16
+          - when: else
+            next: 22
+        - type: prompt_for_field
+          prompt: '{{discoveryCurrentQuestionPrompt}}'
+          storeIn: discoveryAnswerRaw
+        - type: capture_field
+          storeIn: discoveryAnswerRaw
+        - type: call_action
+          action: capture_and_apply_discovery_answer
+        - type: call_action
+          action: classify_assumption_or_issue
+        - type: call_action
+          action: recompute_plan_progress
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: discoveryBlockingIssueMode
+              value: 'true'
+            next: 22
+          - when:
+              key: discoveryHasOpenGaps
+              value: 'true'
+            next: 14
+            clear:
+            - discoveryAnswerRaw
+          - when: else
+            next: 22
+        - type: call_action
+          action: mark_intake_discovery_complete
+          storeSpread: true
+        - type: done
+          message: ''
+      cap_planning_run_expansion:
+        kind: legacy_action
+        action: planning_run_expansion
+        storeSpread: true
+      cap_planning_run_inner_round:
+        kind: legacy_action
+        action: planning_run_inner_round
+        storeSpread: true
+      cap_planning_finalize_cycle_spread:
+        kind: legacy_action
+        action: planning_finalize_cycle_spread
+        storeSpread: true
+      cap_post_draft_blocked:
+        kind: legacy_action
+        action: post_channel_message
+        bind:
+          content: '**Draft blocked â€” packet not posted**
+
+            {{planningRoomCycleErrorUserMessage}}
+
+            {{planningPacketDepthReason}}
+
+            **What helps next:** Reply in this thread with more detail, constraints, or risks in plain text and I will run another planning pass. If depth checks suggest another pass, say **yes** to retry when asked â€” no slash-commands needed.'
+          asRole: orchestrator
+          target: thread
+      cap_planning_clarification:
+        kind: configurable_steps
+        steps:
+        - type: branch
+          branches:
+          - when:
+              key: planningClarificationStuck
+              value: 'true'
+            next: 1
+          - when: else
+            next: 2
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: '{{planningClarificationStuckHint}}'
+            asRole: orchestrator
+            target: thread
+        - type: prompt_for_field
+          prompt: '{{planningOrchestratorRoundSummary}}'
+          storeIn: planningClarificationRaw
+        - type: capture_field
+          storeIn: planningClarificationRaw
+        - type: call_action
+          action: merge_planning_clarification_choice
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: planningClarificationMergeOk
+              value: 'true'
+            next: 6
+          - when: else
+            next: 8
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: Thanks â€” I've recorded that and I'm folding it into the draft. You'll see another short update when this pass finishes.
+            asRole: orchestrator
+            target: thread
+        - type: done
+          message: ''
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: I could not apply that clarification â€” {{planningClarificationMergeError}}. Please send a short plain-text reply in this thread.
+            asRole: orchestrator
+            target: thread
+        - type: branch
+          branches:
+          - when: else
+            next: 2
+            clear:
+            - planningClarificationRaw
+      cap_derive_plan_governance:
+        kind: legacy_action
+        action: derive_plan_governance
+        storeSpread: true
+      cap_evaluate_planning_packet_depth:
+        kind: legacy_action
+        action: evaluate_planning_packet_depth
+        storeSpread: true
+      cap_post_planning_packet_thread:
+        kind: legacy_action
+        action: post_planning_packet_thread
+        storeSpread: true
+      cap_run_plan_critique_and_readiness:
+        kind: legacy_action
+        action: run_plan_critique_and_readiness
+        storeSpread: true
+      cap_planning_human_review:
+        kind: configurable_steps
+        steps:
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: '**Human review requested**
+
+              {{planReadinessCheckpointGuide}}
+
+              **Status:** {{planReadinessStatusLabel}}
+
+              {{planReadinessSummary}}
+
+              **Critique (high level)** â€” {{planCritiqueSummary}}
+
+              '
+            asRole: orchestrator
+            target: thread
+        - type: prompt_for_field
+          prompt: '**Pick what happens next** (still **not** a code launch â€” only routing the workflow).
+
+            â€¢ **Continue to approval** â†’ you get **Approve / Approve with risks / Revise / Reject** for this packet.
+
+            â€¢ **Revise plan first** â†’ another drafting round; you will return here afterward.
+
+            Use the button that matches what you want.'
+          storeIn: readinessProceedRaw
+          intent: present_choices
+          choices:
+          - id: proceed
+            label: Continue to approval
+          - id: revise
+            label: Revise plan first
+        - type: capture_field
+          storeIn: readinessProceedRaw
+        - type: branch
+          branches:
+          - when:
+              key: readinessProceedRaw
+              value: proceed
+            next: 4
+          - when:
+              key: readinessProceedRaw
+              value: revise
+            next: 6
+          - when: else
+            next: 0
+        - type: call_action
+          action: acknowledge_readiness_human_decision
+          storeSpread: true
+        - type: done
+          message: ''
+        - type: done
+          message: ''
+      cap_post_prelaunch_review:
+        kind: legacy_action
+        action: post_channel_message
+        bind:
+          content: '**Pre-launch review** â€” the **Planning packet** above is the full draft; this message is a **short checklist** only.
+
+            **Status:** {{planReadinessStatusLabel}}
+
+            {{planReadinessSummary}}
+
+            **Assumptions** â€” {{planAssumptionsSummary}}
+
+            **Issues / risks** â€” {{planIssuesSummary}}
+
+            **Critique** â€” {{planCritiqueSummary}}
+
+            {{planningThreadReviewBuildError}}
+
+            _When the gates clear, you will get **Approve / Approve with risks / Revise / Reject** â€” nothing launches until you pick one._
+
+            '
+          asRole: orchestrator
+          target: thread
+      cap_evaluate_planning_approval_gate:
+        kind: legacy_action
+        action: evaluate_planning_approval_gate
+        storeSpread: true
+      cap_post_approval_hold:
+        kind: legacy_action
+        action: post_channel_message
+        bind:
+          content: '**Approval held** â€” {{planningApprovalGateReason}}
+
+            We will run another planning round to strengthen the packet before you approve.'
+          asRole: orchestrator
+          target: thread
+      cap_planning_revision_reset:
+        kind: configurable_steps
+        steps:
+        - type: branch
+          branches:
+          - when: else
+            next: 1
+            clear:
+            - discoveryAnswerRaw
+            - planApprovalDecision
+            - planningProposalsJson
+            - planningConfirmQueueJson
+            - proposalConfirmPrompt
+            - proposalConfirmProposalId
+            - proposalConfirmArtifactId
+            - proposalConfirmSectionId
+            - proposalConfirmFieldId
+            - proposalConfirmProposedValue
+            - planningHasConfirmPending
+            - readinessProceedRaw
+            - discoveryBundledApplyJson
+            - intakeChoice
+            - planningClarificationRaw
+            - planningPacketPostedVersion
+            - planningRoomCycleIteration
+        - type: done
+          message: ''
+      cap_planning_approval:
+        kind: configurable_steps
+        steps:
+        - type: prompt_for_field
+          prompt: Approve implementation launch?
+          storeIn: planApprovalDecision
+          intent: present_choices
+          choices:
+          - id: approve
+            label: Approve
+          - id: approve_with_risks
+            label: Approve with risks
+          - id: revise
+            label: Revise plan
+          - id: reject
+            label: Reject
+        - type: capture_field
+          storeIn: planApprovalDecision
+        - type: call_action
+          action: persist_plan_approval
+        - type: branch
+          branches:
+          - when:
+              key: planApprovalDecision
+              value: reject
+            next: 5
+          - when:
+              key: planApprovalDecision
+              value: revise
+            next: 4
+          - when: else
+            next: 4
+        - type: done
+          message: ''
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: '**Plan rejected** â€” not launching from this packet. Start a fresh planning run from the main room when the request changes.'
+            asRole: orchestrator
+            target: thread
+        - type: done
+          message: Planning rejected; not launching.
+      cap_planning_launch:
+        kind: configurable_steps
+        steps:
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: '**Approved** â€” launching from this plan. Repo: `{{project}}`. Request summary is in the planning packet above.'
+            asRole: orchestrator
+            target: thread
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: Lifecycle room is ready. Launching the Cursor run from the approved planning packet in this feature room.
+            asRole: orchestrator
+            target: room
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: '**Launching Cursor Cloud** â€” submitting the run now (HTTP timeout up to ~2 minutes). A success or failure message follows in this thread.'
+            asRole: orchestrator
+            target: thread
+        - type: call_action
+          action: launch_cursor_run
+          bind: {}
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: launchSucceeded
+              value: 'false'
+            next: 5
+          - when: else
+            next: 8
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: 'Planning is blocked right now â€” {{planCritiqueError}}
+
+              {{planReadinessSummary}}'
+            asRole: orchestrator
+            target: thread
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: Planning blocked â€” cannot launch until workspace/gaps are resolved. See intake/spec thread.
+            asRole: orchestrator
+            target: room
+        - type: done
+          message: Planning blocked; not launching.
+        - type: call_action
+          action: post_channel_message
+          bind:
+            content: '{{launchMessage}}'
+            asRole: orchestrator
+            target: thread
+        - type: done
+          message: '{{launchMessage}}'
+      cap_post_blocked_thread:
+        kind: legacy_action
+        action: post_channel_message
+        bind:
+          content: 'Planning is blocked right now â€” {{planCritiqueError}}
+
+            {{planReadinessSummary}}'
+          asRole: orchestrator
+          target: thread
+      cap_post_blocked_room:
+        kind: legacy_action
+        action: post_channel_message
+        bind:
+          content: Planning blocked â€” cannot launch until workspace/gaps are resolved. See intake/spec thread.
+          asRole: orchestrator
+          target: room
+    rulesets:
+      rs_ingress:
+        - when:
+            equals:
+              key: planningIngressMode
+              value: SYNTHETIC_KICKOFF
+          then:
+          - transition: planning_kickoff
+        - when:
+            equals:
+              key: planningIngressMode
+              value: APPROVAL_INTERACTION
+          then:
+          - transition: planning_preapproval_review
+      rs_autonomous_draft:
+        - when:
+            truthy:
+              key: planningUserInputRequired
+          then:
+          - transition: planning_clarification
+        - when:
+            truthy:
+              key: planningReadyToPostPacket
+          then:
+          - transition: planning_packet
+      rs_critique:
+        - when:
+            equals:
+              key: planReadinessStatus
+              value: BLOCKED
+          then:
+          - transition: planning_blocked
+        - when:
+            equals:
+              key: planReadinessStatus
+              value: NEEDS_HUMAN_DECISION
+          then:
+          - transition: planning_human_review
+        - when:
+            equals:
+              key: planReadinessStatus
+              value: NEEDS_REVISION
+          then:
+          - transition: planning_revision_reset
+      rs_human_review:
+        - when:
+            equals:
+              key: readinessProceedRaw
+              value: revise
+          then:
+          - transition: planning_revision_reset
+      rs_preapproval_review:
+        - when:
+            truthy:
+              key: planningReadyForApproval
+          then:
+          - transition: planning_approval
+      rs_approval:
+        - when:
+            equals:
+              key: planApprovalDecision
+              value: approve
+          then:
+          - transition: planning_launch
+        - when:
+            equals:
+              key: planApprovalDecision
+              value: approve_with_risks
+          then:
+          - transition: planning_launch
+        - when:
+            equals:
+              key: planApprovalDecision
+              value: revise
+          then:
+          - transition: planning_revision_reset
+
   simple_echo:
     steps:
     - type: ask_input
@@ -806,9 +858,6 @@ workflows:
       bind:
         participantBotIds:
         - arrietty
-        - architect
-        - auditor
-        - scribe
         lifecycleOwnerBotId: arrietty
       storeIn: channelId
     - type: branch
@@ -879,18 +928,20 @@ workflows:
       - from: context.channelId
         storeIn: channelId
     - type: prompt_for_field
-      prompt: '**DevOps** — choose an action:'
+      prompt: '**DevOps** â€” choose an action:'
       storeIn: mainMenu
       intent: present_choices
       choices:
       - id: ansible
         label: Ansible playbook deploy
       - id: compose_up
-        label: Docker Compose — start (up)
+        label: Docker Compose â€” start (up)
       - id: compose_stop
-        label: Docker Compose — stop
+        label: Docker Compose â€” stop
+      - id: compose_restart
+        label: Docker Compose â€” restart
       - id: compose_ps
-        label: Docker Compose — status (ps)
+        label: Docker Compose â€” status (ps)
       - id: cancel
         label: Cancel
     - type: capture_field
@@ -900,7 +951,7 @@ workflows:
       - when:
           key: mainMenu
           value: cancel
-        next: 61
+        next: 51
       - when:
           key: mainMenu
           value: ansible
@@ -908,17 +959,21 @@ workflows:
       - when:
           key: mainMenu
           value: compose_up
-        next: 20
+        next: 17
       - when:
           key: mainMenu
           value: compose_stop
-        next: 32
+        next: 26
+      - when:
+          key: mainMenu
+          value: compose_restart
+        next: 35
       - when:
           key: mainMenu
           value: compose_ps
         next: 44
       - when: else
-        next: 61
+        next: 51
     - type: call_action
       action: deploy_resolve_project
       storeSpread: true
@@ -976,9 +1031,9 @@ workflows:
       - when:
           key: deployNeedsProjectPick
           value: 'true'
-        next: 22
+        next: 19
       - when: else
-        next: 24
+        next: 21
     - type: prompt_for_field
       prompt: Which deploy target?
       storeIn: deployTargetId
@@ -1035,6 +1090,41 @@ workflows:
       action: run_deploy_compose
       bind:
         composeOperation: stop
+      storeSpread: true
+    - type: done
+      message: '{{deployComposeMessage}}'
+    - type: call_action
+      action: deploy_resolve_project
+      storeSpread: true
+    - type: branch
+      branches:
+      - when:
+          key: deployNeedsProjectPick
+          value: 'true'
+        next: 37
+      - when: else
+        next: 39
+    - type: prompt_for_field
+      prompt: Which deploy target?
+      storeIn: deployTargetId
+      choiceProvider: deployTargets
+    - type: capture_field
+      storeIn: deployTargetId
+    - type: prompt_for_field
+      prompt: Which service(s)?
+      storeIn: deployComposeService
+      choiceProvider: deployComposeServices
+    - type: capture_field
+      storeIn: deployComposeService
+    - type: call_action
+      action: create_thread
+      bind:
+        threadName: deploy-progress
+      storeIn: deliveryChannelId
+    - type: call_action
+      action: run_deploy_compose
+      bind:
+        composeOperation: restart
       storeSpread: true
     - type: done
       message: '{{deployComposeMessage}}'

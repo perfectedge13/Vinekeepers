@@ -146,6 +146,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                 plan.withPacketPosted(Instant.now(), "", fingerprint, chunks.size())
                         .withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null));
         spread.put("planningPacketPosted", "true");
+        spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.PACKET_POSTED.name());
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));
         spread.put("planningPacketSkippedDuplicate", "false");
         spread.put("planningPacketSkipReason", "");

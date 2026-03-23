@@ -77,6 +77,7 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
         planStore.update(
                 plan.withIntakeKickoffPosted(nextVer, fingerprint)
                         .withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, null));
+        spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.DRAFTING.name());
         return spread;
     }
 

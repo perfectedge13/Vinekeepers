@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-22T23:50:00Z"
+  updated_utc: "2026-03-23T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -42,7 +42,7 @@ assets:
   - id: ASSET-PLANNING-ROLE
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/PlanningRole.java
-    role: Enum for feature room planning roles (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE)
+    role: Enum for feature room planning roles; production room provisioning is Arrietty-only but legacy role values remain for compatibility
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-ROOM-PARTICIPANT
@@ -60,7 +60,7 @@ assets:
   - id: ASSET-FEATURE-ROOM-STATE-STORE
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/FeatureRoomStateStore.java
-    role: Store and resolve feature room state by contextId, roomChannelId, intakeThreadId, featureId, or deliveryTargetId (thread then channel); null/blank keys no-op on lookup; put(null) no-op; getParticipantBotIds returns participant configuredBotIds in deterministic role order (ORCHESTRATOR, ARCHITECT, AUDITOR, SCRIBE); static resolveCoordinatorConfiguredBotId prefers primaryCoordinator flag then ORCHESTRATOR fallback
+    role: Store and resolve feature room state by contextId, roomChannelId, intakeThreadId, featureId, or deliveryTargetId (thread then channel); null/blank keys no-op on lookup; put(null) no-op; getParticipantBotIds returns participant configuredBotIds in deterministic PlanningRole order; static resolveCoordinatorConfiguredBotId prefers primaryCoordinator flag then ORCHESTRATOR fallback
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-FEATURE-PLAN-STATE
@@ -74,7 +74,14 @@ assets:
       notes, confidenceScore, confidenceReasons, computedAt), PlanApproval (status, actorId, at, optional rationale);
       durable PlanningIntakeStage with stageEnteredAt, intakeKickoffPostedVersion / intakeKickoffPostedFingerprint for
       idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED; repo workspace fields
-      (repoWorkspaceStatus, repoLocalPath, repoRef, repoAccessNotes) feed spread_plan_workspace_signals and JSON evidence spreads in workflow state
+      (repoWorkspaceStatus, repoLocalPath, repoRef, repoAccessNotes) feed spread_plan_workspace_signals and JSON evidence spreads in workflow state;
+      autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back post-draft clarification engine and discovery gap gating on the plan record
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-CLARIFICATION-RESOLUTION-DECISION
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/ClarificationResolutionDecision.java
+    role: Clarification assessor outcomes (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) for canonical coordinator engine
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLANNING-INTAKE-STAGE
@@ -288,11 +295,14 @@ requirements:
       criteria:
         - StateStore.load(botId, conversationKey) returns state or empty
         - StateStore.save persists state for bot and conversation
-        - FeatureRoomStateStore.getParticipantBotIds returns participant configured bot ids in stable order by PlanningRole (Orchestrator, Architect, Auditor, Scribe) regardless of list order in state
+        - FeatureRoomStateStore.getParticipantBotIds returns participant configured bot ids in stable PlanningRole order regardless of list order in state
         - FeatureRoomStateStore.getByContextId and getByRoomChannelId return empty for null or blank keys; put(null) does not store; put skips secondary indexes when optional keys are null or blank
         - FeatureRoomStateStore.resolveCoordinatorConfiguredBotId returns the participant marked primaryCoordinator when present, else the ORCHESTRATOR participant when present, else empty for null state or empty participants
         - FeaturePlanStateStore stores FeaturePlanState by contextId and secondary indexes (featureId, roomChannelId, intakeThreadId)
         - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows; creates VINEKEEPERS_REPO_WORKSPACE_ROOT when missing; deletes existing per-context workspace directory before shallow clone when present; fails closed if stale directory cannot be removed; logs milestones and supports optional progress callback; surfaces git output snippet on clone failure
+        - >-
+          FeaturePlanState repo workspace fields (repoRef, repoLocalPath, repoWorkspaceStatus, repoAccessNotes, workspace id) are the
+          persisted inputs for spread_plan_workspace_signals and for optional prep_planning_repo_grounding (checkout root + ref/branch scope for Parquet cache and Qdrant payload filters)
         - FeaturePlanState carries optional profileId and artifacts map (per-artifact section/field values) alongside legacy planning fields; with* methods preserve profileId and artifacts
         - >-
           FeaturePlanState holds governance lists (PlanAssumption, PlanIssue, PlanRisk, PlanDecision, unresolvedQuestions),
@@ -318,11 +328,15 @@ requirements:
           across rows; workflow session flag planningAutonomousFirstPassCompleted (set after a successful planning room cycle) gates
           whether REQUIRED_FIELD gaps are emitted alongside workspace BLOCKER gaps
         - >-
+          FeaturePlanState.autonomousPlanningPassCompleted, clarificationTurnsCompleted, and clarificationOutcomeHistory persist the
+          post-draft clarification engine: autonomous cycle completion, user clarification turn budget accounting, and short audit lines
+          for assume/defer/block outcomes; ClarificationResolutionDecision models the assessor outcomes used before a question is shown
+        - >-
           state.workflow package holds generic UnresolvedItem / UnresolvedItemStatus models for config-driven clarification ledgers
           (used by workflow engine features; JSON-serializable)
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-PLANNING-INTAKE-STAGE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-INTAKE-STAGE, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
       symbols: []
     validation:
       tests:
@@ -338,7 +352,7 @@ requirements:
           preconditions: []
         - id: UNIT-FEATURE-ROOM-STATE-STORE-PARTICIPANT-ORDER
           title: FeatureRoomStateStoreTest
-          intent: Verify getParticipantBotIds returns participant bot ids in stable role order (Orchestrator, Architect, Auditor, Scribe)
+          intent: Verify getParticipantBotIds returns participant bot ids in stable PlanningRole order
           testClass: com.vinekeepers.state.planning.FeatureRoomStateStoreTest
           testMethod: getParticipantBotIds_returnsStableOrderFromParticipantList
           preconditions: []
@@ -444,5 +458,5 @@ features:
       StateStore persists and loads per-bot, per-conversation workflow state; state.workflow holds generic UnresolvedItem
       models for config-driven clarification ledgers (REQ-WORKFLOW-002).
     requirement_ids: [REQ-STATE-001]
-    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
     status: active

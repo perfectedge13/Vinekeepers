@@ -15,3 +15,19 @@ targets:
       services:
         - vinekeepers
       hostOpsExecutor: direct
+  - id: neo4j
+    label: Neo4j
+    compose:
+      file: docker-compose.yml
+      workingDirectory: /opt/stacks/neo4j
+      services:
+        - neo4j
+      hostOpsExecutor: direct
+  - id: wikijs
+    label: Wiki.js
+    compose:
+      file: docker-compose.yml
+      workingDirectory: /opt/stacks/wikijs
+      services:
+        - wikijs
+      hostOpsExecutor: direct

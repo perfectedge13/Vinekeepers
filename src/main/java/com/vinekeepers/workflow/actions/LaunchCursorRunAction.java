@@ -30,6 +30,8 @@ import com.vinekeepers.state.planning.PlanApproval;
 
 import com.vinekeepers.state.planning.PlanApprovalStatus;
 
+import com.vinekeepers.state.planning.PlanningIntakeStage;
+
 import org.slf4j.Logger;
 
 import org.slf4j.LoggerFactory;
@@ -228,6 +230,8 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
         try {
 
+            updatePlanningStage(contextId, PlanningIntakeStage.LAUNCHING);
+
             CursorAgentLaunchResult launch = adapter.launchAgent(request);
 
             LifecycleRunRecord record = new LifecycleRunRecord(
@@ -280,6 +284,8 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
             }
 
+            updatePlanningStage(contextId, PlanningIntakeStage.DONE);
+
             String ack = buildAcknowledgement(record);
 
             log.info("Cursor launch success: agentId={}, status={}", launch.id(), launch.status());
@@ -289,6 +295,8 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         } catch (CursorCloudException e) {
 
             String msg = "Cursor launch failed: " + e.getMessage();
+
+            updatePlanningStage(contextId, PlanningIntakeStage.FAILED);
 
             log.warn("Cursor launch failed: {}", e.getMessage());
 
@@ -466,18 +474,6 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
 
 
-    private static long parseTimeoutMs(String raw, long fallback) {
-        if (raw == null || raw.isBlank()) {
-            return fallback;
-        }
-        try {
-            long v = Long.parseLong(raw.trim());
-            return v > 0 ? v : fallback;
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
-    }
-
     private static String normalizeRepository(String project) {
 
         if (project == null || project.isBlank()) {
@@ -501,6 +497,26 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         }
 
         return null;
+
+    }
+
+    private void updatePlanningStage(String contextId, PlanningIntakeStage stage) {
+
+        if (featurePlanStateStore == null || contextId == null || contextId.isBlank() || stage == null) {
+
+            return;
+
+        }
+
+        featurePlanStateStore.getByContextId(contextId).ifPresent(plan -> {
+
+            if (plan.getPlanningIntakeStage() != stage) {
+
+                featurePlanStateStore.update(plan.withPlanningIntakeStage(stage, null));
+
+            }
+
+        });
 
     }
 

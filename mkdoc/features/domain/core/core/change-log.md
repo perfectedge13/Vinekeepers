@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-22
+
+- **Optional Qdrant planning RAG wiring:** **Bootstrap** registers **prep_planning_repo_grounding** (**PrepPlanningRepoGroundingAction**) with **OpenAiChatClient** and plan/workspace stores so ingress YAML can run Parquet-backed embedding cache and Qdrant retrieval after **ensure_repo_workspace** without failing the workflow when RAG is disabled or misconfigured. Specs: **core-registry**, **workflow-registry**; implementation under **workflow/planning/rag**.
+
 ## 2026-03-18
 
 - **Bootstrap: FeatureRoomStateStore and multi-bot feature room actions:** Bootstrap creates **FeatureRoomStateStore** and passes it to **Router** and **OutboundDeliveryRouter** so multi-bot feature room routing and sendAsRole/sendAs work. Bootstrap registers workflow actions **provision_room_participants** (ProvisionRoomParticipantsAction) and **initialize_feature_room_state** (InitializeFeatureRoomStateAction). No change to engine or config wiring; action registration stays in Bootstrap.

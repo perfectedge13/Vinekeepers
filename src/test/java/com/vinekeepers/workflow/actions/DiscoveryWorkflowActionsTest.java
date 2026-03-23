@@ -194,10 +194,20 @@ class DiscoveryWorkflowActionsTest {
     }
 
     @Test
-    void markIntakeDiscoveryComplete_setsHumanFlag() {
-        var action = new MarkIntakeDiscoveryCompleteAction();
+    void markIntakeDiscoveryComplete_advancesCanonicalStage() {
+        var reg = TestWorkProfiles.loadFromRepoConfig();
+        var store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new com.vinekeepers.state.planning.FeatureRoomStateStore(), reg);
+        init.run(
+                null,
+                Map.of("contextId", "mdc", "channelId", "ch"),
+                Map.of("profileId", "software_feature_planning"));
+        var action = new MarkIntakeDiscoveryCompleteAction(store);
         @SuppressWarnings("unchecked")
-        Map<String, Object> out = (Map<String, Object>) action.run(null, Map.of(), Map.of());
-        assertEquals("true", out.get("humanDiscoveryCompleted"));
+        Map<String, Object> out = (Map<String, Object>) action.run(null, Map.of("contextId", "mdc"), Map.of());
+        assertEquals("DRAFTING", out.get("canonicalPlanningIntakeStage"));
+        assertEquals(
+                com.vinekeepers.state.planning.PlanningIntakeStage.DRAFTING,
+                store.getByContextId("mdc").orElseThrow().getPlanningIntakeStage());
     }
 }
