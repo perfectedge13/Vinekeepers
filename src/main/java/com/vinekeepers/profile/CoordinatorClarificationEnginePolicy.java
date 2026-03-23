@@ -8,6 +8,8 @@ import java.util.Objects;
 public final class CoordinatorClarificationEnginePolicy {
 
     private final int maxClarificationTurns;
+    private final int maxClarificationTurnsPerGap;
+    private final int maxAutonomousRedraftsBeforeAsk;
     private final double repoEvidenceAskThreshold;
     private final double clarificationAskPriorityThreshold;
     private final boolean allowAssumeAndContinue;
@@ -19,7 +21,27 @@ public final class CoordinatorClarificationEnginePolicy {
             double clarificationAskPriorityThreshold,
             boolean allowAssumeAndContinue,
             boolean allowClarificationAfterCritique) {
+        this(
+                maxClarificationTurns,
+                2,
+                2,
+                repoEvidenceAskThreshold,
+                clarificationAskPriorityThreshold,
+                allowAssumeAndContinue,
+                allowClarificationAfterCritique);
+    }
+
+    public CoordinatorClarificationEnginePolicy(
+            int maxClarificationTurns,
+            int maxClarificationTurnsPerGap,
+            int maxAutonomousRedraftsBeforeAsk,
+            double repoEvidenceAskThreshold,
+            double clarificationAskPriorityThreshold,
+            boolean allowAssumeAndContinue,
+            boolean allowClarificationAfterCritique) {
         this.maxClarificationTurns = Math.max(0, maxClarificationTurns);
+        this.maxClarificationTurnsPerGap = Math.max(0, maxClarificationTurnsPerGap);
+        this.maxAutonomousRedraftsBeforeAsk = Math.max(0, maxAutonomousRedraftsBeforeAsk);
         this.repoEvidenceAskThreshold =
                 repoEvidenceAskThreshold >= 0 && repoEvidenceAskThreshold <= 1
                         ? repoEvidenceAskThreshold
@@ -33,11 +55,19 @@ public final class CoordinatorClarificationEnginePolicy {
     }
 
     public static CoordinatorClarificationEnginePolicy defaultPolicy() {
-        return new CoordinatorClarificationEnginePolicy(10, 0.45, 0.48, true, true);
+        return new CoordinatorClarificationEnginePolicy(10, 2, 2, 0.45, 0.48, true, true);
     }
 
     public int getMaxClarificationTurns() {
         return maxClarificationTurns;
+    }
+
+    public int getMaxClarificationTurnsPerGap() {
+        return maxClarificationTurnsPerGap;
+    }
+
+    public int getMaxAutonomousRedraftsBeforeAsk() {
+        return maxAutonomousRedraftsBeforeAsk;
     }
 
     /**
@@ -73,7 +103,10 @@ public final class CoordinatorClarificationEnginePolicy {
         }
         CoordinatorClarificationEnginePolicy that = (CoordinatorClarificationEnginePolicy) o;
         return maxClarificationTurns == that.maxClarificationTurns
+                && maxClarificationTurnsPerGap == that.maxClarificationTurnsPerGap
+                && maxAutonomousRedraftsBeforeAsk == that.maxAutonomousRedraftsBeforeAsk
                 && Double.compare(that.repoEvidenceAskThreshold, repoEvidenceAskThreshold) == 0
+                && Double.compare(that.clarificationAskPriorityThreshold, clarificationAskPriorityThreshold) == 0
                 && allowAssumeAndContinue == that.allowAssumeAndContinue
                 && allowClarificationAfterCritique == that.allowClarificationAfterCritique;
     }
@@ -82,6 +115,8 @@ public final class CoordinatorClarificationEnginePolicy {
     public int hashCode() {
         return Objects.hash(
                 maxClarificationTurns,
+                maxClarificationTurnsPerGap,
+                maxAutonomousRedraftsBeforeAsk,
                 repoEvidenceAskThreshold,
                 clarificationAskPriorityThreshold,
                 allowAssumeAndContinue,

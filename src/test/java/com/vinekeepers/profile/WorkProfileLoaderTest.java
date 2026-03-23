@@ -26,5 +26,7 @@ class WorkProfileLoaderTest {
         WorkProfileDefinition v2 = reg.get("software_feature_planning_v2").orElseThrow();
         assertTrue(v2.getCoordinatorClarification().isCanonicalV1());
         assertFalse(v2.getCoordinatorClarification().getGaps().isEmpty());
+        assertEquals(2, v2.getCoordinatorClarification().getEnginePolicy().getMaxClarificationTurnsPerGap());
+        assertEquals(2, v2.getCoordinatorClarification().getEnginePolicy().getMaxAutonomousRedraftsBeforeAsk());
     }
 }

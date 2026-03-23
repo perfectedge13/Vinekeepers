@@ -130,6 +130,8 @@ profiles:
       mode: canonical_v1
       engine:
         maxClarificationTurns: 10
+        maxClarificationTurnsPerGap: 2
+        maxAutonomousRedraftsBeforeAsk: 2
         repoEvidenceAskThreshold: 0.42
         clarificationAskPriorityThreshold: 0.48
         allowAssumeAndContinue: true

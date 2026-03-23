@@ -3,6 +3,8 @@ package com.vinekeepers.workflow.planning;
 import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationMode;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
+import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
@@ -14,6 +16,7 @@ import java.util.Map;
 
 import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.vinekeepers.profile.WorkProfileDefinition;
@@ -190,6 +193,51 @@ class PlanningCyclePipelineCanonicalClarificationTest {
     }
 
     @Test
+    void canonicalResolveClarificationRoundRequiresPostDraftSemanticsToOpenGap() {
+        CoordinatorClarificationGapRule rule =
+                new CoordinatorClarificationGapRule(
+                        "model_override_granularity",
+                        true,
+                        "Which workflow steps should support model overrides first?",
+                        List.of("override", "step"),
+                        List.of("model", "step"),
+                        List.of("named steps", "per step", "step types", "both"));
+        CoordinatorClarificationSettings coord =
+                new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(rule));
+        WorkProfileDefinition profile =
+                new WorkProfileDefinition(
+                        "p",
+                        "",
+                        List.of(),
+                        List.of(),
+                        false,
+                        false,
+                        List.of(),
+                        coord);
+        FeaturePlanState plan = bareFeaturePlan();
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan);
+        WorkProfileRegistry registry = new WorkProfileRegistry();
+        registry.register(profile);
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, registry);
+        List<String> followUps =
+                List.of("Which workflow steps should support model overrides first, and what default model/provider must remain the fallback?");
+
+        Object preDraft =
+                invokeResolveClarificationRound(
+                        pipeline, "c", plan, Map.of(), profile, followUps, false);
+        assertFalse(invokeCanonicalClarificationPending(preDraft));
+        assertTrue(invokeLlmUserInputSuggested(preDraft));
+        assertNotNull(invokeFallbackQuestion(preDraft));
+        assertFalse(invokeFallbackQuestion(preDraft).isBlank());
+
+        Object postDraft =
+                invokeResolveClarificationRound(
+                        pipeline, "c", plan, Map.of(), profile, followUps, true);
+        assertTrue(invokeCanonicalClarificationPending(postDraft));
+    }
+
+    @Test
     void ensureRankedRepairsWhenRankerDropsShortCanonicalTemplate() {
         CoordinatorClarificationGapRule rule =
                 new CoordinatorClarificationGapRule("g_low", false, "ok", List.of("x"), List.of(), List.of());
@@ -205,7 +253,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         assertFalse(dropped.userInputRequired());
         RankedClarification repaired =
                 invokeEnsureRankedForOpenCanonicalGap(
-                        null, UnresolvedItemLedger.empty(), profile, coord, top, dropped);
+                        null, UnresolvedItemLedger.empty(), profile, coord, top, dropped, 0);
         assertTrue(repaired.userInputRequired());
         assertFalse(repaired.questionText() == null || repaired.questionText().isBlank());
     }
@@ -237,8 +285,25 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         0);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(merged);
         String q =
-                PlanningCyclePipeline.effectiveCanonicalQuestionText("Original?", "g1", rule, ledger);
+                PlanningCyclePipeline.effectiveCanonicalQuestionText("Original?", "g1", rule, ledger, 0);
         assertTrue(q.contains("concrete constraint"));
+    }
+
+    @Test
+    void canonicalQuestionEscalatesToBoundedReplyAfterMultipleAsks() {
+        CoordinatorClarificationGapRule rule =
+                new CoordinatorClarificationGapRule(
+                        "g1",
+                        false,
+                        "Original?",
+                        List.of(),
+                        List.of(),
+                        List.of("config only", "runtime only", "both"));
+        String q =
+                PlanningCyclePipeline.effectiveCanonicalQuestionText(
+                        "Original?", "g1", rule, UnresolvedItemLedger.empty(), 2);
+        assertTrue(q.contains("exactly one option"));
+        assertTrue(q.contains("config only"));
     }
 
     @Test
@@ -267,7 +332,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         List.of(),
                         coord);
         RankedClarification ranked =
-                invokeRankCanonicalOpenTopGap(null, UnresolvedItemLedger.empty(), profile, coord, top);
+                invokeRankCanonicalOpenTopGap(null, UnresolvedItemLedger.empty(), profile, coord, top, 0);
         assertFalse(ranked.useStructuredChoices());
     }
 
@@ -277,7 +342,8 @@ class PlanningCyclePipelineCanonicalClarificationTest {
             WorkProfileDefinition profile,
             CoordinatorClarificationSettings coord,
             CoordinatorClarificationGapEvaluator.OpenGap top,
-            RankedClarification ranked) {
+            RankedClarification ranked,
+            int priorAskCount) {
         try {
             var m =
                     PlanningCyclePipeline.class.getDeclaredMethod(
@@ -287,9 +353,10 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                             WorkProfileDefinition.class,
                             CoordinatorClarificationSettings.class,
                             CoordinatorClarificationGapEvaluator.OpenGap.class,
-                            RankedClarification.class);
+                            RankedClarification.class,
+                            int.class);
             m.setAccessible(true);
-            return (RankedClarification) m.invoke(null, plan, ledger, profile, coord, top, ranked);
+            return (RankedClarification) m.invoke(null, plan, ledger, profile, coord, top, ranked, priorAskCount);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -300,7 +367,8 @@ class PlanningCyclePipelineCanonicalClarificationTest {
             UnresolvedItemLedger ledger,
             WorkProfileDefinition profile,
             CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top) {
+            CoordinatorClarificationGapEvaluator.OpenGap top,
+            int priorAskCount) {
         try {
             var m =
                     PlanningCyclePipeline.class.getDeclaredMethod(
@@ -309,9 +377,76 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                             UnresolvedItemLedger.class,
                             WorkProfileDefinition.class,
                             CoordinatorClarificationSettings.class,
-                            CoordinatorClarificationGapEvaluator.OpenGap.class);
+                            CoordinatorClarificationGapEvaluator.OpenGap.class,
+                            int.class);
             m.setAccessible(true);
-            return (RankedClarification) m.invoke(null, plan, ledger, profile, coord, top);
+            return (RankedClarification) m.invoke(null, plan, ledger, profile, coord, top, priorAskCount);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Object invokeResolveClarificationRound(
+            PlanningCyclePipeline pipeline,
+            String contextId,
+            FeaturePlanState plan,
+            Map<String, Object> state,
+            WorkProfileDefinition profile,
+            List<String> aggregatedFollowUps,
+            boolean draftingCompletedThisInvocation) {
+        try {
+            var m =
+                    PlanningCyclePipeline.class.getDeclaredMethod(
+                            "resolveClarificationRound",
+                            String.class,
+                            FeaturePlanState.class,
+                            Map.class,
+                            WorkProfileDefinition.class,
+                            List.class,
+                            boolean.class);
+            m.setAccessible(true);
+            return m.invoke(
+                    pipeline,
+                    contextId,
+                    plan,
+                    state,
+                    profile,
+                    aggregatedFollowUps,
+                    draftingCompletedThisInvocation);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static boolean invokeCanonicalClarificationPending(Object outcome) {
+        try {
+            var m = outcome.getClass().getDeclaredMethod("canonicalClarificationPending");
+            m.setAccessible(true);
+            return (boolean) m.invoke(outcome);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static boolean invokeLlmUserInputSuggested(Object outcome) {
+        try {
+            var m = outcome.getClass().getDeclaredMethod("llmUserInputSuggested");
+            m.setAccessible(true);
+            return (boolean) m.invoke(outcome);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String invokeFallbackQuestion(Object outcome) {
+        try {
+            var rankedMethod = outcome.getClass().getDeclaredMethod("rankedLlm");
+            rankedMethod.setAccessible(true);
+            Object ranked = rankedMethod.invoke(outcome);
+            var questionMethod = ranked.getClass().getDeclaredMethod("questionText");
+            questionMethod.setAccessible(true);
+            Object question = questionMethod.invoke(ranked);
+            return question != null ? question.toString() : "";
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

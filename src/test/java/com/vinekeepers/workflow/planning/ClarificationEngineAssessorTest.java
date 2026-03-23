@@ -108,6 +108,21 @@ class ClarificationEngineAssessorTest {
     }
 
     @Test
+    void perGapBudgetExhaustedUsesExplicitGapLimit() {
+        CoordinatorClarificationEnginePolicy pol =
+                new CoordinatorClarificationEnginePolicy(10, 1, 2, 0.45, 0.0, true, true);
+        CoordinatorClarificationSettings settings =
+                new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
+        FeaturePlanState plan =
+                basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("ask:g_nb:1");
+        List<ClarificationEngineAssessor.AssessedGap> out =
+                ClarificationEngineAssessor.assessCanonicalGaps(
+                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+        assertEquals(1, out.size());
+        assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
+    }
+
+    @Test
     void critiqueFollowUpLowersAskThresholdSoMarginalEvidenceCanAssume() {
         CoordinatorClarificationEnginePolicy pol =
                 new CoordinatorClarificationEnginePolicy(5, 0.55, 0.0, true, true);

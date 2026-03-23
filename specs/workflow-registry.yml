@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T18:00:00Z"
+  updated_utc: "2026-03-23T23:30:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -387,8 +387,9 @@ assets:
       runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
       planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls; ranks clarifications with ledger fingerprint
       filtering; optional selective rerun after merge (skips expansion, one inner round); ConfigurablePassRunner resolves
-      the Arrietty planning pass from planningRolePassOrder bind (legacy architect/auditor/scribe tokens collapse to the same pass); sets planningPhase READY_FOR_REVIEW when draft is
-      review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
+      the Arrietty planning pass from planningRolePassOrder bind (legacy architect/auditor/scribe tokens collapse to the same pass); derives a
+      single pre-packet loop outcome through PlanningPostDraftGovernor (ASK / REDRAFT / POST / ASSUME / BLOCK) and treats planningPhase,
+      planningReadyToPostPacket, and planningRevisionNeeded as derived views of that result; DeliberationEngine
       derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
       mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
       and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); merge/reconciliation can add an explicit
@@ -402,7 +403,7 @@ assets:
       PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;       PlanningQuestionRankingPolicy.rank uses
       maxQuestions budget 1 for coordinator LLM follow-up ranking and canonical repair paths; ClarificationEngineAssessor runs after
       draft/gap evaluation for canonical_v1, using repo-grounding evidence strength, CoordinatorClarificationEnginePolicy thresholds,
-      clarification-turn budget, and critique follow-up state to choose ClarificationResolutionDecision before surfacing a question;
+      clarification-turn budget, per-gap ask budget, and critique follow-up state to choose ClarificationResolutionDecision before surfacing a question;
       planningCycleUserVisibleFailure maps
       planningRoomCycleError through PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine and LLM error/skip lines through
       humanizePlanningCycleFailureFragment; planningOrchestratorRoundSummary and
@@ -411,10 +412,14 @@ assets:
       synthesizes a non-empty RankedClarification before upsert so ledger and prompts stay consistent; spread keys
       planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
       planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true;
+      finalizePlanningCycleSpread reassesses canonical clarification with post-draft semantics after the inner round and, when canonical
+      reassessment still yields no open gap, may preserve a single synthesized clarification question as a narrow fallback instead of
+      letting the fail-closed post-assess route collapse into planning_blocked;
       alongside machine planningRoomCycleError codes, spreads planningRoomCycleErrorUserMessage (PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine)
       for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens;
       PlanningPostDraftGovernor derives planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
-      AUTONOMOUS_REDRAFT) plus planningPostDraftNoticeMarkdown and material/revision baselines so Arrietty v2 post-assess YAML
+      AUTONOMOUS_REDRAFT) plus a canonical loop outcome, planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount,
+      and material/revision baselines so Arrietty v2 post-assess YAML
       routes only on that action (no truthy planningUserInputRequired/planningReadyToPostPacket convergence); finalizePlanningCycleSpread
       persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute);
       applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
@@ -429,14 +434,16 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPostDraftGovernor.java
     role: >-
-      Post-draft routing governor: derives PlanningPostDraftAction from clarification, depth, parse health, ledger repeat,
+      Post-draft routing governor: derives PlanningPostDraftAction plus a canonical loop outcome from clarification, depth, parse health, ledger repeat,
       material-change signals (merged user answer, repo evidence hash, assumption count, critique blocking count, draft
       fingerprint when canonical exploration/summary text changed), and non-blank planningSynthesisFailureCategory; when category is
       recoverable (planningRecoverableDraftAfterSynthesis) prefers ASK_ONE_QUESTION from ledger/plan, else ASSUME_AND_CONTINUE with a
       plain continuing notice instead of AUTONOMOUS_REDRAFT spam; when a stale hard-clarification signal coexists with an open question
-      or a just-merged clarification, it asks/continues instead of falsely BLOCKing; otherwise BLOCK with
+      or a just-merged clarification, it asks/continues instead of falsely BLOCKing; a single synthesized clarification question may
+      also force ASK_ONE_QUESTION when canonical finalize reassessment produced no open gap but no real failure exists; otherwise BLOCK with
       PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode;
-      revision situation fingerprint stops unchanged non-posting loops; when redraft would otherwise assume-through, ASK_ONE_QUESTION if
+      revision situation fingerprint stops unchanged non-posting loops; explicit planningAutonomousRedraftCount and
+      maxAutonomousRedraftsBeforeAsk bias the system toward asking before another low-value redraft; when redraft would otherwise assume-through, ASK_ONE_QUESTION if
       FeaturePlanState still has structured material gaps (unresolvedQuestions, open blocking issues, open HIGH assumptions) via
       firstStructuredMaterialQuestion — not packet display text; firstUserFacingClarificationTextOrEmpty merges ledger then plan for forced clarification copy
     requires:
@@ -485,7 +492,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/ClarificationEngineAssessor.java
     role: >-
       Post-draft coordinator clarification assessor for canonical_v1 gaps: combines repo-grounding signals, engine-policy
-      thresholds (repoEvidenceAskThreshold, clarificationAskPriorityThreshold), clarification-turn budget, and critique-follow-up
+      thresholds (repoEvidenceAskThreshold, clarificationAskPriorityThreshold), clarification-turn budget, per-gap ask cap, and critique-follow-up
       state to choose ASK_USER vs ASSUME_AND_CONTINUE /
       LOW_PRIORITY_DEFER / BLOCK_AS_UNIMPLEMENTABLE before a single question is surfaced
     requires:
@@ -526,8 +533,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningReadinessSpread.java
     role: >-
-      Planning-cycle spread contract for clarification-first gating: writes packet/review/approval allowance keys,
-      keeps reviewReady false until packet-post + critique gates run, and exposes helper predicates for pending
+      Planning-cycle spread contract for clarification-first gating: writes packet/review/approval allowance keys and explanatory reasons,
+      leaves final reviewReady / approvalReady ownership to EvaluatePlanningApprovalGateAction after packet-post + critique, and exposes helper predicates for pending
       clarification, packet-post permission, and human checkpoint acknowledgment
     requires:
       - REQ-WORKFLOW-001
@@ -1717,7 +1724,7 @@ assets:
       Workflow action evaluate_planning_packet_depth — resolves WorkProfileDefinition from plan profileId and
       PlanningPacketDepthEvaluator.evaluate(plan, profile, relaxOpenQuestionSupplementalChecks(state));
       storeSpread planningPacketDepthOk, planningPacketDepthReason,
-      planningPacketDepthRetryRecommended; depth feedback is emitted here but final reviewReady/reviewReady stays deferred
+      planningPacketDepthRetryRecommended, and explanatory review-ready reasons only; final reviewReady/approvalReady stays deferred
       until packet-post + critique gates run;
       derive_plan_governance runs before this step in YAML so depth/post see merged governance lists
     requires:
@@ -2807,10 +2814,11 @@ requirements:
       configurable_steps only and does not use linear_workflow_ref. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
-      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; OPEN ledger items after upsert drive
-      planningUserInputRequired; canonical_v1 profiles reconcile OPEN items from profile coordinatorClarification gaps before upsert;
+      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; canonical_v1 profiles reconcile OPEN items from
+      profile coordinatorClarification gaps before upsert and use PlanningPostDraftGovernor as the single source of truth for the
+      pre-packet loop outcome (ASK / REDRAFT / POST / ASSUME / BLOCK);
       post-draft ClarificationEngineAssessor applies engine policy (ask vs assume-and-continue vs defer vs block) using repo evidence,
-      turn budget, and critique context; when allowClarificationAfterCritique is enabled, critique can trigger another clarification
+      total/per-gap turn budget, and critique context; when allowClarificationAfterCritique is enabled, critique can trigger another clarification
       sweep without abandoning single-question specificity; coordinator clarification follows a strict contract (one concrete blocking
       question when a required fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved
       plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. PlanningPostDraftGovernor derives
@@ -2855,10 +2863,11 @@ requirements:
           remain, packet depth and critique accept the ready-to-implement sentinel instead of requiring an editable draft list
         - >-
           PlanningPostDraftGovernor spreads planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
-          AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, and durable material/revision baselines in workflow session state so an
+          AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount, and durable material/revision baselines in workflow session state so an
           unchanged non-posting revision situation cannot re-enter autonomous drafting without a merged user answer, new repo evidence,
           new assumptions, new critique blocking findings, or materially different canonical draft/exploration text; when that
-          deny-redraft path would otherwise ASSUME_AND_CONTINUE, an OPEN planning clarification question or structured material gaps on
+          deny-redraft path would otherwise ASSUME_AND_CONTINUE, or when the autonomous redraft count reaches the configured ask threshold,
+          an OPEN planning clarification question or structured material gaps on
           FeaturePlanState (e.g. unresolved questions, open blocking issues, open HIGH assumptions) forces ASK_ONE_QUESTION with
           forceUserInputRequired instead of silently assuming through
         - >-
@@ -2873,9 +2882,9 @@ requirements:
         - >-
           For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
           ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
-          CoordinatorClarificationEnginePolicy (maxClarificationTurns, repoEvidenceAskThreshold, allowAssumeAndContinue,
-          allowClarificationAfterCritique) plus repo-grounding signals on FeaturePlanState; surfaced questions still respect the
-          maxQuestions=1 coordinator ranking contract
+          CoordinatorClarificationEnginePolicy (maxClarificationTurns, maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk,
+          repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique) plus repo-grounding signals on FeaturePlanState; surfaced questions still respect the
+          maxQuestions=1 coordinator ranking contract and escalate from open to narrow to bounded prompts as repeated asks accumulate
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           informs clarification assessment and ranking so strong on-repo support can reduce unnecessary user asks per policy thresholds

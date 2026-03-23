@@ -9,7 +9,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -125,6 +124,16 @@ public final class WorkProfileLoader {
                 maxTurnsObj != null
                         ? maxTurnsObj
                         : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxClarificationTurns();
+        Integer maxTurnsPerGapObj = intObject(em.get("maxClarificationTurnsPerGap"));
+        int maxTurnsPerGap =
+                maxTurnsPerGapObj != null
+                        ? maxTurnsPerGapObj
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxClarificationTurnsPerGap();
+        Integer maxRedraftsObj = intObject(em.get("maxAutonomousRedraftsBeforeAsk"));
+        int maxRedrafts =
+                maxRedraftsObj != null
+                        ? maxRedraftsObj
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxAutonomousRedraftsBeforeAsk();
         Double threshold = doubleObject(em.get("repoEvidenceAskThreshold"));
         double thr =
                 threshold != null
@@ -143,10 +152,10 @@ public final class WorkProfileLoader {
                 em.containsKey("allowClarificationAfterCritique")
                         ? booleanVal(em.get("allowClarificationAfterCritique"))
                         : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowClarificationAfterCritique();
-        return new CoordinatorClarificationEnginePolicy(maxTurns, thr, askP, allowAssume, allowCrit);
+        return new CoordinatorClarificationEnginePolicy(
+                maxTurns, maxTurnsPerGap, maxRedrafts, thr, askP, allowAssume, allowCrit);
     }
 
-    @SuppressWarnings("unchecked")
     private static CoordinatorClarificationGapRule parseCoordinatorGap(Map<String, Object> raw) {
         if (raw == null) {
             return null;
@@ -360,7 +369,6 @@ public final class WorkProfileLoader {
         return false;
     }
 
-    @SuppressWarnings("unchecked")
     private static List<String> stringList(Object o) {
         if (!(o instanceof List<?> list)) {
             return List.of();

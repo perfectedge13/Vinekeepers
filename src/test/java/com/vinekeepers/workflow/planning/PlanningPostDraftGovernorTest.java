@@ -164,6 +164,41 @@ class PlanningPostDraftGovernorTest {
     }
 
     @Test
+    void derive_asksWhenLlmSuggestedQuestionExistsEvenWithoutCanonicalPending() {
+        UnresolvedItem it =
+                new UnresolvedItem(
+                        "uq_1",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "Which workflow steps should support model overrides first?",
+                        "normal",
+                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL),
+                        List.of(),
+                        List.of(),
+                        0);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(it);
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of("planningLlmUserInputSuggested", "true"),
+                        minimalPlan(),
+                        ledger,
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        "",
+                        false,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
+        assertTrue(r.forceUserInputRequired());
+    }
+
+    @Test
     void derive_forcesAskWhenRepeatLedgerAndNoMaterial() {
         UnresolvedItem it =
                 new UnresolvedItem(

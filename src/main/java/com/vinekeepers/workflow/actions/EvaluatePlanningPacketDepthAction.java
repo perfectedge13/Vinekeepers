@@ -29,8 +29,6 @@ public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.
         Map<String, Object> spread = new LinkedHashMap<>();
         spread.put("planningPacketDepthOk", "false");
         spread.put("planningPacketDepthReason", "");
-        spread.put("planningReviewReady", "false");
-        spread.put("reviewReady", "false");
         spread.put("planningReviewReadyReason", "");
         spread.put("reviewReadyReason", "");
         if (planStateStore == null) {
@@ -53,8 +51,6 @@ public final class EvaluatePlanningPacketDepthAction implements com.vinekeepers.
         spread.put("planningPacketDepthOk", r.ok() ? "true" : "false");
         spread.put("planningPacketDepthReason", r.reason() != null ? r.reason() : "");
         spread.put("planningPacketDepthRetryRecommended", r.ok() ? "false" : "true");
-        spread.put("planningReviewReady", "false");
-        spread.put("reviewReady", "false");
         boolean noClarify = !com.vinekeepers.workflow.planning.PlanningReadinessSpread.hasPendingClarification(state);
         if (r.ok() && noClarify) {
             spread.put(

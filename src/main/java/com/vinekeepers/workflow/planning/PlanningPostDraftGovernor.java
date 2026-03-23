@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.profile.CoordinatorClarificationEnginePolicy;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.PlanAssumptionStatus;
@@ -28,10 +29,32 @@ public final class PlanningPostDraftGovernor {
     public static final String BASELINE_CRITIQUE_BLOCKING_KEY = "planningMaterialBaselineCritiqueBlockingCount";
     public static final String BASELINE_DRAFT_FP_KEY = "planningMaterialBaselineDraftFingerprint";
     public static final String LAST_REVISION_SITUATION_KEY = "planningLastNonPostingRevisionSituation";
+    public static final String AUTONOMOUS_REDRAFT_COUNT_KEY = "planningAutonomousRedraftCount";
 
     private PlanningPostDraftGovernor() {}
 
-    public record Result(PlanningPostDraftAction action, String noticeMarkdown, boolean forceUserInputRequired) {}
+    public enum LoopOutcome {
+        ASK,
+        REDRAFT,
+        POST,
+        ASSUME,
+        BLOCK
+    }
+
+    public record Result(
+            PlanningPostDraftAction action,
+            LoopOutcome outcome,
+            String noticeMarkdown,
+            boolean forceUserInputRequired,
+            boolean userInputRequired,
+            boolean readyToPostPacket,
+            String planningPhase,
+            boolean revisionNeeded) {
+
+        public boolean packetPostingAllowed() {
+            return outcome == LoopOutcome.POST || outcome == LoopOutcome.ASSUME;
+        }
+    }
 
     /**
      * @param persistedSessionState keys persisted from prior workflow turns (baselines, last revision situation)
@@ -52,11 +75,52 @@ public final class PlanningPostDraftGovernor {
             boolean recoverableAfterSynthesis,
             boolean suppressAutonomousRedraftNotice,
             boolean hardClarificationBlock) {
+        return derive(
+                persistedSessionState,
+                signalState,
+                plan,
+                ledger,
+                userInputRequired,
+                readyToPost,
+                depthOk,
+                structuredParseFailed,
+                depthReason,
+                cycleError,
+                synthesisFailureCategory,
+                recoverableAfterSynthesis,
+                suppressAutonomousRedraftNotice,
+                hardClarificationBlock,
+                CoordinatorClarificationEnginePolicy.defaultPolicy());
+    }
+
+    public static Result derive(
+            Map<String, Object> persistedSessionState,
+            Map<String, Object> signalState,
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            boolean userInputRequired,
+            boolean readyToPost,
+            boolean depthOk,
+            boolean structuredParseFailed,
+            String depthReason,
+            String cycleError,
+            String synthesisFailureCategory,
+            boolean recoverableAfterSynthesis,
+            boolean suppressAutonomousRedraftNotice,
+            boolean hardClarificationBlock,
+            CoordinatorClarificationEnginePolicy policy) {
         String depth = depthReason != null ? depthReason : "";
         String cyc = cycleError != null ? cycleError : "";
         boolean wantsRevision = !readyToPost && !userInputRequired;
         String synthCat = synthesisFailureCategory != null ? synthesisFailureCategory.trim() : "";
         PlanningFailureCategory synthFailure = PlanningFailureCategory.parse(synthCat);
+        CoordinatorClarificationEnginePolicy loopPolicy =
+                policy != null ? policy : CoordinatorClarificationEnginePolicy.defaultPolicy();
+        int autonomousRedraftCount = parseInt(getString(persistedSessionState, AUTONOMOUS_REDRAFT_COUNT_KEY), 0);
+        boolean redraftAskThresholdReached =
+                wantsRevision
+                        && loopPolicy.getMaxAutonomousRedraftsBeforeAsk() > 0
+                        && autonomousRedraftCount >= loopPolicy.getMaxAutonomousRedraftsBeforeAsk();
 
         boolean material =
                 detectMaterialChange(
@@ -75,23 +139,23 @@ public final class PlanningPostDraftGovernor {
         if (hardClarificationBlock) {
             String q = firstUserFacingClarificationTextOrEmpty(ledger, plan);
             if (!q.isBlank()) {
-                return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+                return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
             }
             if ("true".equalsIgnoreCase(getString(signalState, "planningJustMergedClarification"))) {
-                return new Result(
+                return resultFor(
                         PlanningPostDraftAction.ASSUME_AND_CONTINUE,
                         "**Continuing**\n\nYour clarification was applied successfully, so I'm using that answer and "
                                 + "moving the saved draft forward instead of dropping into a blocked state.",
                         false);
             }
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.BLOCK,
                     "**Planning paused**\n\nA blocking coordinator gap hit the clarification budget. A human needs to "
                             + "unblock scope or relax constraints before we continue.",
                     false);
         }
         if (!cyc.isBlank() && cyc.startsWith("DEPTH_FAIL_AFTER_RETRIES")) {
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.BLOCK,
                     "**Planning paused**\n\nDepth checks failed after several tries. Reply with one concrete constraint, "
                             + "example, or acceptance check you care about, or confirm a smaller scope so we can ship a "
@@ -101,7 +165,7 @@ public final class PlanningPostDraftGovernor {
 
         if (synthFailure == PlanningFailureCategory.SYNTHESIS_EMPTY_NOOP) {
             if (recoverableAfterSynthesis) {
-                return new Result(
+                return resultFor(
                         PlanningPostDraftAction.ASSUME_AND_CONTINUE,
                         "**Continuing**\n\nThe latest drafting pass made no applicable structured changes, so I'm "
                                 + "keeping the current draft and moving forward.",
@@ -114,13 +178,13 @@ public final class PlanningPostDraftGovernor {
             if (recoverableAfterSynthesis) {
                 String q = firstUserFacingClarificationTextOrEmpty(ledger, plan);
                 if (!q.isBlank()) {
-                    return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+                    return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
                 }
                 if (hasStructuredMaterialPlanningGaps(plan)) {
-                    return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+                    return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
                 }
                 String human = PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthFailure.name());
-                return new Result(
+                return resultFor(
                         PlanningPostDraftAction.ASSUME_AND_CONTINUE,
                         "**Continuing**\n\n"
                                 + (human.isBlank() ? "The latest drafting pass had trouble." : human)
@@ -128,45 +192,59 @@ public final class PlanningPostDraftGovernor {
                         false);
             }
             String human = PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthFailure.name());
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.BLOCK,
                     "**Planning paused**\n\n" + (human.isBlank() ? synthFailure.name() : human),
                     false);
         }
 
         if (!cyc.isBlank()) {
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.BLOCK,
                     "**Planning paused**\n\n"
                             + (cyc.length() > 220 ? cyc.substring(0, 219) + "…" : cyc),
                     false);
         }
 
+        if (!userInputRequired && !readyToPost && synthesisAskFallbackAvailable(signalState, ledger)) {
+            return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+        }
+
         if (userInputRequired) {
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.ASK_ONE_QUESTION,
                     "",
                     false);
         }
         if (readyToPost) {
-            return new Result(PlanningPostDraftAction.POST_PACKET, "", false);
+            return resultFor(PlanningPostDraftAction.POST_PACKET, "", false);
         }
 
         boolean ledgerRepeat = ledger != null && ledger.maxOpenItemRepeatCount() >= 1;
         boolean denyRedraft = !material && (sameNonPostingSituation || ledgerRepeat);
 
+        if (wantsRevision && redraftAskThresholdReached) {
+            String q = firstOpenPlanningQuestion(ledger);
+            if (q != null && !q.isBlank()) {
+                return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+            }
+            if (hasStructuredMaterialPlanningGaps(plan)) {
+                return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+            }
+        }
+
         if (wantsRevision && denyRedraft) {
             String q = firstOpenPlanningQuestion(ledger);
             if (q != null && !q.isBlank()) {
-                return new Result(
+                return resultFor(
                         PlanningPostDraftAction.ASK_ONE_QUESTION,
                         "",
                         true);
             }
             if (hasStructuredMaterialPlanningGaps(plan)) {
-                return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+                return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
             }
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.ASSUME_AND_CONTINUE,
                     "**Continuing**\n\nI'm treating remaining gaps as assumptions for this pass and moving the packet "
                             + "forward for review. Reply if you want to correct anything before launch.",
@@ -175,20 +253,20 @@ public final class PlanningPostDraftGovernor {
 
         if (wantsRevision) {
             if (suppressAutonomousRedraftNotice) {
-                return new Result(
+                return resultFor(
                         PlanningPostDraftAction.ASSUME_AND_CONTINUE,
                         "**Continuing**\n\nAdvancing from the saved draft without a separate redraft notice — reply "
                                 + "only if you want to correct something before the next packet step.",
                         false);
             }
-            return new Result(
+            return resultFor(
                     PlanningPostDraftAction.AUTONOMOUS_REDRAFT,
                     "**Another drafting pass**\n\nTightening the draft from the latest repo signals and coordinator "
                             + "notes — no reply needed unless I ask a specific question next.",
                     false);
         }
 
-        return new Result(PlanningPostDraftAction.ASSUME_AND_CONTINUE, "", false);
+        return resultFor(PlanningPostDraftAction.ASSUME_AND_CONTINUE, "", false);
     }
 
     /** Updates session keys merged from spread after assess (material baselines + last non-posting situation). */
@@ -196,7 +274,7 @@ public final class PlanningPostDraftGovernor {
             Map<String, Object> spread,
             Map<String, Object> signalState,
             FeaturePlanState plan,
-            boolean readyToPost,
+            Result result,
             boolean wantsRevision,
             String revisionSituationFingerprint) {
         if (spread == null) {
@@ -210,11 +288,54 @@ public final class PlanningPostDraftGovernor {
         spread.put(BASELINE_ASSUMPTION_COUNT_KEY, String.valueOf(asm));
         spread.put(BASELINE_CRITIQUE_BLOCKING_KEY, String.valueOf(critBlock));
         spread.put(BASELINE_DRAFT_FP_KEY, draftFp != null ? draftFp : "");
-        if (readyToPost || !wantsRevision) {
+        PlanningPostDraftAction action = result != null ? result.action() : null;
+        if (action == PlanningPostDraftAction.AUTONOMOUS_REDRAFT) {
+            int prev = parseInt(getString(signalState, AUTONOMOUS_REDRAFT_COUNT_KEY), 0);
+            spread.put(AUTONOMOUS_REDRAFT_COUNT_KEY, String.valueOf(prev + 1));
+        } else {
+            spread.put(AUTONOMOUS_REDRAFT_COUNT_KEY, "0");
+        }
+        if ((result != null && result.outcome() == LoopOutcome.POST) || !wantsRevision) {
             spread.put(LAST_REVISION_SITUATION_KEY, "");
         } else if (revisionSituationFingerprint != null && !revisionSituationFingerprint.isBlank()) {
             spread.put(LAST_REVISION_SITUATION_KEY, revisionSituationFingerprint);
         }
+    }
+
+    private static Result resultFor(
+            PlanningPostDraftAction action, String noticeMarkdown, boolean forceUserInputRequired) {
+        LoopOutcome outcome = outcomeFor(action);
+        boolean effectiveUser = outcome == LoopOutcome.ASK || forceUserInputRequired;
+        boolean readyToPostPacket = outcome == LoopOutcome.POST;
+        String phase = switch (outcome) {
+            case ASK -> "WAITING_FOR_CLARIFICATION";
+            case REDRAFT -> "REVISING";
+            case POST, ASSUME -> "READY_FOR_REVIEW";
+            case BLOCK -> "FAILED";
+        };
+        boolean revisionNeeded = outcome == LoopOutcome.ASK || outcome == LoopOutcome.REDRAFT;
+        return new Result(
+                action,
+                outcome,
+                noticeMarkdown != null ? noticeMarkdown : "",
+                forceUserInputRequired,
+                effectiveUser,
+                readyToPostPacket,
+                phase,
+                revisionNeeded);
+    }
+
+    private static LoopOutcome outcomeFor(PlanningPostDraftAction action) {
+        if (action == null) {
+            return LoopOutcome.BLOCK;
+        }
+        return switch (action) {
+            case ASK_ONE_QUESTION -> LoopOutcome.ASK;
+            case AUTONOMOUS_REDRAFT -> LoopOutcome.REDRAFT;
+            case POST_PACKET -> LoopOutcome.POST;
+            case ASSUME_AND_CONTINUE -> LoopOutcome.ASSUME;
+            case BLOCK -> LoopOutcome.BLOCK;
+        };
     }
 
     static String revisionSituationFingerprint(
@@ -403,6 +524,19 @@ public final class PlanningPostDraftGovernor {
             }
         }
         return "";
+    }
+
+    private static boolean synthesisAskFallbackAvailable(
+            Map<String, Object> signalState, UnresolvedItemLedger ledger) {
+        if (!"true".equalsIgnoreCase(getString(signalState, "planningLlmUserInputSuggested"))) {
+            return false;
+        }
+        String q = firstOpenPlanningQuestionTextOrEmpty(ledger);
+        if (q != null && !q.isBlank()) {
+            return true;
+        }
+        String spreadQuestion = getString(signalState, "planningClarificationQuestionText");
+        return spreadQuestion != null && !spreadQuestion.isBlank();
     }
 
     private static String firstOpenPlanningQuestion(UnresolvedItemLedger ledger) {

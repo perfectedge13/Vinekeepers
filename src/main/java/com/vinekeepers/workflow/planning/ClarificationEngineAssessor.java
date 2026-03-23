@@ -61,7 +61,15 @@ public final class ClarificationEngineAssessor {
 
         List<AssessedGap> assessed = new ArrayList<>();
         for (CoordinatorClarificationGapEvaluator.OpenGap g : open) {
-            assessed.add(assessOneGap(g, settings, evidence, askThreshold, pol, budgetExhausted));
+            assessed.add(
+                    assessOneGap(
+                            g,
+                            settings,
+                            evidence,
+                            askThreshold,
+                            pol,
+                            budgetExhausted,
+                            gapAskCount(plan, g.gapId())));
         }
         assessed.sort(Comparator.comparingDouble(AssessedGap::rankScore).reversed());
         return List.copyOf(assessed);
@@ -73,11 +81,14 @@ public final class ClarificationEngineAssessor {
             double evidenceScore,
             double askThreshold,
             CoordinatorClarificationEnginePolicy pol,
-            boolean budgetExhausted) {
+            boolean budgetExhausted,
+            int gapAskCount) {
         CoordinatorClarificationGapRule rule = settings.findGapRule(g.gapId()).orElse(null);
         double rank = rankGap(g, evidenceScore, rule);
+        boolean gapBudgetExhausted =
+                pol.getMaxClarificationTurnsPerGap() > 0 && gapAskCount >= pol.getMaxClarificationTurnsPerGap();
         if (g.blocking()) {
-            if (budgetExhausted) {
+            if (budgetExhausted || gapBudgetExhausted) {
                 return new AssessedGap(
                         g,
                         ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE,
@@ -88,7 +99,7 @@ public final class ClarificationEngineAssessor {
             }
             return new AssessedGap(g, ClarificationResolutionDecision.ASK_USER, "", rank);
         }
-        if (budgetExhausted) {
+        if (budgetExhausted || gapBudgetExhausted) {
             if (pol.isAllowAssumeAndContinue()) {
                 return new AssessedGap(
                         g,
@@ -135,6 +146,20 @@ public final class ClarificationEngineAssessor {
         String q = g.questionText() != null ? g.questionText() : "";
         score += Math.min(0.12, q.length() / 4000.0);
         return score;
+    }
+
+    private static int gapAskCount(FeaturePlanState plan, String gapId) {
+        if (plan == null || gapId == null || gapId.isBlank() || plan.getClarificationOutcomeHistory() == null) {
+            return 0;
+        }
+        String prefix = "ask:" + gapId.trim() + ":";
+        int count = 0;
+        for (String row : plan.getClarificationOutcomeHistory()) {
+            if (row != null && row.startsWith(prefix)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public static double repoEvidenceGroundingScore(FeaturePlanState plan, String planningRepoEvidenceJson) {

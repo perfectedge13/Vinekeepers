@@ -92,7 +92,7 @@ class PlanningDeliberationLedgerSyncTest {
                         "Q?");
         PlanningDeliberationLedgerSync.UpsertResult out =
                 PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
-                        UnresolvedItemLedger.empty(), ranked, "my_gap", false);
+                        UnresolvedItemLedger.empty(), ranked, "my_gap", false, 2, "NARROW");
         assertTrue(out.activeItemId().isPresent());
         UnresolvedItem it =
                 out.ledger().items().stream()
@@ -100,6 +100,8 @@ class PlanningDeliberationLedgerSyncTest {
                         .findFirst()
                         .orElseThrow();
         assertEquals("my_gap", it.getSource().get("gapId"));
+        assertEquals("2", it.getSource().get("askCount"));
+        assertEquals("NARROW", it.getSource().get("escalationLevel"));
     }
 
     @Test

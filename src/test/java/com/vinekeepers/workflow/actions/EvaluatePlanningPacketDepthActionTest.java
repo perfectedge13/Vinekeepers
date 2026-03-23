@@ -59,7 +59,7 @@ class EvaluatePlanningPacketDepthActionTest {
                                 state,
                                 Map.of("contextId", "ctx-relax"));
         assertEquals("true", spread.get("planningPacketDepthOk"));
-        assertEquals("false", spread.get("planningReviewReady"));
+        assertFalse(spread.containsKey("planningReviewReady"));
         assertTrue(String.valueOf(spread.get("planningReviewReadyReason")).contains("Final review readiness"));
     }
 
@@ -82,7 +82,7 @@ class EvaluatePlanningPacketDepthActionTest {
                                 state,
                                 Map.of("contextId", "ctx-block"));
         assertEquals("false", spread.get("planningPacketDepthOk"));
-        assertEquals("false", spread.get("planningReviewReady"));
+        assertFalse(spread.containsKey("planningReviewReady"));
         assertFalse(String.valueOf(spread.get("planningPacketDepthReason")).isBlank());
     }
 

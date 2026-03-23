@@ -22,6 +22,7 @@ import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
 import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
+import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.state.planning.ClarificationResolutionDecision;
 import com.vinekeepers.state.planning.PlanningFailureCategory;
@@ -203,10 +204,6 @@ public final class PlanningCyclePipeline {
         }
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
-        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
-            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
-        }
-
         applyPostDraftGovernor(
                 contextId,
                 state,
@@ -384,7 +381,7 @@ public final class PlanningCyclePipeline {
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
         WorkProfileDefinition profileFin = ctx.profile();
         ClarificationRoundOutcome clrFin =
-                resolveClarificationRound(contextId, plan, state, profileFin, aggregatedFollowUps, false);
+                resolveClarificationRound(contextId, plan, state, profileFin, aggregatedFollowUps, true);
         plan = clrFin.plan();
         RankedClarification rankedLlmFin = clrFin.rankedLlm();
         PlanningDeliberationLedgerSync.UpsertResult upsertFin = clrFin.upsert();
@@ -420,10 +417,6 @@ public final class PlanningCyclePipeline {
             spread.put("planningPacketDepthRetryRecommended", "true");
         }
         applyClarificationStuck(state, spread, ranked, userInputRequired);
-
-        if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
-            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
-        }
 
         applyPostDraftGovernor(
                 contextId,
@@ -620,22 +613,35 @@ public final class PlanningCyclePipeline {
                                     : CoordinatorClarificationGapEvaluator.openGapIds(openRawFinal));
             RankedClarification rankedBeforeEnsure =
                     topAskFinal == null
-                            ? emptyRankedClarification()
-                            : rankCanonicalOpenTopGap(plan, ledger, profile, coord, topAskFinal);
+                            ? rankSynthFallbackQuestion(plan, ledger, profile, aggregatedFollowUps)
+                            : rankCanonicalOpenTopGap(
+                                    plan,
+                                    ledger,
+                                    profile,
+                                    coord,
+                                    topAskFinal,
+                                    planGapAskCount(plan, topAskFinal.gapId()));
             boolean llmUserInputSuggested = rankedBeforeEnsure.userInputRequired();
             rankedLlm = rankedBeforeEnsure;
             if (topAskFinal != null) {
+                int priorAskCount = planGapAskCount(plan, topAskFinal.gapId());
                 rankedLlm =
                         ensureRankedForOpenCanonicalGap(
-                                plan, ledger, profile, coord, topAskFinal, rankedBeforeEnsure);
+                                plan, ledger, profile, coord, topAskFinal, rankedBeforeEnsure, priorAskCount);
             }
             PlanningDeliberationLedgerSync.UpsertResult upsert;
             if (topAskFinal == null) {
                 upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
             } else {
+                int nextAskCount = planGapAskCount(plan, topAskFinal.gapId()) + 1;
                 upsert =
                         PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
-                                ledger, rankedLlm, topAskFinal.gapId(), topAskFinal.blocking());
+                                ledger,
+                                rankedLlm,
+                                topAskFinal.gapId(),
+                                topAskFinal.blocking(),
+                                nextAskCount,
+                                clarificationEscalationLevel(nextAskCount - 1).name());
             }
             if (topAskFinal != null && rankedLlm.userInputRequired()) {
                 plan =
@@ -713,9 +719,10 @@ public final class PlanningCyclePipeline {
                         firstNonBlank(getString(spread, "planningSynthesisFailureCategory"), ""),
                         "true".equalsIgnoreCase(getString(spread, "planningRecoverableDraftAfterSynthesis")),
                         "true".equalsIgnoreCase(getString(spread, "planningSuppressAutonomousRedraftNotice")),
-                        clr.hardClarificationBlock());
+                        clr.hardClarificationBlock(),
+                        profile.getCoordinatorClarification().getEnginePolicy());
         spread.put("planningHardClarificationBlockReason", clr.hardClarificationBlockReason());
-        boolean effectiveUser = userInputRequired || gov.forceUserInputRequired();
+        boolean effectiveUser = gov.userInputRequired();
         if (gov.forceUserInputRequired()) {
             spread.put("planningUserInputRequired", "true");
             if (profile.getCoordinatorClarification().isCanonicalV1()) {
@@ -742,7 +749,7 @@ public final class PlanningCyclePipeline {
             planStateStore.update(clarifying);
             plan = planStateStore.getByContextId(contextId).orElse(clarifying);
         }
-        boolean effectiveReady = depthOk && !effectiveUser && !structuredParseFailed;
+        boolean effectiveReady = gov.readyToPostPacket();
         if (gov.action() == PlanningPostDraftAction.BLOCK) {
             spread.put("planningUserInputRequired", "false");
             spread.put("planningCanonicalUserInputRequired", "false");
@@ -764,15 +771,9 @@ public final class PlanningCyclePipeline {
             }
         }
         spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
-        spread.put(
-                "planningPhase",
-                effectiveUser
-                        ? "WAITING_FOR_CLARIFICATION"
-                        : (effectiveReady ? "READY_FOR_REVIEW" : "REVISING"));
-        spread.put(
-                "planningRevisionNeeded",
-                (!depthOk || effectiveUser || structuredParseFailed) ? "true" : "false");
-        PlanningReadinessSpread.applyCycleReadiness(spread, gov.action(), effectiveReady, effectiveUser);
+        spread.put("planningPhase", gov.planningPhase());
+        spread.put("planningRevisionNeeded", gov.revisionNeeded() ? "true" : "false");
+        PlanningReadinessSpread.applyCycleReadiness(spread, gov);
         spread.put(PlanningPostDraftGovernor.SPREAD_KEY, gov.action().name());
         spread.put(
                 PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY,
@@ -787,7 +788,7 @@ public final class PlanningCyclePipeline {
                         effectiveReady,
                         clr.upsert().ledger());
         PlanningPostDraftGovernor.writePersistenceKeys(
-                spread, signal, plan, effectiveReady, wantsRevision, situation);
+                spread, signal, plan, gov, wantsRevision, situation);
     }
 
     static boolean resolvePlanningUserInputRequired(
@@ -813,10 +814,18 @@ public final class PlanningCyclePipeline {
             String templateQuestion,
             String gapId,
             CoordinatorClarificationGapRule rule,
-            UnresolvedItemLedger ledger) {
+            UnresolvedItemLedger ledger,
+            int priorAskCount) {
         String template = templateQuestion != null ? templateQuestion.trim() : "";
         if (template.isBlank() || gapId == null || gapId.isBlank()) {
             return template;
+        }
+        ClarificationEscalationLevel escalation = clarificationEscalationLevel(priorAskCount);
+        if (escalation == ClarificationEscalationLevel.BOUNDED) {
+            return boundedEscalationQuestion(template, rule);
+        }
+        if (escalation == ClarificationEscalationLevel.NARROW) {
+            return narrowEscalationQuestion(rule);
         }
         Optional<String> last =
                 PlanningDeliberationLedgerSync.lastMergedQuestionTextForPlanningGap(ledger, gapId);
@@ -826,11 +835,81 @@ public final class PlanningCyclePipeline {
         if (!normalizeClarificationQuestion(template).equals(normalizeClarificationQuestion(last.get()))) {
             return template;
         }
+        return narrowEscalationQuestion(rule);
+    }
+
+    private enum ClarificationEscalationLevel {
+        OPEN,
+        NARROW,
+        BOUNDED
+    }
+
+    private static ClarificationEscalationLevel clarificationEscalationLevel(int priorAskCount) {
+        if (priorAskCount >= 2) {
+            return ClarificationEscalationLevel.BOUNDED;
+        }
+        if (priorAskCount >= 1) {
+            return ClarificationEscalationLevel.NARROW;
+        }
+        return ClarificationEscalationLevel.OPEN;
+    }
+
+    private static String narrowEscalationQuestion(CoordinatorClarificationGapRule rule) {
         if (rule != null && rule.getNarrowEscalationTemplate() != null && !rule.getNarrowEscalationTemplate().isBlank()) {
-            return rule.getNarrowEscalationTemplate();
+            return rule.getNarrowEscalationTemplate().trim();
         }
         return "You already answered part of this. To finish narrowing scope, can you spell out one concrete constraint "
                 + "(where it should live, who changes it, or an example edge case)?";
+    }
+
+    private static String boundedEscalationQuestion(String template, CoordinatorClarificationGapRule rule) {
+        List<String> options =
+                rule != null && rule.getResolveAnySubstring() != null
+                        ? rule.getResolveAnySubstring().stream()
+                                .filter(text -> text != null && !text.isBlank())
+                                .map(String::trim)
+                                .distinct()
+                                .limit(4)
+                                .toList()
+                        : List.of();
+        if (!options.isEmpty()) {
+            return "To unblock this, reply with exactly one option: " + joinOptions(options) + ".";
+        }
+        return narrowEscalationQuestion(rule) + " Keep it to one concrete answer.";
+    }
+
+    private static String joinOptions(List<String> options) {
+        if (options == null || options.isEmpty()) {
+            return "";
+        }
+        if (options.size() == 1) {
+            return options.get(0);
+        }
+        if (options.size() == 2) {
+            return options.get(0) + " or " + options.get(1);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < options.size(); i++) {
+            if (i > 0) {
+                sb.append(i == options.size() - 1 ? ", or " : ", ");
+            }
+            sb.append(options.get(i));
+        }
+        return sb.toString();
+    }
+
+    private static int planGapAskCount(FeaturePlanState plan, String gapId) {
+        if (plan == null || gapId == null || gapId.isBlank() || plan.getClarificationOutcomeHistory() == null) {
+            return 0;
+        }
+        String prefix = "ask:" + gapId.trim() + ":";
+        int count = 0;
+        for (String entry : plan.getClarificationOutcomeHistory()) {
+            if (entry != null && entry.startsWith(prefix)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static final String CANONICAL_CLARIFICATION_FALLBACK_QUESTION =
@@ -848,13 +927,14 @@ public final class PlanningCyclePipeline {
             WorkProfileDefinition profile,
             CoordinatorClarificationSettings coord,
             CoordinatorClarificationGapEvaluator.OpenGap top,
-            RankedClarification ranked) {
+            RankedClarification ranked,
+            int priorAskCount) {
         String qt = ranked.questionText() != null ? ranked.questionText().trim() : "";
         if (ranked.userInputRequired() && !qt.isBlank()) {
             return ranked;
         }
         CoordinatorClarificationGapRule rule = coord.findGapRule(top.gapId()).orElse(null);
-        String synth = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger);
+        String synth = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger, priorAskCount);
         if (synth.isBlank()) {
             synth = top.questionText() != null ? top.questionText().trim() : "";
         }
@@ -926,9 +1006,10 @@ public final class PlanningCyclePipeline {
             UnresolvedItemLedger ledger,
             WorkProfileDefinition profile,
             CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top) {
+            CoordinatorClarificationGapEvaluator.OpenGap top,
+            int priorAskCount) {
         CoordinatorClarificationGapRule rule = coord.findGapRule(top.gapId()).orElse(null);
-        String q = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger);
+        String q = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger, priorAskCount);
         boolean bounded =
                 rule != null
                         && rule.isUseBoundedChoiceUi()
@@ -938,6 +1019,33 @@ public final class PlanningCyclePipeline {
         RankedClarification ranked =
                 PlanningQuestionRankingPolicy.rank(plan, List.of(q), 1, ledger, bounded, inferOr);
         return withCoordinatorGapMeta(ranked, top.gapId(), top.blocking());
+    }
+
+    private static RankedClarification rankSynthFallbackQuestion(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            WorkProfileDefinition profile,
+            List<String> aggregatedFollowUps) {
+        if (aggregatedFollowUps == null || aggregatedFollowUps.isEmpty()) {
+            return emptyRankedClarification();
+        }
+        List<String> fallback = new ArrayList<>();
+        for (String q : aggregatedFollowUps) {
+            if (q != null && !q.isBlank()) {
+                fallback.add(q.trim());
+            }
+            if (!fallback.isEmpty()) {
+                break;
+            }
+        }
+        if (fallback.isEmpty()) {
+            return emptyRankedClarification();
+        }
+        String question = fallback.getFirst();
+        if (ClarificationPromptQualityGate.isGenericOrMetaClarification(question)) {
+            return emptyRankedClarification();
+        }
+        return new RankedClarification(true, "", "[]", "{}", 0, List.of(), false, question);
     }
 
     private static RankedClarification emptyRankedClarification() {

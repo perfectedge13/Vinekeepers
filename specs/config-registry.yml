@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T18:00:00Z"
+  updated_utc: "2026-03-23T23:30:00Z"
 
 project:
   id: vinekeepers
@@ -100,7 +100,9 @@ assets:
       Declarative work profiles (profiles map) defining artifacts, sections, required fields, optional field promptHint strings
       for coordinator missing-field prompts (PlanningPromptFormatter), optional or default readiness.anyOfGroups,
       optional packetQuality.forbiddenSubstrings, and field-level richness keys for GenericReadinessEvaluator; default profile
-      software_feature_planning includes a readiness gate for review-packet substance
+      software_feature_planning includes a readiness gate for review-packet substance; software_feature_planning_v2
+      coordinatorClarification.engine may also tune maxClarificationTurnsPerGap and maxAutonomousRedraftsBeforeAsk so
+      clarification escalation and autonomous redraft pacing stay explicit
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-WORK-PROFILE-LOADER
@@ -110,13 +112,14 @@ assets:
       Load work-profiles.yaml into WorkProfileRegistry; parses profile readiness.anyOfGroups, ReadinessPathRule rows,
       packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText, and field-level minWords,
       maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks; parses coordinatorClarification.mode/gaps plus optional
-      coordinatorClarification.engine knobs (maxClarificationTurns, repoEvidenceAskThreshold, clarificationAskPriorityThreshold, allowAssumeAndContinue, allowClarificationAfterCritique)
+      coordinatorClarification.engine knobs (maxClarificationTurns, maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk,
+      repoEvidenceAskThreshold, clarificationAskPriorityThreshold, allowAssumeAndContinue, allowClarificationAfterCritique)
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
     kind: source
     path: src/main/java/com/vinekeepers/profile/CoordinatorClarificationEnginePolicy.java
-    role: Typed defaults and YAML-backed policy for post-draft clarification budgets, repo-evidence ask threshold, assume/defer, and critique re-entry
+    role: Typed defaults and YAML-backed policy for post-draft clarification budgets (total and per gap), autonomous redraft-before-ask pacing, repo-evidence ask threshold, assume/defer, and critique re-entry
     requires: [REQ-CONFIG-001, REQ-WORKFLOW-002]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-READINESS-PATH-RULE
@@ -185,8 +188,8 @@ requirements:
         - >-
           Work profile coordinatorClarification (canonical_v1 gap rules and mode) is the config contract for which missing facts
           block Arrietty planning; optional coordinatorClarification.engine supplies clarification turn budget, repo-evidence ask threshold,
-          assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with ClarificationEngineAssessor, ledger reconciliation,
-          and strict single-question, non-meta clarification UX; gap questionTemplate values that read as generic meta or completeness prompts
+          per-gap clarification cap, autonomous-redraft-before-ask pacing, assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with ClarificationEngineAssessor, ledger reconciliation,
+          and strict single-question, non-meta clarification UX with escalation from open to narrow to bounded prompts; gap questionTemplate values that read as generic meta or completeness prompts
           are ignored at evaluation time, resolveAnySubstring aliases may cover real operator phrasings (for example config/schema only,
           runtime too, named workflow steps, or individual steps), and profile gaps may require explicit model-routing choices such as
           per-step vs step-type overrides
@@ -253,6 +256,11 @@ requirements:
           intent: >-
             Verify arrietty_room_v2 YAML shape, planningPostDraftAction-only post-assess branching, coordinator template contracts, and the ❓ prompt alert marker on Arrietty question steps
           testClass: com.vinekeepers.config.ArriettyV2WorkflowYamlTest
+          preconditions: []
+        - id: UNIT-WORK-PROFILE-LOADER
+          title: WorkProfileLoaderTest
+          intent: Verify work-profile coordinator clarification engine knobs load from config/work-profiles.yaml
+          testClass: com.vinekeepers.profile.WorkProfileLoaderTest
           preconditions: []
 
 features:

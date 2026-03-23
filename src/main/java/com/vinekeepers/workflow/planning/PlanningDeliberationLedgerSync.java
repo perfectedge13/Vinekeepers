@@ -86,7 +86,9 @@ public final class PlanningDeliberationLedgerSync {
             UnresolvedItemLedger ledger,
             PlanningQuestionRankingPolicy.RankedClarification ranked,
             String canonicalGapId,
-            boolean gapRuleBlocking) {
+            boolean gapRuleBlocking,
+            int askCount,
+            String escalationLevel) {
         UnresolvedItemLedger base = ledger != null ? ledger : UnresolvedItemLedger.empty();
         if (!ranked.userInputRequired()) {
             return new UpsertResult(base, Optional.empty());
@@ -109,6 +111,12 @@ public final class PlanningDeliberationLedgerSync {
         source.put("topicKey", canonicalGapId.trim());
         source.put("inputKind", inputKind);
         source.put("lastAskedAt", String.valueOf(System.currentTimeMillis()));
+        if (askCount > 0) {
+            source.put("askCount", String.valueOf(askCount));
+        }
+        if (escalationLevel != null && !escalationLevel.isBlank()) {
+            source.put("escalationLevel", escalationLevel.trim());
+        }
         boolean blocking = gapRuleBlocking || ranked.blockingQuestionCount() > 0;
         String severity = blocking ? "blocking" : "normal";
 
@@ -137,6 +145,24 @@ public final class PlanningDeliberationLedgerSync {
                         List.of(),
                         0);
         return new UpsertResult(withoutOthers.withAdded(created), Optional.of(id));
+    }
+
+    public static int planningGapAskCount(UnresolvedItemLedger ledger, String gapId) {
+        if (ledger == null || gapId == null || gapId.isBlank()) {
+            return 0;
+        }
+        int count = 0;
+        String normalized = gapId.trim();
+        for (UnresolvedItem it : ledger.items()) {
+            if (!PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"))) {
+                continue;
+            }
+            if (!normalized.equals(it.getSource().getOrDefault("gapId", "").trim())) {
+                continue;
+            }
+            count++;
+        }
+        return count;
     }
 
     /**

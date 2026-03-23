@@ -4,7 +4,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Dual-writes generic readiness flags ({@code reviewReady}, {@code approvalReady}) alongside legacy {@code planning*} keys.
+ * Cycle-time readiness hints before packet post + critique compute the authoritative review / approval flags.
  */
 public final class PlanningReadinessSpread {
 
@@ -19,20 +19,13 @@ public final class PlanningReadinessSpread {
      * After a planning cycle: packet posting may be allowed, but final review/approval readiness is decided only after
      * packet post + critique gates run.
      */
-    public static void applyCycleReadiness(
-            Map<String, Object> spread,
-            PlanningPostDraftAction action,
-            boolean readyToPost,
-            boolean userInputRequired) {
-        boolean packetAllowed =
-                action == PlanningPostDraftAction.POST_PACKET || action == PlanningPostDraftAction.ASSUME_AND_CONTINUE;
+    public static void applyCycleReadiness(Map<String, Object> spread, PlanningPostDraftGovernor.Result result) {
+        boolean packetAllowed = result != null && result.packetPostingAllowed();
+        boolean readyToPost = result != null && result.readyToPostPacket();
+        boolean userInputRequired = result != null && result.userInputRequired();
         spread.put(PACKET_POSTING_ALLOWED_KEY, packetAllowed ? "true" : "false");
         spread.put(REVIEW_ALLOWED_KEY, (!userInputRequired && packetAllowed) ? "true" : "false");
         spread.put(APPROVAL_ALLOWED_KEY, "false");
-        spread.put("planningReviewReady", "false");
-        spread.put("reviewReady", "false");
-        spread.put("planningApprovalReady", "false");
-        spread.put("approvalReady", "false");
         if (userInputRequired) {
             spread.put(
                     "planningReviewReadyReason",
