@@ -1,5 +1,11 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.bot.BotCatalog;
+import com.vinekeepers.bot.BotDefinition;
+import com.vinekeepers.bot.MemoryPolicy;
+import com.vinekeepers.bot.ModelProfile;
+import com.vinekeepers.bot.Persona;
+import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
@@ -24,6 +30,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EnsureRepoWorkspaceActionTest {
+
+    private static BotCatalog sampleCatalog() {
+        BotCatalog c = new BotCatalog();
+        c.replaceAll(List.of(new BotDefinition(
+                "coord1",
+                new Persona("RepoBot", "p"),
+                new ModelProfile("openai", "gpt-4o"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(1024))));
+        return c;
+    }
 
     @Test
     void linksPlanStateAfterEnsure(@TempDir Path tmp) throws Exception {
@@ -80,7 +97,7 @@ class EnsureRepoWorkspaceActionTest {
         RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("w"), false, new DefaultRepoRefResolver());
         RepoWorkspaceStateStore rwStore = new RepoWorkspaceStateStore();
         EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, rwStore, plans, new FeatureRoomStateStore(),
-                (ExplicitBotSender) null);
+                new BotCatalog(), (ExplicitBotSender) null);
 
         Object r = action.run(null, Map.of("contextId", "ctx-1", "project", repo.toAbsolutePath().toString()), Map.of());
         assertEquals("OK", r);
@@ -98,7 +115,7 @@ class EnsureRepoWorkspaceActionTest {
     void returnsErrorWhenRepoMissing() {
         RepoWorkspaceService svc = new RepoWorkspaceService(Path.of(System.getProperty("java.io.tmpdir")), false, new DefaultRepoRefResolver());
         EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, new RepoWorkspaceStateStore(), new FeaturePlanStateStore(), new FeatureRoomStateStore(),
-                (ExplicitBotSender) null);
+                new BotCatalog(), (ExplicitBotSender) null);
         Object r = action.run(null, Map.of("contextId", "c"), Map.of());
         assertEquals("Missing repo input for ensure_repo_workspace.", r);
     }
@@ -113,13 +130,13 @@ class EnsureRepoWorkspaceActionTest {
     @Test
     void formatProgressChatLine_readyClonedUsesCompactCopy() {
         assertEquals(
-                "**Arrietty:** Repo ready: `main @ ba83567`",
+                "**Coordinator:** Repo ready: `main @ ba83567`",
                 EnsureRepoWorkspaceAction.formatProgressChatLine(
                         RepoWorkspaceProgressPhase.READY_CLONED, "main @ ba83567"));
     }
 
     @Test
-    void postsArriettyProgressWhenExplicitSenderAndTargetsPresent(@TempDir Path tmp) throws Exception {
+    void postsProgressWhenExplicitSenderAndTargetsPresent(@TempDir Path tmp) throws Exception {
         Assumptions.assumeTrue(gitWorks());
         Path repo = tmp.resolve("r");
         Files.createDirectories(repo);
@@ -175,22 +192,25 @@ class EnsureRepoWorkspaceActionTest {
         ExplicitBotSender sender = (channelId, messageId, content, botId) -> {
             lastChannel.set(channelId);
             messages.add(content);
-            assertEquals("arrietty", botId);
+            assertEquals("coord1", botId);
             return Optional.empty();
         };
 
         RepoWorkspaceService svc = new RepoWorkspaceService(tmp.resolve("w"), false, new DefaultRepoRefResolver());
-        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(svc, new RepoWorkspaceStateStore(), plans, new FeatureRoomStateStore(), sender);
+        EnsureRepoWorkspaceAction action = new EnsureRepoWorkspaceAction(
+                svc, new RepoWorkspaceStateStore(), plans, new FeatureRoomStateStore(), sampleCatalog(), sender);
 
         Object r = action.run(null, Map.of(
                 "contextId", "ctx-1",
                 "project", repo.toAbsolutePath().toString(),
                 "channelId", "room-ch",
-                "deliveryChannelId", "thread-ch"), Map.of());
+                "deliveryChannelId", "thread-ch",
+                "__botId", "coord1"), Map.of());
         assertEquals("OK", r);
         assertEquals("thread-ch", lastChannel.get());
         assertEquals(1, messages.size());
         assertTrue(messages.get(0).contains("Using local repository"), messages.get(0));
+        assertTrue(messages.get(0).contains("RepoBot:"), messages.get(0));
     }
 
     private static boolean gitWorks() {

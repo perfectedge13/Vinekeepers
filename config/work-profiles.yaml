@@ -129,8 +129,9 @@ profiles:
     coordinatorClarification:
       mode: canonical_v1
       engine:
-        maxClarificationTurns: 5
+        maxClarificationTurns: 10
         repoEvidenceAskThreshold: 0.42
+        clarificationAskPriorityThreshold: 0.48
         allowAssumeAndContinue: true
         allowClarificationAfterCritique: true
       gaps:

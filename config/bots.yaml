@@ -28,6 +28,7 @@ bots:
     type: configured
     params:
       workflowRef: arrietty_room_v2
+      deferredInteractionAckPlanningCoordinator: true
   identities:
     discord:
       handlesOwnedSpaces: true
@@ -146,8 +147,11 @@ workflows:
         - cap_set_stage_drafting
         - cap_planning_run_expansion
         - cap_planning_run_inner_round
+        defaultNextPhase: planning_assess_clarification
+      planning_assess_clarification:
+        pipeline:
         - cap_planning_finalize_cycle_spread
-        rulesRef: rs_autonomous_draft
+        rulesRef: rs_post_draft
         defaultNextPhase: planning_redraft_notice
       planning_redraft_notice:
         pipeline:
@@ -279,96 +283,48 @@ workflows:
         - type: call_action
           action: apply_auto_planning_proposals
           storeSpread: true
-        - type: branch
-          branches:
-          - when:
-              key: planningHasConfirmPending
-              value: 'true'
-            next: 4
-          - when: else
-            next: 12
         - type: call_action
-          action: build_proposal_confirm_prompt
+          action: accept_pending_planning_confirmations
+          storeSpread: true
+        - type: call_action
+          action: spread_planning_workspace_blocker
           storeSpread: true
         - type: branch
           branches:
           - when:
-              key: proposalConfirmPrompt
-              operator: nonblank
+              key: planningWorkspaceUserInputRequired
+              value: 'true'
             next: 6
           - when: else
-            next: 12
+            next: 13
         - type: prompt_for_field
-          prompt: '{{proposalConfirmPrompt}}'
+          prompt: '{{planningWorkspaceBlockerPrompt}}'
           storeIn: discoveryAnswerRaw
         - type: capture_field
           storeIn: discoveryAnswerRaw
         - type: call_action
-          action: resolve_proposal_confirmation
-          storeSpread: true
-        - type: call_action
           action: classify_assumption_or_issue
+        - type: call_action
+          action: ensure_repo_workspace
+        - type: call_action
+          action: spread_planning_workspace_blocker
+          storeSpread: true
         - type: call_action
           action: recompute_plan_progress
           storeSpread: true
         - type: branch
           branches:
           - when:
-              key: planningHasConfirmPending
+              key: planningWorkspaceUserInputRequired
               value: 'true'
-            next: 4
+            next: 6
             clear:
             - discoveryAnswerRaw
           - when: else
-            next: 12
-        - type: call_action
-          action: get_structured_discovery_gaps
-          storeSpread: true
-        - type: branch
-          branches:
-          - when:
-              key: discoveryHasOpenGaps
-              value: 'true'
-            next: 14
-          - when: else
-            next: 22
-        - type: call_action
-          action: build_insight_discovery_agenda
-          storeSpread: true
-        - type: branch
-          branches:
-          - when:
-              key: discoveryCurrentQuestionPrompt
-              operator: nonblank
-            next: 16
-          - when: else
-            next: 22
-        - type: prompt_for_field
-          prompt: '{{discoveryCurrentQuestionPrompt}}'
-          storeIn: discoveryAnswerRaw
-        - type: capture_field
-          storeIn: discoveryAnswerRaw
-        - type: call_action
-          action: capture_and_apply_discovery_answer
-        - type: call_action
-          action: classify_assumption_or_issue
+            next: 13
         - type: call_action
           action: recompute_plan_progress
           storeSpread: true
-        - type: branch
-          branches:
-          - when:
-              key: discoveryBlockingIssueMode
-              value: 'true'
-            next: 22
-          - when:
-              key: discoveryHasOpenGaps
-              value: 'true'
-            next: 14
-            clear:
-            - discoveryAnswerRaw
-          - when: else
-            next: 22
         - type: call_action
           action: mark_intake_discovery_complete
           storeSpread: true
@@ -390,13 +346,13 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: '**Draft blocked â€” packet not posted**
+          content: '**Draft blocked — packet not posted**
 
             {{planningRoomCycleErrorUserMessage}}
 
             {{planningPacketDepthReason}}
 
-            **What helps next:** Reply in this thread with more detail, constraints, or risks in plain text and I will run another planning pass. If depth checks suggest another pass, say **yes** to retry when asked â€” no slash-commands needed.'
+            **What helps next:** Reply in this thread with more detail, constraints, or risks in plain text and I will run another planning pass. If depth checks suggest another pass, say **yes** to retry when asked — no slash-commands needed.'
           asRole: orchestrator
           target: thread
       cap_planning_clarification:
@@ -435,7 +391,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: Thanks â€” I've recorded that and I'm folding it into the draft. You'll see another short update when this pass finishes.
+            content: Thanks — I've recorded that and I'm folding it into the draft. You'll see another short update when this pass finishes.
             asRole: orchestrator
             target: thread
         - type: done
@@ -443,7 +399,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: I could not apply that clarification â€” {{planningClarificationMergeError}}. Please send a short plain-text reply in this thread.
+            content: I could not apply that clarification — {{planningClarificationMergeError}}. Please send a short plain-text reply in this thread.
             asRole: orchestrator
             target: thread
         - type: branch
@@ -482,17 +438,17 @@ workflows:
 
               {{planReadinessSummary}}
 
-              **Critique (high level)** â€” {{planCritiqueSummary}}
+              **Critique (high level)** — {{planCritiqueSummary}}
 
               '
             asRole: orchestrator
             target: thread
         - type: prompt_for_field
-          prompt: '**Pick what happens next** (still **not** a code launch â€” only routing the workflow).
+          prompt: '**Pick what happens next** (still **not** a code launch — only routing the workflow).
 
-            â€¢ **Continue to approval** â†’ you get **Approve / Approve with risks / Revise / Reject** for this packet.
+            • **Continue to approval** → you get **Approve / Approve with risks / Revise / Reject** for this packet.
 
-            â€¢ **Revise plan first** â†’ another drafting round; you will return here afterward.
+            • **Revise plan first** → another drafting round; you will return here afterward.
 
             Use the button that matches what you want.'
           storeIn: readinessProceedRaw
@@ -527,21 +483,21 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: '**Pre-launch review** â€” the **Planning packet** above is the full draft; this message is a **short checklist** only.
+          content: '**Pre-launch review** — the **Planning packet** above is the full draft; this message is a **short checklist** only.
 
             **Status:** {{planReadinessStatusLabel}}
 
             {{planReadinessSummary}}
 
-            **Assumptions** â€” {{planAssumptionsSummary}}
+            **Assumptions** — {{planAssumptionsSummary}}
 
-            **Issues / risks** â€” {{planIssuesSummary}}
+            **Issues / risks** — {{planIssuesSummary}}
 
-            **Critique** â€” {{planCritiqueSummary}}
+            **Critique** — {{planCritiqueSummary}}
 
             {{planningThreadReviewBuildError}}
 
-            _When the gates clear, you will get **Approve / Approve with risks / Revise / Reject** â€” nothing launches until you pick one._
+            _When the gates clear, you will get **Approve / Approve with risks / Revise / Reject** — nothing launches until you pick one._
 
             '
           asRole: orchestrator
@@ -554,7 +510,7 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: '**Approval held** â€” {{planningApprovalGateReason}}
+          content: '**Approval held** — {{planningApprovalGateReason}}
 
             We will run another planning round to strengthen the packet before you approve.'
           asRole: orchestrator
@@ -623,7 +579,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: '**Plan rejected** â€” not launching from this packet. Start a fresh planning run from the main room when the request changes.'
+            content: '**Plan rejected** — not launching from this packet. Start a fresh planning run from the main room when the request changes.'
             asRole: orchestrator
             target: thread
         - type: done
@@ -634,7 +590,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: '**Approved** â€” launching from this plan. Repo: `{{project}}`. Request summary is in the planning packet above.'
+            content: '**Approved** — launching from this plan. Repo: `{{project}}`. Request summary is in the planning packet above.'
             asRole: orchestrator
             target: thread
         - type: call_action
@@ -646,7 +602,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: '**Launching Cursor Cloud** â€” submitting the run now (HTTP timeout up to ~2 minutes). A success or failure message follows in this thread.'
+            content: '**Launching Cursor Cloud** — submitting the run now (HTTP timeout up to ~2 minutes). A success or failure message follows in this thread.'
             asRole: orchestrator
             target: thread
         - type: call_action
@@ -664,7 +620,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: 'Planning is blocked right now â€” {{planCritiqueError}}
+            content: 'Planning is blocked right now — {{planCritiqueError}}
 
               {{planReadinessSummary}}'
             asRole: orchestrator
@@ -672,7 +628,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: Planning blocked â€” cannot launch until workspace/gaps are resolved. See intake/spec thread.
+            content: Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread.
             asRole: orchestrator
             target: room
         - type: done
@@ -689,7 +645,7 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: 'Planning is blocked right now â€” {{planCritiqueError}}
+          content: 'Planning is blocked right now — {{planCritiqueError}}
 
             {{planReadinessSummary}}'
           asRole: orchestrator
@@ -698,7 +654,7 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: Planning blocked â€” cannot launch until workspace/gaps are resolved. See intake/spec thread.
+          content: Planning blocked — cannot launch until workspace/gaps are resolved. See intake/spec thread.
           asRole: orchestrator
           target: room
     rulesets:
@@ -715,7 +671,7 @@ workflows:
               value: APPROVAL_INTERACTION
           then:
           - transition: planning_preapproval_review
-      rs_autonomous_draft:
+      rs_post_draft:
         - when:
             truthy:
               key: planningUserInputRequired
@@ -885,6 +841,8 @@ workflows:
       storeIn: deliveryChannelId
     - type: call_action
       action: provision_room_participants
+      bind:
+        orchestratorConfiguredBotId: arrietty
       storeIn: featureRoomParticipants
     - type: call_action
       action: initialize_feature_room_state
@@ -928,20 +886,20 @@ workflows:
       - from: context.channelId
         storeIn: channelId
     - type: prompt_for_field
-      prompt: '**DevOps** â€” choose an action:'
+      prompt: '**DevOps** — choose an action:'
       storeIn: mainMenu
       intent: present_choices
       choices:
       - id: ansible
         label: Ansible playbook deploy
       - id: compose_up
-        label: Docker Compose â€” start (up)
+        label: Docker Compose — start (up)
       - id: compose_stop
-        label: Docker Compose â€” stop
+        label: Docker Compose — stop
       - id: compose_restart
-        label: Docker Compose â€” restart
+        label: Docker Compose — restart
       - id: compose_ps
-        label: Docker Compose â€” status (ps)
+        label: Docker Compose — status (ps)
       - id: cancel
         label: Cancel
     - type: capture_field

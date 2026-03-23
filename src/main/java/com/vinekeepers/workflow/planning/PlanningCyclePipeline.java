@@ -629,6 +629,7 @@ public final class PlanningCyclePipeline {
         plan = planStateStore.getByContextId(contextId).orElse(plan);
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
+        plan = ClarificationCoordinatorLedger.persist(planStateStore, contextId, plan, List.of(), null);
         return new ClarificationRoundOutcome(plan, rankedLlm, upsert, false, rankedLlm.userInputRequired());
     }
 
@@ -1204,7 +1205,7 @@ public final class PlanningCyclePipeline {
 
     private static String roleUserLabel(PlanningCoordinatorRole role) {
         return switch (role) {
-            case ARRIETTY -> "Arrietty";
+            case COORDINATOR -> "Coordinator";
         };
     }
 

@@ -17,7 +17,7 @@ public final class ConfigurablePassRunner {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final List<PlanningCoordinatorRole> DEFAULT_ORDER =
-            List.of(PlanningCoordinatorRole.ARRIETTY);
+            List.of(PlanningCoordinatorRole.COORDINATOR);
 
     private ConfigurablePassRunner() {}
 
@@ -73,11 +73,14 @@ public final class ConfigurablePassRunner {
         if (normalized.isBlank()) {
             return null;
         }
+        if ("ARRIETTY".equals(normalized)) {
+            return PlanningCoordinatorRole.COORDINATOR;
+        }
         if ("ARCHITECT".equals(normalized)
                 || "AUDITOR".equals(normalized)
                 || "SCRIBE".equals(normalized)
                 || "PLANNER".equals(normalized)) {
-            return PlanningCoordinatorRole.ARRIETTY;
+            return PlanningCoordinatorRole.COORDINATOR;
         }
         try {
             return PlanningCoordinatorRole.valueOf(normalized);

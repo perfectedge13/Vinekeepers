@@ -40,7 +40,7 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
 
     private static final String THREAD_PLANNING_IDLE_MESSAGE =
             "This intake/spec thread already completed the planning launch. "
-                    + "For a new change, start again from the main channel with @Luna.";
+                    + "For a new change, start again from the main channel with your intake bot.";
 
     private final WorkflowV2Model model;
     private final String sessionKeyStrategyName;
@@ -251,17 +251,43 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
                                 null);
                 StepResult result;
                 try {
+                    log.debug(
+                            "Executing graph capability botId={} phaseId={} pipeIdx={} capabilityId={} kind={} action={}",
+                            botId,
+                            phaseId,
+                            pipeIdx,
+                            capId,
+                            capKind,
+                            step.actionId());
                     result = step.execute(event, state, guard);
                 } catch (SecurityException e) {
-                    log.warn("Graph workflow tool denied for {}: {}", botId, e.getMessage());
+                    String detail = summarizeException(e);
+                    log.warn(
+                            "Graph workflow tool denied for {} phaseId={} pipeIdx={} capabilityId={} action={} detail={}",
+                            botId,
+                            phaseId,
+                            pipeIdx,
+                            capId,
+                            step.actionId(),
+                            detail,
+                            e);
                     state.markError();
                     stateStore.put(stateKey, state);
-                    return WorkflowRunResult.error(e.getMessage());
+                    return WorkflowRunResult.error(detail);
                 } catch (RuntimeException e) {
-                    log.warn("Graph workflow step failed for {}: {}", botId, e.getMessage());
+                    String detail = summarizeException(e);
+                    log.warn(
+                            "Graph workflow step failed for {} phaseId={} pipeIdx={} capabilityId={} action={} detail={}",
+                            botId,
+                            phaseId,
+                            pipeIdx,
+                            capId,
+                            step.actionId(),
+                            detail,
+                            e);
                     state.markError();
                     stateStore.put(stateKey, state);
-                    return WorkflowRunResult.error(e.getMessage());
+                    return WorkflowRunResult.error(detail);
                 }
 
                 if (!result.getSpreadWrites().isEmpty()) {
@@ -559,6 +585,18 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
         } catch (NumberFormatException e) {
             return dflt;
         }
+    }
+
+    private static String summarizeException(Throwable error) {
+        if (error == null) {
+            return "unknown error";
+        }
+        String message = error.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String simple = error.getClass().getSimpleName();
+        return simple != null && !simple.isBlank() ? simple : error.getClass().getName();
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.vinekeepers.core;
 
 import com.vinekeepers.audit.AuditRecorder;
+import com.vinekeepers.bot.BotCatalog;
 import com.vinekeepers.bot.BotDefinition;
 import com.vinekeepers.bot.Router;
 import com.vinekeepers.config.BotConfig;
@@ -51,6 +52,7 @@ import com.vinekeepers.workflow.WorkflowRunner;
 import com.vinekeepers.workflow.WorkflowRunnerFactory;
 import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 import com.vinekeepers.workflow.actions.AcknowledgeReadinessHumanDecisionAction;
+import com.vinekeepers.workflow.actions.AcceptPendingPlanningConfirmationsAction;
 import com.vinekeepers.workflow.actions.ApplyAutoPlanningProposalsAction;
 import com.vinekeepers.workflow.actions.AppendAssumptionAction;
 import com.vinekeepers.workflow.actions.AppendIssueAction;
@@ -112,6 +114,7 @@ import com.vinekeepers.workflow.actions.SetPlanningIntakeStageAction;
 import com.vinekeepers.workflow.actions.SetSolutionOutlineAction;
 import com.vinekeepers.workflow.actions.StartCoordinatorPlanningAction;
 import com.vinekeepers.workflow.actions.SynthesizePlanDraftsAction;
+import com.vinekeepers.workflow.actions.SpreadPlanningWorkspaceBlockerAction;
 import com.vinekeepers.workflow.actions.SpreadPlanWorkspaceSignalsAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
 import com.vinekeepers.workflow.actions.UpsertArtifactSectionDataAction;
@@ -154,6 +157,7 @@ public final class Bootstrap {
     private final SpaceOperationsRegistry spaceOperationsRegistry = new SpaceOperationsRegistry();
     private final ConnectorRegistry connectorRegistry = new ConnectorRegistry();
     private final List<BotDefinition> lastLoadedBots = new ArrayList<>();
+    private final BotCatalog botCatalog = new BotCatalog();
     private final Set<String> routedBotIds = new HashSet<>();
     /** From config defaultDiscordTokenEnvKey (retained transitional root-level); used when no bot has identities.discord.tokenEnvKey. */
     private String defaultDiscordTokenEnvKey;
@@ -230,6 +234,7 @@ public final class Bootstrap {
             List<BotDefinition> bots = loader.buildBots(config);
             lastLoadedBots.clear();
             lastLoadedBots.addAll(bots);
+            botCatalog.replaceAll(bots);
             Map<String, Boolean> handlesMap = new HashMap<>();
             for (BotDefinition bot : bots) {
                 boolean handles = bot.getConnectorIdentity("discord")
@@ -328,7 +333,7 @@ public final class Bootstrap {
                 (event, state, bind) -> java.util.Map.of("v2NoopRan", "true"));
         registry.register("provision_bot_instance", new ProvisionBotInstanceAction(stateStore));
         registry.register("create_lifecycle_context", new CreateLifecycleContextAction(lifecycleContextStore));
-        registry.register("provision_room_participants", new ProvisionRoomParticipantsAction(stateStore));
+        registry.register("provision_room_participants", new ProvisionRoomParticipantsAction(stateStore, botCatalog));
         registry.register("initialize_feature_room_state", new InitializeFeatureRoomStateAction(featureRoomStateStore));
         registry.register("initialize_feature_plan_state", new InitializeFeaturePlanStateAction(
                 featurePlanStateStore, featureRoomStateStore, workProfileRegistry));
@@ -338,6 +343,9 @@ public final class Bootstrap {
         registry.register("apply_auto_planning_proposals", new ApplyAutoPlanningProposalsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("build_proposal_confirm_prompt", new BuildProposalConfirmPromptAction(featurePlanStateStore, workProfileRegistry));
         registry.register("resolve_proposal_confirmation", new ResolveProposalConfirmationAction(featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "accept_pending_planning_confirmations",
+                new AcceptPendingPlanningConfirmationsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("synthesize_plan_drafts", new SynthesizePlanDraftsAction(featurePlanStateStore, workProfileRegistry));
         registry.register("upsert_artifact_section_data", new UpsertArtifactSectionDataAction(featurePlanStateStore, workProfileRegistry));
         registry.register("get_profile_missing_fields", new GetProfileMissingFieldsAction(featurePlanStateStore, workProfileRegistry));
@@ -379,11 +387,15 @@ public final class Bootstrap {
         registry.register("set_solution_outline", new SetSolutionOutlineAction(featurePlanStateStore));
         registry.register("ensure_repo_workspace", new EnsureRepoWorkspaceAction(
                 repoWorkspaceService, repoWorkspaceStateStore, featurePlanStateStore, featureRoomStateStore,
+                botCatalog,
                 outboundDeliveryRouter));
         registry.register(
                 "prep_planning_repo_grounding",
                 new PrepPlanningRepoGroundingAction(openAiChatClient, featurePlanStateStore));
         registry.register("spread_plan_workspace_signals", new SpreadPlanWorkspaceSignalsAction(featurePlanStateStore));
+        registry.register(
+                "spread_planning_workspace_blocker",
+                new SpreadPlanningWorkspaceBlockerAction(featurePlanStateStore));
         registry.register(
                 "evaluate_planning_packet_depth",
                 new EvaluatePlanningPacketDepthAction(featurePlanStateStore, workProfileRegistry));

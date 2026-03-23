@@ -130,6 +130,11 @@ public final class WorkProfileLoader {
                 threshold != null
                         ? threshold
                         : CoordinatorClarificationEnginePolicy.defaultPolicy().getRepoEvidenceAskThreshold();
+        Double askPri = doubleObject(em.get("clarificationAskPriorityThreshold"));
+        double askP =
+                askPri != null
+                        ? askPri
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getClarificationAskPriorityThreshold();
         boolean allowAssume =
                 em.containsKey("allowAssumeAndContinue")
                         ? booleanVal(em.get("allowAssumeAndContinue"))
@@ -138,7 +143,7 @@ public final class WorkProfileLoader {
                 em.containsKey("allowClarificationAfterCritique")
                         ? booleanVal(em.get("allowClarificationAfterCritique"))
                         : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowClarificationAfterCritique();
-        return new CoordinatorClarificationEnginePolicy(maxTurns, thr, allowAssume, allowCrit);
+        return new CoordinatorClarificationEnginePolicy(maxTurns, thr, askP, allowAssume, allowCrit);
     }
 
     @SuppressWarnings("unchecked")

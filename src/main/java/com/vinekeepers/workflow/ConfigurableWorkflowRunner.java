@@ -23,7 +23,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     /** When planning finished in an intake thread, avoid restarting the full workflow on every later message. */
     private static final String THREAD_PLANNING_IDLE_MESSAGE =
             "This intake/spec thread already completed the planning launch. "
-                    + "For a new change, start again from the main channel with @Luna.";
+                    + "For a new change, start again from the main channel with your intake bot.";
 
     private final String sessionKeyStrategyName;
     private final ConversationMode conversationMode;
@@ -93,17 +93,39 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             WorkflowStep step = steps.get(state.getStepIndex());
             StepResult result;
             try {
+                log.debug(
+                        "Executing workflow step botId={} stepIndex={} stepType={} action={}",
+                        botId,
+                        state.getStepIndex(),
+                        step.getClass().getSimpleName(),
+                        describeAction(step));
                 result = step.execute(event, state, state.getStepIndex());
             } catch (SecurityException e) {
-                log.warn("Workflow tool denied for {}: {}", botId, e.getMessage());
+                String detail = summarizeException(e);
+                log.warn(
+                        "Workflow tool denied for {} stepIndex={} stepType={} action={} detail={}",
+                        botId,
+                        state.getStepIndex(),
+                        step.getClass().getSimpleName(),
+                        describeAction(step),
+                        detail,
+                        e);
                 state.markError();
                 stateStore.put(stateKey, state);
-                return WorkflowRunResult.error(e.getMessage());
+                return WorkflowRunResult.error(detail);
             } catch (RuntimeException e) {
-                log.warn("Workflow step failed for {}: {}", botId, e.getMessage());
+                String detail = summarizeException(e);
+                log.warn(
+                        "Workflow step failed for {} stepIndex={} stepType={} action={} detail={}",
+                        botId,
+                        state.getStepIndex(),
+                        step.getClass().getSimpleName(),
+                        describeAction(step),
+                        detail,
+                        e);
                 state.markError();
                 stateStore.put(stateKey, state);
-                return WorkflowRunResult.error(e.getMessage());
+                return WorkflowRunResult.error(detail);
             }
 
             if (!result.getSpreadWrites().isEmpty()) {
@@ -210,7 +232,6 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                 case "call_action" -> {
                     boolean storeSpread = Boolean.TRUE.equals(stepMap.get("storeSpread"))
                             || "true".equalsIgnoreCase(String.valueOf(stepMap.get("storeSpread")));
-                    @SuppressWarnings("unchecked")
                     Map<String, Object> stepLlm = (Map<String, Object>) stepMap.get("llm");
                     out.add(new com.vinekeepers.workflow.steps.CallActionStep(
                             registry,
@@ -260,6 +281,25 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             return out;
         }
         return List.of(transformObj.toString().trim());
+    }
+
+    private static String describeAction(WorkflowStep step) {
+        if (step instanceof com.vinekeepers.workflow.steps.CallActionStep callActionStep) {
+            return callActionStep.describeForLogs();
+        }
+        return "";
+    }
+
+    private static String summarizeException(Throwable error) {
+        if (error == null) {
+            return "unknown error";
+        }
+        String message = error.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String simple = error.getClass().getSimpleName();
+        return simple != null && !simple.isBlank() ? simple : error.getClass().getName();
     }
 
     /**

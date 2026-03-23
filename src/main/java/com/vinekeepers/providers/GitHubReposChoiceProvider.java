@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.interactions.ResponseIntent;
+import com.vinekeepers.state.BotScopedStateKeys;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.DynamicChoiceProvider;
@@ -24,8 +25,6 @@ public final class GitHubReposChoiceProvider implements DynamicChoiceProvider {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubReposChoiceProvider.class);
     private static final String GITHUB_API = "https://api.github.com/user/repos";
-    private static final String LAST_REPO_KEY_PREFIX = "luna:lastRepo:";
-
     private final StateStore stateStore;
     private final java.net.http.HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -49,7 +48,10 @@ public final class GitHubReposChoiceProvider implements DynamicChoiceProvider {
                 ? getString(event.getPayload(), "authorId") : null;
 
         if (authorId != null && !authorId.isBlank()) {
-            String lastRepo = stateStore.get(LAST_REPO_KEY_PREFIX + authorId, String.class).orElse(null);
+            String workflowBotId = state != null && state.getData() != null
+                    ? stringFrom(state.getData().get("__botId"))
+                    : null;
+            String lastRepo = BotScopedStateKeys.resolveLastRepo(stateStore, workflowBotId, authorId).orElse(null);
             if (lastRepo != null && !lastRepo.isBlank()) {
                 choices.add(new ResponseIntent.Choice(lastRepo, "Use last repo (" + lastRepo + ")", null));
             }
@@ -104,6 +106,14 @@ public final class GitHubReposChoiceProvider implements DynamicChoiceProvider {
         if (map == null) return null;
         Object v = map.get(key);
         return v != null ? v.toString() : null;
+    }
+
+    private static String stringFrom(Object v) {
+        if (v == null) {
+            return null;
+        }
+        String s = v.toString().trim();
+        return s.isBlank() ? null : s;
     }
 
     private static int parseInt(String value, int fallback) {

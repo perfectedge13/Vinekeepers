@@ -15,7 +15,7 @@ import java.util.Optional;
 
 /**
  * When the Discord event channel is a feature-room intake/spec thread, spreads workflow keys from
- * {@link FeatureRoomState} / {@link FeaturePlanState} so thread-scoped planning can run without Luna session state.
+ * {@link FeatureRoomState} / {@link FeaturePlanState} so thread-scoped planning can run without the intake gathering bot session state.
  */
 public final class HydratePlanningSessionAction implements com.vinekeepers.workflow.WorkflowAction {
 

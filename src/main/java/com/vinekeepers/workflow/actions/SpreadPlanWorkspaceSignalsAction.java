@@ -73,6 +73,11 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
             evidence.put("workspaceStatus", statusName.isBlank() ? "unknown" : statusName);
             evidence.put("localPathPresent", pathOk);
             evidence.put("repoRef", plan.getRepoRef() != null ? plan.getRepoRef() : "");
+            String branchHint = defaultBranchHint(plan.getRepoRef());
+            if (!branchHint.isBlank()) {
+                evidence.put("defaultBranchHint", branchHint);
+            }
+            evidence.put("planTitle", plan.getTitle() != null ? plan.getTitle() : "");
             if (!notes.isBlank()) {
                 evidence.put("accessNotes", notes);
             }
@@ -105,6 +110,18 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
         if (v != null && !v.toString().isBlank()) {
             evidence.put(key, v.toString());
         }
+    }
+
+    private static String defaultBranchHint(String repoRef) {
+        if (repoRef == null || repoRef.isBlank()) {
+            return "";
+        }
+        String r = repoRef.trim();
+        int at = r.lastIndexOf('@');
+        if (at >= 0 && at + 1 < r.length()) {
+            return r.substring(at + 1).trim();
+        }
+        return "";
     }
 
     private static boolean isMaterialized(String statusName) {

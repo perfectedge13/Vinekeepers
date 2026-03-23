@@ -29,7 +29,7 @@ public final class RunArchitectPlanningPassAction implements com.vinekeepers.wor
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        return runRole(PlanningCoordinatorRole.ARRIETTY, client, planStore, profiles, event, state, bind);
+        return runRole(PlanningCoordinatorRole.COORDINATOR, client, planStore, profiles, event, state, bind);
     }
 
     static Map<String, Object> runRole(

@@ -131,7 +131,7 @@ assets:
   - id: ASSET-DISCORD-REPLY-SINK
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordAppReplySink.java
-    role: Implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; lifecycle operations; channel send and follow-up/update with optional components; render intents to Discord; fallback to text; when router getGatewayForChannel returns null, falls back to router defaultGateway for interaction follow-up; adapter owns timing and may auto-defer on interaction receive
+    role: Implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; lifecycle operations; channel send and follow-up/update with optional components; render intents to Discord; fallback to text; deferred interaction follow-ups with ingestBotId resolve the bot-bound gateway first and fail closed when that gateway is missing; adapter owns timing and may auto-defer on interaction receive
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-OUTBOUND-DELIVERY-ROUTER
@@ -218,7 +218,7 @@ assets:
   - id: ASSET-DISCORD-REPLY-TARGET-RESOLVER
     kind: source
     path: src/main/java/com/vinekeepers/connectors/DiscordReplyTargetResolver.java
-    role: Implements ReplyTargetResolver; reads event payload (channelId, messageId, interactionId, token, deferred) and returns InteractionTarget or ChannelTarget
+    role: Implements ReplyTargetResolver; reads event payload (channelId, messageId, interactionId, token, deferred, ingestBotId) and returns InteractionTarget or ChannelTarget
     requires: [REQ-CONNECTORS-DISCORD-001]
     feature_ids: [FEAT-CONNECTORS-DISCORD]
   - id: ASSET-GITHUB-SOURCE
@@ -254,6 +254,7 @@ requirements:
         - "Outbound-only gateway when DiscordIngressModes resolves both message and interaction ingress to none. Routed bots use routed message and interaction ingress. Bots with handlesOwnedSpaces only (not in YAML routing) use owned_spaces for messages and own_messages for interactions by default so they do not publish duplicate general guild messages; component interactions on that bot's messages are still received. Optional identities.discord.ingress overrides defaults."
         - Discord gateway handles Interaction Create; on receive, adapter acks or defers within platform window and publishes Event with kind interaction and token
         - DiscordAppReplySink implements AppReplySink; uses OutboundDeliveryRouter for sender resolution; all lifecycle operations; render intents; channel send and follow-up/update with optional components; fallback to text
+        - Deferred Discord interaction follow-ups carrying ingestBotId route through that bot's registered gateway; when no gateway is registered for the ingest bot, the sink does not fall back to the default gateway
         - Discord connector can send replies back to the originating channel or message (including with components) through the Discord API
         - ReplySender generic contract (send(channelId, messageId, content)); DiscordReplySender extends ReplySender; Discord implementations used wherever core expects ReplySender
         - Replies from the engine are delivered to Discord via sink or legacy reply path when source is Discord

@@ -53,6 +53,16 @@ public final class DiscordAppReplySink implements AppReplySink {
      */
     private DiscordGateway gatewayFor(ReplyTarget target) {
         if (router != null && target != null) {
+            if (target instanceof InteractionTarget it && it.ingestBotId() != null) {
+                OutboundGateway byBot = router.getGatewayForBot(it.ingestBotId());
+                if (byBot instanceof DiscordGateway dg) {
+                    log.debug("Routing deferred interaction follow-up via ingest bot {}", it.ingestBotId());
+                    return dg;
+                }
+                log.warn("Deferred interaction reply requires bot-bound gateway for ingestBotId={} but none is registered; not falling back to default gateway.",
+                        it.ingestBotId());
+                return null;
+            }
             if (target instanceof ChannelTarget ct && ct.replyAsBotId() != null && !ct.replyAsBotId().isBlank()) {
                 OutboundGateway byBot = router.getGatewayForBot(ct.replyAsBotId());
                 if (byBot instanceof DiscordGateway dg) {
@@ -62,6 +72,9 @@ public final class DiscordAppReplySink implements AppReplySink {
             DiscordGateway gw = (DiscordGateway) router.getGatewayForChannel(target.channelId());
             if (gw == null) {
                 gw = (DiscordGateway) router.getDefaultGateway();
+            }
+            if (target instanceof InteractionTarget) {
+                log.debug("Routing interaction reply via channel/default gateway for channel {}", target.channelId());
             }
             return gw;
         }

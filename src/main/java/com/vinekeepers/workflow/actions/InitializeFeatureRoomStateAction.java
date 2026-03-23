@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Workflow action: read featureRoomParticipants from state (transient list of maps), validate the Arrietty-only
+ * Workflow action: read featureRoomParticipants from state (transient list of maps), validate the single-coordinator
  * room contract (exactly one ORCHESTRATOR marked primaryCoordinator; non-blank configuredBotId/runtimeBotInstanceId),
  * convert to typed {@link RoomParticipant}, build {@link FeatureRoomState}, and put it in store.
  */

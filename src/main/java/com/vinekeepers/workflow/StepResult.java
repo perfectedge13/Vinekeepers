@@ -61,7 +61,7 @@ public final class StepResult {
         this.clearKeys = clearKeys != null && !clearKeys.isEmpty()
                 ? List.copyOf(clearKeys) : null;
         this.spreadWrites = spreadWrites != null && !spreadWrites.isEmpty()
-                ? Map.copyOf(new LinkedHashMap<>(spreadWrites))
+                ? Collections.unmodifiableMap(new LinkedHashMap<>(spreadWrites))
                 : null;
     }
 

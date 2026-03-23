@@ -1,9 +1,12 @@
 package com.vinekeepers.workflow;
 
 import com.vinekeepers.events.Event;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -11,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Registry of named workflow actions for CallActionStep.
  */
 public final class WorkflowActionRegistry {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkflowActionRegistry.class);
 
     private final Map<String, WorkflowAction> actions = new ConcurrentHashMap<>();
 
@@ -31,10 +36,31 @@ public final class WorkflowActionRegistry {
         WorkflowAction action = actions.get(id);
         if (action == null) return null;
         try {
-            return action.run(event, state != null ? Map.copyOf(state) : Map.of(),
-                    bind != null ? Map.copyOf(bind) : Map.of());
+            return action.run(event, snapshot(state), snapshot(bind));
         } catch (Exception e) {
-            return null;
+            String actionId = id != null && !id.isBlank() ? id : "<unknown>";
+            String detail = summarizeException(e);
+            log.warn("Workflow action failed: actionId={} detail={}", actionId, detail, e);
+            throw new IllegalStateException("Workflow action '" + actionId + "' failed: " + detail, e);
         }
+    }
+
+    private static Map<String, Object> snapshot(Map<String, Object> input) {
+        if (input == null || input.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(new LinkedHashMap<>(input));
+    }
+
+    private static String summarizeException(Throwable error) {
+        if (error == null) {
+            return "unknown error";
+        }
+        String message = error.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String simple = error.getClass().getSimpleName();
+        return simple != null && !simple.isBlank() ? simple : error.getClass().getName();
     }
 }

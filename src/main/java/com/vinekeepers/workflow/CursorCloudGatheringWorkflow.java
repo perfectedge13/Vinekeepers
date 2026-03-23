@@ -44,7 +44,7 @@ public final class CursorCloudGatheringWorkflow implements Workflow<GatheringSta
                 return runCursorAndFinish(current);
 
             case DONE:
-                return WorkflowResult.done(current, "Session complete. Use /Luna again to start a new request.");
+                return WorkflowResult.done(current, "Session complete. Start a new request from the main channel when ready.");
 
             default:
                 return WorkflowResult.continueWith(GatheringState.initial(), "Which project do you want to update?");

@@ -1,10 +1,10 @@
 package com.vinekeepers.workflow.planning;
 
 /**
- * Configurable coordinator passes for Arrietty-owned planning.
+ * Configurable coordinator passes for feature-room planning (single consolidated coordinator pass).
  */
 public enum PlanningCoordinatorRole {
-    ARRIETTY;
+    COORDINATOR;
 
     String systemPromptBlock() {
         String schema = """
@@ -21,7 +21,7 @@ public enum PlanningCoordinatorRole {
                 If nothing should change, return {"upserts":[],"follow_up_questions":[]}.
                 """;
         return switch (this) {
-            case ARRIETTY -> "You are Arrietty, the sole planning coordinator for this feature room. "
+            case COORDINATOR -> "You are the sole planning coordinator for this feature room. "
                     + "You must preserve the coverage previously split across architecture, audit, and scribe passes. "
                     + "Produce a coherent planning draft that covers requirements_spec.narrative, architecture_notes.impact, "
                     + "risk_register.main, open_questions_block.backlog, decision_log.decisions, overall_plan.outline, "
@@ -33,7 +33,7 @@ public enum PlanningCoordinatorRole {
 
     String userTaskHint() {
         return switch (this) {
-            case ARRIETTY -> "Update the full planning packet as one coordinator pass without dropping architecture, risk, validation, or narrative coverage.";
+            case COORDINATOR -> "Update the full planning packet as one coordinator pass without dropping architecture, risk, validation, or narrative coverage.";
         };
     }
 }

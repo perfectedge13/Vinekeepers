@@ -58,7 +58,7 @@ assets:
       ensure_repo_workspace, optional prep_planning_repo_grounding (legacy_action) for Qdrant/Parquet planning RAG, spread_plan_workspace_signals, and the named planning lifecycle phases directly in the v2 graph;
       v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted, planningRepoEvidenceJson, canonicalPlanningIntakeStage;
       create_thread storeIn deliveryChannelId; capture_field trimAndLower;       done step e.g. "Launching now. See <#{{channelId}}>.";
-      optional workflow steps provision_room_participants and initialize_feature_room_state for Arrietty-owned feature rooms;
+      optional workflow steps provision_room_participants (bind orchestratorConfiguredBotId or equivalent resolution) and initialize_feature_room_state for coordinator-owned feature rooms;
       feature-room planning uses Arrietty as the sole room participant/coordinator with sessionKeyStrategy thread for per-thread session keys;
       arrietty_room_v2 launch success path ends with one post_channel_message plus done (no redundant duplicate terminal pair);
       coordinator posts in arrietty_room_v2 use refreshed copy (workspace kickoff, draft-blocked with {{planningRoomCycleErrorUserMessage}}
@@ -78,6 +78,18 @@ assets:
     role: Bot composition (persona, model, workflow, tools, runtime conversation settings); connector identity via getConnectorIdentity(connectorId)
     requires: [REQ-BOT-003]
     feature_ids: [FEAT-BOT]
+  - id: ASSET-BOT-CATALOG
+    kind: source
+    path: src/main/java/com/vinekeepers/bot/BotCatalog.java
+    role: Thread-safe snapshot of loaded bots; Bootstrap.replaceAll after ConfigLoader.buildBots; workflow actions resolve persona display names without hardcoded bot ids
+    requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
+  - id: ASSET-BOT-SCOPED-STATE-KEYS
+    kind: source
+    path: src/main/java/com/vinekeepers/state/BotScopedStateKeys.java
+    role: Bot-scoped StateStore key helpers (vk:lastRepo:{botId}:{authorId}); legacy read of luna:lastRepo:{authorId}; branch prefix sanitization for Cursor launches
+    requires: [REQ-CONFIG-001]
+    feature_ids: [FEAT-CONFIG]
   - id: ASSET-WORK-PROFILES-YAML
     kind: config
     path: config/work-profiles.yaml
@@ -95,7 +107,7 @@ assets:
       Load work-profiles.yaml into WorkProfileRegistry; parses profile readiness.anyOfGroups, ReadinessPathRule rows,
       packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText, and field-level minWords,
       maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks; parses coordinatorClarification.mode/gaps plus optional
-      coordinatorClarification.engine knobs (maxClarificationTurns, repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique)
+      coordinatorClarification.engine knobs (maxClarificationTurns, repoEvidenceAskThreshold, clarificationAskPriorityThreshold, allowAssumeAndContinue, allowClarificationAfterCritique)
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
@@ -140,7 +152,22 @@ requirements:
         - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces, optional ingress) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
         - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId, target, targetChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
-        - Feature-room planning uses Arrietty as the sole room participant/coordinator with sessionKeyStrategy thread for per-thread workflow session keys
+        - >-
+          provision_room_participants resolves the orchestrator configured/template bot id from bind or state (orchestratorConfiguredBotId,
+          templateBotId, valid instanceId RuntimeBotInstance template, or __botId) without a hardcoded default bot id in Java
+        - >-
+          workflow.params may set deferredInteractionAckPlanningCoordinator (boolean) so VinekeepersEngine uses planning-style deferred
+          Discord interaction follow-up copy; legacy workflowRef prefix arrietty_room* remains supported for migration
+        - >-
+          Coordinator kickoff for arrietty_room_v2 must fail visibly: blank or erroring synthetic kickoff runs are not treated as
+          successful handoff, and the intake/spec thread receives a fallback internal-error notice instead of staying silent
+        - >-
+          ensure_repo_workspace optional Discord progress lines use workflow __botId or bind repoProgressAsBotId / repoProgressPersonaName
+          for explicit sender and display prefix (Bootstrap supplies BotCatalog for persona lookup)
+        - >-
+          Cursor launch and GitHub repo choice last-repo keys use vk:lastRepo:{botId}:{authorId} when __botId is present, with legacy
+          read/write fallback to luna:lastRepo:{authorId} when bot id is absent
+        - Feature-room planning coordinator is the configuredBotId on the sole ORCHESTRATOR participant with sessionKeyStrategy thread for per-thread workflow session keys
         - >-
           Workflow map arrietty_room_v2 declares workflowSchema v2 with explicit ingress, drafting, clarification, packet, critique,
           approval, and launch phases; no production capability delegates to a sibling legacy workflow

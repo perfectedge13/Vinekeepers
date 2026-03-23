@@ -33,9 +33,10 @@ public final class DiscordReplyTargetResolver implements ReplyTargetResolver {
         Boolean deferred = event.getPayload("deferred", Boolean.class);
         String interactionId = event.getPayload("interactionId", String.class);
         String token = event.getPayload("token", String.class);
+        String ingestBotId = event.getPayload("ingestBotId", String.class);
         if ("interaction".equals(event.getKind()) && interactionId != null && token != null) {
             return Optional.of(new InteractionTarget(
-                    sourceId, channelId, messageId, interactionId, token, Boolean.TRUE.equals(deferred)));
+                    sourceId, channelId, messageId, interactionId, token, Boolean.TRUE.equals(deferred), ingestBotId));
         }
         return Optional.of(new ChannelTarget(sourceId, channelId, messageId));
     }

@@ -137,7 +137,7 @@ public final class CursorCloudRunMonitor implements AutoCloseable {
     private static String formatTerminalUpdate(LifecycleRunRecord runState) {
         String status = runState.getStatus() != null ? runState.getStatus() : "UNKNOWN";
         if ("FINISHED".equalsIgnoreCase(status)) {
-            StringBuilder message = new StringBuilder("Cursor finished the Luna request.");
+            StringBuilder message = new StringBuilder("Cursor finished the requested run.");
             String pr = runState.getPrUrl();
             if (pr != null && !pr.isBlank() && !runState.hasPostedPrContaining(pr)) {
                 message.append(" PR: ").append(pr);

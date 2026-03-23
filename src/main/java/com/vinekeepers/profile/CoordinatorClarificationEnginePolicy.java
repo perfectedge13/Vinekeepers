@@ -9,12 +9,14 @@ public final class CoordinatorClarificationEnginePolicy {
 
     private final int maxClarificationTurns;
     private final double repoEvidenceAskThreshold;
+    private final double clarificationAskPriorityThreshold;
     private final boolean allowAssumeAndContinue;
     private final boolean allowClarificationAfterCritique;
 
     public CoordinatorClarificationEnginePolicy(
             int maxClarificationTurns,
             double repoEvidenceAskThreshold,
+            double clarificationAskPriorityThreshold,
             boolean allowAssumeAndContinue,
             boolean allowClarificationAfterCritique) {
         this.maxClarificationTurns = Math.max(0, maxClarificationTurns);
@@ -22,12 +24,16 @@ public final class CoordinatorClarificationEnginePolicy {
                 repoEvidenceAskThreshold >= 0 && repoEvidenceAskThreshold <= 1
                         ? repoEvidenceAskThreshold
                         : 0.45;
+        this.clarificationAskPriorityThreshold =
+                clarificationAskPriorityThreshold >= 0 && clarificationAskPriorityThreshold <= 1
+                        ? clarificationAskPriorityThreshold
+                        : 0.48;
         this.allowAssumeAndContinue = allowAssumeAndContinue;
         this.allowClarificationAfterCritique = allowClarificationAfterCritique;
     }
 
     public static CoordinatorClarificationEnginePolicy defaultPolicy() {
-        return new CoordinatorClarificationEnginePolicy(5, 0.45, true, true);
+        return new CoordinatorClarificationEnginePolicy(10, 0.45, 0.48, true, true);
     }
 
     public int getMaxClarificationTurns() {
@@ -40,6 +46,13 @@ public final class CoordinatorClarificationEnginePolicy {
      */
     public double getRepoEvidenceAskThreshold() {
         return repoEvidenceAskThreshold;
+    }
+
+    /**
+     * Non-blocking gaps with {@code rankScore} below this threshold are assumed instead of prompting.
+     */
+    public double getClarificationAskPriorityThreshold() {
+        return clarificationAskPriorityThreshold;
     }
 
     public boolean isAllowAssumeAndContinue() {
@@ -67,6 +80,11 @@ public final class CoordinatorClarificationEnginePolicy {
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxClarificationTurns, repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique);
+        return Objects.hash(
+                maxClarificationTurns,
+                repoEvidenceAskThreshold,
+                clarificationAskPriorityThreshold,
+                allowAssumeAndContinue,
+                allowClarificationAfterCritique);
     }
 }

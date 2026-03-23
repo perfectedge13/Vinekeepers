@@ -9,13 +9,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * After Luna posts the intake/spec handoff, explicitly runs the coordinator bot's thread workflow once
+ * After the intake bot posts the intake/spec handoff, explicitly runs the coordinator bot's thread workflow once
  * using an in-process synthetic Discord message (same thread id as channelId + threadId). Does not post a
  * user-visible dummy message to Discord.
  */
 public final class StartCoordinatorPlanningAction implements com.vinekeepers.workflow.WorkflowAction {
-
-    private static final String DEFAULT_COORDINATOR = "arrietty";
 
     private final VinekeepersEngine engine;
     private final FeatureRoomStateStore featureRoomStateStore;
@@ -38,15 +36,18 @@ public final class StartCoordinatorPlanningAction implements com.vinekeepers.wor
             return "start_coordinator_planning: intake thread was not created.";
         }
         String coordinator = firstNonBlank(getString(bind, "coordinatorBotId"), getString(state, "coordinatorBotId"));
-        if (coordinator == null || coordinator.isBlank()) {
-            coordinator = featureRoomStateStore != null
-                    ? featureRoomStateStore.getByIntakeThreadId(intakeThreadId)
+        if ((coordinator == null || coordinator.isBlank()) && featureRoomStateStore != null) {
+            coordinator = featureRoomStateStore
+                    .getByIntakeThreadId(intakeThreadId)
                     .flatMap(FeatureRoomStateStore::resolveCoordinatorConfiguredBotId)
-                    .orElse(DEFAULT_COORDINATOR)
-                    : DEFAULT_COORDINATOR;
+                    .orElse(null);
+        }
+        if (coordinator == null || coordinator.isBlank()) {
+            return "start_coordinator_planning: missing coordinatorBotId (set bind/state coordinatorBotId or ensure "
+                    + "feature room state exists for this intake thread with a primary coordinator participant).";
         }
         Event synthetic = buildSyntheticThreadMessage(parentEvent, intakeThreadId.trim());
-        return engine.dispatchCoordinatorPlanningKickoff(synthetic, coordinator);
+        return engine.dispatchCoordinatorPlanningKickoff(synthetic, coordinator.trim());
     }
 
     private static Event buildSyntheticThreadMessage(Event parentEvent, String intakeThreadId) {

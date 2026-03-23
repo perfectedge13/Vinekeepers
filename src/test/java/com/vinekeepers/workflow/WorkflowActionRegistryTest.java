@@ -7,6 +7,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkflowActionRegistryTest {
@@ -43,13 +44,15 @@ class WorkflowActionRegistryTest {
     }
 
     @Test
-    void runThrowingActionReturnsNull() {
+    void runThrowingActionRethrowsWithActionContext() {
         WorkflowActionRegistry registry = new WorkflowActionRegistry();
         registry.register("bad", (e, s, b) -> {
             throw new RuntimeException("oops");
         });
         Event event = new Event("test", "message", Map.of());
-        assertNull(registry.run("bad", event, Map.of(), Map.of()));
+        IllegalStateException error =
+                assertThrows(IllegalStateException.class, () -> registry.run("bad", event, Map.of(), Map.of()));
+        assertTrue(error.getMessage().contains("Workflow action 'bad' failed: oops"));
     }
 
     @Test

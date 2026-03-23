@@ -4,6 +4,9 @@ import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.StateStore;
+import com.vinekeepers.tools.Tool;
+import com.vinekeepers.tools.ToolRegistry;
+import com.vinekeepers.tools.ToolRunner;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunResult;
 import org.junit.jupiter.api.Test;
@@ -328,5 +331,83 @@ class GraphWorkflowRunnerTest {
         assertEquals("one", finalState.get().get("firstAnswer"));
         assertEquals("two", finalState.get().get("secondAnswer"));
         assertEquals("__v2_done", finalState.get().get(GraphWorkflowRunner.PHASE_KEY));
+    }
+
+    @Test
+    void legacyActionWithNullMessageExceptionReturnsNonEmptyError() {
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public String getId() {
+                return "explode";
+            }
+
+            @Override
+            public Object run(Map<String, Object> args) {
+                throw new NullPointerException();
+            }
+        });
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "p");
+        wf.put("phases", Map.of("p", Map.of("pipeline", List.of("cap1"))));
+        wf.put("capabilities", Map.of("cap1", Map.of("kind", "legacy_action", "action", "explode")));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("tool_fail_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model,
+                        new WorkflowActionRegistry(),
+                        new ToolRunner(registry),
+                        ToolPolicy.allowAll(),
+                        ConversationMode.SINGLE_EVENT,
+                        "channel");
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "go"));
+
+        WorkflowRunResult res = runner.runResult(event, new StateStore(), "b");
+        assertEquals("NullPointerException", res.getErrorMessage());
+    }
+
+    @Test
+    void legacyActionStoreSpreadSkipsNullValuesWithoutCrashing() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+        reg.register("spread_null", (e, s, b) -> {
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("nullableKey", null);
+            out.put("stableKey", "ok");
+            return out;
+        });
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "p");
+        wf.put("phases", Map.of("p", Map.of("pipeline", List.of("cap1"), "defaultNextPhase", "done"),
+                "done", Map.of("pipeline", List.of(), "terminal", true)));
+        wf.put("capabilities", Map.of("cap1", Map.of("kind", "legacy_action", "action", "spread_null", "storeSpread", true)));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("spread_null_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model, reg, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, "channel");
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "go"));
+
+        StateStore store = new StateStore();
+        WorkflowRunResult res = runner.runResult(event, store, "b");
+        assertTrue(res.isCompleted());
+        String key = "bot:b:conv:ch1";
+        var st = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class).orElseThrow();
+        assertTrue(!st.getData().containsKey("nullableKey"));
+        assertEquals("ok", st.get("stableKey"));
     }
 }

@@ -41,6 +41,7 @@ class ArriettyV2WorkflowYamlTest {
                     "planning_ingress",
                     "planning_prepare",
                     "planning_autonomous_draft",
+                    "planning_assess_clarification",
                     "planning_clarification",
                     "planning_packet",
                     "planning_critique",
@@ -57,25 +58,34 @@ class ArriettyV2WorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
         boolean hasInlineSteps = false;
-        boolean hasCoordinatorRef = false;
         for (Map.Entry<String, Object> entry : capabilities.entrySet()) {
             @SuppressWarnings("unchecked")
             Map<String, Object> capability = (Map<String, Object>) entry.getValue();
             String kind = String.valueOf(capability.get("kind"));
-            if ("linear_workflow_ref".equals(kind)) {
-                String ref = String.valueOf(capability.get("workflowRef"));
-                assertTrue(
-                        ref.startsWith("arrietty_room_") && !ref.contains("legacy"),
-                        "coordinator ref must not use deleted legacy id");
-                hasCoordinatorRef = true;
-            }
+            assertFalse(
+                    "linear_workflow_ref".equals(kind),
+                    "arrietty_room_v2 must not delegate to a sibling linear workflow: capability "
+                            + entry.getKey());
             if ("configurable_steps".equals(kind)) {
                 hasInlineSteps = true;
             }
         }
-        assertTrue(
-                hasInlineSteps || hasCoordinatorRef,
-                "arrietty_room_v2 should inline steps or delegate to a coordinator workflow");
+        assertTrue(hasInlineSteps, "arrietty_room_v2 must embed at least one configurable_steps capability");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> bots = (List<Map<String, Object>>) root.get("bots");
+        Map<String, Object> arrietty = bots.stream()
+                .filter(bot -> "arrietty".equals(String.valueOf(bot.get("id"))))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("arrietty bot must exist"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> wf = (Map<String, Object>) arrietty.get("workflow");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) wf.get("params");
+        assertEquals(
+                ARRIETTY_V2_ID,
+                String.valueOf(params.get("workflowRef")),
+                "arrietty bot must use arrietty_room_v2 in production config");
     }
 
     @Test

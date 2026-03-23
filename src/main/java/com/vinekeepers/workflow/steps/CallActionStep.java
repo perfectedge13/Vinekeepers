@@ -65,13 +65,25 @@ public final class CallActionStep implements WorkflowStep {
         if (storeSpread && result instanceof Map<?, ?> raw) {
             Map<String, Object> spread = new LinkedHashMap<>();
             for (Map.Entry<?, ?> e : raw.entrySet()) {
-                if (e.getKey() != null) {
+                if (e.getKey() != null && e.getValue() != null) {
                     spread.put(e.getKey().toString(), e.getValue());
                 }
             }
             return StepResult.advanceSpread(spread);
         }
         return StepResult.advance(storeIn, result);
+    }
+
+    public String actionId() {
+        return actionId;
+    }
+
+    public boolean storeSpread() {
+        return storeSpread;
+    }
+
+    public String describeForLogs() {
+        return "call_action:" + actionId + (storeSpread ? " (storeSpread)" : "");
     }
 
     private Map<String, Object> buildArgs(Event event, ConfigurableWorkflowState state) {

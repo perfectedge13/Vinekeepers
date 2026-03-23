@@ -25,6 +25,6 @@ public final class RunScribePlanningPassAction implements com.vinekeepers.workfl
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
         return RunArchitectPlanningPassAction.runRole(
-                PlanningCoordinatorRole.ARRIETTY, client, planStore, profiles, event, state, bind);
+                PlanningCoordinatorRole.COORDINATOR, client, planStore, profiles, event, state, bind);
     }
 }

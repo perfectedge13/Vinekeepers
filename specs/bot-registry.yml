@@ -323,6 +323,7 @@ requirements:
       criteria:
         - BotDefinition holds persona, model, workflowType, workflowParams, tool policy, memory policy, conversation mode, optional session key strategy, and connectorIdentities (getConnectorIdentity(connectorId) for adapter-specific attributes)
         - Config loader produces BotDefinition from YAML (including workflow block, runtime options, and identities.discord or legacy keys normalized to ConnectorIdentity)
+        - workflowParams may include deferredInteractionAckPlanningCoordinator (boolean) for planning-style deferred Discord interaction follow-up text in VinekeepersEngine (legacy arrietty_room* workflow ref/type still recognized)
       examples: []
     traceability:
       assets: [ASSET-CONNECTOR-IDENTITY, ASSET-BOT-DEFINITION, ASSET-CONFIG-LOADER, ASSET-BOTS-YAML, ASSET-CONVERSATION-MODE, ASSET-PERSONA, ASSET-MODEL-PROFILE, ASSET-MEMORY-POLICY]

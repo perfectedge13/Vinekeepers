@@ -168,6 +168,32 @@ class DiscordAppReplySinkTest {
     }
 
     @Test
+    void interactionTargetWithIngestBotIdUsesThatBotsGatewayNotDefault() {
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
+        RecordingDiscordGateway defaultGw = new RecordingDiscordGateway();
+        RecordingDiscordGateway gadgetGw = new RecordingDiscordGateway();
+        router.setDefaultGateway(defaultGw);
+        router.registerSender("gadget", gadgetGw::send, gadgetGw);
+        DiscordAppReplySink routerSink = new DiscordAppReplySink(router);
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "m1", "i1", "tok", true, "gadget");
+        routerSink.sendFollowUp(OutboundResponse.ofText("Later"), target);
+        assertEquals(0, defaultGw.sendFollowUpCalls.get());
+        assertEquals(1, gadgetGw.sendFollowUpCalls.get());
+        assertEquals("tok|Later", gadgetGw.lastSendFollowUp);
+    }
+
+    @Test
+    void interactionTargetWithIngestBotIdDoesNotFallBackToDefaultGatewayWhenBotGatewayMissing() {
+        OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
+        RecordingDiscordGateway defaultGw = new RecordingDiscordGateway();
+        router.setDefaultGateway(defaultGw);
+        DiscordAppReplySink routerSink = new DiscordAppReplySink(router);
+        InteractionTarget target = new InteractionTarget("discord:g", "ch1", "m1", "i1", "tok", true, "gadget");
+        routerSink.sendFollowUp(OutboundResponse.ofText("Later"), target);
+        assertEquals(0, defaultGw.sendFollowUpCalls.get());
+    }
+
+    @Test
     void channelTargetWithReplyAsBotIdUsesThatBotsGatewayNotDefault() {
         OutboundDeliveryRouter router = new OutboundDeliveryRouter(new LifecycleContextStore());
         RecordingDiscordGateway defaultGw = new RecordingDiscordGateway();

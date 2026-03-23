@@ -112,7 +112,7 @@ assets:
       handlesOwnedSpaces map from loaded bots to Router; construct FeaturePlanStateStore, RepoWorkspaceStateStore,
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
       hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
-      resolve_proposal_confirmation, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
+      resolve_proposal_confirmation, accept_pending_planning_confirmations, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
       derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
       planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
       post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
@@ -444,12 +444,25 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/ClarificationEngineAssessor.java
     role: >-
       Post-draft coordinator clarification assessor for canonical_v1 gaps: combines repo-grounding signals, engine-policy
-      thresholds, clarification-turn budget, and critique-follow-up state to choose ASK_USER vs ASSUME_AND_CONTINUE /
+      thresholds (repoEvidenceAskThreshold, clarificationAskPriorityThreshold), clarification-turn budget, and critique-follow-up
+      state to choose ASK_USER vs ASSUME_AND_CONTINUE /
       LOW_PRIORITY_DEFER / BLOCK_AS_UNIMPLEMENTABLE before a single question is surfaced
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW
+  - id: ASSET-CLARIFICATION-COORDINATOR-LEDGER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/ClarificationCoordinatorLedger.java
+    role: >-
+      Serializes assessed coordinator gaps and optional next ask into FeaturePlanState.clarificationCoordinatorLedgerJson after
+      each clarification resolution pass (canonical and legacy paths)
+    requires:
+      - REQ-WORKFLOW-002
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-WORKFLOW
+      - FEAT-CURSOR-GATHERING
   - id: ASSET-PLANNING-COORDINATOR-ROLE
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningCoordinatorRole.java
@@ -463,7 +476,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/ConfigurablePassRunner.java
     role: >-
       Parses planningRolePassOrder from bind/state (JSON array or comma list) into ordered PlanningCoordinatorRole list;
-      defaults to the single Arrietty pass and maps legacy architect/auditor/scribe tokens to that pass
+      defaults to the single COORDINATOR pass and maps legacy ARRIETTY/architect/auditor/scribe tokens to that pass
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1050,8 +1063,8 @@ assets:
       Workflow action to resolve/materialize repo workspace via RepoWorkspaceService (with optional RepoWorkspaceProgressCallback), persist RepoWorkspaceState, and
       update FeaturePlanState workspace linkage when plan exists; passes prior RepoWorkspaceState from the store so RepoWorkspaceService can reuse a
       MATERIALIZED/RESOLVED_LOCAL checkout for the same context+ref without recloning (unless VINEKEEPERS_REPO_WORKSPACE_FORCE_REFRESH is true); when
-      OutboundDeliveryRouter is wired, posts short progress lines to the lifecycle thread as bot arrietty using the same send-target rules as
-      post_channel_message (deliveryChannelId with THREAD_CREATE_FAILED fallback to channelId)
+      OutboundDeliveryRouter is wired, posts short progress lines using workflow __botId (or bind repoProgressAsBotId / repoProgressPersonaName) and BotCatalog
+      persona names with the same send-target rules as post_channel_message (deliveryChannelId with THREAD_CREATE_FAILED fallback to channelId)
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -1322,6 +1335,30 @@ assets:
     role: >-
       Workflow action resolve_proposal_confirmation — OK/yes/accept uses proposed value; else user text; pops queue and removes
       proposal from planningProposalsJson; upserts canonical artifact field
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-ACCEPT-PENDING-PLANNING-CONFIRMATIONS-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/AcceptPendingPlanningConfirmationsAction.java
+    role: >-
+      Workflow action accept_pending_planning_confirmations — draft-first intake: applies every CONFIRM proposal in
+      planningConfirmQueueJson using its proposedValue, clears the queue, and rewrites planningProposalsJson without user prompts
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-SPREAD-PLANNING-WORKSPACE-BLOCKER-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/SpreadPlanningWorkspaceBlockerAction.java
+    role: >-
+      Workflow action spread_planning_workspace_blocker — storeSpread keys planningWorkspaceUserInputRequired and
+      planningWorkspaceBlockerPrompt when FeaturePlanState repo workspace status is FAILED or UNAVAILABLE (hard precondition before draft)
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -2635,10 +2672,10 @@ requirements:
   - id: REQ-WORKFLOW-002
     title: Config-driven workflow v2 graph, ledger, rules, and safe templates
     statement: >-
-      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge, linear_workflow_ref delegate,
-      configurable_steps inline linear-style steps), and rulesets; coordinator workflows such as arrietty_room_v2 may run
-      hydrate/ensure/spread ingress capabilities in the entry phase before delegating to a linear_workflow_ref submodule or
-      embedded configurable_steps segment. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
+      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge, linear_workflow_ref delegate
+      for workflows that intentionally nest a sibling linear workflow, and configurable_steps inline linear-style steps), and rulesets.
+      Production coordinator workflow arrietty_room_v2 owns the full lifecycle in the v2 phase graph using legacy_action and embedded
+      configurable_steps only and does not use linear_workflow_ref. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; OPEN ledger items after upsert drive
@@ -2661,6 +2698,9 @@ requirements:
       criteria:
         - WorkflowDefinition carries optional workflowSchema; v2 resolves when YAML has phases without steps list
         - GraphWorkflowRunner runs legacy_action and linear_workflow_ref capability pipeline and phase transitions via defaultNextPhase or rulesets
+        - >-
+          GraphWorkflowRunner and ConfigurableWorkflowRunner log full throwables with phase/step, capability, and action context;
+          when an exception has a blank message, workflow error text falls back to the exception class name so audits and replies are not empty
         - WorkflowV2Loader parses phases, capabilities, rulesets, llm, and optional deliberation map from workflow map
         - UnresolvedItemLedger serializes to workflowUnresolvedItemsJson; WorkflowRulesEngine hasOpenUnresolved predicate works
         - ProgressDedupeHelper provides normalize + fingerprint + isPostWorthy for generic progress dedupe
@@ -2696,11 +2736,17 @@ requirements:
         - >-
           classify_planning_ingress and set_planning_intake_stage actions are registered for v2 YAML to normalize ingress mode and
           persist canonical intake stage transitions on FeaturePlanState
+        - >-
+          WorkflowActionRegistry logs and rethrows action failures instead of silently swallowing them, and StepResult spread writes
+          preserve null values without throwing during immutable-copy wrapping
+        - >-
+          dispatchCoordinatorPlanningKickoff does not report a blank coordinator kickoff as success: when kickoff returns an error
+          or no visible outbound reply, the session is marked failed and the thread receives a fallback internal-error notice
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
         - >-
           Production Arrietty uses arrietty_room_v2 (workflowSchema v2) whose explicit lifecycle phases own hydrate_planning_session,
           ensure_repo_workspace, optional prep_planning_repo_grounding (Qdrant + Parquet RAG when configured in ingress YAML),
-          spread_plan_workspace_signals, structured discovery, clarification, critique, approval, and launch
+          spread_plan_workspace_signals, spread_planning_workspace_blocker, structured discovery, clarification, critique, approval, and launch
           inside the v2 graph; v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted,
           planningRepoEvidenceJson, canonicalPlanningIntakeStage, and user-facing review / launch copy keys
         - >-
@@ -2755,6 +2801,9 @@ requirements:
         - ASSET-PLANNING-GAP-EVALUATOR
         - ASSET-COORDINATOR-CLARIFICATION-GAP-EVALUATOR
         - ASSET-CLARIFICATION-ENGINE-ASSESSOR
+        - ASSET-CLARIFICATION-COORDINATOR-LEDGER
+        - ASSET-ACCEPT-PENDING-PLANNING-CONFIRMATIONS-ACTION
+        - ASSET-SPREAD-PLANNING-WORKSPACE-BLOCKER-ACTION
         - ASSET-CLASSIFY-PLANNING-INGRESS-ACTION
         - ASSET-SET-PLANNING-INTAKE-STAGE-ACTION
         - ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS

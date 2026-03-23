@@ -328,9 +328,10 @@ requirements:
           across rows; workflow session flag planningAutonomousFirstPassCompleted (set after a successful planning room cycle) gates
           whether REQUIRED_FIELD gaps are emitted alongside workspace BLOCKER gaps
         - >-
-          FeaturePlanState.autonomousPlanningPassCompleted, clarificationTurnsCompleted, and clarificationOutcomeHistory persist the
-          post-draft clarification engine: autonomous cycle completion, user clarification turn budget accounting, and short audit lines
-          for assume/defer/block outcomes; ClarificationResolutionDecision models the assessor outcomes used before a question is shown
+          FeaturePlanState.autonomousPlanningPassCompleted, clarificationTurnsCompleted, clarificationOutcomeHistory, and
+          clarificationCoordinatorLedgerJson persist the
+          post-draft clarification engine: autonomous cycle completion, user clarification turn budget accounting, short audit lines
+          for assume/defer/block outcomes, and a JSON snapshot of assessed gaps / next ask; ClarificationResolutionDecision models the assessor outcomes used before a question is shown
         - >-
           state.workflow package holds generic UnresolvedItem / UnresolvedItemStatus models for config-driven clarification ledgers
           (used by workflow engine features; JSON-serializable)

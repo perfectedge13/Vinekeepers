@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.bot.BotCatalog;
 import com.vinekeepers.connectors.OutboundDeliveryRouter;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
@@ -18,18 +19,19 @@ import java.util.Optional;
 
 /**
  * Resolves/materializes a repo workspace, stores {@link RepoWorkspaceState}, and links {@link FeaturePlanState}.
- * When an {@link OutboundDeliveryRouter} is supplied, posts short progress lines to the lifecycle thread as Arrietty.
+ * When an {@link OutboundDeliveryRouter} is supplied, posts short progress lines using the workflow bot id
+ * ({@code __botId}) or optional bind {@code repoProgressAsBotId} / {@code repoProgressPersonaName}.
  */
 public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final Logger log = LoggerFactory.getLogger(EnsureRepoWorkspaceAction.class);
-    private static final String ARRIETTY_BOT_ID = "arrietty";
     private static final int CHAT_DETAIL_MAX = 350;
 
     private final RepoWorkspaceService repoWorkspaceService;
     private final RepoWorkspaceStateStore repoWorkspaceStateStore;
     private final FeaturePlanStateStore planStateStore;
     private final FeatureRoomStateStore featureRoomStateStore;
+    private final BotCatalog botCatalog;
     private final ExplicitBotSender explicitBotSender;
 
     public EnsureRepoWorkspaceAction(
@@ -37,12 +39,14 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
             RepoWorkspaceStateStore repoWorkspaceStateStore,
             FeaturePlanStateStore planStateStore,
             FeatureRoomStateStore featureRoomStateStore,
+            BotCatalog botCatalog,
             OutboundDeliveryRouter outboundDeliveryRouter) {
         this(
                 repoWorkspaceService,
                 repoWorkspaceStateStore,
                 planStateStore,
                 featureRoomStateStore,
+                botCatalog,
                 outboundDeliveryRouter != null ? outboundDeliveryRouter::sendAsExplicit : null);
     }
 
@@ -51,11 +55,13 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
             RepoWorkspaceStateStore repoWorkspaceStateStore,
             FeaturePlanStateStore planStateStore,
             FeatureRoomStateStore featureRoomStateStore,
+            BotCatalog botCatalog,
             ExplicitBotSender explicitBotSender) {
         this.repoWorkspaceService = repoWorkspaceService;
         this.repoWorkspaceStateStore = repoWorkspaceStateStore;
         this.planStateStore = planStateStore;
         this.featureRoomStateStore = featureRoomStateStore;
+        this.botCatalog = botCatalog != null ? botCatalog : new BotCatalog();
         this.explicitBotSender = explicitBotSender;
     }
 
@@ -86,13 +92,14 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
 
         Map<String, Object> st = state != null ? state : Map.of();
         Map<String, Object> bd = bind != null ? bind : Map.of();
+        String progressLabel = resolveProgressPersonaLabel(st, bd);
         RepoWorkspaceState prior = repoWorkspaceStateStore.getByContextId(contextId).orElse(null);
         RepoWorkspaceState ensured = repoWorkspaceService.ensure(contextId, rawRepo, (phase, detail) -> {
-            String line = formatProgressChatLine(phase, detail);
+            String line = formatProgressChatLine(progressLabel, phase, detail);
             if (line == null) {
                 return;
             }
-            postArrietty(st, bd, line);
+            postProgress(st, bd, line);
         }, prior);
         repoWorkspaceStateStore.put(ensured);
 
@@ -116,17 +123,47 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
         return "OK";
     }
 
-    private void postArrietty(Map<String, Object> state, Map<String, Object> bind, String content) {
+    private void postProgress(Map<String, Object> state, Map<String, Object> bind, String content) {
         if (explicitBotSender == null) {
             return;
         }
         String sendTarget = resolveSendTarget(state, bind);
         if (sendTarget == null || sendTarget.isBlank()) {
-            log.debug("Skipping Arrietty repo progress: no send target in workflow state");
+            log.debug("Skipping repo progress post: no send target in workflow state");
             return;
         }
-        Optional<String> err = explicitBotSender.sendAsExplicit(sendTarget, null, content, ARRIETTY_BOT_ID);
-        err.ifPresent(msg -> log.warn("Arrietty repo progress not delivered: {}", msg));
+        String botId = resolveSenderBotId(state, bind);
+        if (botId == null || botId.isBlank()) {
+            log.debug("Skipping repo progress post: missing __botId / repoProgressAsBotId");
+            return;
+        }
+        Optional<String> err = explicitBotSender.sendAsExplicit(sendTarget, null, content, botId.trim());
+        err.ifPresent(msg -> log.warn("Repo workspace progress not delivered: {}", msg));
+    }
+
+    private String resolveSenderBotId(Map<String, Object> state, Map<String, Object> bind) {
+        return firstNonBlank(
+                getString(bind, "repoProgressAsBotId"),
+                getString(state, "repoProgressAsBotId"),
+                getString(state, "__botId"));
+    }
+
+    private String resolveProgressPersonaLabel(Map<String, Object> state, Map<String, Object> bind) {
+        String explicit = firstNonBlank(
+                getString(bind, "repoProgressPersonaName"),
+                getString(state, "repoProgressPersonaName"));
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit.trim();
+        }
+        String bid = resolveSenderBotId(state, bind);
+        if (bid != null && !bid.isBlank()) {
+            String fromCat = botCatalog.displayNameForBot(bid.trim());
+            if (fromCat != null && !fromCat.isBlank()) {
+                return fromCat;
+            }
+            return bid.trim();
+        }
+        return "Coordinator";
     }
 
     /**
@@ -142,16 +179,22 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
         return sendTarget;
     }
 
+    /** Default persona label {@code Coordinator} for tests and callers that omit bind/state. */
     static String formatProgressChatLine(RepoWorkspaceProgressPhase phase, String detail) {
+        return formatProgressChatLine("Coordinator", phase, detail);
+    }
+
+    static String formatProgressChatLine(String personaLabel, RepoWorkspaceProgressPhase phase, String detail) {
+        String label = personaLabel != null && !personaLabel.isBlank() ? personaLabel.trim() : "Coordinator";
         return switch (phase) {
             case RESOLVED_REF, VERIFYING_GIT -> null;
-            case CREATING_WORKSPACE_ROOT -> "**Arrietty:** Preparing workspace directories…";
-            case REMOVING_STALE_CLONE -> "**Arrietty:** Removing previous checkout…";
-            case CLONING -> "**Arrietty:** Cloning repository…";
-            case READY_LOCAL -> "**Arrietty:** Using local repository"
+            case CREATING_WORKSPACE_ROOT -> "**" + label + ":** Preparing workspace directories…";
+            case REMOVING_STALE_CLONE -> "**" + label + ":** Removing previous checkout…";
+            case CLONING -> "**" + label + ":** Cloning repository…";
+            case READY_LOCAL -> "**" + label + ":** Using local repository"
                     + (detail != null && !detail.isBlank() ? ": `" + truncateChat(detail) + "`" : ".");
-            case READY_CLONED -> "**Arrietty:** Repo ready: `" + (detail != null ? truncateChat(detail) : "?") + "`";
-            case FAILED -> "**Arrietty:** Workspace issue — " + truncateChat(detail != null ? detail : "unknown error");
+            case READY_CLONED -> "**" + label + ":** Repo ready: `" + (detail != null ? truncateChat(detail) : "?") + "`";
+            case FAILED -> "**" + label + ":** Workspace issue — " + truncateChat(detail != null ? detail : "unknown error");
         };
     }
 
@@ -176,5 +219,10 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static String firstNonBlank(String a, String b, String c) {
+        String x = firstNonBlank(a, b);
+        return x != null ? x : c;
     }
 }

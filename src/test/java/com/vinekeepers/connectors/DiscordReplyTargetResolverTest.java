@@ -47,7 +47,12 @@ class DiscordReplyTargetResolverTest {
     @Test
     void interactionEventWithInteractionIdTokenDeferred_returnsInteractionTargetWithCorrectAlreadyDeferred() {
         Event event = new Event("discord:g:789", "interaction",
-                Map.of("channelId", "ch-i", "interactionId", "int-1", "token", "tok-1", "deferred", true));
+                Map.of(
+                        "channelId", "ch-i",
+                        "interactionId", "int-1",
+                        "token", "tok-1",
+                        "deferred", true,
+                        "ingestBotId", "gadget"));
         Optional<ReplyTarget> result = resolver.resolve(event);
         assertTrue(result.isPresent());
         ReplyTarget target = result.get();
@@ -58,6 +63,7 @@ class DiscordReplyTargetResolverTest {
         assertEquals("int-1", it.interactionId());
         assertEquals("tok-1", it.token());
         assertTrue(it.alreadyDeferred());
+        assertEquals("gadget", it.ingestBotId());
     }
 
     @Test

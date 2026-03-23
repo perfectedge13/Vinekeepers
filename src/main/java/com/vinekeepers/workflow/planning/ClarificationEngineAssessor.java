@@ -105,6 +105,13 @@ public final class ClarificationEngineAssessor {
                     defaultAssumptionLine(g),
                     rank);
         }
+        if (pol.isAllowAssumeAndContinue() && rank < pol.getClarificationAskPriorityThreshold()) {
+            return new AssessedGap(
+                    g,
+                    ClarificationResolutionDecision.ASSUME_AND_CONTINUE,
+                    defaultAssumptionLine(g),
+                    rank);
+        }
         return new AssessedGap(g, ClarificationResolutionDecision.ASK_USER, "", rank);
     }
 

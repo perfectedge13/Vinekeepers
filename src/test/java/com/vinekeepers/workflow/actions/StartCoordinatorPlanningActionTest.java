@@ -75,6 +75,16 @@ class StartCoordinatorPlanningActionTest {
     }
 
     @Test
+    void missingCoordinator_returnsErrorWhenNoFeatureRoom() {
+        var action = new StartCoordinatorPlanningAction(engine, rooms);
+        String out = (String) action.run(
+                new Event("discord:g", "message", Map.of()),
+                Map.of(),
+                Map.of("intakeThreadId", "unknown-thread-999"));
+        assertTrue(out.contains("missing coordinatorBotId"));
+    }
+
+    @Test
     void dispatchesWithThreadPayloadAndResolvesCoordinatorFromRoom() {
         String threadId = "111222333444555666";
         rooms.put(new FeatureRoomState(

@@ -20,6 +20,7 @@ import com.vinekeepers.events.Event;
 
 import com.vinekeepers.state.LifecycleContextStore;
 
+import com.vinekeepers.state.BotScopedStateKeys;
 import com.vinekeepers.state.StateStore;
 
 import com.vinekeepers.state.planning.FeaturePlanState;
@@ -198,7 +199,8 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
         String baseBranch = firstNonBlank(getString(args, "baseBranch"), Env.get("CURSOR_BASE_BRANCH", DEFAULT_BASE_BRANCH));
 
-        String branchName = buildBranchName(change);
+        String workflowBotId = getString(args, "__botId");
+        String branchName = buildBranchName(change, workflowBotId);
 
         Map<String, Object> eventMeta = getMap(args, "__event");
 
@@ -271,9 +273,11 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
             String authorId = eventMeta != null ? getString(eventMeta, "authorId") : null;
 
             if (authorId != null && !authorId.isBlank()) {
-
-                stateStore.put("luna:lastRepo:" + authorId, project);
-
+                if (workflowBotId != null && !workflowBotId.isBlank()) {
+                    stateStore.put(BotScopedStateKeys.lastRepoKey(workflowBotId, authorId), project);
+                } else {
+                    stateStore.put(BotScopedStateKeys.legacyLunaLastRepoKey(authorId), project);
+                }
             }
 
             if (contextId != null && !contextId.isBlank()) {
@@ -366,7 +370,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
 
 
-    private static String buildBranchName(String change) {
+    private static String buildBranchName(String change, String workflowBotId) {
 
         String normalized = change.toLowerCase(Locale.ROOT)
 
@@ -386,7 +390,8 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
         }
 
-        return "luna/" + normalized + "-" + System.currentTimeMillis();
+        String prefix = BotScopedStateKeys.branchPrefixForBot(workflowBotId);
+        return prefix + "/" + normalized + "-" + System.currentTimeMillis();
 
     }
 

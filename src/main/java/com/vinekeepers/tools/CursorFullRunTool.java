@@ -8,6 +8,7 @@ import com.vinekeepers.core.cursor.CursorCloudException;
 import com.vinekeepers.core.cursor.CursorInstructionComposer;
 import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.env.Env;
+import com.vinekeepers.state.BotScopedStateKeys;
 import com.vinekeepers.state.StateStore;
 
 import java.time.Instant;
@@ -16,7 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Tool wrapper that launches a Cursor cloud agent run for Luna.
+ * Tool wrapper that launches a Cursor cloud agent run (workflow context supplies {@code __botId} when available).
  */
 public final class CursorFullRunTool implements Tool {
 
@@ -66,7 +67,8 @@ public final class CursorFullRunTool implements Tool {
 
         Map<String, Object> eventMetadata = getMap(args, "__event");
         String baseBranch = firstNonBlank(getString(args, "baseBranch"), Env.get("CURSOR_BASE_BRANCH", DEFAULT_BASE_BRANCH));
-        String branchName = buildBranchName(change);
+        String workflowBotId = getString(args, "__botId");
+        String branchName = buildBranchName(change, workflowBotId);
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
                 repositoryUrl,
@@ -96,7 +98,11 @@ public final class CursorFullRunTool implements Tool {
             stateStore.put(sessionRunKey(sessionKey), launch.id());
             String authorId = getString(eventMetadata, "authorId");
             if (authorId != null && !authorId.isBlank()) {
-                stateStore.put("luna:lastRepo:" + authorId, project);
+                if (workflowBotId != null && !workflowBotId.isBlank()) {
+                    stateStore.put(BotScopedStateKeys.lastRepoKey(workflowBotId, authorId), project);
+                } else {
+                    stateStore.put(BotScopedStateKeys.legacyLunaLastRepoKey(authorId), project);
+                }
             }
             return buildLaunchAcknowledgement(runState);
         } catch (CursorCloudException e) {
@@ -138,7 +144,7 @@ public final class CursorFullRunTool implements Tool {
         return null;
     }
 
-    private static String buildBranchName(String change) {
+    private static String buildBranchName(String change, String workflowBotId) {
         String normalized = change.toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("(^-|-$)", "");
@@ -148,7 +154,8 @@ public final class CursorFullRunTool implements Tool {
         if (normalized.length() > 32) {
             normalized = normalized.substring(0, 32);
         }
-        return "luna/" + normalized + "-" + System.currentTimeMillis();
+        String prefix = BotScopedStateKeys.branchPrefixForBot(workflowBotId);
+        return prefix + "/" + normalized + "-" + System.currentTimeMillis();
     }
 
     private static String buildLaunchAcknowledgement(LifecycleRunRecord runState) {

@@ -61,6 +61,8 @@ public final class FeaturePlanState {
     private final int clarificationTurnsCompleted;
     /** Short audit lines for clarification engine outcomes (budget, assume, defer). */
     private final List<String> clarificationOutcomeHistory;
+    /** Serialized coordinator clarification ledger JSON (canonical engine). */
+    private final String clarificationCoordinatorLedgerJson;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -148,6 +150,7 @@ public final class FeaturePlanState {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -195,7 +198,8 @@ public final class FeaturePlanState {
             String planningOrchestrationFailureReason,
             Boolean autonomousPlanningPassCompleted,
             Integer clarificationTurnsCompleted,
-            List<String> clarificationOutcomeHistory) {
+            List<String> clarificationOutcomeHistory,
+            String clarificationCoordinatorLedgerJson) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
         this.featureId = featureId;
         this.featureSlug = featureSlug;
@@ -248,6 +252,10 @@ public final class FeaturePlanState {
                 clarificationTurnsCompleted != null && clarificationTurnsCompleted >= 0 ? clarificationTurnsCompleted : 0;
         this.clarificationOutcomeHistory =
                 clarificationOutcomeHistory != null ? List.copyOf(clarificationOutcomeHistory) : List.of();
+        this.clarificationCoordinatorLedgerJson =
+                clarificationCoordinatorLedgerJson != null && !clarificationCoordinatorLedgerJson.isBlank()
+                        ? clarificationCoordinatorLedgerJson
+                        : "{}";
         this.createdAt = effectiveCreated;
         this.updatedAt = updatedAt != null ? updatedAt : this.createdAt;
     }
@@ -373,7 +381,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     /**
@@ -424,7 +433,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withPlanConfidence(PlanConfidence confidence) {
@@ -472,7 +482,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withPlanApproval(PlanApproval approval) {
@@ -520,7 +531,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withPlanCritiqueSnapshot(PlanCritiqueSnapshot snapshot) {
@@ -570,7 +582,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withCritiqueLifecycleStatus(String status) {
@@ -618,7 +631,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withPacketPosted(
@@ -670,7 +684,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     /**
@@ -726,7 +741,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     private FeaturePlanState copy(
@@ -781,7 +797,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public String getContextId() {
@@ -960,6 +977,66 @@ public final class FeaturePlanState {
         return clarificationOutcomeHistory;
     }
 
+    public String getClarificationCoordinatorLedgerJson() {
+        return clarificationCoordinatorLedgerJson;
+    }
+
+    /**
+     * Replace the JSON clarification assessment ledger (see {@link com.vinekeepers.workflow.planning.ClarificationCoordinatorLedger}).
+     */
+    public FeaturePlanState withClarificationCoordinatorLedgerJson(String json) {
+        String j = json != null && !json.isBlank() ? json : "{}";
+        if (j.equals(clarificationCoordinatorLedgerJson)) {
+            return this;
+        }
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                j);
+    }
+
     public FeaturePlanState withAutonomousPlanningPassCompleted(boolean completed) {
         if (completed == this.autonomousPlanningPassCompleted) {
             return this;
@@ -1008,7 +1085,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 completed,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     /**
@@ -1061,7 +1139,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 next,
-                hist);
+                hist,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withClarificationEngineNote(String auditLine) {
@@ -1113,7 +1192,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                hist);
+                hist,
+                clarificationCoordinatorLedgerJson);
     }
 
     private static List<String> appendHistory(List<String> prior, String line) {
@@ -1176,7 +1256,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withIntakeKickoffPosted(int version, String fingerprint) {
@@ -1224,7 +1305,8 @@ public final class FeaturePlanState {
                 planningOrchestrationFailureReason,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public FeaturePlanState withPlanningOrchestrationFailure(String reason) {
@@ -1273,7 +1355,8 @@ public final class FeaturePlanState {
                 r,
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
-                clarificationOutcomeHistory);
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson);
     }
 
     public int countBlockingIssues() {

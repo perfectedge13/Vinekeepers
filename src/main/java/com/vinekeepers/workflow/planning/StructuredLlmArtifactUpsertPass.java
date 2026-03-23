@@ -140,8 +140,8 @@ public final class StructuredLlmArtifactUpsertPass {
         String r = roleNameForPayload != null ? roleNameForPayload.trim().toUpperCase() : "";
         String who =
                 switch (r) {
-                    case "ARRIETTY", "ARCHITECT", "AUDITOR", "SCRIBE" -> "Arrietty";
-                    default -> "Arrietty";
+                    case "COORDINATOR", "ARRIETTY", "ARCHITECT", "AUDITOR", "SCRIBE" -> "Coordinator";
+                    default -> "Coordinator";
                 };
         return who + " is updating the structured plan draft (asking ChatGPT).";
     }
@@ -150,8 +150,8 @@ public final class StructuredLlmArtifactUpsertPass {
         String r = roleNameForPayload != null ? roleNameForPayload.trim().toUpperCase() : "";
         String who =
                 switch (r) {
-                    case "ARRIETTY", "ARCHITECT", "AUDITOR", "SCRIBE" -> "Arrietty";
-                    default -> "Arrietty";
+                    case "COORDINATOR", "ARRIETTY", "ARCHITECT", "AUDITOR", "SCRIBE" -> "Coordinator";
+                    default -> "Coordinator";
                 };
         return "Fixing " + who + " JSON output so we can apply updates (asking ChatGPT).";
     }

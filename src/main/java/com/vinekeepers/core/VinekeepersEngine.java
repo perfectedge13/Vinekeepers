@@ -42,6 +42,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class VinekeepersEngine implements EventSubscriber {
 
     private static final Logger log = LoggerFactory.getLogger(VinekeepersEngine.class);
+    private static final String COORDINATOR_KICKOFF_FAILURE_KEY = "coordinatorKickoffFailureReason";
+    private static final String COORDINATOR_KICKOFF_FAILURE_MESSAGE =
+            "Planning hit an internal error during kickoff. See server logs.";
 
     private final Router router;
     private final Map<String, BotDefinition> bots = new ConcurrentHashMap<>();
@@ -123,12 +126,12 @@ public final class VinekeepersEngine implements EventSubscriber {
 
     /**
      * Runs the coordinator bot workflow once for a synthetic Discord message in the intake/spec thread
-     * (e.g. immediately after Luna handoff). Does not use the router — only {@code coordinatorBotId} runs.
+     * (e.g. immediately after the intake bot posts the handoff). Does not use the router — only {@code coordinatorBotId} runs.
      * Idempotent: no-ops when the thread session already has planning in progress, is waiting for input, or
      * completed (conversational thread terminal).
      *
-     * @return {@code RAN}, {@code SKIPPED_WAITING}, {@code SKIPPED_IN_PROGRESS}, {@code SKIPPED_COMPLETED},
-     *         {@code NO_BOT}, or {@code NO_RUNNER}
+     * @return {@code RAN}, {@code RAN_ERROR}, {@code RAN_NO_OUTBOUND}, {@code SKIPPED_WAITING},
+     *         {@code SKIPPED_IN_PROGRESS}, {@code SKIPPED_COMPLETED}, {@code NO_BOT}, or {@code NO_RUNNER}
      */
     public String dispatchCoordinatorPlanningKickoff(Event syntheticThreadMessage, String coordinatorBotId) {
         if (coordinatorBotId == null || coordinatorBotId.isBlank()) {
@@ -175,7 +178,22 @@ public final class VinekeepersEngine implements EventSubscriber {
             }
         }
         auditRecorder.record(AuditLog.fromEvent(syntheticThreadMessage, coordinatorBotId, "received", ""));
-        runWorkflowReasonerAndDeliver(syntheticThreadMessage, bot, coordinatorBotId);
+        WorkflowDeliveryOutcome outcome = runWorkflowReasonerAndDeliver(syntheticThreadMessage, bot, coordinatorBotId);
+        String failureDetail = summarizeKickoffFailure(outcome);
+        if (failureDetail != null) {
+            markCoordinatorKickoffFailure(stateKey, failureDetail);
+            boolean fallbackSent = outcome.replyDelivered()
+                    || deliverKickoffFailureNotice(syntheticThreadMessage, coordinatorBotId);
+            String status = classifyKickoffStatus(outcome);
+            log.warn(
+                    "Coordinator planning kickoff failed for botId={} sessionKey={} status={} detail={} fallbackSent={}",
+                    coordinatorBotId,
+                    stateKey,
+                    status,
+                    failureDetail,
+                    fallbackSent);
+            return status;
+        }
         log.info("Coordinator planning kickoff finished for botId={} sessionKey={}", coordinatorBotId, stateKey);
         return "RAN";
     }
@@ -347,7 +365,7 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
     }
 
-    private void runWorkflowReasonerAndDeliver(Event event, BotDefinition bot, String botId) {
+    private WorkflowDeliveryOutcome runWorkflowReasonerAndDeliver(Event event, BotDefinition bot, String botId) {
         WorkflowRunResult workflowResult = WorkflowRunResult.continueWithoutReply();
         WorkflowRunner runner = runners.get(botId);
         if (runner != null) {
@@ -364,20 +382,21 @@ public final class VinekeepersEngine implements EventSubscriber {
         String sourceId = event.getSourceId();
         if (sourceId == null) {
             log.warn("No reply target resolver for null sourceId; skipping reply delivery");
-            return;
+            return new WorkflowDeliveryOutcome(workflowResult, false, outbound == null, "missing sourceId");
         }
         String sourcePrefix = sourceId.contains(":") ? sourceId.substring(0, sourceId.indexOf(':')) : sourceId;
         ReplyTargetResolver resolver = resolversByConnectorId.get(sourcePrefix);
         if (resolver == null) {
             log.warn("No reply target resolver for source prefix {}; skipping reply delivery", sourcePrefix);
-            return;
+            return new WorkflowDeliveryOutcome(workflowResult, false, outbound == null, "missing reply target resolver");
         }
         Optional<ReplyTarget> targetOpt = resolver.resolve(event);
         if (targetOpt.isEmpty()) {
             log.warn("Reply target resolver returned empty; skipping reply delivery");
-            return;
+            return new WorkflowDeliveryOutcome(workflowResult, false, outbound == null, "reply target unresolved");
         }
-        deliverReply(event, outbound, targetOpt.get(), botId);
+        boolean delivered = deliverReply(event, outbound, targetOpt.get(), botId);
+        return new WorkflowDeliveryOutcome(workflowResult, delivered, outbound == null, delivered ? "" : "reply not delivered");
     }
 
     private ReasonerOutput runReasoner(BotDefinition bot, Event event, WorkflowRunResult workflowResult) {
@@ -458,17 +477,31 @@ public final class VinekeepersEngine implements EventSubscriber {
     private OutboundResponse deferredInteractionAck(String handlingBotId) {
         if (handlingBotId != null && !handlingBotId.isBlank()) {
             BotDefinition b = bots.get(handlingBotId);
-            if (b != null && usesArriettyPlanningCoordinatorWorkflow(b)) {
+            if (b != null && usesPlanningCoordinatorDeferredInteractionAck(b)) {
                 return OutboundResponse.ofText("Working on your update…");
             }
         }
         return DEFERRED_INTERACTION_ACK;
     }
 
-    /** True when the bot runs the Arrietty coordinator planning workflow (configured ref {@code arrietty_room_*} or legacy type string). */
-    private static boolean usesArriettyPlanningCoordinatorWorkflow(BotDefinition b) {
+    /**
+     * When {@code workflow.params.deferredInteractionAckPlanningCoordinator} is true, use planning-style deferred copy.
+     * Otherwise, when the bot uses the Arrietty room workflow ({@code workflowRef} starting with {@code arrietty_room} or
+     * {@code workflow.type} {@code arrietty_room}), use the same deferred-interaction copy.
+     */
+    private static boolean usesPlanningCoordinatorDeferredInteractionAck(BotDefinition b) {
+        if (b.getWorkflowParams() != null) {
+            Object flag = b.getWorkflowParams().get("deferredInteractionAckPlanningCoordinator");
+            if (Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag))) {
+                return true;
+            }
+        }
+        return arriettyRoomWorkflowRefOrType(b);
+    }
+
+    private static boolean arriettyRoomWorkflowRefOrType(BotDefinition b) {
         if ("arrietty_room".equalsIgnoreCase(b.getWorkflowType())) {
-            return true; // legacy YAML workflow type, if present
+            return true;
         }
         if (!"configured".equalsIgnoreCase(b.getWorkflowType()) || b.getWorkflowParams() == null) {
             return false;
@@ -481,7 +514,7 @@ public final class VinekeepersEngine implements EventSubscriber {
         return r.startsWith("arrietty_room");
     }
 
-    private void deliverReply(Event event, OutboundResponse outbound, ReplyTarget target, String handlingBotId) {
+    private boolean deliverReply(Event event, OutboundResponse outbound, ReplyTarget target, String handlingBotId) {
         ReplyTarget resolved = target;
         if (handlingBotId != null && !handlingBotId.isBlank()
                 && target instanceof com.vinekeepers.interactions.ChannelTarget ct
@@ -493,7 +526,7 @@ public final class VinekeepersEngine implements EventSubscriber {
             if (resolved instanceof com.vinekeepers.interactions.InteractionTarget it && it.alreadyDeferred()) {
                 outbound = deferredInteractionAck(handlingBotId);
             } else {
-                return;
+                return false;
             }
         }
         String sourcePrefix = event.getSourceId().contains(":") ? event.getSourceId().substring(0, event.getSourceId().indexOf(':')) : event.getSourceId();
@@ -506,7 +539,7 @@ public final class VinekeepersEngine implements EventSubscriber {
             } else {
                 sink.respondImmediately(outbound, resolved);
             }
-            return;
+            return true;
         }
         ReplySender sender = replySendersByConnectorId.get(sourcePrefix);
         if (sender != null) {
@@ -516,14 +549,86 @@ public final class VinekeepersEngine implements EventSubscriber {
                 String messageId = resolved.messageId();
                 if (channelId != null) {
                     sender.send(channelId, messageId, text);
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     private static String lastUserMessage(Event event) {
         NormalizedEventContext context = NormalizedEventContext.from(event);
         return context.getText() != null ? context.getText() : "";
     }
+
+    private String summarizeKickoffFailure(WorkflowDeliveryOutcome outcome) {
+        if (outcome == null) {
+            return "Coordinator kickoff outcome missing.";
+        }
+        WorkflowRunResult workflowResult = outcome.workflowResult();
+        if (workflowResult != null) {
+            String error = workflowResult.getErrorMessage();
+            if (error != null && !error.isBlank()) {
+                return error;
+            }
+            boolean blankTerminal =
+                    !workflowResult.isCompleted()
+                            && !workflowResult.isWaiting()
+                            && workflowResult.getReplyMessage().isBlank()
+                            && workflowResult.getRichReply().isEmpty();
+            if (blankTerminal) {
+                return "Workflow failed without an error message.";
+            }
+        }
+        if (!outcome.replyDelivered()) {
+            return outcome.deliveryIssue() != null && !outcome.deliveryIssue().isBlank()
+                    ? "Coordinator kickoff produced no visible reply: " + outcome.deliveryIssue()
+                    : "Coordinator kickoff produced no visible reply.";
+        }
+        return null;
+    }
+
+    private String classifyKickoffStatus(WorkflowDeliveryOutcome outcome) {
+        WorkflowRunResult workflowResult = outcome != null ? outcome.workflowResult() : null;
+        boolean workflowErrored =
+                workflowResult != null
+                        && ((workflowResult.getErrorMessage() != null)
+                        || (!workflowResult.isCompleted()
+                        && !workflowResult.isWaiting()
+                        && workflowResult.getReplyMessage().isBlank()
+                        && workflowResult.getRichReply().isEmpty()));
+        return workflowErrored ? "RAN_ERROR" : "RAN_NO_OUTBOUND";
+    }
+
+    private void markCoordinatorKickoffFailure(String stateKey, String reason) {
+        ConfigurableWorkflowState state =
+                stateStore.get(stateKey, ConfigurableWorkflowState.class).orElseGet(ConfigurableWorkflowState::new);
+        state.put(COORDINATOR_KICKOFF_FAILURE_KEY, reason != null ? reason : "Coordinator kickoff failed.");
+        state.markError();
+        stateStore.put(stateKey, state);
+    }
+
+    private boolean deliverKickoffFailureNotice(Event event, String botId) {
+        String sourceId = event.getSourceId();
+        if (sourceId == null) {
+            return false;
+        }
+        String sourcePrefix = sourceId.contains(":") ? sourceId.substring(0, sourceId.indexOf(':')) : sourceId;
+        ReplyTargetResolver resolver = resolversByConnectorId.get(sourcePrefix);
+        if (resolver == null) {
+            return false;
+        }
+        Optional<ReplyTarget> targetOpt = resolver.resolve(event);
+        if (targetOpt.isEmpty()) {
+            return false;
+        }
+        return deliverReply(event, OutboundResponse.ofText(COORDINATOR_KICKOFF_FAILURE_MESSAGE), targetOpt.get(), botId);
+    }
+
+    private record WorkflowDeliveryOutcome(
+            WorkflowRunResult workflowResult,
+            boolean replyDelivered,
+            boolean outboundMissing,
+            String deliveryIssue) {}
 
 }

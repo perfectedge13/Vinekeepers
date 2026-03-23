@@ -423,7 +423,7 @@ class ConfigurableWorkflowRunnerTest {
                 Map.of("type", "capture_field", "storeIn", "room", "trimAndLower", true),
                 Map.of("type", "done", "message", "Room: {{room}}")
         );
-        WorkflowDefinition def = new WorkflowDefinition("arrietty_room", steps);
+        WorkflowDefinition def = new WorkflowDefinition("coordinator_room_fixture", steps);
         ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry());
         StateStore store = new StateStore();
 

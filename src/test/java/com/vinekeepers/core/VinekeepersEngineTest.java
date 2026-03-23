@@ -840,6 +840,68 @@ class VinekeepersEngineTest {
     }
 
     @Test
+    void dispatchCoordinatorPlanningKickoff_blankErrorPostsFallbackAndReturnsRanError() {
+        BotDefinition arrietty = new BotDefinition(
+                "arrietty",
+                new Persona("A", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096),
+                "configured",
+                Map.of("workflowRef", "arrietty_room_v2"),
+                ConversationMode.CONVERSATIONAL,
+                "thread",
+                null);
+        engine.registerBot(arrietty);
+        engine.registerRunner("arrietty", (event, store, botId) -> WorkflowRunResult.error(null));
+        engine.registerReasoner("arrietty", new StubReasoner());
+        AtomicReference<String> sent = new AtomicReference<>();
+        engine.setReplySender("discord", (channelId, messageId, content) -> sent.set(content));
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+
+        String threadId = "thread-kickoff-error";
+        Event syn = new Event("discord:g:1", "message", Map.of("channelId", threadId, "threadId", threadId));
+        assertEquals("RAN_ERROR", engine.dispatchCoordinatorPlanningKickoff(syn, "arrietty"));
+        assertEquals("Planning hit an internal error during kickoff. See server logs.", sent.get());
+
+        String sessionKey = "bot:arrietty:conv:" + threadId;
+        ConfigurableWorkflowState state = stateStore.get(sessionKey, ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals(ConfigurableWorkflowState.Status.ERROR, state.getStatus());
+        assertTrue(String.valueOf(state.get("coordinatorKickoffFailureReason")).contains("failed"));
+    }
+
+    @Test
+    void dispatchCoordinatorPlanningKickoff_blankCompletedReplyPostsFallbackAndReturnsRanNoOutbound() {
+        BotDefinition arrietty = new BotDefinition(
+                "arrietty",
+                new Persona("A", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096),
+                "configured",
+                Map.of("workflowRef", "arrietty_room_v2"),
+                ConversationMode.CONVERSATIONAL,
+                "thread",
+                null);
+        engine.registerBot(arrietty);
+        engine.registerRunner("arrietty", (event, store, botId) -> WorkflowRunResult.completed(""));
+        engine.registerReasoner("arrietty", new StubReasoner());
+        AtomicReference<String> sent = new AtomicReference<>();
+        engine.setReplySender("discord", (channelId, messageId, content) -> sent.set(content));
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+
+        String threadId = "thread-kickoff-empty";
+        Event syn = new Event("discord:g:1", "message", Map.of("channelId", threadId, "threadId", threadId));
+        assertEquals("RAN_NO_OUTBOUND", engine.dispatchCoordinatorPlanningKickoff(syn, "arrietty"));
+        assertEquals("Planning hit an internal error during kickoff. See server logs.", sent.get());
+
+        String sessionKey = "bot:arrietty:conv:" + threadId;
+        ConfigurableWorkflowState state = stateStore.get(sessionKey, ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals(ConfigurableWorkflowState.Status.ERROR, state.getStatus());
+        assertTrue(String.valueOf(state.get("coordinatorKickoffFailureReason")).contains("no visible reply"));
+    }
+
+    @Test
     void featureRoomIntakeThreadInteraction_invokesCoordinatorWorkflowOnly() {
         FeatureRoomStateStore frs = new FeatureRoomStateStore();
         List<RoomParticipant> parts = List.of(

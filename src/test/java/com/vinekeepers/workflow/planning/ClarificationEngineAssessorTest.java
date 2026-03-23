@@ -30,7 +30,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void nonBlockingLowRepoEvidenceAsksUser() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(5, 0.45, true, true);
+                new CoordinatorClarificationEnginePolicy(5, 0.45, 0.0, true, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan = basePlan("ctx", "config versus runtime tradeoff");
@@ -44,7 +44,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void nonBlockingStrongRepoEvidenceAssumesWhenAllowed() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(5, 0.45, true, true);
+                new CoordinatorClarificationEnginePolicy(5, 0.45, 0.0, true, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan =
@@ -61,7 +61,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void budgetExhaustedNonBlockingAssumesWhenPolicyAllows() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(2, 0.45, true, true);
+                new CoordinatorClarificationEnginePolicy(2, 0.45, 0.0, true, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan =
@@ -78,7 +78,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void budgetExhaustedNonBlockingDefersWhenAssumeDisabled() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(1, 0.45, false, true);
+                new CoordinatorClarificationEnginePolicy(1, 0.45, 0.0, false, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan =
@@ -93,7 +93,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void budgetExhaustedBlockingYieldsBlockAsUnimplementable() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(1, 0.45, true, true);
+                new CoordinatorClarificationEnginePolicy(1, 0.45, 0.0, true, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(
                         CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(true)), pol);
@@ -110,7 +110,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void critiqueFollowUpLowersAskThresholdSoMarginalEvidenceCanAssume() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(5, 0.55, true, true);
+                new CoordinatorClarificationEnginePolicy(5, 0.55, 0.0, true, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         String json =
