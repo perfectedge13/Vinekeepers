@@ -19,10 +19,18 @@ RUN mvn -B package -Dmaven.test.skip=true && \
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
-# ensure_repo_workspace: git + ssh for clones; Ansible for Gadget deploy; mount volumes to persist checkouts.
+# ensure_repo_workspace: git + ssh for clones; Ansible for Gadget deploy; Docker CLI + compose plugin
+# for Gadget host compose operations via /var/run/docker.sock; mount volumes to persist checkouts.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        git openssh-client ansible \
+        ca-certificates curl gnupg git openssh-client ansible \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/checkouts
 ENV VINEKEEPERS_REPO_WORKSPACE_ROOT=/app/checkouts

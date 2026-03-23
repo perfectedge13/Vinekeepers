@@ -189,6 +189,38 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
+    void arriettyBlockedThreadUsesUserVisiblePlanningFailure() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_post_blocked_thread");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bind = (Map<String, Object>) cap.get("bind");
+        String content = String.valueOf(bind.get("content"));
+        assertTrue(content.contains("{{planningCycleUserVisibleFailure}}"));
+        assertFalse(content.contains("{{planCritiqueError}}"));
+    }
+
+    @Test
+    void arriettyTemplatePolicyAllowlistsPlanningCycleUserVisibleFailure() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> templates = (Map<String, Object>) room.get("templates");
+        @SuppressWarnings("unchecked")
+        List<String> allowedKeys = (List<String>) templates.get("allowedKeys");
+        assertTrue(allowedKeys.contains("planningCycleUserVisibleFailure"));
+    }
+
+    @Test
     void planningRoom_isArriettyOnly() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")

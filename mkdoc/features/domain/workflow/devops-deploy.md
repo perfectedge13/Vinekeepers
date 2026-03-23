@@ -6,7 +6,7 @@ active
 
 # Summary
 
-Operator-driven deploys from Discord (**REQ-GADGET-001**). Any bot may use `workflowRef: devops_deploy`; the shipped example bot id is **gadget** in `config/bots.yaml` with `discordMention: gadget` and `discordChannels`. Flow: main menu (Ansible vs Docker Compose up/stop/restart/status) → `deploy_resolve_project` → optional **`deployTargets`** pick → branch or compose service pick → `create_thread` (`deploy-progress`) → **`start_ansible_deploy`** or **`run_deploy_compose`**. The shipped menu copy uses standard punctuation in Discord, including `Docker Compose — status (ps)`. Progress uses **`OutboundDeliveryRouter.sendAs`** with workflow **`__botId`** (never a hardcoded Java default). Manifest: **`config/deploy-targets.yaml`** (or `DEPLOY_TARGETS_PATH` / legacy `GADGET_PROJECTS_PATH`). Shipped compose-only examples **neo4j** and **wikijs** use host stack `workingDirectory` paths. See [How it works](devops-deploy/how-it-works.md).
+Operator-driven deploys from Discord (**REQ-GADGET-001**). Any bot may use `workflowRef: devops_deploy`; the shipped example bot id is **gadget** in `config/bots.yaml` with `discordMention: gadget` and `discordChannels`. `gadget` activates only from a **direct bot/app mention** in the allowlisted ops room (or a thread under that room via parent-channel matching); Discord role pings do **not** satisfy `discordMention`. Flow: main menu (Ansible vs Docker Compose up/stop/restart/status) → `deploy_resolve_project` → optional **`deployTargets`** pick → branch or compose service pick → `create_thread` (`deploy-progress` for mutating compose actions, `DevOps Progress` for `compose ps`) → **`start_ansible_deploy`** or **`run_deploy_compose`**. The shipped menu copy uses standard punctuation in Discord, including `Docker Compose — status (ps)`. Progress uses **`OutboundDeliveryRouter.sendAs`** with workflow **`__botId`** (never a hardcoded Java default). Direct compose operations require the Vinekeepers runtime image to include the Docker CLI + Compose plugin and the container to mount `/var/run/docker.sock` plus each target `workingDirectory` at the same path declared in the manifest. Manifest: **`config/deploy-targets.yaml`** (or `DEPLOY_TARGETS_PATH` / legacy `GADGET_PROJECTS_PATH`). Shipped compose-only examples **neo4j** and **wikijs** use host stack `workingDirectory` paths. See [How it works](devops-deploy/how-it-works.md).
 
 # Key assets
 
@@ -24,7 +24,7 @@ Operator-driven deploys from Discord (**REQ-GADGET-001**). Any bot may use `work
 | ASSET-BOTS-YAML | Operator bot + `workflowRef` | config/bots.yaml |
 | ASSET-BOOTSTRAP | Register actions and choice providers | src/main/java/com/vinekeepers/core/Bootstrap.java |
 | ASSET-DYNAMIC-CHOICE-PROVIDER-REGISTRY | Named provider wiring | src/main/java/com/vinekeepers/workflow/DynamicChoiceProviderRegistry.java |
-| ASSET-CREATE-THREAD-ACTION | `deploy-progress` thread | src/main/java/com/vinekeepers/workflow/actions/CreateThreadAction.java |
+| ASSET-CREATE-THREAD-ACTION | DevOps progress/status threads | src/main/java/com/vinekeepers/workflow/actions/CreateThreadAction.java |
 
 # Sub-pages
 

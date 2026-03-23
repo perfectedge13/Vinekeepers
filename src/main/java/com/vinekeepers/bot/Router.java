@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Routes events to bot ids using event filters (from RoutingRule).
@@ -31,6 +32,7 @@ import java.util.Set;
 public final class Router {
 
     private static final Logger log = LoggerFactory.getLogger(Router.class);
+    private static final Pattern DISCORD_ROLE_PING_PATTERN = Pattern.compile("<@&([0-9]+)>");
 
     private final List<RoutingRule> routings = new ArrayList<>();
     private final LifecycleContextStore lifecycleContextStore;
@@ -100,6 +102,7 @@ public final class Router {
             }
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("channelId", String.valueOf(context.getChannelId()));
+            d.put("parentChannelId", String.valueOf(context.getParentChannelId()));
             d.put("mentions", context.getMentions().toString());
             d.put("filterBotIds", filterBotIds.toString());
             d.put("textPrefix", tp);
@@ -182,15 +185,22 @@ public final class Router {
                 textPrefix = textPrefix.substring(0, 160) + "…";
             }
             Object ingestBotId = context.getMetadata().get("ingestBotId");
+            boolean rolePingDetected = containsDiscordRolePing(textPrefix);
+            String routingHint = rolePingDetected
+                    ? "discord role pings do not satisfy discordMention; use a direct bot mention"
+                    : "";
             log.info(
-                    "No routing rule matched: source={}, kind={}, channelId={}, authorId={}, actorUsername={}, mentions={}, ingestBotId={}, textPrefix={}",
+                    "No routing rule matched: source={}, kind={}, channelId={}, parentChannelId={}, authorId={}, actorUsername={}, mentions={}, ingestBotId={}, rolePingDetected={}, routingHint={}, textPrefix={}",
                     context.getSourceType(),
                     context.getEventType(),
                     context.getChannelId(),
+                    context.getParentChannelId(),
                     context.getActorId(),
                     context.getActorUsername(),
                     context.getMentions(),
                     ingestBotId != null ? String.valueOf(ingestBotId) : "",
+                    rolePingDetected,
+                    routingHint,
                     textPrefix != null ? textPrefix : "");
         }
         return dedupe(filterBotIds);
@@ -209,8 +219,7 @@ public final class Router {
 
         if ("discord".equals(sourceType)) {
             if (!f.getDiscordChannelsExclude().isEmpty()) {
-                String exCh = context.getChannelId();
-                if (exCh != null && !exCh.isBlank() && f.getDiscordChannelsExclude().contains(exCh)) {
+                if (matchesDiscordChannel(f.getDiscordChannelsExclude(), context)) {
                     return false;
                 }
             }
@@ -230,8 +239,7 @@ public final class Router {
                 if (!authorMatch) return false;
             }
             if (!f.getDiscordChannels().isEmpty()) {
-                String channel = context.getChannelId();
-                if (channel == null || !f.getDiscordChannels().contains(channel)) {
+                if (!matchesDiscordChannel(f.getDiscordChannels(), context)) {
                     return false;
                 }
             }
@@ -268,5 +276,20 @@ public final class Router {
         }
 
         return true;
+    }
+
+    private static boolean matchesDiscordChannel(Set<String> configuredChannels, NormalizedEventContext context) {
+        String channelId = context.getChannelId();
+        if (channelId != null && !channelId.isBlank() && configuredChannels.contains(channelId)) {
+            return true;
+        }
+        String parentChannelId = context.getParentChannelId();
+        return parentChannelId != null
+                && !parentChannelId.isBlank()
+                && configuredChannels.contains(parentChannelId);
+    }
+
+    private static boolean containsDiscordRolePing(String text) {
+        return text != null && DISCORD_ROLE_PING_PATTERN.matcher(text).find();
     }
 }

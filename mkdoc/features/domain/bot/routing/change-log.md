@@ -4,7 +4,7 @@
 
 ## 2026-03-23
 
-- **`discordMention` token rules:** Only numeric user/bot snowflakes in `<@id>` / `<@!id>` (from text normalization and gateway `mentions` metadata) satisfy `discordMention`; role pings and pseudo-name bracket tokens do not. **Router** no-match diagnostics are a structured **INFO** log including `ingestBotId` and a truncated `textPrefix` (replaces prior DEBUG-only no-match line). **NormalizedEventContext** / **JdaDiscordGateway** behavior aligned with connectors Discord decision (2026-03-23). Tests: RouterTest, NormalizedEventContextTest.
+- **`discordMention` token rules:** Only numeric user/bot snowflakes in `<@id>` / `<@!id>` (from text normalization and gateway `mentions` metadata) satisfy `discordMention`; role pings and pseudo-name bracket tokens do not. Discord thread events now carry `parentChannelId`, so `discordChannels` / `discordChannelsExclude` can match the parent room for thread messages and interactions. **Router** no-match diagnostics are a structured **INFO** log including `ingestBotId`, `parentChannelId`, `rolePingDetected`, and a truncated `textPrefix` (replaces prior DEBUG-only no-match line). **NormalizedEventContext** / **JdaDiscordGateway** behavior aligned with connectors Discord decision (2026-03-23). Tests: RouterTest, NormalizedEventContextTest.
 
 ## 2026-03-22
 

@@ -135,7 +135,7 @@ assets:
 requirements:
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML; BotConfig models the structure. Dual-read identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy top-level discordTokenEnvKey/handlesOwnedSpaces (deprecated); normalize into ConnectorIdentity per connector; new shape preferred, new wins if both present. defaultDiscordTokenEnvKey at root is retained transitional. Workflow block, conversationMode, sessionKeyStrategy, routing filters (discordTrigger, discordMention, discordAuthors) parsed into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML; BotConfig models the structure. Dual-read identities.discord (tokenEnvKey, handlesOwnedSpaces) and legacy top-level discordTokenEnvKey/handlesOwnedSpaces (deprecated); normalize into ConnectorIdentity per connector; new shape preferred, new wins if both present. defaultDiscordTokenEnvKey at root is retained transitional. Workflow block, conversationMode, sessionKeyStrategy, routing filters (discordTrigger, discordMention, discordAuthors, discordChannels, discordChannelsExclude) parsed into runtime configuration.
     status: active
     priority: high
     type: functional
@@ -151,7 +151,7 @@ requirements:
         - BotConfig maps to BotDefinition structure
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
-        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, discordAuthors (list of string ids or usernames), and optional discordChannelsExclude (Discord channel ids where the rule must not match) from YAML
+        - ConfigLoader parses routing filters including optional discordTrigger, discordMention, discordAuthors (list of string ids or usernames), discordChannels, and optional discordChannelsExclude (Discord channel ids where the rule must not match) from YAML
         - ConfigLoader parses identities.discord (tokenEnvKey, handlesOwnedSpaces, optional ingress) and legacy discordTokenEnvKey/handlesOwnedSpaces; builds ConnectorIdentity per connector and passes to BotDefinition
         - BotConfig retains defaultDiscordTokenEnvKey as retained transitional root-level (when bot has no identities.discord.tokenEnvKey)
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId, target, targetChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
@@ -189,8 +189,10 @@ requirements:
           are ignored at evaluation time
         - >-
           bots.yaml arrietty_room_v2 rs_post_draft branches only on planningPostDraftAction (fail-closed default planning_blocked);
-          cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; orchestrator templates interpolate
-          planningRoomCycleErrorUserMessage alongside planning depth fields where relevant, and pre-launch review copy stays a short
+          cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; blocked-thread templates interpolate
+          planningCycleUserVisibleFailure for planning-room failures, and that key must be present in the safe-template allowedKeys list;
+          orchestrator templates interpolate planningRoomCycleErrorUserMessage
+          alongside planning depth fields where relevant, and pre-launch review copy stays a short
           checklist when the full planning packet is already in-thread
         - >-
           arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace

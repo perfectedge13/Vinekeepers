@@ -6,9 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 public final class HostComposeOpsRunner {
 
     private static final Logger log = LoggerFactory.getLogger(HostComposeOpsRunner.class);
+    private static final Path DOCKER_SOCKET_PATH = Path.of("/var/run/docker.sock");
 
     private static final ExecutorService POOL = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "host-compose-ops");
@@ -108,10 +111,19 @@ public final class HostComposeOpsRunner {
                                              List<String> services) throws Exception {
         List<String> cmd = buildDockerComposeCommand(c, operation, services);
         Path wd = Path.of(c.getWorkingDirectory());
+        String prerequisiteFailure = validateDirectComposePrerequisites(wd, c.getFile(), cmd.get(0));
+        if (prerequisiteFailure != null) {
+            throw new IllegalStateException(prerequisiteFailure);
+        }
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(wd.toFile());
         pb.redirectErrorStream(true);
-        Process proc = pb.start();
+        Process proc;
+        try {
+            proc = pb.start();
+        } catch (IOException e) {
+            throw new IOException(buildDirectStartFailureMessage(c.getWorkingDirectory(), cmd.get(0), e), e);
+        }
         streamComposeLines(router, workflowBotId, channelId, proc.getInputStream(), maxDiscordLines());
         long timeoutSec = parseLongEnv("DEPLOY_HOST_OPS_TIMEOUT_SECS", 600L);
         if (!proc.waitFor(timeoutSec, TimeUnit.SECONDS)) {
@@ -160,6 +172,11 @@ public final class HostComposeOpsRunner {
                                                          ComposeOperation operation,
                                                          List<String> services) {
         return buildDockerComposeCommand(c, operation, services);
+    }
+
+    /** Visible for tests. */
+    static String validateDirectComposePrerequisitesForTest(Path workingDirectory, String composeFile, String dockerBinary) {
+        return validateDirectComposePrerequisites(workingDirectory, composeFile, dockerBinary);
     }
 
     private static void runViaCursorAgent(OutboundDeliveryRouter router,
@@ -223,6 +240,73 @@ public final class HostComposeOpsRunner {
             return s;
         }
         return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private static String validateDirectComposePrerequisites(Path workingDirectory, String composeFile, String dockerBinary) {
+        if (workingDirectory == null) {
+            return "Compose failed: working directory is not configured for this target.";
+        }
+        if (!Files.exists(workingDirectory) || !Files.isDirectory(workingDirectory)) {
+            return "Compose failed: working directory `" + escape(workingDirectory.toString())
+                    + "` is not available inside Vinekeepers. Mount the host stack into the container at the same path as `config/deploy-targets.yaml`.";
+        }
+        Path composePath = workingDirectory.resolve(composeFile).normalize();
+        if (!Files.exists(composePath) || Files.isDirectory(composePath)) {
+            return "Compose failed: file `" + escape(composePath.toString())
+                    + "` is not available inside Vinekeepers. Mount the stack directory at the same path as `config/deploy-targets.yaml`.";
+        }
+        String cliFailure = validateComposeCli(dockerBinary);
+        if (cliFailure != null) {
+            return cliFailure;
+        }
+        if (runningInContainer() && !Files.exists(DOCKER_SOCKET_PATH)) {
+            return "Compose failed: Docker socket `" + escape(DOCKER_SOCKET_PATH.toString())
+                    + "` is not mounted in the Vinekeepers container. Mount `/var/run/docker.sock:/var/run/docker.sock` to use direct host compose operations.";
+        }
+        return null;
+    }
+
+    private static String validateComposeCli(String dockerBinary) {
+        ProcessBuilder pb = new ProcessBuilder(dockerBinary, "compose", "version");
+        pb.redirectErrorStream(true);
+        try {
+            Process proc = pb.start();
+            byte[] output = proc.getInputStream().readAllBytes();
+            if (!proc.waitFor(15, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+                return "Compose failed: timed out while checking Docker Compose availability for `" + escape(dockerBinary) + "`.";
+            }
+            if (proc.exitValue() == 0) {
+                return null;
+            }
+            String rendered = new String(output, StandardCharsets.UTF_8).trim();
+            if (rendered.isBlank()) {
+                rendered = "docker compose version exited with code " + proc.exitValue();
+            }
+            return "Compose failed: Docker Compose is not available via `" + escape(dockerBinary)
+                    + " compose`. Rebuild the image with the Docker CLI + compose plugin, or set `DEPLOY_COMPOSE_BINARY` to a working binary. Details: "
+                    + escape(truncate(rendered, 240));
+        } catch (IOException e) {
+            return "Compose failed: Docker binary `" + escape(dockerBinary)
+                    + "` is not available inside Vinekeepers. Rebuild the image with the Docker CLI + compose plugin, or set `DEPLOY_COMPOSE_BINARY` to a working binary.";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "Compose failed: interrupted while checking Docker Compose availability.";
+        }
+    }
+
+    private static String buildDirectStartFailureMessage(String workingDirectory, String dockerBinary, IOException error) {
+        String detail = error.getMessage() != null && !error.getMessage().isBlank()
+                ? error.getMessage()
+                : error.getClass().getSimpleName();
+        return "Compose failed while starting `" + escape(dockerBinary)
+                + " compose` in `" + escape(workingDirectory)
+                + "`. Ensure the Docker CLI is installed in the Vinekeepers image, `/var/run/docker.sock` is mounted, and the stack path is bind-mounted at the same location inside the container. Details: "
+                + escape(detail);
+    }
+
+    private static boolean runningInContainer() {
+        return Files.exists(Path.of("/.dockerenv"));
     }
 
     private static void streamComposeLines(OutboundDeliveryRouter router,

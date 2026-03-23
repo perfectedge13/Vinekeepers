@@ -63,8 +63,11 @@ public final class RunDeployComposeAction implements com.vinekeepers.workflow.Wo
 
         HostComposeOpsRunner.submit(router, workflowBotId, progressTarget, t.get(), op, service);
 
+        String kickoff = op == ComposeOperation.PS
+                ? "Compose status started. Progress in <#" + progressTarget + ">."
+                : "Compose operation started. Progress in <#" + progressTarget + ">.";
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("deployComposeMessage", "Compose operation started. Progress in <#" + progressTarget + ">.");
+        out.put("deployComposeMessage", kickoff);
         out.put("deployComposeTargetId", progressTarget);
         return out;
     }

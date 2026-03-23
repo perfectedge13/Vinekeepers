@@ -27,11 +27,6 @@ public final class StructuredLlmArtifactUpsertPass {
     private static final ObjectMapper JSON = new ObjectMapper();
     /** Prefix on {@link RolePassResult#error()} when assistant output could not be parsed as structured JSON. */
     public static final String STRUCTURED_JSON_PARSE_PREFIX = "STRUCTURED_JSON_PARSE:";
-    private static final int REPAIR_USER_SNIPPET_MAX = 14_000;
-
-    private static final String JSON_REPAIR_SYSTEM =
-            "You fix JSON. Reply with a single valid JSON object only: no markdown fences, no explanation. "
-                    + "Arrays must use [ ]. Objects must use { }. No trailing commas.";
 
     private StructuredLlmArtifactUpsertPass() {}
 
@@ -72,7 +67,7 @@ public final class StructuredLlmArtifactUpsertPass {
             return parseAndApplyUpserts(raw, event, state, contextId, planStore, profileRegistry, roleNameForPayload);
         } catch (Exception e) {
             log.warn("{} pass parse failed: {}", roleNameForPayload, e.getMessage());
-            String repaired = tryRepairJson(client, raw, roleNameForPayload, event, state);
+            String repaired = PlanningLlmJsonSupport.tryRepairJson(client, raw, roleNameForPayload, event, state);
             if (repaired != null) {
                 try {
                     return parseAndApplyUpserts(
@@ -95,45 +90,14 @@ public final class StructuredLlmArtifactUpsertPass {
             WorkProfileRegistry profileRegistry,
             String roleNameForPayload)
             throws Exception {
-        String json = PlanningLlmJsonSupport.extractJsonObject(raw);
-        JsonNode root = JSON.readTree(json);
-        int applied = PlanningLlmJsonSupport.applyUpserts(root, event, state, contextId, planStore, profileRegistry);
+        JsonNode root = PlanningLlmJsonSupport.parseJsonObject(raw);
+        PlanningLlmJsonSupport.UpsertApplyResult upsertResult =
+                PlanningLlmJsonSupport.applyUpsertsDetailed(root, event, state, contextId, planStore, profileRegistry);
+        if (upsertResult.attempted() > 0 && upsertResult.applied() == 0) {
+            throw new IllegalArgumentException(PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
+        }
         List<String> followUps = PlanningLlmJsonSupport.readFollowUpQuestions(root);
-        return new RolePassResult(applied, followUps, "", false);
-    }
-
-    private static String tryRepairJson(
-            OpenAiChatClient client,
-            String rawAssistant,
-            String roleNameForPayload,
-            Event event,
-            Map<String, Object> state) {
-        if (client == null || !client.isConfigured()) {
-            return null;
-        }
-        String snippet = rawAssistant != null && rawAssistant.length() > REPAIR_USER_SNIPPET_MAX
-                ? rawAssistant.substring(0, REPAIR_USER_SNIPPET_MAX) + "…"
-                : rawAssistant;
-        String user =
-                "The following text was meant to be one JSON object but is invalid. "
-                        + "Return only corrected JSON (same keys/shape intent: upserts array, follow_up_questions array).\n\n"
-                        + snippet;
-        String out;
-        try {
-            OpenAiCallContext repairCtx =
-                    OpenAiCallContext.planning(
-                            event,
-                            state,
-                            jsonRepairActivityLine(roleNameForPayload));
-            out = client.complete(JSON_REPAIR_SYSTEM, user, "gpt-4o-mini", null, repairCtx);
-        } catch (Exception e) {
-            log.debug("{} JSON repair call failed: {}", roleNameForPayload, e.getMessage());
-            return null;
-        }
-        if (out == null || out.startsWith("ERROR:")) {
-            return null;
-        }
-        return out;
+        return new RolePassResult(upsertResult.applied(), followUps, "", false);
     }
 
     private static String coordinatorPassActivityLine(String roleNameForPayload) {
@@ -144,16 +108,6 @@ public final class StructuredLlmArtifactUpsertPass {
                     default -> "Coordinator";
                 };
         return who + " is updating the structured plan draft (asking ChatGPT).";
-    }
-
-    private static String jsonRepairActivityLine(String roleNameForPayload) {
-        String r = roleNameForPayload != null ? roleNameForPayload.trim().toUpperCase() : "";
-        String who =
-                switch (r) {
-                    case "COORDINATOR", "ARRIETTY", "ARCHITECT", "AUDITOR", "SCRIBE" -> "Coordinator";
-                    default -> "Coordinator";
-                };
-        return "Fixing " + who + " JSON output so we can apply updates (asking ChatGPT).";
     }
 
     private static String truncateOneLine(String s, int max) {

@@ -3,6 +3,8 @@ package com.vinekeepers.workflow.actions;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,7 +22,10 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("repo_evidence_this_pass"));
         assertTrue(system.contains("Ground every factual claim"));
         assertTrue(system.contains("Do not fabricate file paths"));
+        assertTrue(system.contains("current_state_summary"));
+        assertTrue(system.contains("never use the literal key \"fieldId\""));
         assertFalse(system.contains("candidate_open_questions"));
+        assertFalse(system.contains("\"fieldId\": \"value\""));
     }
 
     @Test
@@ -33,6 +38,27 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("Always leave follow_up_questions empty"));
         assertTrue(system.contains("do not name paths/packages unless observed"));
+        assertTrue(system.contains("current_state_summary"));
+        assertTrue(system.contains("never use the literal key \"fieldId\""));
+        assertFalse(system.contains("\"fieldId\": \"value string\""));
+    }
+
+    @Test
+    void coordinatorPrompt_usesRealSectionIdsAndFieldKeys() throws Exception {
+        Class<?> roleClass = Class.forName("com.vinekeepers.workflow.planning.PlanningCoordinatorRole");
+        Object coordinator = Arrays.stream(roleClass.getEnumConstants())
+                .filter(constant -> ((Enum<?>) constant).name().equals("COORDINATOR"))
+                .findFirst()
+                .orElseThrow();
+        Method method = roleClass.getDeclaredMethod("systemPromptBlock");
+        method.setAccessible(true);
+        String system = (String) method.invoke(coordinator);
+        assertTrue(system.contains("requirements_spec"));
+        assertTrue(system.contains("sectionId\": \"narrative\""));
+        assertTrue(system.contains("feature_summary"));
+        assertTrue(system.contains("open_questions"));
+        assertTrue(system.contains("literal key \"fieldId\""));
+        assertFalse(system.contains("\"fieldId\": \"value\""));
     }
 
     private static String staticStringField(Class<?> clazz, String name) throws Exception {

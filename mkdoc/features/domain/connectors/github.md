@@ -6,7 +6,7 @@ active
 
 # Summary
 
-GitHub event source (REQ-CONNECTORS-GITHUB-001). GitHubEventSource implements EventSource and translates GitHub payloads into internal events on the event bus. Asset: GitHubEventSource.
+GitHub event source (REQ-CONNECTORS-GITHUB-001). `GitHubEventSource` is currently a stub event source: it implements `EventSource`, starts and stops cleanly, and waits for a real webhook/event bridge instead of publishing placeholder pull-request traffic on startup. Asset: GitHubEventSource.
 
 # Key assets
 

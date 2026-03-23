@@ -1,7 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.connectors.openai.OpenAiCallContext;
@@ -11,6 +10,7 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planning.PlanningLlmJsonSupport;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +31,8 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
 
     private static final String SYSTEM = """
             You are a planning assistant for software feature intake. Reply with a single JSON object only, no markdown fences.
+            Contract rules: use real artifactId/sectionId pairs from the profile, use real field ids inside data,
+            never use the literal key "fieldId", and never put a field id in sectionId.
             Schema:
             {
               "repo_evidence_this_pass": "observed | inferred_unverified | not_inspected",
@@ -39,7 +41,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                   "artifactId": "requirements_spec",
                   "sectionId": "narrative",
                   "mode": "replace",
-                  "data": { "fieldId": "value string" }
+                  "data": { "current_state_summary": "value string" }
                 }
               ],
               "top_unresolved_gap": "string or empty",
@@ -130,103 +132,59 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             return spread;
         }
         try {
-            String json = extractJsonObject(raw);
-            JsonNode root = JSON.readTree(json);
-            JsonNode upsertsNode = root.path("upserts");
-            List<Map<String, Object>> upserts = new ArrayList<>();
-            if (upsertsNode.isArray()) {
-                for (JsonNode n : upsertsNode) {
-                    if (n.isObject()) {
-                        upserts.add(JSON.convertValue(n, new TypeReference<>() {}));
-                    }
-                }
-            }
-            List<String> followUps = new ArrayList<>();
-            JsonNode fq = root.path("follow_up_questions");
-            if (fq.isArray()) {
-                for (JsonNode n : fq) {
-                    if (n.isTextual()) {
-                        String q = n.asText().trim();
-                        if (!q.isBlank()) {
-                            followUps.add(q);
-                        }
-                    }
-                }
-            }
-            String qNeeded = root.path("question_if_needed").asText("").trim();
-            if (followUps.isEmpty() && !qNeeded.isBlank()) {
-                followUps.add(qNeeded);
-            } else if (followUps.size() > 1) {
-                followUps = new ArrayList<>(followUps.subList(0, 1));
-            }
-            UpsertArtifactSectionDataAction upsertAction = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
-            Map<String, Object> base = new LinkedHashMap<>();
-            if (state != null) {
-                base.putAll(state);
-            }
-            base.put("contextId", contextId);
-            int applied = 0;
-            for (Map<String, Object> u : upserts) {
-                Object aid = u.get("artifactId");
-                Object sid = u.get("sectionId");
-                if (aid == null || sid == null) {
-                    continue;
-                }
-                Object dataObj = u.get("data");
-                if (!(dataObj instanceof Map<?, ?>)) {
-                    continue;
-                }
-                @SuppressWarnings("unchecked")
-                Map<String, Object> dataMap = (Map<String, Object>) dataObj;
-                String mode = u.get("mode") != null ? u.get("mode").toString() : "replace";
-                Object res = upsertAction.run(
-                        event,
-                        base,
-                        Map.of(
-                                "artifactId",
-                                aid.toString(),
-                                "sectionId",
-                                sid.toString(),
-                                "mode",
-                                mode,
-                                "data",
-                                dataMap));
-                if ("OK".equals(res)) {
-                    applied++;
-                }
-            }
-            spread.put("planningLlmUpsertCount", Integer.toString(applied));
-            spread.put("planningFollowUpQuestionsJson", JSON.writeValueAsString(followUps));
-            spread.put("planningLlmOk", "true");
-            spread.put("planningLlmError", "");
+            applyStructuredResponse(
+                    event,
+                    state,
+                    contextId,
+                    spread,
+                    PlanningLlmJsonSupport.parseJsonObject(raw));
         } catch (Exception e) {
-            spread.put("planningLlmError", e.getMessage() != null ? e.getMessage() : "parse failed");
+            Exception parseFailure = e;
+            String repaired = PlanningLlmJsonSupport.tryRepairJson(openAiChatClient, raw, "planning synthesis", event, state);
+            if (repaired != null) {
+                try {
+                    applyStructuredResponse(
+                            event,
+                            state,
+                            contextId,
+                            spread,
+                            PlanningLlmJsonSupport.parseJsonObject(repaired));
+                    return spread;
+                } catch (Exception repairedFailure) {
+                    parseFailure = repairedFailure;
+                    log.warn("Planning LLM parse failed after repair: {}", repairedFailure.getMessage());
+                }
+            }
+            spread.put("planningLlmError", parseFailure.getMessage() != null ? parseFailure.getMessage() : "parse failed");
             log.warn("Planning LLM parse/apply failed: {}", spread.get("planningLlmError"));
         }
         return spread;
     }
 
     static String extractJsonObject(String raw) {
-        if (raw == null) {
-            return "{}";
+        return PlanningLlmJsonSupport.extractJsonObject(raw);
+    }
+
+    private void applyStructuredResponse(
+            Event event, Map<String, Object> state, String contextId, Map<String, Object> spread, JsonNode root)
+            throws Exception {
+        PlanningLlmJsonSupport.UpsertApplyResult upsertResult =
+                PlanningLlmJsonSupport.applyUpsertsDetailed(
+                        root, event, state, contextId, planStateStore, workProfileRegistry);
+        if (upsertResult.attempted() > 0 && upsertResult.applied() == 0) {
+            throw new IllegalArgumentException(PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
         }
-        String t = raw.trim();
-        if (t.startsWith("```")) {
-            int nl = t.indexOf('\n');
-            if (nl > 0) {
-                t = t.substring(nl + 1);
-            }
-            int end = t.lastIndexOf("```");
-            if (end > 0) {
-                t = t.substring(0, end).trim();
-            }
+        List<String> followUps = new ArrayList<>(PlanningLlmJsonSupport.readFollowUpQuestions(root));
+        String qNeeded = root.path("question_if_needed").asText("").trim();
+        if (followUps.isEmpty() && !qNeeded.isBlank()) {
+            followUps.add(qNeeded);
+        } else if (followUps.size() > 1) {
+            followUps = new ArrayList<>(followUps.subList(0, 1));
         }
-        int start = t.indexOf('{');
-        int last = t.lastIndexOf('}');
-        if (start >= 0 && last > start) {
-            return t.substring(start, last + 1);
-        }
-        return t;
+        spread.put("planningLlmUpsertCount", Integer.toString(upsertResult.applied()));
+        spread.put("planningFollowUpQuestionsJson", JSON.writeValueAsString(followUps));
+        spread.put("planningLlmOk", "true");
+        spread.put("planningLlmError", "");
     }
 
     private static String buildUserPayload(FeaturePlanState plan, String profileId, Map<String, Object> state) {

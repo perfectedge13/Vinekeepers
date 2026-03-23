@@ -10,10 +10,14 @@ public enum PlanningCoordinatorRole {
         String schema = """
                 Reply with a single JSON object only, no markdown fences, no commentary before or after.
                 Syntax rules: use [ ] for arrays and { } for objects only; do not close an array with }; no trailing commas.
+                Contract rules: sectionId must be a real profile section id like narrative, impact, backlog, outline,
+                checks, context, analysis, or decisions. data keys must be real field ids for that section. Never use
+                the literal key "fieldId" and never use a field id such as scope_summary or open_questions as sectionId.
                 Schema:
                 {
                   "upserts": [
-                    { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "fieldId": "value" } }
+                    { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "feature_summary": "value", "current_state_summary": "value", "scope_summary": "value" } },
+                    { "artifactId": "open_questions_block", "sectionId": "backlog", "mode": "replace", "data": { "open_questions": "None - ready to implement" } }
                   ],
                   "follow_up_questions": [ "short question?" ]
                 }

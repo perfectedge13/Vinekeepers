@@ -1018,6 +1018,7 @@ public final class PlanningCyclePipeline {
         Map<String, Object> synthSpread = synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
         mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
         mergeSynthFollowUps(spread, aggregatedFollowUps);
+        applyImmediateSynthesisFailure(spread, synthSpread);
         String lastSynthLlmLine = pickSynthLlmLine(synthSpread, previousSynthLine);
 
         new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
@@ -1187,6 +1188,25 @@ public final class PlanningCyclePipeline {
                     PlanningUserFacingCopy.humanizePlanningCycleFailureFragment("Synthesis skipped: " + skip), 140);
         }
         return previous;
+    }
+
+    private void applyImmediateSynthesisFailure(Map<String, Object> spread, Map<String, Object> synthSpread) {
+        if (synthSpread == null || spread == null) {
+            return;
+        }
+        String llmErr = getString(synthSpread, "planningLlmError");
+        if (llmErr == null || llmErr.isBlank()) {
+            return;
+        }
+        int applied = parseInt(getString(synthSpread, "planningLlmUpsertCount"), 0);
+        if (applied > 0) {
+            return;
+        }
+        String existing = getString(spread, "planningRoomCycleError");
+        if (existing != null && !existing.isBlank()) {
+            return;
+        }
+        putPlanningRoomCycleError(spread, "SYNTHESIS_UPSERTS_NOT_APPLIED");
     }
 
     private static void mergeExpansionFollowUpsFromWork(Map<String, Object> work, List<String> aggregated) {

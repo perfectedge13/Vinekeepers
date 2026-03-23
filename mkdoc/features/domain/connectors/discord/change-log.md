@@ -4,7 +4,7 @@
 
 ## 2026-03-23
 
-- **User/bot mention routing alignment:** `discordMention` matches only supported user/bot mention tokens. **NormalizedEventContext** parses numeric snowflakes from `<@id>` and `<@!id>` in message text only; role pings `<@&id>` and other angle-bracket bodies are ignored. **JdaDiscordGateway** mention metadata uses Discord user id plus account username and global display name (no guild nicknames). **Router** logs a structured **INFO** line when no rule matches (channelId, authorId, actorUsername, mentions, ingestBotId, truncated textPrefix). Tests: RouterTest, NormalizedEventContextTest. Specs (bot, connectors, config, core, workflow) and README aligned; ops channel routing for gadget unchanged in `config/bots.yaml`.
+- **User/bot mention routing alignment:** `discordMention` matches only supported user/bot mention tokens. **NormalizedEventContext** parses numeric snowflakes from `<@id>` and `<@!id>` in message text only; role pings `<@&id>` and other angle-bracket bodies are ignored. **JdaDiscordGateway** mention metadata uses Discord user id plus account username and global display name (no guild nicknames), and thread ingress payloads now include `parentChannelId` for message and interaction routing. **Router** logs a structured **INFO** line when no rule matches (channelId, parentChannelId, authorId, actorUsername, mentions, ingestBotId, rolePingDetected, truncated textPrefix). Tests: RouterTest, NormalizedEventContextTest. Specs (bot, connectors, config, core, workflow) and README aligned; `config/bots.yaml` routing stays config-driven while ops-thread messages can match via parent-channel allowlists.
 
 ## 2026-03-20
 

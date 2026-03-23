@@ -109,6 +109,7 @@ workflows:
       - planningOrchestratorRoundSummary
       - planningClarificationMergeError
       - planningRoomCycleErrorUserMessage
+      - planningCycleUserVisibleFailure
       - planningPacketDepthReason
       - planningPacketSkipReason
       - planReadinessStatus
@@ -614,7 +615,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: 'Planning is blocked right now — {{planCritiqueError}}
+            content: 'Planning is blocked right now — {{planningCycleUserVisibleFailure}}
 
               {{planReadinessSummary}}'
             asRole: orchestrator
@@ -639,7 +640,7 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: 'Planning is blocked right now — {{planCritiqueError}}
+          content: 'Planning is blocked right now — {{planningCycleUserVisibleFailure}}
 
             {{planReadinessSummary}}'
           asRole: orchestrator
@@ -988,7 +989,7 @@ workflows:
     - type: call_action
       action: create_thread
       bind:
-        threadName: deploy-progress
+        threadName: DevOps Status
       storeIn: deliveryChannelId
     - type: call_action
       action: start_ansible_deploy
@@ -1021,7 +1022,7 @@ workflows:
     - type: call_action
       action: create_thread
       bind:
-        threadName: deploy-progress
+        threadName: DevOps Progress
       storeIn: deliveryChannelId
     - type: call_action
       action: run_deploy_compose
@@ -1120,7 +1121,7 @@ workflows:
     - type: call_action
       action: create_thread
       bind:
-        threadName: deploy-progress
+        threadName: DevOps Progress
       storeIn: deliveryChannelId
     - type: call_action
       action: run_deploy_compose

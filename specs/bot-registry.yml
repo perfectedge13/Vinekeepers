@@ -63,7 +63,7 @@ assets:
   - id: ASSET-ROUTING-FILTER
     kind: source
     path: src/main/java/com/vinekeepers/bot/RoutingFilter.java
-    role: Apply routing filters to events; for Discord, discordTrigger and discordMention apply only to message events; discordAuthors (numeric id or username list) and discordChannels apply to all Discord events
+    role: Apply routing filters to events; for Discord, discordTrigger and discordMention apply only to message events; discordAuthors (numeric id or username list) and discordChannels apply to all Discord events, matching the event channel id or a Discord thread's parent channel id when present
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-NORMALIZED-EVENT-CONTEXT
@@ -71,9 +71,9 @@ assets:
     path: src/main/java/com/vinekeepers/bot/NormalizedEventContext.java
     role: >-
       Normalize event payloads for routing and session decisions, including actorId and actorUsername (from payload
-      author/authorId), mention extraction (metadata plus message text: numeric user/bot snowflakes in angle brackets only;
-      role-style `<@&id>` and non-numeric bracket bodies excluded), and optional interaction payload (interactionId,
-      token, customId, values)
+      author/authorId), channelId plus optional parentChannelId for Discord threads, mention extraction (metadata plus
+      message text: numeric user/bot snowflakes in angle brackets only; role-style `<@&id>` and non-numeric bracket
+      bodies excluded), and optional interaction payload (interactionId, token, customId, values)
     requires: [REQ-BOT-001]
     feature_ids: [FEAT-ROUTING]
   - id: ASSET-TOOL-POLICY
@@ -147,10 +147,11 @@ requirements:
         - Filters apply Discord/GitHub and other criteria from routing config
         - Event routing can normalize actor, channel, text, mentions, repo, and label fields from incoming payloads
         - Normalized event context exposes actorId and actorUsername (e.g. from payload author/authorId) for routing
+        - discordChannels and discordChannelsExclude match the event channel id or parentChannelId when the Discord event originated in a thread
         - discordTrigger and discordMention are enforced only for Discord message events; for Discord interaction events routing uses author, channel, and other criteria only (no trigger/mention check)
         - discordMention filters match case-insensitively against normalized mentions from payload metadata or message text (message events only)
         - Angle-bracket tokens in message text add mention tokens only for Discord user/bot snowflakes (`<@digits>`, `<@!digits>`); role pings (`<@&digits>`) and non-numeric bracket bodies do not count toward discordMention matching
-        - When no routing rule matches, Router logs at INFO with structured fields (source, kind, channelId, authorId, actorUsername, mentions, ingestBotId when present, truncated text prefix)
+        - When no routing rule matches, Router logs at INFO with structured fields (source, kind, channelId, parentChannelId, authorId, actorUsername, mentions, ingestBotId when present, rolePingDetected, routingHint, truncated text prefix)
         - discordAuthors filters match when event author (actorId or actorUsername normalized) is in the configured list
       examples: []
     traceability:

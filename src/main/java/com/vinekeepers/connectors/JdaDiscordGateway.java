@@ -229,6 +229,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         Guild guild = interaction.getGuild();
         String sourceId = guild != null ? "discord:" + guild.getId() : "discord:dm";
         String channelId = interaction.getChannel() != null ? interaction.getChannel().getId() : "";
+        String parentChannelId = resolveParentChannelId(interaction.getChannel());
         String threadId = "";
         if (interaction.getChannel() instanceof ThreadChannel) {
             threadId = interaction.getChannel().getId();
@@ -251,6 +252,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("channelId", channelId);
+        payload.put("parentChannelId", parentChannelId);
         payload.put("threadId", threadId);
         payload.put("messageId", messageId);
         payload.put("authorId", authorId);
@@ -555,6 +557,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         Message message = event.getMessage();
         Guild guild = event.getGuild();
         String sourceId = guild != null ? "discord:" + guild.getId() : "discord:dm";
+        String parentChannelId = resolveParentChannelId(event.getChannel());
         String threadId = event.isFromThread() ? event.getChannel().getId() : null;
         Set<String> mentions = new LinkedHashSet<>();
         for (User user : message.getMentions().getUsers()) {
@@ -564,6 +567,7 @@ public final class JdaDiscordGateway implements DiscordGateway {
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("channelId", event.getChannel().getId());
+        payload.put("parentChannelId", parentChannelId);
         payload.put("threadId", threadId != null ? threadId : "");
         payload.put("authorId", event.getAuthor().getId());
         payload.put("author", event.getAuthor().getName() != null ? event.getAuthor().getName() : "");
@@ -575,6 +579,13 @@ public final class JdaDiscordGateway implements DiscordGateway {
             payload.put("ingestBotId", logicalBotId);
         }
         return new Event(sourceId, "message", payload);
+    }
+
+    private static String resolveParentChannelId(Object channel) {
+        if (channel instanceof ThreadChannel threadChannel && threadChannel.getParentChannel() != null) {
+            return threadChannel.getParentChannel().getId();
+        }
+        return "";
     }
 
     private static void collectMentionToken(Set<String> mentions, String value) {

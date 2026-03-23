@@ -138,6 +138,8 @@ public final class PlanningUserFacingCopy {
             case "NO_PLAN" -> "No planning draft is loaded for this session yet.";
             case "PROFILE_NOT_V2" ->
                     "This work profile does not enable the full coordinator drafting loop for this room.";
+            case "SYNTHESIS_UPSERTS_NOT_APPLIED" ->
+                    "A drafting step returned planning updates that did not match this room's schema.";
             default -> "Planning hit an unexpected issue; try again or check configuration.";
         };
     }

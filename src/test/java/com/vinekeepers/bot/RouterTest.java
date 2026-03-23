@@ -285,6 +285,29 @@ class RouterTest {
     }
 
     @Test
+    void routeMatchesGadgetInOpsThreadWhenParentChannelAllowlisted() {
+        String opsChannelId = "1484800775342391378";
+        RoutingFilter gadget = new RoutingFilter(
+                Set.of(),
+                Set.of(opsChannelId),
+                Set.of(),
+                null,
+                "gadget",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        router.addRouting(new RoutingRule(gadget, "gadget"));
+        Event event = new Event("discord:g:guild", "message", Map.of(
+                "channelId", "thread-ops-1",
+                "parentChannelId", opsChannelId,
+                "threadId", "thread-ops-1",
+                "author", "novawilde13_72571",
+                "content", "@Gadget deploy",
+                "mentions", List.of("gadget")));
+        assertEquals(List.of("gadget"), router.route(event));
+    }
+
+    @Test
     void routeExcludesLunaInOpsChannelWhenConfiguredExcludeMatches() {
         String opsChannelId = "1484800775342391378";
         RoutingFilter luna = new RoutingFilter(
@@ -309,6 +332,29 @@ class RouterTest {
         router.addRouting(new RoutingRule(gadget, "gadget"));
         Event event = new Event("discord:g:guild", "message", Map.of(
                 "channelId", opsChannelId,
+                "author", "novawilde13_72571",
+                "content", "Hey @Luna help",
+                "mentions", List.of("luna")));
+        assertTrue(router.route(event).isEmpty());
+    }
+
+    @Test
+    void routeExcludesLunaInOpsThreadWhenParentChannelExcluded() {
+        String opsChannelId = "1484800775342391378";
+        RoutingFilter luna = new RoutingFilter(
+                Set.of("novawilde13_72571"),
+                Set.of(),
+                Set.of(opsChannelId),
+                null,
+                "luna",
+                Set.of(),
+                Set.of(),
+                Set.of());
+        router.addRouting(new RoutingRule(luna, "luna"));
+        Event event = new Event("discord:g:guild", "message", Map.of(
+                "channelId", "thread-ops-1",
+                "parentChannelId", opsChannelId,
+                "threadId", "thread-ops-1",
                 "author", "novawilde13_72571",
                 "content", "Hey @Luna help",
                 "mentions", List.of("luna")));
@@ -385,6 +431,45 @@ class RouterTest {
             assertTrue(msg.contains("gadget"), msg);
             assertTrue(msg.contains("someone"), msg);
             assertTrue(msg.contains("…"), msg);
+        } finally {
+            routerLogger.detachAppender(listAppender);
+            listAppender.stop();
+            routerLogger.setLevel(prior);
+        }
+    }
+
+    @Test
+    void routeLogsRolePingHintWhenNoRuleMatches() {
+        Assumptions.assumeTrue(
+                LoggerFactory.getILoggerFactory() instanceof LoggerContext,
+                "Logback LoggerContext required to capture Router logs");
+        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger routerLogger = lc.getLogger(Router.class.getName());
+        Level prior = routerLogger.getLevel();
+        routerLogger.setLevel(Level.INFO);
+        ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+        listAppender.start();
+        routerLogger.addAppender(listAppender);
+        try {
+            RoutingFilter filter = new RoutingFilter(
+                    Set.of(), Set.of("ops-room"), null, "gadget", Set.of(), Set.of(), Set.of());
+            router.addRouting(new RoutingRule(filter, "gadget"));
+            Event event = new Event("discord:g:guild", "message", Map.of(
+                    "channelId", "ops-room",
+                    "authorId", "author-42",
+                    "author", "alice",
+                    "content", "<@&1484802559884398602>",
+                    "ingestBotId", "gadget"));
+            assertTrue(router.route(event).isEmpty());
+
+            List<ILoggingEvent> infos = listAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.INFO)
+                    .filter(e -> e.getFormattedMessage().contains("No routing rule matched"))
+                    .toList();
+            assertTrue(infos.size() >= 1, "Expected no-match INFO log; got: " + listAppender.list);
+            String msg = infos.get(0).getFormattedMessage();
+            assertTrue(msg.contains("rolePingDetected=true"), msg);
+            assertTrue(msg.contains("discord role pings do not satisfy discordMention"), msg);
         } finally {
             routerLogger.detachAppender(listAppender);
             listAppender.stop();

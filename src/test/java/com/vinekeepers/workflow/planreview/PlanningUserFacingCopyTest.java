@@ -141,6 +141,10 @@ class PlanningUserFacingCopyTest {
         assertEquals(
                 "Planning hit an unexpected issue; try again or check configuration.",
                 PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode("CUSTOM_CODE"));
+        assertTrue(
+                PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode("SYNTHESIS_UPSERTS_NOT_APPLIED")
+                        .toLowerCase()
+                        .contains("schema"));
     }
 
     @Test

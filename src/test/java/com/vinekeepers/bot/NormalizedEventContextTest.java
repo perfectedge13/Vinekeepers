@@ -31,6 +31,14 @@ class NormalizedEventContextTest {
     }
 
     @Test
+    void fromEventMapsParentChannelIdForThreadPayload() {
+        Event event = new Event("discord:g:thread", "message",
+                Map.of("channelId", "thread-1", "parentChannelId", "ops-chan", "threadId", "thread-1", "content", "hi"));
+        NormalizedEventContext ctx = NormalizedEventContext.from(event);
+        assertEquals("ops-chan", ctx.getParentChannelId());
+    }
+
+    @Test
     void fromEventWithNoAuthorReturnsNullActorUsername() {
         Event event = new Event("discord:g:ch", "message",
                 Map.of("authorId", "u1", "content", "hi"));

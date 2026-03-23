@@ -1,6 +1,7 @@
 package com.vinekeepers.workflow.actions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.connectors.openai.OpenAiCallContext;
@@ -12,6 +13,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.planning.OpenAiPlanningContentGenerator;
 import com.vinekeepers.workflow.planning.PlanningContentGenerator;
+import com.vinekeepers.workflow.planning.PlanningLlmJsonSupport;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +33,8 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
 
     private static final String SYSTEM = """
             You are a planning assistant. Reply with a single JSON object only, no markdown fences.
+            Contract rules: use real artifactId/sectionId pairs from the active profile, use real field ids inside data,
+            never use the literal key "fieldId", and never put a field id in sectionId.
             Schema:
             {
               "repo_evidence_this_pass": "observed | inferred_unverified | not_inspected",
@@ -48,7 +52,7 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
               "validation_concerns": "string",
               "design_options": "optional string",
               "follow_up_decisions": "optional array with at most one object { id, question, choice_a, choice_b, choice_c } — only for bounded-choice UI; otherwise omit",
-              "upserts": [ { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "fieldId": "value" } } ]
+              "upserts": [ { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "current_state_summary": "value", "feature_summary": "value", "scope_summary": "value" } } ]
             }
             Ground every factual claim: separate what you observed in the repo snapshot this pass vs what you inferred vs unknown.
             Do not fabricate file paths or packages when repo_evidence_this_pass is not observed.
@@ -143,8 +147,7 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         }
 
         try {
-            String json = RunLlmPlanningSynthesisAction.extractJsonObject(raw);
-            JsonNode root = JSON.readTree(json);
+            JsonNode root = PlanningLlmJsonSupport.parseJsonObject(raw);
             UpsertArtifactSectionDataAction upsertAction = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
             Map<String, Object> base = new LinkedHashMap<>();
             if (state != null) {
@@ -308,18 +311,24 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             if (!n.isObject()) {
                 continue;
             }
-            Object aid = n.get("artifactId");
-            Object sid = n.get("sectionId");
+            Map<String, Object> upsert;
+            try {
+                upsert = JSON.convertValue(n, new TypeReference<>() {});
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            Object aid = upsert.get("artifactId");
+            Object sid = upsert.get("sectionId");
             if (aid == null || sid == null) {
                 continue;
             }
-            Object dataObj = n.get("data");
+            Object dataObj = upsert.get("data");
             if (!(dataObj instanceof Map<?, ?>)) {
                 continue;
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> dataMap = (Map<String, Object>) dataObj;
-            String mode = n.get("mode") != null ? n.get("mode").asText() : "replace";
+            String mode = upsert.get("mode") != null ? upsert.get("mode").toString() : "replace";
             Object res = upsertAction.run(
                     event,
                     base,

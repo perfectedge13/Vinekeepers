@@ -1804,7 +1804,9 @@ assets:
       post-draft routing semantics, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
       planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
       parse uses shared PlanningLlmJsonSupport extraction and attempts one JSON repair before surfacing planningLlmError;
-      failures return ERROR-prefixed or exception messages without hanging
+      semantic validation now requires real profile artifact/section ids and field-keyed data maps (never literal fieldId placeholders),
+      and zero-applied upsert batches fail visibly instead of silently redrafting; failures return ERROR-prefixed or exception messages
+      without hanging
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1819,7 +1821,8 @@ assets:
       Workflow action run_request_expansion_llm — structured JSON expansion into exploration_body and narrative/architecture
       fields; ChatGPT system prompt requires repo_evidence_this_pass tiers, recommended_action enum, single question_if_needed,
       and caps follow-ups to one (optional follow_up_decisions only when bounded UI); forbids naming repo touchpoints not observed
-      in supplied evidence; user payload may include planningRepoEvidenceJson
+      in supplied evidence; prompt examples use real software_feature_planning_v2 section ids and field ids rather than generic fieldId
+      placeholders; user payload may include planningRepoEvidenceJson
       and optional RAG snippets when present in workflow state; storeSpread planningExpansionSource, planningExpansionFallbackUsed,
       planningExpansionFromLlm, etc.; invoked inside execute_planning_room_cycle before deterministic build_request_exploration
     requires:
@@ -2774,8 +2777,9 @@ requirements:
           and the unresolved ledger has no OPEN blocking item
         - >-
           run_request_expansion_llm and run_llm_planning_synthesis system prompts require repo evidence tiers, a single recommended_action,
-          at most one question_if_needed, and forbid generic multi-question open-question brainstorming; touchpoints must not be asserted
-          as observed unless present in supplied repo evidence for that pass
+          at most one question_if_needed, forbid generic multi-question open-question brainstorming, and require real
+          software_feature_planning_v2 artifact/section/field ids instead of generic fieldId placeholders; touchpoints must not be
+          asserted as observed unless present in supplied repo evidence for that pass
         - >-
           For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
           ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
@@ -3531,9 +3535,10 @@ requirements:
     title: DevOps deploy — Discord menu, Ansible and Docker Compose, thread progress
     statement: >-
       Operator bot (e.g. id gadget) with Discord token env GADGET_DISCORD_TOKEN; routing uses discordMention and discordChannels
-      allowlist (ops channel id); workflow devops_deploy uses extract_event for channelId, main menu (Ansible deploy vs compose up/stop/restart/ps or Cancel),
+      allowlist (ops channel id, including Discord threads whose parent channel is allowlisted); workflow devops_deploy
+      uses extract_event for channelId, main menu (Ansible deploy vs compose up/stop/restart/ps or Cancel),
       choiceProvider deployTargets from config/deploy-targets.yaml, branch choices main/develop/other with resolve_deploy_branch,
-      create_thread for progress/status threads (thread name deploy-progress for mutating actions, DevOps Status for compose ps),
+      create_thread for progress/status threads (thread name deploy-progress for mutating actions, DevOps Progress for compose ps),
       start_ansible_deploy to run ansible-playbook asynchronously and run_deploy_compose for docker compose or optional cursor
       agent executor; OutboundDeliveryRouter.sendAs workflow bot id from state; progress falls back to parent channel when
       THREAD_CREATE_FAILED; compose-only targets may omit playbook and use host workingDirectory paths (e.g. /opt/stacks/neo4j,
@@ -3551,7 +3556,8 @@ requirements:
       criteria:
         - bots.yaml defines operator DevOps bot with workflowRef devops_deploy and identities.discord ingress routed
         - >-
-          Routing filter discordMention and discordChannels; messages match only in allowlisted channel with bot mention metadata
+          Routing filter discordMention and discordChannels; messages match only with direct bot mention metadata/text in
+          the allowlisted channel or a Discord thread whose parent channel is allowlisted; role pings do not satisfy discordMention
         - >-
           devops_deploy registers choiceProviders deployTargets, deployComposeServices, and deployGitBranches; Bootstrap registers
           deploy_resolve_project, resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose; reload registry actions when config loads
@@ -3567,7 +3573,7 @@ requirements:
           config/bots.yaml workflows.devops_deploy main menu includes compose_restart; branch step next indices reference valid step
           indices (DevopsDeployWorkflowYamlTest)
         - >-
-          config/bots.yaml uses thread name DevOps Status for compose ps and deploy-progress for mutating compose actions; compose
+          config/bots.yaml uses thread name DevOps Progress for compose ps and deploy-progress for mutating compose actions; compose
           status kickoff copy says updates will appear in the selected status target
         - >-
           Shipped config/deploy-targets.yaml includes compose-only neo4j and wikijs targets with host stack workingDirectory and

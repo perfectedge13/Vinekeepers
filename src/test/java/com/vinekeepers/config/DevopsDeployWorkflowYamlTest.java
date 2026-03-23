@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -73,5 +74,30 @@ class DevopsDeployWorkflowYamlTest {
         boolean hasRestart = choices.stream()
                 .anyMatch(c -> "compose_restart".equals(String.valueOf(c.get("id"))));
         assertTrue(hasRestart, "main menu must offer compose_restart");
+    }
+
+    @Test
+    void devopsDeploy_composePsUsesDevOpsProgressThread() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> devops = (Map<String, Object>) workflows.get("devops_deploy");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) devops.get("steps");
+
+        Map<String, Object> createThread = (Map<String, Object>) steps.get(48);
+        assertEquals("call_action", String.valueOf(createThread.get("type")));
+        assertEquals("create_thread", String.valueOf(createThread.get("action")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bind = (Map<String, Object>) createThread.get("bind");
+        assertEquals("DevOps Progress", String.valueOf(bind.get("threadName")));
+
+        Map<String, Object> composeCall = (Map<String, Object>) steps.get(49);
+        assertEquals("run_deploy_compose", String.valueOf(composeCall.get("action")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> composeBind = (Map<String, Object>) composeCall.get("bind");
+        assertEquals("ps", String.valueOf(composeBind.get("composeOperation")));
     }
 }

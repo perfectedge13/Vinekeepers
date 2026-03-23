@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T22:30:00Z"
+  updated_utc: "2026-03-24T00:10:00Z"
 
 project:
   id: vinekeepers
@@ -250,6 +250,9 @@ requirements:
           JdaDiscordGateway message mention metadata includes each mentioned user's snowflake id and lowercase account
           username and global display name when present; guild member nicknames (effective/server display names) are not
           added so mention-based routing is not spoofed by a nickname matching another bot's configured discordMention
+        - >-
+          Discord thread ingress payloads include parentChannelId for message and interaction events so channel allowlists
+          and excludes can match the owning parent room while keeping discordMention aligned to direct user/bot mentions only
         - Per-bot Discord identity via BotDefinition.getConnectorIdentity("discord") (tokenEnvKey, handlesOwnedSpaces, optional ingress); ConfigLoader parses identities.discord.ingress; DiscordConnectorAdapter registers sender and gateway when token present
         - "OutboundDeliveryRouter resolves sender from delivery target (channel or thread id): LifecycleContextStore getByDeliveryTargetId(targetId) when present yields context then configuredBotId and that bot's sender; else resolve by channelId; absent context uses default sender"
         - "Lifecycle sender resolution: for a channel with lifecycle context, delivery uses the configured bot's sender only; when no sender is registered for that bot, do not send and log error (no silent fallback to another bot)"
@@ -374,7 +377,7 @@ requirements:
 
   - id: REQ-CONNECTORS-GITHUB-001
     title: GitHub event source
-    statement: GitHubEventSource implements EventSource and translates GitHub payloads into internal events on the event bus.
+    statement: GitHubEventSource implements EventSource; the current shipped implementation is a stub that starts and stops cleanly and waits for a real GitHub webhook/event bridge instead of publishing placeholder pull-request events on startup.
     status: active
     priority: medium
     type: functional
@@ -387,13 +390,18 @@ requirements:
     acceptance:
       criteria:
         - GitHubEventSource exists and implements EventSource
-        - Connector emits events onto the event bus when started
+        - The current stub starts and stops without publishing placeholder startup events onto the event bus
       examples: []
     traceability:
       assets: [ASSET-GITHUB-SOURCE]
       symbols: []
     validation:
       tests:
+        - id: UNIT-GITHUB-EVENT-SOURCE-STUB
+          title: GitHubEventSourceTest
+          intent: Verify the GitHub stub starts and stops without publishing placeholder startup events
+          testClass: com.vinekeepers.connectors.GitHubEventSourceTest
+          preconditions: []
         - id: MANUAL-CONNECTORS-GITHUB
           title: GitHub connector compiles and implements interface
           intent: Verify GitHubEventSource exists and implements EventSource

@@ -12,10 +12,14 @@ services:
       - "8080:8080"
     volumes:
       - ./config:/app/config
-      # Gadget / run_deploy_compose: also mount the host Docker socket and every compose
-      # workingDirectory from config/deploy-targets.yaml at the same path (e.g. repo root
-      # as /app, plus /opt/stacks/neo4j and /opt/stacks/wikijs for the sample targets).
+      # Gadget / run_deploy_compose (direct executor): the image includes the Docker CLI,
+      # but direct host compose still requires the host Docker socket plus every compose
+      # workingDirectory from config/deploy-targets.yaml mounted at the same in-container path.
+      # Example mounts: repo root as /app, plus /opt/stacks/neo4j and /opt/stacks/wikijs
+      # for the sample targets. Without these mounts Gadget will fail fast with a prerequisite error.
       # See README.md → Docker → Gadget / run_deploy_compose on Docker.
       # - /var/run/docker.sock:/var/run/docker.sock
       # - .:/app
+      # - /opt/stacks/neo4j:/opt/stacks/neo4j
+      # - /opt/stacks/wikijs:/opt/stacks/wikijs
     restart: unless-stopped

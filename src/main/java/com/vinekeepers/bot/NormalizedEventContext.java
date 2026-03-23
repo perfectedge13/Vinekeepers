@@ -24,6 +24,7 @@ public final class NormalizedEventContext {
     private final String actorId;
     private final String actorUsername;
     private final String channelId;
+    private final String parentChannelId;
     private final String threadId;
     private final String conversationId;
     private final String text;
@@ -37,7 +38,7 @@ public final class NormalizedEventContext {
     private final List<String> interactionValues;
 
     private NormalizedEventContext(String sourceType, String eventType, String actorId, String actorUsername, String channelId,
-                                   String threadId, String conversationId, String text, List<String> mentions,
+                                   String parentChannelId, String threadId, String conversationId, String text, List<String> mentions,
                                    String repo, List<String> labels, Map<String, Object> metadata,
                                    String interactionId, String token, String customId, List<String> interactionValues) {
         this.sourceType = sourceType != null ? sourceType : "";
@@ -45,6 +46,7 @@ public final class NormalizedEventContext {
         this.actorId = actorId;
         this.actorUsername = actorUsername;
         this.channelId = channelId;
+        this.parentChannelId = parentChannelId;
         this.threadId = threadId;
         this.conversationId = conversationId;
         this.text = text;
@@ -60,7 +62,7 @@ public final class NormalizedEventContext {
 
     public static NormalizedEventContext from(Event event) {
         if (event == null) {
-            return new NormalizedEventContext("", "", null, null, null, null, null, null, List.of(), null, List.of(), Map.of(), null, null, null, List.of());
+            return new NormalizedEventContext("", "", null, null, null, null, null, null, null, List.of(), null, List.of(), Map.of(), null, null, null, List.of());
         }
         Map<String, Object> payload = event.getPayload();
         String sourceId = event.getSourceId();
@@ -70,6 +72,7 @@ public final class NormalizedEventContext {
         String actorId = firstString(payload, "authorId", "user");
         String actorUsername = firstString(payload, "author");
         String channelId = firstString(payload, "channelId", "channel");
+        String parentChannelId = firstString(payload, "parentChannelId");
         String threadId = firstString(payload, "threadId", "thread");
         String conversationId = threadId != null ? threadId : channelId;
         String text = firstString(payload, "text", "content");
@@ -82,7 +85,7 @@ public final class NormalizedEventContext {
         List<String> interactionValues = "interaction".equals(event.getKind())
                 ? listOfStrings(payload.get("values") != null ? extractValuesList(payload.get("values")) : null)
                 : List.of();
-        return new NormalizedEventContext(sourceType, event.getKind(), actorId, actorUsername, channelId, threadId,
+        return new NormalizedEventContext(sourceType, event.getKind(), actorId, actorUsername, channelId, parentChannelId, threadId,
                 conversationId, text, mentions, repo, labels, payload,
                 interactionId, token, customId, interactionValues);
     }
@@ -123,6 +126,10 @@ public final class NormalizedEventContext {
 
     public String getChannelId() {
         return channelId;
+    }
+
+    public String getParentChannelId() {
+        return parentChannelId;
     }
 
     public String getThreadId() {

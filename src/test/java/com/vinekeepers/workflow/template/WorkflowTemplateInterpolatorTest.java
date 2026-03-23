@@ -42,4 +42,14 @@ class WorkflowTemplateInterpolatorTest {
         String out = WorkflowTemplateInterpolator.interpolate("{{customKey}}", m, pol);
         assertEquals("X", out);
     }
+
+    @Test
+    void safeModeCanExposePlanningCycleUserVisibleFailureWhenAllowlisted() {
+        Map<String, Object> m = Map.of("planningCycleUserVisibleFailure", "A drafting step failed cleanly.");
+        WorkflowTemplatePolicy pol =
+                WorkflowTemplatePolicy.fromYaml(
+                        Map.of("exposeInternal", false, "allowedKeys", List.of("planningCycleUserVisibleFailure")));
+        String out = WorkflowTemplateInterpolator.interpolate("{{planningCycleUserVisibleFailure}}", m, pol);
+        assertEquals("A drafting step failed cleanly.", out);
+    }
 }
