@@ -21,6 +21,10 @@ import java.util.Optional;
  */
 public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.workflow.WorkflowAction {
 
+    public static final String KICKOFF_VISIBLE_OUTCOME_KEY = "coordinatorKickoffVisibleOutcome";
+    public static final String KICKOFF_VISIBLE_OUTCOME_FALSE = "false";
+    public static final String KICKOFF_VISIBLE_OUTCOME_TRUE = "true";
+
     private final OutboundDeliveryRouter outboundDeliveryRouter;
     private final FeaturePlanStateStore planStore;
 
@@ -35,6 +39,7 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
         Map<String, Object> spread = new LinkedHashMap<>();
         spread.put("intakeKickoffPostedSkipped", "false");
         spread.put("intakeKickoffPostedError", "");
+        spread.put(KICKOFF_VISIBLE_OUTCOME_KEY, KICKOFF_VISIBLE_OUTCOME_FALSE);
         if (outboundDeliveryRouter == null || planStore == null) {
             spread.put("intakeKickoffPostedError", "Router or plan store not available.");
             return spread;
@@ -65,6 +70,7 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
         if (fingerprint.equals(plan.getIntakeKickoffPostedFingerprint())
                 && plan.getIntakeKickoffPostedVersion() > 0) {
             spread.put("intakeKickoffPostedSkipped", "true");
+            spread.put(KICKOFF_VISIBLE_OUTCOME_KEY, KICKOFF_VISIBLE_OUTCOME_TRUE);
             return spread;
         }
         Optional<String> err =
@@ -78,6 +84,7 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
                 plan.withIntakeKickoffPosted(nextVer, fingerprint)
                         .withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, null));
         spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.DRAFTING.name());
+        spread.put(KICKOFF_VISIBLE_OUTCOME_KEY, KICKOFF_VISIBLE_OUTCOME_TRUE);
         return spread;
     }
 

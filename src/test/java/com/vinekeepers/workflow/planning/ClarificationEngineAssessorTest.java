@@ -138,6 +138,29 @@ class ClarificationEngineAssessorTest {
         assertTrue(withJson > bare);
     }
 
+    @Test
+    void blockingModelRoutingGapStillAsksUserWithStrongRepoEvidence() {
+        CoordinatorClarificationGapRule gap =
+                new CoordinatorClarificationGapRule(
+                        "model_override_granularity",
+                        true,
+                        "Should overrides be per named workflow step, step type, or both?",
+                        List.of("override", "step"),
+                        List.of("model", "step"),
+                        List.of("named steps", "step types", "both"));
+        CoordinatorClarificationEnginePolicy pol =
+                new CoordinatorClarificationEnginePolicy(5, 0.10, 0.0, true, true);
+        CoordinatorClarificationSettings settings =
+                new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(gap), pol);
+        FeaturePlanState plan =
+                basePlan("ctx", "Lets plug different models into different workflow steps.")
+                        .withWorkspaceLinkage("ws1", "MATERIALIZED", "/repo/worktree", "");
+        List<ClarificationEngineAssessor.AssessedGap> out =
+                ClarificationEngineAssessor.assessCanonicalGaps(plan, settings, List.of(), true, null, false);
+        assertEquals(1, out.size());
+        assertEquals(ClarificationResolutionDecision.ASK_USER, out.get(0).decision());
+    }
+
     private static CoordinatorClarificationGapRule simpleGap(boolean blocking) {
         return new CoordinatorClarificationGapRule(
                 blocking ? "g_blk" : "g_nb",

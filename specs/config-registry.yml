@@ -162,8 +162,9 @@ requirements:
           workflow.params may set deferredInteractionAckPlanningCoordinator (boolean) so VinekeepersEngine uses planning-style deferred
           Discord interaction follow-up copy; legacy workflowRef prefix arrietty_room* remains supported for migration
         - >-
-          Coordinator kickoff for arrietty_room_v2 must fail visibly: blank or erroring synthetic kickoff runs are not treated as
-          successful handoff, and the intake/spec thread receives a fallback internal-error notice instead of staying silent
+          Coordinator kickoff for arrietty_room_v2 must fail visibly only when the synthetic kickoff neither returns a
+          reply nor records a successful kickoff side effect (for example the coordinator_intake_bootstrap thread post);
+          blank or erroring runs without either signal still trigger the fallback internal-error notice instead of staying silent
         - >-
           ensure_repo_workspace optional Discord progress lines use workflow __botId or bind repoProgressAsBotId / repoProgressPersonaName
           for explicit sender and display prefix (Bootstrap supplies BotCatalog for persona lookup)
@@ -186,7 +187,7 @@ requirements:
           block Arrietty planning; optional coordinatorClarification.engine supplies clarification turn budget, repo-evidence ask threshold,
           assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with ClarificationEngineAssessor, ledger reconciliation,
           and strict single-question, non-meta clarification UX; gap questionTemplate values that read as generic meta or completeness prompts
-          are ignored at evaluation time
+          are ignored at evaluation time, and profile gaps may require explicit model-routing choices such as per-step vs step-type overrides
         - >-
           bots.yaml arrietty_room_v2 rs_post_draft branches only on planningPostDraftAction (fail-closed default planning_blocked);
           cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; blocked-thread templates interpolate

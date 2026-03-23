@@ -19,6 +19,7 @@ import com.vinekeepers.reasoner.ReasonerOutput;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.ToolRegistry;
 import com.vinekeepers.tools.ToolRunner;
+import com.vinekeepers.workflow.actions.CoordinatorIntakeBootstrapAction;
 import com.vinekeepers.workflow.ConfigurableWorkflowRunner;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.SessionKeyStrategies;
@@ -179,7 +180,8 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
         auditRecorder.record(AuditLog.fromEvent(syntheticThreadMessage, coordinatorBotId, "received", ""));
         WorkflowDeliveryOutcome outcome = runWorkflowReasonerAndDeliver(syntheticThreadMessage, bot, coordinatorBotId);
-        String failureDetail = summarizeKickoffFailure(outcome);
+        boolean kickoffVisibleOutcome = hasVisibleCoordinatorKickoffOutcome(stateKey);
+        String failureDetail = summarizeKickoffFailure(outcome, kickoffVisibleOutcome);
         if (failureDetail != null) {
             markCoordinatorKickoffFailure(stateKey, failureDetail);
             boolean fallbackSent = outcome.replyDelivered()
@@ -561,7 +563,7 @@ public final class VinekeepersEngine implements EventSubscriber {
         return context.getText() != null ? context.getText() : "";
     }
 
-    private String summarizeKickoffFailure(WorkflowDeliveryOutcome outcome) {
+    private String summarizeKickoffFailure(WorkflowDeliveryOutcome outcome, boolean kickoffVisibleOutcome) {
         if (outcome == null) {
             return "Coordinator kickoff outcome missing.";
         }
@@ -580,12 +582,25 @@ public final class VinekeepersEngine implements EventSubscriber {
                 return "Workflow failed without an error message.";
             }
         }
-        if (!outcome.replyDelivered()) {
+        if (!outcome.replyDelivered() && !kickoffVisibleOutcome) {
             return outcome.deliveryIssue() != null && !outcome.deliveryIssue().isBlank()
                     ? "Coordinator kickoff produced no visible reply: " + outcome.deliveryIssue()
                     : "Coordinator kickoff produced no visible reply.";
         }
         return null;
+    }
+
+    private boolean hasVisibleCoordinatorKickoffOutcome(String stateKey) {
+        if (stateKey == null || stateKey.isBlank()) {
+            return false;
+        }
+        Optional<ConfigurableWorkflowState> stateOpt = stateStore.get(stateKey, ConfigurableWorkflowState.class);
+        if (stateOpt.isEmpty()) {
+            return false;
+        }
+        Object raw = stateOpt.get().get(CoordinatorIntakeBootstrapAction.KICKOFF_VISIBLE_OUTCOME_KEY);
+        return raw != null
+                && CoordinatorIntakeBootstrapAction.KICKOFF_VISIBLE_OUTCOME_TRUE.equalsIgnoreCase(raw.toString().trim());
     }
 
     private String classifyKickoffStatus(WorkflowDeliveryOutcome outcome) {

@@ -26,6 +26,7 @@ class CoordinatorIntakeBootstrapActionTest {
                                 Map.of("contextId", "missing"),
                                 Map.of());
         assertTrue(String.valueOf(spread.get("intakeKickoffPostedError")).contains("No plan"));
+        assertFalse(Boolean.parseBoolean(String.valueOf(spread.get(CoordinatorIntakeBootstrapAction.KICKOFF_VISIBLE_OUTCOME_KEY))));
     }
 
     @Test

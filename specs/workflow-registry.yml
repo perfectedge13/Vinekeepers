@@ -142,6 +142,7 @@ assets:
       Route events to bots (router plus for Discord message events add bots with waiting session WAITING_INPUT for event
       session key unless router.isCoordinatorExclusivePlanningDiscordEvent); run workflow and reasoner; apply tool/state side effects; deliver replies via connector sink;
       dispatchCoordinatorPlanningKickoff runs a single coordinator bot for a synthetic thread message after Luna handoff with idempotent skip when thread session is already waiting, in progress, or completed
+      and treats a recorded coordinator kickoff side effect as a successful visible outcome even when the workflow returns completed("");
       registry (transitional source-prefix) and lifecycle operations (respondImmediately, sendFollowUp, updateMessage);
       for Discord, OutboundDeliveryRouter resolves sender by target and lifecycle configuredBotId with no silent
       fallback; build OutboundResponse from workflow/reasoner; obtain ReplyTarget via ReplyTargetResolver by connector id; fail closed when no resolver or resolver returns empty; no defer in engine;
@@ -466,7 +467,8 @@ assets:
     role: >-
       Profile-driven open gaps for coordinator clarification (canonical_v1): scans assumptions, request_exploration, and
       decision_log text; LLM follow-up lines trigger gaps via hintDetectAllOf; optional canonicalOpenAllOf for narrower follow-ups;
-      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge; gap rules whose
+      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge; supports explicit
+      model-routing gaps such as per-step vs step-type override choices; gap rules whose
       questionTemplate is generic/meta per ClarificationPromptQualityGate are not surfaced (misconfigured prompts are dropped)
     requires:
       - REQ-WORKFLOW-002
@@ -1282,8 +1284,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/CoordinatorIntakeBootstrapAction.java
     role: >-
       Workflow action coordinator_intake_bootstrap — idempotent discovery kickoff post to intake thread (fingerprinted body vs
-      FeaturePlanState), spreads canonicalPlanningIntakeStage, updates PlanningIntakeStage to DRAFTING on first successful post;
-      skips duplicate sends when fingerprint unchanged
+      FeaturePlanState), spreads canonicalPlanningIntakeStage and a visible-kickoff outcome marker, updates PlanningIntakeStage
+      to DRAFTING on first successful post; skips duplicate sends when fingerprint unchanged
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -2867,8 +2869,10 @@ requirements:
           WorkflowActionRegistry logs and rethrows action failures instead of silently swallowing them, and StepResult spread writes
           preserve null values without throwing during immutable-copy wrapping
         - >-
-          dispatchCoordinatorPlanningKickoff does not report a blank coordinator kickoff as success: when kickoff returns an error
-          or no visible outbound reply, the session is marked failed and the thread receives a fallback internal-error notice
+          dispatchCoordinatorPlanningKickoff does not report a blank coordinator kickoff as success unless the workflow records
+          a successful kickoff side effect (for example coordinator_intake_bootstrap posting the thread kickoff); otherwise
+          when kickoff returns an error or has no reply and no recorded visible outcome, the session is marked failed and
+          the thread receives a fallback internal-error notice
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
         - >-
           Production Arrietty uses arrietty_room_v2 (workflowSchema v2) whose explicit lifecycle phases own hydrate_planning_session,

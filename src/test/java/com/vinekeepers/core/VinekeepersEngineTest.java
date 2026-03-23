@@ -26,6 +26,7 @@ import com.vinekeepers.interactions.AppReplySink;
 import com.vinekeepers.interactions.ChannelTarget;
 import com.vinekeepers.interactions.OutboundResponse;
 import com.vinekeepers.interactions.ReplyTarget;
+import com.vinekeepers.workflow.actions.CoordinatorIntakeBootstrapAction;
 import com.vinekeepers.workflow.StubWorkflowRunner;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowRunResult;
@@ -51,6 +52,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VinekeepersEngineTest {
@@ -899,6 +901,44 @@ class VinekeepersEngineTest {
         ConfigurableWorkflowState state = stateStore.get(sessionKey, ConfigurableWorkflowState.class).orElseThrow();
         assertEquals(ConfigurableWorkflowState.Status.ERROR, state.getStatus());
         assertTrue(String.valueOf(state.get("coordinatorKickoffFailureReason")).contains("no visible reply"));
+    }
+
+    @Test
+    void dispatchCoordinatorPlanningKickoff_visibleWorkflowSideEffectSkipsFallback() {
+        BotDefinition arrietty = new BotDefinition(
+                "arrietty",
+                new Persona("A", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096),
+                "configured",
+                Map.of("workflowRef", "arrietty_room_v2"),
+                ConversationMode.CONVERSATIONAL,
+                "thread",
+                null);
+        engine.registerBot(arrietty);
+        engine.registerRunner("arrietty", (event, store, botId) -> {
+            String stateKey = "bot:" + botId + ":conv:" + event.getPayload().get("threadId");
+            ConfigurableWorkflowState kickoffState =
+                    store.get(stateKey, ConfigurableWorkflowState.class).orElseGet(ConfigurableWorkflowState::new);
+            kickoffState.put(CoordinatorIntakeBootstrapAction.KICKOFF_VISIBLE_OUTCOME_KEY, "true");
+            store.put(stateKey, kickoffState);
+            return WorkflowRunResult.completed("");
+        });
+        engine.registerReasoner("arrietty", new StubReasoner());
+        AtomicReference<String> sent = new AtomicReference<>();
+        engine.setReplySender("discord", (channelId, messageId, content) -> sent.set(content));
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+
+        String threadId = "thread-kickoff-visible";
+        Event syn = new Event("discord:g:1", "message", Map.of("channelId", threadId, "threadId", threadId));
+        assertEquals("RAN", engine.dispatchCoordinatorPlanningKickoff(syn, "arrietty"));
+        assertNull(sent.get());
+
+        String sessionKey = "bot:arrietty:conv:" + threadId;
+        ConfigurableWorkflowState state = stateStore.get(sessionKey, ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals("true", String.valueOf(state.get(CoordinatorIntakeBootstrapAction.KICKOFF_VISIBLE_OUTCOME_KEY)));
+        assertNull(state.get("coordinatorKickoffFailureReason"));
     }
 
     @Test

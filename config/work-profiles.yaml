@@ -178,6 +178,32 @@ profiles:
             - override
             - .yaml
             - environment
+        - id: model_override_granularity
+          blocking: true
+          questionTemplate: >-
+            For workflow-level model routing, should overrides be configured per **named workflow step**, per
+            **step type/phase**, or **both**? Reply briefly in plain text (for example: "named steps", "step
+            types", or "both").
+          hintDetectAllOf:
+            - override
+            - step
+          canonicalOpenAllOf:
+            - model
+            - step
+          resolveAnySubstring:
+            - named steps
+            - named step
+            - step-id
+            - step ids
+            - per-step
+            - per step
+            - step types
+            - step type
+            - per phase
+            - phases
+            - both
+            - decision (user
+            - coordinator clarification (user)
     # Declarative readiness: generic evaluator + supplemental workspace/validation checks in Java.
     readiness:
       anyOfGroups:

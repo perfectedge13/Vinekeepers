@@ -181,6 +181,34 @@ class CoordinatorClarificationGapEvaluatorTest {
         assertEquals("narrow", open.get(0).gapId());
     }
 
+    @Test
+    void modelRoutingGapOpensFromRequestUntilGranularityIsChosen() {
+        CoordinatorClarificationSettings settings =
+                new CoordinatorClarificationSettings(
+                        CoordinatorClarificationMode.CANONICAL_V1,
+                        List.of(
+                                new CoordinatorClarificationGapRule(
+                                        "model_override_granularity",
+                                        true,
+                                        "Should overrides be per named workflow step, step type, or both?",
+                                        List.of("override", "step"),
+                                        List.of("model", "step"),
+                                        List.of("named steps", "step types", "both"))));
+        FeaturePlanState openPlan =
+                minimalPlan("ctx", "Lets plug different models into different workflow steps.");
+        List<CoordinatorClarificationGapEvaluator.OpenGap> open =
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(openPlan, settings, List.of());
+        assertEquals(1, open.size());
+        assertEquals("model_override_granularity", open.get(0).gapId());
+
+        FeaturePlanState resolvedPlan =
+                openPlan.withAppendedAssumption(
+                        PlanAssumption.fromLegacyText("a1", "Decision (user): use named steps for overrides.", Instant.now()));
+        List<CoordinatorClarificationGapEvaluator.OpenGap> resolved =
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(resolvedPlan, settings, List.of());
+        assertTrue(resolved.isEmpty());
+    }
+
     private static FeaturePlanState minimalPlan(String contextId, String request) {
         return new FeaturePlanState(
                 contextId,
