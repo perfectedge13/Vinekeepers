@@ -60,7 +60,7 @@ assets:
       retained transitional; lifecycleBotName in step bind; Arrietty production workflowRef arrietty_room_v2 runs hydrate_planning_session,
       ensure_repo_workspace, optional prep_planning_repo_grounding (legacy_action) for Qdrant/Parquet planning RAG, spread_plan_workspace_signals, and the named planning lifecycle phases directly in the v2 graph;
       v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted, planningRepoEvidenceJson, canonicalPlanningIntakeStage;
-      create_thread storeIn deliveryChannelId; capture_field trimAndLower;       done step e.g. "Launching now. See <#{{channelId}}>.";
+      create_thread storeIn deliveryChannelId; capture_field trimAndLower; Arrietty prompt_for_field asks carry a leading ❓ alert marker in Discord;       done step e.g. "Launching now. See <#{{channelId}}>.";
       optional workflow steps provision_room_participants (bind orchestratorConfiguredBotId or equivalent resolution) and initialize_feature_room_state for coordinator-owned feature rooms;
       feature-room planning uses Arrietty as the sole room participant/coordinator with sessionKeyStrategy thread for per-thread session keys;
       arrietty_room_v2 launch success path ends with one post_channel_message plus done (no redundant duplicate terminal pair);
@@ -187,7 +187,9 @@ requirements:
           block Arrietty planning; optional coordinatorClarification.engine supplies clarification turn budget, repo-evidence ask threshold,
           assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with ClarificationEngineAssessor, ledger reconciliation,
           and strict single-question, non-meta clarification UX; gap questionTemplate values that read as generic meta or completeness prompts
-          are ignored at evaluation time, and profile gaps may require explicit model-routing choices such as per-step vs step-type overrides
+          are ignored at evaluation time, resolveAnySubstring aliases may cover real operator phrasings (for example config/schema only,
+          runtime too, named workflow steps, or individual steps), and profile gaps may require explicit model-routing choices such as
+          per-step vs step-type overrides
         - >-
           bots.yaml arrietty_room_v2 rs_post_draft branches only on planningPostDraftAction (fail-closed default planning_blocked);
           cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; blocked-thread templates interpolate
@@ -249,7 +251,7 @@ requirements:
         - id: UNIT-ARRIETTY-V2-WORKFLOW-YAML
           title: ArriettyV2WorkflowYamlTest
           intent: >-
-            Verify arrietty_room_v2 YAML shape, planningPostDraftAction-only post-assess branching, and coordinator template contracts
+            Verify arrietty_room_v2 YAML shape, planningPostDraftAction-only post-assess branching, coordinator template contracts, and the ❓ prompt alert marker on Arrietty question steps
           testClass: com.vinekeepers.config.ArriettyV2WorkflowYamlTest
           preconditions: []
 

@@ -251,4 +251,44 @@ class ArriettyV2WorkflowYamlTest {
         List<String> participantBotIds = (List<String>) bind.get("participantBotIds");
         assertEquals(List.of("arrietty"), participantBotIds);
     }
+
+    @Test
+    void arriettyPromptQuestionsStartWithAlertEmoji() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+
+        int promptCount = 0;
+        for (Object rawCapability : capabilities.values()) {
+            if (!(rawCapability instanceof Map<?, ?> capability)) {
+                continue;
+            }
+            if (!"configurable_steps".equals(String.valueOf(capability.get("kind")))) {
+                continue;
+            }
+            Object rawSteps = capability.get("steps");
+            if (!(rawSteps instanceof List<?> steps)) {
+                continue;
+            }
+            for (Object rawStep : steps) {
+                if (!(rawStep instanceof Map<?, ?> step)) {
+                    continue;
+                }
+                if (!"prompt_for_field".equals(String.valueOf(step.get("type")))) {
+                    continue;
+                }
+                promptCount++;
+                String prompt = String.valueOf(step.get("prompt"));
+                assertTrue(
+                        prompt.startsWith("❓ "),
+                        "Arrietty prompt_for_field steps must start with the red question mark alert");
+            }
+        }
+
+        assertTrue(promptCount > 0, "arrietty_room_v2 should define at least one prompt_for_field step");
+    }
 }

@@ -73,6 +73,17 @@ public final class PlanningPostDraftGovernor {
                         && situation.equals(lastSituation != null ? lastSituation : "");
 
         if (hardClarificationBlock) {
+            String q = firstUserFacingClarificationTextOrEmpty(ledger, plan);
+            if (!q.isBlank()) {
+                return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+            }
+            if ("true".equalsIgnoreCase(getString(signalState, "planningJustMergedClarification"))) {
+                return new Result(
+                        PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                        "**Continuing**\n\nYour clarification was applied successfully, so I'm using that answer and "
+                                + "moving the saved draft forward instead of dropping into a blocked state.",
+                        false);
+            }
             return new Result(
                     PlanningPostDraftAction.BLOCK,
                     "**Planning paused**\n\nA blocking coordinator gap hit the clarification budget. A human needs to "

@@ -107,6 +107,63 @@ class PlanningPostDraftGovernorTest {
     }
 
     @Test
+    void derive_hardClarificationBlockWithOpenQuestion_asksInsteadOfBlocking() {
+        UnresolvedItem it =
+                new UnresolvedItem(
+                        "uq_1",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "Which workflow steps need overrides first?",
+                        "blocking",
+                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        List.of(),
+                        List.of(),
+                        0);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(it);
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of(),
+                        minimalPlan(),
+                        ledger,
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        "",
+                        false,
+                        false,
+                        true);
+        assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
+        assertTrue(r.forceUserInputRequired());
+    }
+
+    @Test
+    void derive_hardClarificationBlockAfterSuccessfulMerge_continues() {
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        Map.of("planningJustMergedClarification", "true"),
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        true,
+                        false,
+                        "",
+                        "",
+                        "",
+                        false,
+                        false,
+                        true);
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
+        assertTrue(r.noticeMarkdown().contains("clarification was applied successfully"));
+    }
+
+    @Test
     void derive_forcesAskWhenRepeatLedgerAndNoMaterial() {
         UnresolvedItem it =
                 new UnresolvedItem(

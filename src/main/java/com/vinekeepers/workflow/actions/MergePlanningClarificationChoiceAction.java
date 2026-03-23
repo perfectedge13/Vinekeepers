@@ -3,6 +3,7 @@ package com.vinekeepers.workflow.actions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.PlanAssumption;
@@ -78,9 +79,19 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             String optB = text(meta, "optB");
             String q = text(meta, "questionText");
             String coordinatorGapId = text(meta, "gapId");
+            WorkProfileDefinition profileDef =
+                    plan.getProfileId() != null && !plan.getProfileId().isBlank()
+                            ? workProfileRegistry.get(plan.getProfileId()).orElse(null)
+                            : null;
+            CoordinatorClarificationGapRule coordinatorGapRule =
+                    profileDef != null && profileDef.getCoordinatorClarification().isCanonicalV1()
+                            ? profileDef.getCoordinatorClarification().findGapRule(coordinatorGapId).orElse(null)
+                            : null;
             String decisionLine;
+            String answerSummary;
             if ("planning_clarify_default".equals(choice)) {
-                decisionLine = "Decision (user selected default): " + (defaultText.isBlank() ? "Use recommended baseline." : defaultText);
+                answerSummary = defaultText.isBlank() ? "Use recommended baseline." : defaultText;
+                decisionLine = "Decision (user selected default): " + answerSummary;
                 if (!defaultText.isBlank()) {
                     plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                             "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
@@ -88,29 +99,42 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                             null));
                 }
             } else if ("planning_clarify_opt_a".equals(choice)) {
-                decisionLine = "Decision (user choice A): " + (optA.isBlank() ? "Option A" : optA);
+                answerSummary = optA.isBlank() ? "Option A" : optA;
+                decisionLine = "Decision (user choice A): " + answerSummary;
                 plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));
             } else if ("planning_clarify_opt_b".equals(choice)) {
-                decisionLine = "Decision (user choice B): " + (optB.isBlank() ? "Option B" : optB);
+                answerSummary = optB.isBlank() ? "Option B" : optB;
+                decisionLine = "Decision (user choice B): " + answerSummary;
                 plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));
             } else if ("planning_clarify_opt_c".equals(choice)) {
                 String optC = text(meta, "optC");
-                decisionLine = "Decision (user choice C): " + (optC.isBlank() ? "Option C" : optC);
+                answerSummary = optC.isBlank() ? "Option C" : optC;
+                decisionLine = "Decision (user choice C): " + answerSummary;
                 plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
                         null));
             } else {
+                answerSummary = choice.trim();
                 decisionLine = "Decision (user selection): " + choice + (q.isBlank() ? "" : " regarding: " + q);
                 plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
                         "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
                         decisionLine,
+                        null));
+            }
+            String explicitResolutionLine =
+                    CoordinatorClarificationGapEvaluator.buildExplicitResolutionLine(
+                            coordinatorGapId, coordinatorGapRule, answerSummary);
+            if (!explicitResolutionLine.isBlank()) {
+                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
+                        "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
+                        explicitResolutionLine,
                         null));
             }
 
@@ -121,7 +145,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             String qText = q.isBlank() ? firstNonBlank(getString(state, "planningClarificationQuestionText"), "") : q;
             ledger =
                     PlanningDeliberationLedgerSync.mergeAnswerIntoLedger(
-                            ledger, ledgerItemId, qText, coordinatorGapId, choice, choice.trim());
+                            ledger, ledgerItemId, qText, coordinatorGapId, answerSummary, answerSummary.trim());
             UnresolvedItemLedger.mergeLedgerIntoSpread(spread, ledger);
 
             UpsertArtifactSectionDataAction upsert = new UpsertArtifactSectionDataAction(planStateStore, workProfileRegistry);
@@ -143,15 +167,11 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                             "data",
                             Map.of("decision_text", decisionLine)));
 
-            appendCoordinatorClarificationToExploration(event, base, upsert, q, choice);
+            appendCoordinatorClarificationToExploration(event, base, upsert, q, answerSummary);
             spread.put("planningClarificationMerged", "true");
             spread.put("planningJustMergedClarification", "true");
             spread.put("planningClarificationChoicesJson", "[]");
             spread.put("planningClarificationMetaJson", "{}");
-            WorkProfileDefinition profileDef =
-                    plan.getProfileId() != null && !plan.getProfileId().isBlank()
-                            ? workProfileRegistry.get(plan.getProfileId()).orElse(null)
-                            : null;
             FeaturePlanState refreshed = planStateStore.getByContextId(contextId).orElse(plan);
             if (profileDef != null && profileDef.getCoordinatorClarification().isCanonicalV1()) {
                 var open =

@@ -20,6 +20,10 @@ import java.util.Set;
  */
 public final class CoordinatorClarificationGapEvaluator {
 
+    private static final String GAP_CONFIG_VS_RUNTIME_SCOPE = "config_vs_runtime_scope";
+    private static final String GAP_CONFIG_RUNTIME_SPECIFICS = "config_runtime_specifics";
+    private static final String GAP_MODEL_OVERRIDE_GRANULARITY = "model_override_granularity";
+
     public record OpenGap(String gapId, boolean blocking, String questionText) {}
 
     private CoordinatorClarificationGapEvaluator() {}
@@ -74,8 +78,8 @@ public final class CoordinatorClarificationGapEvaluator {
             sb.append(req.trim()).append('\n');
         }
         for (PlanAssumption a : plan.getAssumptions()) {
-            if (a.getText() != null && !a.getText().isBlank()) {
-                sb.append(a.getText().trim()).append('\n');
+            if (a.getStatement() != null && !a.getStatement().isBlank()) {
+                sb.append(a.getStatement().trim()).append('\n');
             }
         }
         sb.append(
@@ -104,6 +108,44 @@ public final class CoordinatorClarificationGapEvaluator {
         boolean hintOk = hintMatches(hints, rule);
         boolean canonOk = canonicalOpenMatches(canonicalLower, rule);
         return hintOk || canonOk;
+    }
+
+    /**
+     * Normalizes a free-text clarification reply into a canonical resolution marker for the asked gap when possible.
+     * This gives merge/reconciliation a deterministic path instead of relying on the raw answer wording to happen to
+     * match plan text later.
+     */
+    public static String buildExplicitResolutionLine(
+            String gapId, CoordinatorClarificationGapRule rule, String answerText) {
+        if (gapId == null || gapId.isBlank() || rule == null) {
+            return "";
+        }
+        String resolution = canonicalResolutionValue(gapId, rule, answerText);
+        if (resolution.isBlank()) {
+            return "";
+        }
+        return "Coordinator gap resolution (" + gapId.trim() + "): " + resolution + ".";
+    }
+
+    static String canonicalResolutionValue(
+            String gapId, CoordinatorClarificationGapRule rule, String answerText) {
+        String normalizedAnswer = normalizePhrase(answerText);
+        if (normalizedAnswer.isBlank() || rule == null) {
+            return "";
+        }
+        for (String needle : rule.getResolveAnySubstring()) {
+            String normalizedNeedle = normalizePhrase(needle);
+            if (!normalizedNeedle.isBlank() && normalizedAnswer.contains(normalizedNeedle)) {
+                return needle.trim().toLowerCase(Locale.ROOT);
+            }
+        }
+        String gap = gapId != null ? gapId.trim() : "";
+        return switch (gap) {
+            case GAP_CONFIG_VS_RUNTIME_SCOPE -> inferConfigVsRuntimeResolution(normalizedAnswer);
+            case GAP_CONFIG_RUNTIME_SPECIFICS -> inferConfigRuntimeSpecificsResolution(normalizedAnswer);
+            case GAP_MODEL_OVERRIDE_GRANULARITY -> inferModelOverrideGranularityResolution(normalizedAnswer);
+            default -> "";
+        };
     }
 
     private static boolean hintMatches(List<String> hints, CoordinatorClarificationGapRule rule) {
@@ -161,5 +203,104 @@ public final class CoordinatorClarificationGapEvaluator {
             }
         }
         return s;
+    }
+
+    private static String inferConfigVsRuntimeResolution(String normalizedAnswer) {
+        if (containsAny(
+                normalizedAnswer,
+                "both",
+                "config and runtime",
+                "runtime and config",
+                "runtime too",
+                "runtime as well",
+                "config plus runtime",
+                "runtime plus config")) {
+            return "both";
+        }
+        if (containsAny(
+                normalizedAnswer,
+                "config only",
+                "configuration only",
+                "yaml only",
+                "schema only",
+                "static",
+                "static is fine",
+                "compile time",
+                "build time",
+                "no runtime",
+                "not runtime")) {
+            return "config only";
+        }
+        if (containsAny(normalizedAnswer, "runtime only")) {
+            return "runtime only";
+        }
+        return "";
+    }
+
+    private static String inferConfigRuntimeSpecificsResolution(String normalizedAnswer) {
+        if (containsAny(normalizedAnswer, "both")) {
+            return "both";
+        }
+        boolean yaml = containsAny(normalizedAnswer, "yaml", ".yaml", "repo config", "config file");
+        boolean environment = containsAny(normalizedAnswer, "env", "environment", "override");
+        if (yaml && environment) {
+            return "both";
+        }
+        if (environment) {
+            return "environment";
+        }
+        if (yaml) {
+            return "yaml";
+        }
+        return "";
+    }
+
+    private static String inferModelOverrideGranularityResolution(String normalizedAnswer) {
+        if (containsAny(normalizedAnswer, "both")) {
+            return "both";
+        }
+        if (containsAny(
+                normalizedAnswer,
+                "named workflow steps",
+                "named workflow step",
+                "named steps",
+                "named step",
+                "workflow steps",
+                "workflow step",
+                "individual steps",
+                "individual step",
+                "specific steps",
+                "specific step",
+                "per step",
+                "per-step")) {
+            return "per step";
+        }
+        if (containsAny(normalizedAnswer, "step types", "step type", "per phase", "phases", "phase")) {
+            return "step types";
+        }
+        return "";
+    }
+
+    private static boolean containsAny(String normalizedHaystack, String... phrases) {
+        if (normalizedHaystack == null || normalizedHaystack.isBlank() || phrases == null) {
+            return false;
+        }
+        for (String phrase : phrases) {
+            String normalizedPhrase = normalizePhrase(phrase);
+            if (!normalizedPhrase.isBlank() && normalizedHaystack.contains(normalizedPhrase)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String normalizePhrase(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 }

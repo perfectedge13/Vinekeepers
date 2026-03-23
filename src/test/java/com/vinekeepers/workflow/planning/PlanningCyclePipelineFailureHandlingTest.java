@@ -74,7 +74,8 @@ class PlanningCyclePipelineFailureHandlingTest {
                         new PlanningDeliberationLedgerSync.UpsertResult(UnresolvedItemLedger.empty(), Optional.empty()),
                         false,
                         false,
-                        false);
+                        false,
+                        "");
         Method m =
                 PlanningCyclePipeline.class.getDeclaredMethod(
                         "applyPostDraftGovernor",

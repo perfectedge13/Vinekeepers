@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MergePlanningClarificationChoiceActionTest {
 
@@ -77,6 +78,50 @@ class MergePlanningClarificationChoiceActionTest {
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-b"));
         assertEquals("true", spread.get("planningClarificationMergeOk"));
         assertEquals("true", spread.get("planningUserInputRequired"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void canonicalV1MergeAddsExplicitResolutionMarkerForAskedGap() {
+        CoordinatorClarificationGapRule granularity =
+                new CoordinatorClarificationGapRule(
+                        "model_override_granularity",
+                        true,
+                        "Per step or step type?",
+                        List.of("override", "step"),
+                        List.of("model", "step"),
+                        List.of("named steps", "per step", "step types", "both"));
+        WorkProfileRegistry reg = new WorkProfileRegistry();
+        reg.register(
+                new WorkProfileDefinition(
+                        "p_merge_resolution",
+                        "",
+                        List.of(),
+                        List.of(),
+                        false,
+                        false,
+                        List.of(),
+                        new CoordinatorClarificationSettings(
+                                CoordinatorClarificationMode.CANONICAL_V1, List.of(granularity))));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan("ctx-merge-c", "p_merge_resolution", "route models by workflow step"));
+        var action = new MergePlanningClarificationChoiceAction(store, reg);
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("contextId", "ctx-merge-c");
+        state.put("planningClarificationRaw", "scope is for individual steps");
+        state.put(
+                "planningClarificationMetaJson",
+                "{\"gapId\":\"model_override_granularity\",\"questionText\":\"Per step or step type?\"}");
+
+        Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-c"));
+
+        assertEquals("true", spread.get("planningClarificationMergeOk"));
+        assertEquals("false", spread.get("planningUserInputRequired"));
+        FeaturePlanState refreshed = store.getByContextId("ctx-merge-c").orElseThrow();
+        assertTrue(
+                refreshed.getAssumptions().stream()
+                        .map(assumption -> assumption.getStatement() != null ? assumption.getStatement() : "")
+                        .anyMatch(text -> text.contains("Coordinator gap resolution (model_override_granularity): per step.")));
     }
 
     private static FeaturePlanState plan(String contextId, String profileId, String request) {

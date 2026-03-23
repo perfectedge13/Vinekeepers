@@ -163,7 +163,7 @@ assets:
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
       workflowRef arrietty_room_v2 whose planning ingress may run hydrate_planning_session, ensure_repo_workspace,
-      optional prep_planning_repo_grounding (Parquet cache + Qdrant + planningRag* spreads), and spread_plan_workspace_signals before direct v2-owned planning phases, handlesOwnedSpaces, capture_field trimAndLower for room name UX, branch value "" for
+      optional prep_planning_repo_grounding (Parquet cache + Qdrant + planningRag* spreads), and spread_plan_workspace_signals before direct v2-owned planning phases, handlesOwnedSpaces, capture_field trimAndLower for room name UX, Arrietty prompt_for_field asks prefixed with ❓ for chat visibility, branch value "" for
       blank/empty; operator bot (e.g. id gadget) with workflowRef devops_deploy, routing discordMention and discordChannels allowlist
       ops channel id in discordChannels (see comment block top of config/bots.yaml); Luna routing optional discordChannelsExclude
       for that ops channel id
@@ -391,7 +391,9 @@ assets:
       review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
       derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
       mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
-      and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); Arrietty-style coordinator clarification
+      and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); merge/reconciliation can add an explicit
+      Coordinator gap resolution (...) marker so the asked gap closes deterministically even when the raw reply wording differs from
+      the profile phrase list; Arrietty-style coordinator clarification
       is strict: at most one concrete blocking user question per round when a required fact cannot be inferred; PlanningQuestionRankingPolicy
       and ClarificationPromptQualityGate drop generic/meta/completeness/catch-all open-question prompts; ranked open-question substance
       aligns with unresolved plan state (governance + artifact text), not free-form LLM filler; canonical coordinator questions use
@@ -417,7 +419,8 @@ assets:
       persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute);
       applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
       SYNTHESIS_JSON_INVALID / SYNTHESIS_REPAIR_EXHAUSTED when no upserts applied; applyPostDraftGovernor persists planner recovery
-      fields on FeaturePlanState when synthesis failure forces BLOCK
+      fields on FeaturePlanState when synthesis failure forces BLOCK; spread also carries planningHardClarificationBlockReason for
+      debug visibility when clarification budget exhaustion is the remaining true blocker
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -430,7 +433,9 @@ assets:
       material-change signals (merged user answer, repo evidence hash, assumption count, critique blocking count, draft
       fingerprint when canonical exploration/summary text changed), and non-blank planningSynthesisFailureCategory; when category is
       recoverable (planningRecoverableDraftAfterSynthesis) prefers ASK_ONE_QUESTION from ledger/plan, else ASSUME_AND_CONTINUE with a
-      plain continuing notice instead of AUTONOMOUS_REDRAFT spam; otherwise BLOCK with PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode;
+      plain continuing notice instead of AUTONOMOUS_REDRAFT spam; when a stale hard-clarification signal coexists with an open question
+      or a just-merged clarification, it asks/continues instead of falsely BLOCKing; otherwise BLOCK with
+      PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode;
       revision situation fingerprint stops unchanged non-posting loops; when redraft would otherwise assume-through, ASK_ONE_QUESTION if
       FeaturePlanState still has structured material gaps (unresolvedQuestions, open blocking issues, open HIGH assumptions) via
       firstStructuredMaterialQuestion — not packet display text; firstUserFacingClarificationTextOrEmpty merges ledger then plan for forced clarification copy
@@ -467,7 +472,8 @@ assets:
     role: >-
       Profile-driven open gaps for coordinator clarification (canonical_v1): scans assumptions, request_exploration, and
       decision_log text; LLM follow-up lines trigger gaps via hintDetectAllOf; optional canonicalOpenAllOf for narrower follow-ups;
-      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge; supports explicit
+      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge; normalizes common
+      operator phrasings and can build explicit Coordinator gap resolution (...) lines for the active gap during merge; supports explicit
       model-routing gaps such as per-step vs step-type override choices; gap rules whose
       questionTemplate is generic/meta per ClarificationPromptQualityGate are not surfaced (misconfigured prompts are dropped)
     requires:
@@ -1939,7 +1945,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/MergePlanningClarificationChoiceAction.java
     role: >-
       Workflow action merge_planning_clarification_choice — applies planningClarificationRaw to assumptions and decision_log;
-      clears planningClarificationChoicesJson; when coordinatorClarification mode is canonical_v1, re-evaluates open gaps,
+      when the prompt was tied to a canonical coordinator gap, also records an explicit Coordinator gap resolution (...) assumption
+      using the normalized answer text; clears planningClarificationChoicesJson; when coordinatorClarification mode is canonical_v1, re-evaluates open gaps,
       reconciles OPEN planning_clarification rows, and sets planningUserInputRequired from gap state (otherwise false); on
       success spreads planningPreviousClarificationQuestionText (normalized) and resets planningClarificationRepeatCount;
       DeliberationEngine + planningDirtyPassesJson from DeliberationDirtyPassIndex; spreads planningClarificationMergeOk true

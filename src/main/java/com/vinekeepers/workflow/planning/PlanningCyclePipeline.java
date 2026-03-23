@@ -88,8 +88,10 @@ public final class PlanningCyclePipeline {
              * planningLlmUserInputSuggested}.
              */
             boolean llmUserInputSuggested,
-            /** Budget exhausted on a blocking coordinator gap ({@link ClarificationResolutionDecision#BLOCK_AS_UNIMPLEMENTABLE}). */
-            boolean hardClarificationBlock) {}
+            /** Budget exhausted on a blocking coordinator gap with no remaining askable path. */
+            boolean hardClarificationBlock,
+            /** Human-readable debug note for the active hard clarification block, if any. */
+            String hardClarificationBlockReason) {}
 
     private final OpenAiChatClient openAiChatClient;
     private final FeaturePlanStateStore planStateStore;
@@ -589,12 +591,6 @@ public final class PlanningCyclePipeline {
                             semanticAllowed,
                             getString(state, "planningRepoEvidenceJson"),
                             critiqueSweep);
-            boolean hardClarificationBlock =
-                    assessedFinal.stream()
-                            .anyMatch(
-                                    ag ->
-                                            ag.decision()
-                                                    == ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE);
             List<CoordinatorClarificationGapEvaluator.OpenGap> openRawFinal =
                     CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
                             plan, coord, aggregatedFollowUps, semanticAllowed);
@@ -605,6 +601,17 @@ public final class PlanningCyclePipeline {
                     break;
                 }
             }
+            String hardClarificationBlockReason =
+                    assessedFinal.stream()
+                            .filter(
+                                    ag ->
+                                            ag.decision()
+                                                    == ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE)
+                            .map(AssessedGap::assumptionToRecord)
+                            .filter(note -> note != null && !note.isBlank())
+                            .findFirst()
+                            .orElse("");
+            boolean hardClarificationBlock = !hardClarificationBlockReason.isBlank() && topAskFinal == null;
             ledger =
                     PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
                             ledger,
@@ -640,7 +647,13 @@ public final class PlanningCyclePipeline {
             }
             boolean canonicalPending = topAskFinal != null;
             return new ClarificationRoundOutcome(
-                    plan, rankedLlm, upsert, canonicalPending, llmUserInputSuggested, hardClarificationBlock);
+                    plan,
+                    rankedLlm,
+                    upsert,
+                    canonicalPending,
+                    llmUserInputSuggested,
+                    hardClarificationBlock,
+                    hardClarificationBlockReason);
         }
         rankedLlm =
                 PlanningQuestionRankingPolicy.rank(
@@ -658,7 +671,8 @@ public final class PlanningCyclePipeline {
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
         plan = ClarificationCoordinatorLedger.persist(planStateStore, contextId, plan, List.of(), null);
-        return new ClarificationRoundOutcome(plan, rankedLlm, upsert, false, rankedLlm.userInputRequired(), false);
+        return new ClarificationRoundOutcome(
+                plan, rankedLlm, upsert, false, rankedLlm.userInputRequired(), false, "");
     }
 
     private void applyPostDraftGovernor(
@@ -700,6 +714,7 @@ public final class PlanningCyclePipeline {
                         "true".equalsIgnoreCase(getString(spread, "planningRecoverableDraftAfterSynthesis")),
                         "true".equalsIgnoreCase(getString(spread, "planningSuppressAutonomousRedraftNotice")),
                         clr.hardClarificationBlock());
+        spread.put("planningHardClarificationBlockReason", clr.hardClarificationBlockReason());
         boolean effectiveUser = userInputRequired || gov.forceUserInputRequired();
         if (gov.forceUserInputRequired()) {
             spread.put("planningUserInputRequired", "true");
@@ -1679,6 +1694,7 @@ public final class PlanningCyclePipeline {
         m.put("planningClarificationRepeatCount", "0");
         m.put("planningClarificationLedgerItemId", "");
         m.put("planningJustMergedClarification", "false");
+        m.put("planningHardClarificationBlockReason", "");
         m.put("planningSelectiveRerunActive", "false");
         m.put("planningSelectiveRerunNote", "");
         m.put("workflowUnresolvedHasOpen", "false");

@@ -148,9 +148,14 @@ profiles:
             - config-driven
             - config only
             - configuration only
+            - configuration/schema only
+            - config/schema only
             - yaml only
             - runtime only
+            - runtime too
             - both
+            - config and runtime
+            - runtime and config
             - default: assume both
             - decision (user
             - coordinator clarification (user)
@@ -172,12 +177,15 @@ profiles:
             - config
             - runtime
           resolveAnySubstring:
+            - yaml only
             - yaml
             - bootstrap
             - env
             - override
             - .yaml
             - environment
+            - environment overrides
+            - yaml and environment
         - id: model_override_granularity
           blocking: true
           questionTemplate: >-
@@ -191,10 +199,17 @@ profiles:
             - model
             - step
           resolveAnySubstring:
+            - named workflow steps
+            - named workflow step
             - named steps
             - named step
             - step-id
             - step ids
+            - workflow steps
+            - workflow step
+            - individual steps
+            - specific steps
+            - scope is per step
             - per-step
             - per step
             - step types
@@ -254,7 +269,7 @@ profiles:
                 required: false
                 promptHint: >-
                   Short stories or scenarios, one per line or bullet; role, action, and outcome in plain language.
-                  Tables in Discord packets are built when there are at least two lines.
+                  Discord packets may render these as labeled lists when there are multiple lines.
               - fieldId: acceptance_criteria
                 label: Acceptance criteria
                 type: text
@@ -296,7 +311,7 @@ profiles:
                 required: true
                 promptHint: >-
                   What could go wrong, mitigations, rollout/fallback; one risk per line or bullet when possible
-                  (packets can render a scan table).
+                  (packets can render a labeled list for easier scanning).
       - artifactId: open_questions_block
         title: Open questions
         ownerRoles: [ORCHESTRATOR]
@@ -316,7 +331,7 @@ profiles:
                 readinessChecks:
                   - placeholder
                 promptHint: >-
-                  Unknowns to confirm, one per line or bullet when possible (packets show a scan table when there are
+                  Unknowns to confirm, one per line or bullet when possible (packets show a labeled list when there are
                   multiple). Use "None — ready to implement" if truly none.
       - artifactId: decision_log
         title: Decision log

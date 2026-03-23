@@ -209,6 +209,42 @@ class CoordinatorClarificationGapEvaluatorTest {
         assertTrue(resolved.isEmpty());
     }
 
+    @Test
+    void explicitResolutionLineNormalizesRealWorldGranularityReply() {
+        CoordinatorClarificationGapRule rule =
+                new CoordinatorClarificationGapRule(
+                        "model_override_granularity",
+                        true,
+                        "Should overrides be per named workflow step, step type, or both?",
+                        List.of("override", "step"),
+                        List.of("model", "step"),
+                        List.of("named steps", "per step", "step types", "both"));
+        String line =
+                CoordinatorClarificationGapEvaluator.buildExplicitResolutionLine(
+                        "model_override_granularity", rule, "Scope is for individual steps.");
+        assertEquals(
+                "Coordinator gap resolution (model_override_granularity): per step.",
+                line);
+    }
+
+    @Test
+    void explicitResolutionLineNormalizesConfigVsRuntimeReply() {
+        CoordinatorClarificationGapRule rule =
+                new CoordinatorClarificationGapRule(
+                        "config_vs_runtime_scope",
+                        false,
+                        "Config or runtime?",
+                        List.of("config", "runtime"),
+                        List.of(),
+                        List.of("config only", "runtime only", "both"));
+        String line =
+                CoordinatorClarificationGapEvaluator.buildExplicitResolutionLine(
+                        "config_vs_runtime_scope", rule, "Please keep this configuration/schema only.");
+        assertEquals(
+                "Coordinator gap resolution (config_vs_runtime_scope): config only.",
+                line);
+    }
+
     private static FeaturePlanState minimalPlan(String contextId, String request) {
         return new FeaturePlanState(
                 contextId,

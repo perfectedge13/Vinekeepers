@@ -302,7 +302,7 @@ workflows:
           - when: else
             next: 13
         - type: prompt_for_field
-          prompt: '{{planningWorkspaceBlockerPrompt}}'
+          prompt: '❓ {{planningWorkspaceBlockerPrompt}}'
           storeIn: discoveryAnswerRaw
         - type: capture_field
           storeIn: discoveryAnswerRaw
@@ -371,7 +371,7 @@ workflows:
             asRole: orchestrator
             target: thread
         - type: prompt_for_field
-          prompt: '{{planningOrchestratorRoundSummary}}'
+          prompt: '❓ {{planningOrchestratorRoundSummary}}'
           storeIn: planningClarificationRaw
         - type: capture_field
           storeIn: planningClarificationRaw
@@ -444,7 +444,7 @@ workflows:
             asRole: orchestrator
             target: thread
         - type: prompt_for_field
-          prompt: '**Choose the next step** for this packet.
+          prompt: '❓ **Choose the next step** for this packet.
 
             **Continue to approval** checks whether the approval menu can open for this packet.
 
@@ -557,7 +557,7 @@ workflows:
         kind: configurable_steps
         steps:
         - type: prompt_for_field
-          prompt: Approve implementation launch?
+          prompt: '❓ Approve implementation launch?'
           storeIn: planApprovalDecision
           intent: present_choices
           choices:
