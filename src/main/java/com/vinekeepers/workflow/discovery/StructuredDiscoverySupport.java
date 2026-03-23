@@ -30,6 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Collects structured discovery gaps, builds agendas, and projects plan section status from profile artifacts.
+ * Intake blocking clarification uses {@link ClarificationPromptQualityGate#sanitizeBlockingQuestion} so only one concrete
+ * question reaches Discord.
  */
 public final class StructuredDiscoverySupport {
 

@@ -31,6 +31,25 @@ class IntakeBlockingClarificationTest {
     }
 
     @Test
+    void qualityGate_substantiveOpenQuestionLineRejectsMetaAndShortText() {
+        assertFalse(ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine("short"));
+        assertFalse(
+                ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine(
+                        "Are there any other open questions we should track?"));
+        assertTrue(
+                ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine(
+                        "What is the maximum acceptable latency for the export job when the warehouse is under peak load?"));
+    }
+
+    @Test
+    void qualityGate_detectsInternalMechanismDetail() {
+        assertTrue(
+                ClarificationPromptQualityGate.isInternalMechanismDetail(
+                        "com.example.Oops: boom\n\tat com.vinekeepers.workflow.X.y(X.java:12)"));
+        assertFalse(ClarificationPromptQualityGate.isInternalMechanismDetail("Which region should host the primary database?"));
+    }
+
+    @Test
     void qualityGate_acceptsCanonicalGapDetail() {
         assertTrue(
                 ClarificationPromptQualityGate.passes(
@@ -51,7 +70,6 @@ class IntakeBlockingClarificationTest {
                         + "\"},{\"gapId\":\"gap-c\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
                         + String.format(rowDetail, 3)
                         + "\"}]";
-        @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
@@ -68,7 +86,6 @@ class IntakeBlockingClarificationTest {
     void buildIntakeBlockingClarification_skipsLowSeverityOnly() throws JsonProcessingException {
         String json =
                 "[{\"gapId\":\"low1\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"x\",\"sectionId\":\"y\",\"fieldId\":\"z\",\"reason\":\"r\",\"severity\":\"LOW\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"Some optional refinement text that is long enough here.\"}]";
-        @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
@@ -80,7 +97,6 @@ class IntakeBlockingClarificationTest {
     void buildIntakeBlockingClarification_skipsMediumSeverity_nonBlockingGating() throws JsonProcessingException {
         String json =
                 "[{\"gapId\":\"med1\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"x\",\"sectionId\":\"y\",\"fieldId\":\"z\",\"reason\":\"r\",\"severity\":\"MEDIUM\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"Medium severity optional detail that is long enough to be substantive text.\"}]";
-        @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
@@ -94,9 +110,9 @@ class IntakeBlockingClarificationTest {
         var action = new BuildInsightDiscoveryAgendaAction(new FeaturePlanStateStore(), reg);
         String json =
                 "[{\"gapId\":\"g1\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"**Decision** (item 1 in this list) — reply in **one message** with: What was decided and why.\"}]";
-        @SuppressWarnings("unchecked")
-        Map<String, Object> out =
-                (Map<String, Object>) action.run(new Event("e", "k", Map.of()), Map.of("discoveryGapsJson", json), Map.of());
+        Object raw = action.run(new Event("e", "k", Map.of()), Map.of("discoveryGapsJson", json), Map.of());
+        assertTrue(raw instanceof Map<?, ?>);
+        Map<?, ?> out = (Map<?, ?>) raw;
         String prompt = (String) out.get("discoveryCurrentQuestionPrompt");
         assertTrue(prompt.contains("one message"));
         assertFalse(prompt.contains("Planning check-in"));
@@ -112,7 +128,6 @@ class IntakeBlockingClarificationTest {
                         + "\"},{\"gapId\":\"b\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
                         + identical
                         + "\"}]";
-        @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);

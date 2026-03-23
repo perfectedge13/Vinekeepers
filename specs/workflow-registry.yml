@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T00:20:00Z"
+  updated_utc: "2026-03-22T23:45:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -95,7 +95,9 @@ assets:
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
       append/set plan actions; register resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose;
-      load DeployTargetRegistry and register deployTargets, deployComposeServices, and deployGitBranches choice providers on config load
+      load DeployTargetRegistry and register deployTargets, deployComposeServices, and deployGitBranches choice providers on config load;
+      wires OpenAiChatClient with OpenAiPlanningProgressPoster (OpenAiPlanningProgressSink) so planning LLM calls can post
+      **Update:** lines to the workflow channel when OPENAI_PLANNING_DISCORD_PROGRESS is not false
     requires:
       - REQ-CORE-002
       - REQ-TOOLS-001
@@ -249,11 +251,12 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/GraphWorkflowRunner.java
     role: >-
-      Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action and linear_workflow_ref
-      capabilities); linear_workflow_ref runs a sibling linear workflow via ConfigurableWorkflowRunner on the same session store;
-      applies workflow template policy to state each run; when YAML includes deliberation map, writes workflowDeliberationMetaJson plus
-      deliberationProfileHint and deliberationLabel when present; on outer micro-step guard exhaustion sets
-      planningWorkflowStepLimitReached=true before markError
+      Phase graph runner for workflowSchema v2 (capability pipelines, rulesets, legacy_action, linear_workflow_ref, and
+      configurable_steps capabilities); linear_workflow_ref runs a sibling linear workflow via ConfigurableWorkflowRunner on the
+      same session store; configurable_steps runs inline steps from the capability YAML with the parent v2 workflow llm defaults
+      and template policy; applies workflow template policy to state each run; when YAML includes deliberation map, writes
+      workflowDeliberationMetaJson plus deliberationProfileHint and deliberationLabel when present; on outer micro-step guard
+      exhaustion sets planningWorkflowStepLimitReached=true before markError
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -261,7 +264,9 @@ assets:
   - id: ASSET-WORKFLOW-V2-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/v2/WorkflowV2Loader.java
-    role: Parse workflow YAML map into WorkflowV2Model (phases, capabilities, rulesets, optional templates, optional deliberation map)
+    role: >-
+      Parse workflow YAML map into WorkflowV2Model (phases, capabilities including optional inline steps for
+      configurable_steps, rulesets, optional templates, optional deliberation map)
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -358,15 +363,23 @@ assets:
       review-ready (not approval); dual-writes reviewReady / planningReviewReady via PlanningReadinessSpread; DeliberationEngine
       derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
       mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
-      and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); canonical coordinator questions use
+      and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); Arrietty-style coordinator clarification
+      is strict: at most one concrete blocking user question per round when a required fact cannot be inferred; PlanningQuestionRankingPolicy
+      and ClarificationPromptQualityGate drop generic/meta/completeness/catch-all open-question prompts; ranked open-question substance
+      aligns with unresolved plan state (governance + artifact text), not free-form LLM filler; canonical coordinator questions use
       plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
       post_planning_progress_if_changed; legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering;
-      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;       planningOrchestratorRoundSummary and
+      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode; PlanningQuestionRankingPolicy.rank uses
+      maxQuestions budget 1 for coordinator LLM follow-up ranking and canonical repair paths; planningCycleUserVisibleFailure maps
+      planningRoomCycleError through PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine and LLM error/skip lines through
+      humanizePlanningCycleFailureFragment; planningOrchestratorRoundSummary and
       planningCycleProgressSummary branch on the same resolved planningUserInputRequired gate as workflow YAML (not ranked
       userInputRequired alone); when canonical gaps remain open but the question ranker drops the template, ensureRankedForOpenCanonicalGap
       synthesizes a non-empty RankedClarification before upsert so ledger and prompts stay consistent; spread keys
       planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
-      planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true
+      planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true;
+      alongside machine planningRoomCycleError codes, spreads planningRoomCycleErrorUserMessage (PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine)
+      for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -377,7 +390,8 @@ assets:
     role: >-
       Clarification gating: requiresUserInputForPlanningClarification reflects OPEN planning_clarification items for legacy
       profiles; PlanningCyclePipeline sets planningUserInputRequired from canonical gap pending when mode is CANONICAL_V1;
-      effectiveRanked rehydrates from the ledger in legacy mode only; CANONICAL_V1 profiles skip rehydration so stale OPEN rows
+      effectiveRanked rehydrates from the ledger in legacy mode only (PlanningQuestionRankingPolicy.rank with maxQuestions 1);
+      CANONICAL_V1 profiles skip rehydration so stale OPEN rows
       cannot resurrect questions after CoordinatorClarificationGapEvaluator reconcile
     requires:
       - REQ-WORKFLOW-002
@@ -389,7 +403,8 @@ assets:
     role: >-
       Profile-driven open gaps for coordinator clarification (canonical_v1): scans assumptions, request_exploration, and
       decision_log text; LLM follow-up lines trigger gaps via hintDetectAllOf; optional canonicalOpenAllOf for narrower follow-ups;
-      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge
+      resolveAnySubstring marks gaps satisfied so PlanningCyclePipeline does not re-ask after merge; gap rules whose
+      questionTemplate is generic/meta per ClarificationPromptQualityGate are not surfaced (misconfigured prompts are dropped)
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -439,7 +454,9 @@ assets:
   - id: ASSET-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/StructuredLlmArtifactUpsertPass.java
-    role: Generic LLM JSON upsert pass over feature-plan artifacts; used by PlanningRolePassRunner
+    role: >-
+      Generic LLM JSON upsert pass over feature-plan artifacts; used by PlanningRolePassRunner; supplies OpenAiCallContext
+      per pass so OpenAiChatClient emits Discord progress and server logs for architect/auditor/scribe calls
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1024,8 +1041,11 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPromptFormatter.java
     role: >-
-      Maps work profile labels and hints to plain-English missing-field and discovery copy (avoids raw artifact paths in user text);
-      complements PlanningUserFacingCopy for coordinator-facing critique/readiness labels and decision prompts
+      Maps work profile labels and optional field promptHint to plain-English missing-field and discovery copy (avoids raw artifact paths in user text);
+      requiredFieldPrompt weaves label + repeatable index + hint (or a generic concrete-detail fallback when hint absent);
+      coordinator clarification orchestration lines stay actionable (what to answer next) and avoid meta completeness prompts when
+      the contract calls for a single blocking fact; frames structured-input asks as explicit questions and complements PlanningUserFacingCopy for coordinator-facing
+      critique/readiness labels and decision prompts
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1038,7 +1058,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningUserFacingCopy.java
     role: >-
       Shared plain-language labels for Discord-visible planning copy (critique severities, readiness and tracked-item statuses,
-      profile field titles for internal paths) so operators are not shown raw enums or artifact ids
+      profile field titles for internal paths,       coordinator cycle error lines humanized from machine codes, clarification merge errors always mapped to safe plain text (no raw
+      exception messages), repo-grounding pointer after packet post) so operators
+      are not shown raw enums, artifact ids, or internal pipeline failure mechanics
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1123,8 +1145,10 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/BuildRolePlanningThreadMessagesAction.java
     role: >-
       Workflow action build_role_planning_thread_messages — spreads architectThreadMessage, auditorThreadMessage,
-      scribeThreadMessage from FeaturePlanState artifacts for post_channel_message asRole steps; auditor copy uses
-      plain-language tracked-issues line
+      scribeThreadMessage from FeaturePlanState artifacts for post_channel_message asRole steps; architect appends Decisions
+      as PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable when bullet lines parse to two or more rows; auditor orders
+      risk register (table when parseable), open questions (table when parseable), validation body, then a plain-language tracked-issues count;
+      scribe uses markdown tables for user stories and acceptance criteria when at least two bullet lines parse
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1270,8 +1294,10 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/BuildPlanningThreadReviewBodyAction.java
     role: >-
-      Workflow action build_planning_thread_review_body — builds planningThreadReviewBody (capped) from FeaturePlanState via
-      PlanningThreadPacketFormatter.buildFullPacketBody with request/repo and optional planningRepoEvidenceJson from workflow state;
+      Workflow action build_planning_thread_review_body — builds planningThreadReviewBody from FeaturePlanState; when the packet
+      is already canonical in-thread (truthy planningPacketPosted or planningPacketSkippedDuplicate or planningPacketPostedVersion
+      integer > 0), emits PlanningThreadPacketFormatter.buildConciseThreadReviewBodyAfterPacket instead of duplicating buildFullPacketBody;
+      otherwise buildFullPacketBody with request/repo and optional planningRepoEvidenceJson then hard-caps spread body length;
       null FeaturePlanStateStore or missing contextId/plan spreads planningThreadReviewBuildError
     requires:
       - REQ-WORKFLOW-001
@@ -1284,8 +1310,10 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/discovery/ClarificationPromptQualityGate.java
     role: >-
-      Rejects generic flesh-out clarification copy; used on the intake blocking clarification path inside
-      StructuredDiscoverySupport
+      Rejects generic flesh-out, meta, completeness-only, and vague open-questions clarification copy so intake and coordinator paths
+      ask one concrete blocking question tied to a required missing fact; exposes isInternalMechanismDetail and
+      isSubstantiveOpenQuestionLine for filtering stack/parse noise and packet open-question lists; synthesizeFromGap avoids echoing
+      internal gap reason text; used on the intake blocking clarification path inside StructuredDiscoverySupport
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1362,7 +1390,8 @@ assets:
       planReadinessSummary, planReadinessCheckpointGuide (plain-English fork explanation when planReadinessStatus is
       NEEDS_HUMAN_DECISION; empty otherwise; PlanningUserFacingCopy.readinessCheckpointGuideForDiscord),
       planCritiqueFindingsJson, planCritiqueSummary (plain-language severity + field-area hints via
-      PlanningUserFacingCopy); adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
+      PlanningUserFacingCopy; when repo evidence exists and the planning packet is already visible in-thread, appends a short pointer
+      instead of repeating full repo grounding); adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
       FeaturePlanState PlanningIntakeStage is GATHERING_CONTEXT and humanDiscoveryCompleted is not true (complements canonical
       intake stage with legacy spread); bind humanReadinessProceedAck forces READY spread and persistence for NEEDS_HUMAN_DECISION proceed path;
       planningCritiqueAutoRevisionCount tracks NEEDS_REVISION-driven full replan attempts; after threshold spreads NEEDS_HUMAN_DECISION
@@ -1380,7 +1409,44 @@ assets:
     role: >-
       OpenAI-compatible chat/completions HTTP client (java.net.http); env OPENAI_API_KEY, OPENAI_BASE_URL (preferred) or
       OPENAI_API_BASE_URL, OPENAI_PLANNING_MODEL, OPENAI_PLANNING_TIMEOUT_MS (planning calls) or OPENAI_HTTP_REQUEST_TIMEOUT_MS,
-      OPENAI_HTTP_CONNECT_TIMEOUT_MS; used by run_request_expansion_llm and run_llm_planning_synthesis when configured
+      OPENAI_HTTP_CONNECT_TIMEOUT_MS; optional OpenAiPlanningProgressSink notifies before each HTTP call when
+      OpenAiCallContext.activitySummary is non-blank; planning calls pass call context from expansion, synthesis, role passes,
+      and similar paths; logs per-call duration at INFO when context present; when OPENAI_LOG_PLANNING_BODIES is not false,
+      logs truncated redacted system prompt, user payload, and assistant text (or failure hint) with max length from
+      OPENAI_LOG_BODY_MAX_CHARS (256–32768, default 4096); when body logging is false, still logs concise outcomes on errors
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-OPENAI-CALL-CONTEXT
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/openai/OpenAiCallContext.java
+    role: >-
+      Carries Event, workflow state map, and human-readable activitySummary for a single planning OpenAI completion so
+      OpenAiChatClient can drive progress posts and structured logging for that exchange
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-OPENAI-PLANNING-PROGRESS-SINK
+    kind: source
+    path: src/main/java/com/vinekeepers/connectors/openai/OpenAiPlanningProgressSink.java
+    role: >-
+      Callback interface for user-facing planning OpenAI activity lines (NOOP default); production Bootstrap wires
+      OpenAiPlanningProgressPoster implementation
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-OPENAI-PLANNING-PROGRESS-POSTER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/actions/OpenAiPlanningProgressPoster.java
+    role: >-
+      OpenAiPlanningProgressSink that posts "**Update:** …" via post_channel_message when OPENAI_PLANNING_DISCORD_PROGRESS
+      is not false; no-op when disabled, event/state missing, or line blank
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1478,10 +1544,14 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanGovernanceDeriver.java
     role: >-
-      Deterministic merge of StructuredDiscoverySupport gaps and artifact snippets into canonical governance lists;
-      ignores the ready-to-implement open-questions sentinel so resolved plans do not re-open a fake unresolved item;
-      PlanningCyclePipeline calls derive before planningReadyToPostPacket; gap-derived issue titles avoid bare gap ids when
-      userFacingDetail or field-path phrasing is available
+      Deterministic merge of StructuredDiscoverySupport gaps and artifact snippets into canonical governance lists on FeaturePlanState;
+      preserves existing PlanIssue rows whose id does not start with gap: while replacing gap:* rows from current OPEN gaps;
+      merges risk_register.main.risk_summary and decision_log repeatable decision_text into PlanRisk / PlanDecision rows with
+      synthetic art-risk-* / art-dec-* ids (splitArtifactTextEntries normalizes numbered paragraphs and bullets);
+      unresolvedQuestions merges persisted list with open_questions artifact lines in order, deduped, excluding the
+      ready-to-implement sentinel, so packet and depth logic treat “open questions” as grounded plan state rather than ad-hoc prompts;
+      PlanningCyclePipeline calls derive before planningReadyToPostPacket; gap-derived issue titles
+      prefer reason, else userFacingDetail, else profile field path label via PlanningUserFacingCopy
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1513,6 +1583,21 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-ARTIFACT-TEXTS
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planreview/PlanningArtifactTexts.java
+    role: >-
+      Reads canonical artifact section bodies (same paths as proposal auto-apply / thread review) for repeatable fields and
+      open_questions; substantiveUnresolvedQuestionLines and effectiveOpenQuestions filter FeaturePlanState.unresolvedQuestions for
+      Discord packet “open questions” so meta/completeness filler does not appear; supplies NO_OPEN_QUESTIONS_READY sentinel and
+      normalized text used when ranking clarifications against unresolved plan state
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+      - REQ-STATE-001
+    feature_ids:
+      - FEAT-CURSOR-GATHERING
+      - FEAT-WORKFLOW-STEPS
   - id: ASSET-PLANNING-APPROVAL-GATE-SUPPORT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningApprovalGateSupport.java
@@ -1527,9 +1612,13 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningThreadPacketFormatter.java
     role: >-
-      Builds full planning packet body from FeaturePlanState including canonical assumptions, issues, risks, decisions,
-      open questions (or a ready-to-implement sentinel when none remain), and post-critique readiness snapshot; tracked-item
-      and readiness lines use humanized status/severity labels (PlanningUserFacingCopy) for Discord
+      Builds full planning packet body from FeaturePlanState with markdown tables for assumptions, issues (blocking first),
+      risks, decisions, and open questions (cells escaped and width-capped; open-question rows use PlanningArtifactTexts
+      substantiveUnresolvedQuestionLines only); companion bulletLinesAsMarkdownTable adds tables for
+      user stories and acceptance criteria when at least two lines parse; narrative sections soft-truncate per section with ellipsis
+      plus "Truncated for display length." footnote; splitForDiscord labels chunks "Planning packet (part i/n)" under Discord size target;
+      buildConciseThreadReviewBodyAfterPacket points readers at prior **Planning packet** messages instead of duplicating the draft;
+      readiness snapshot uses plain quality-check wording and PlanningUserFacingCopy for statuses
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1541,9 +1630,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostPlanningPacketThreadAction.java
     role: >-
-      Workflow action post_planning_packet_thread — posts a short "posting packet / running readiness checks"
-      notice before packet chunks; on success updates FeaturePlanState with packetPostedAt, fingerprint, chunk count
-      (message ref nullable until connector returns ids) and sets PlanningIntakeStage.PACKET_POSTED
+      Workflow action post_planning_packet_thread — posts a short operator notice before packet chunks (multi-message packet,
+      readiness checks, and that a pre-launch review summary follows before approval buttons); on success updates FeaturePlanState
+      with packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids) and sets PlanningIntakeStage.PACKET_POSTED
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1593,8 +1682,8 @@ assets:
       planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningCycleProgressSummary, planningReadyToPostPacket,
       planningRoomCycleIteration, planningProgressPostWorthy, planningProgressPostFingerprint, planningCycleRolePassSummary,
       planningStructuredPassParseFailed (when structured role JSON fails parse after optional repair), interim planningCycleProgressSummary
-      updates after each inner depth round, planningClarificationStuck, planningClarificationStuckHint, planningPreviousClarificationQuestionText (from merge),
-      planningCycleUserVisibleFailure, etc.
+      updates after each inner depth round,       planningClarificationStuck, planningClarificationStuckHint, planningPreviousClarificationQuestionText (from merge),
+      planningCycleUserVisibleFailure (plain-language via PlanningUserFacingCopy, not raw internal error tokens), etc.
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1640,7 +1729,9 @@ assets:
       reconciles OPEN planning_clarification rows, and sets planningUserInputRequired from gap state (otherwise false); on
       success spreads planningPreviousClarificationQuestionText (normalized) and resets planningClarificationRepeatCount;
       DeliberationEngine + planningDirtyPassesJson from DeliberationDirtyPassIndex; spreads planningClarificationMergeOk true
-      on success and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE)
+      on success and planningClarificationMergeError when merge cannot run (e.g. NO_CHOICE), humanized for Discord via
+      PlanningUserFacingCopy; workflow spreads remain machine-oriented
+      and are not echoed as coordinator clarification prompts
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -1705,7 +1796,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningQuestionRankingPolicy.java
     role: >-
-      Ranks LLM follow-ups, records safe defaults as assumptions, prepares at most one user clarification round; structured
+      Ranks LLM follow-ups, records safe defaults as assumptions, prepares at most one user clarification round; filters out
+      generic/meta/completeness and non-concrete open-question lines so only blocking, factual coordinator asks surface; structured
       present_choices only for short explicit A-or-B pairs (rejects comma-heavy clauses and multi-clause or splits)
     requires:
       - REQ-WORKFLOW-001
@@ -1945,6 +2037,14 @@ requirements:
           execute_planning_room_cycle (PlanningCyclePipeline) spreads planningAutonomousFirstPassCompleted true when the cycle
           completes without planningRoomCycleError
         - >-
+          Arrietty-style coordinator clarification presents at most one concrete blocking question per round when a required fact
+          cannot be inferred; ClarificationPromptQualityGate and PlanningQuestionRankingPolicy suppress generic, meta, completeness-only,
+          and vague catch-all open-question prompts; clarification substance aligns with unresolved plan state after governance/artifact
+          merges (not free-form LLM filler)
+        - >-
+          Planning cycle operator-visible summaries and failure lines (including planningCycleUserVisibleFailure and planningRoomCycleErrorUserMessage)
+          are humanized via PlanningUserFacingCopy so raw internal error codes and pipeline mechanics are not primary Discord copy
+        - >-
           ExecutePlanningRoomCycleAction requires a non-null PlanningCyclePipeline at construction; Bootstrap wiring must supply
           the pipeline (no silent null fallback)
         - >-
@@ -1965,6 +2065,15 @@ requirements:
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
           on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely
         - >-
+          Planning OpenAI completions that supply OpenAiCallContext with a non-blank activitySummary notify
+          OpenAiPlanningProgressSink before the HTTP request; Bootstrap wires OpenAiPlanningProgressPoster so enabled runs post
+          "**Update:** …" to the workflow channel via post_channel_message unless OPENAI_PLANNING_DISCORD_PROGRESS is false
+        - >-
+          For those contextualized planning calls, OpenAiChatClient logs call duration at INFO and, when OPENAI_LOG_PLANNING_BODIES
+          is not false, logs truncated system prompt, user message, and assistant reply (or a failure hint) with sk-* style
+          redaction and per-field cap OPENAI_LOG_BODY_MAX_CHARS (clamped 256–32768, default 4096); when body logging is false,
+          failures still emit concise outcome lines without full payloads
+        - >-
           build_insight_discovery_agenda selects at most one BLOCKER/HIGH discovery gap, uses canonical userFacingDetail with
           ClarificationPromptQualityGate (no bundled Planning check-in prompts; discoveryBundledApplyJson stays empty on the intake path)
         - >-
@@ -1974,11 +2083,25 @@ requirements:
           Coordinator Discord prompts that gate plan readiness or NEEDS_HUMAN_DECISION include plain-English explanation of what
           the operator is choosing (e.g. move to launch approval vs revise the plan first) rather than only internal status tokens
         - >-
-          When the workflow asks for structured plan input (e.g. decision log rows), user-visible copy explains one-reply-per-row
-          expectations in plain language, states that text is stored on the plan, and avoids unexplained jargon (ADR-only framing)
+          When the workflow asks for structured plan input (e.g. decision log rows), user-visible copy frames the message as a
+          question, explains one-reply-per-row expectations in plain language, states that text is stored on the plan, and avoids
+          unexplained jargon (ADR-only framing)
         - >-
           Critique summaries, readiness lines, and similar coordinator posts use PlanningUserFacingCopy (or equivalent) for
           severities and statuses instead of exposing raw MUST_FIX / NEEDS_HUMAN_DECISION strings to Discord
+        - >-
+          derive_plan_governance merges OPEN discovery gaps into gap:* PlanIssue rows while preserving non-gap issues, splits
+          artifact risk/decision text into canonical PlanRisk / PlanDecision rows with art-risk-* / art-dec-* ids, and merges
+          open_questions lines into unresolvedQuestions with dedupe excluding the ready-to-implement sentinel
+        - >-
+          PlanningThreadPacketFormatter renders governance and multi-line bullets as markdown tables where applicable, soft-truncates
+          long sections with an explicit display-length footnote, and splits oversized bodies into labeled Discord chunks
+        - >-
+          build_role_planning_thread_messages uses the same table helper for architect decisions, auditor risks/open questions, and
+          scribe stories/acceptance when two or more bullet lines parse
+        - >-
+          build_planning_thread_review_body emits concise "packet already above" copy when planningPacketPosted,
+          planningPacketSkippedDuplicate, or planningPacketPostedVersion > 0; otherwise caps the full formatted packet for the spread
       examples: []
     traceability:
       assets:
@@ -2026,6 +2149,7 @@ requirements:
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
         - ASSET-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
         - ASSET-START-COORDINATOR-PLANNING-ACTION
+        - ASSET-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
         - ASSET-PLANNING-PROPOSAL-JSON
@@ -2046,11 +2170,15 @@ requirements:
         - ASSET-PLAN-READINESS-EVALUATOR
         - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
         - ASSET-OPENAI-CHAT-CLIENT
+        - ASSET-OPENAI-CALL-CONTEXT
+        - ASSET-OPENAI-PLANNING-PROGRESS-SINK
+        - ASSET-OPENAI-PLANNING-PROGRESS-POSTER
         - ASSET-SPREAD-PLAN-WORKSPACE-SIGNALS-ACTION
         - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
         - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
         - ASSET-PLAN-GOVERNANCE-DERIVER
+        - ASSET-PLANNING-ARTIFACT-TEXTS
         - ASSET-PLAN-CRITIQUE-RUBRIC
         - ASSET-PLAN-READINESS-CALCULATOR
         - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
@@ -2158,7 +2286,7 @@ requirements:
           title: IntakeBlockingClarificationTest
           intent: >-
             Verify intake blocking clarification: one HIGH/BLOCKER question from canonical gap text, quality gate rejects
-            generic flesh-out copy, LOW-only gaps yield no prompt, BuildInsightDiscoveryAgendaAction matches intake path
+            generic flesh-out and meta/completeness-style copy, LOW-only gaps yield no prompt, BuildInsightDiscoveryAgendaAction matches intake path
           testClass: com.vinekeepers.workflow.discovery.IntakeBlockingClarificationTest
           preconditions: []
         - id: UNIT-DISCOVERY-WORKFLOW-ACTIONS
@@ -2292,12 +2420,56 @@ requirements:
           preconditions: []
         - id: UNIT-PLANNING-PROMPT-FORMATTER
           title: PlanningPromptFormatterTest
-          intent: Verify plain-English missing-field and internal-path summaries from work profile metadata
+          intent: >-
+            Verify plain-English missing-field prompts use field label and optional promptHint from work profile metadata;
+            coordinator clarification orchestration copy stays concrete and avoids banned meta/completeness phrasing
           testClass: com.vinekeepers.workflow.planning.PlanningPromptFormatterTest
+          preconditions: []
+        - id: UNIT-EXECUTE-PLANNING-ROOM-CYCLE-SUMMARY
+          title: ExecutePlanningRoomCycleActionSummaryTest
+          intent: >-
+            Verify open-clarification planning cycle summary lines stay plain-language (question, why, next) without internal pipeline jargon
+          testClass: com.vinekeepers.workflow.actions.ExecutePlanningRoomCycleActionSummaryTest
+          preconditions: []
+        - id: UNIT-MERGE-PLANNING-CLARIFICATION-CHOICE-ACTION
+          title: MergePlanningClarificationChoiceActionTest
+          intent: >-
+            Verify merge_planning_clarification_choice reconciles canonical_v1 gaps and ledger rows and derives planningUserInputRequired from gap state
+          testClass: com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceActionTest
+          preconditions: []
+        - id: UNIT-PLANNING-THREAD-PACKET-FORMATTER
+          title: PlanningThreadPacketFormatterTest
+          intent: Verify planning packet tables, truncation footnote, Discord chunk labels, and companion markdown tables from bullets
+          testClass: com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatterTest
+          preconditions: []
+        - id: UNIT-BUILD-PLANNING-THREAD-REVIEW-BODY-ACTION
+          title: BuildPlanningThreadReviewBodyActionTest
+          intent: Verify concise review body after packet posted vs full capped packet when not posted
+          testClass: com.vinekeepers.workflow.actions.BuildPlanningThreadReviewBodyActionTest
+          preconditions: []
+        - id: UNIT-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
+          title: BuildRolePlanningThreadMessagesActionTest
+          intent: Verify architect/auditor/scribe thread copy includes markdown tables and section ordering from plan artifacts
+          testClass: com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesActionTest
+          preconditions: []
+        - id: UNIT-SYNTHESIZE-PLAN-DRAFTS-ACTION
+          title: SynthesizePlanDraftsActionTest
+          intent: Verify synthesize_plan_drafts workspace-not-ready note uses humanized repo workspace status labels
+          testClass: com.vinekeepers.workflow.actions.SynthesizePlanDraftsActionTest
+          preconditions: []
+        - id: UNIT-PLAN-GOVERNANCE-DERIVER-WORKFLOW
+          title: PlanGovernanceDeriverTest
+          intent: >-
+            Verify governance merge into FeaturePlanState: OPEN gap rows as gap:* issues with non-gap preservation, artifact
+            risk/decision text as synthetic art-risk-* / art-dec-* rows, unresolved questions merged with dedupe excluding the
+            ready-to-implement sentinel
+          testClass: com.vinekeepers.workflow.planning.PlanGovernanceDeriverTest
           preconditions: []
         - id: UNIT-PLANNING-USER-FACING-COPY
           title: PlanningUserFacingCopyTest
-          intent: Verify humanized critique/readiness/status labels and profile field titles for internal paths
+          intent: >-
+            Verify humanized critique/readiness/status labels, profile field titles, planning room cycle error lines without internal mechanics,
+            repo-grounding pointer after packet post, and plain-language INTAKE_DISCOVERY_INCOMPLETE copy
           testClass: com.vinekeepers.workflow.planreview.PlanningUserFacingCopyTest
           preconditions: []
         - id: UNIT-SPREAD-PLAN-WORKSPACE-SIGNALS-ACTION
@@ -2306,6 +2478,18 @@ requirements:
             Verify spread_plan_workspace_signals defaults when store or contextId missing and planningRepoEvidenceJson when
             workspace is materialized
           testClass: com.vinekeepers.workflow.actions.SpreadPlanWorkspaceSignalsActionTest
+          preconditions: []
+        - id: UNIT-OPENAI-CHAT-CLIENT
+          title: OpenAiChatClientTest
+          intent: >-
+            Verify planning OpenAI client progress notification, optional body logging toggles, truncation/redaction, and error paths
+          testClass: com.vinekeepers.connectors.openai.OpenAiChatClientTest
+          preconditions: []
+        - id: UNIT-OPENAI-PLANNING-PROGRESS-POSTER
+          title: OpenAiPlanningProgressPosterTest
+          intent: >-
+            Verify OpenAiPlanningProgressPoster posts **Update:** lines via PostChannelMessageAction when Discord progress env is enabled
+          testClass: com.vinekeepers.workflow.actions.OpenAiPlanningProgressPosterTest
           preconditions: []
         - id: MANUAL-WORKFLOW
           title: Workflow interface
@@ -2319,17 +2503,22 @@ requirements:
       - >-
         Do not surface coordinator readiness or human-decision prompts using only internal enum tokens or template jargon
         without a plain-English sentence that states what the operator is choosing and what happens next in the workflow.
+      - >-
+        Do not use coordinator clarification to ask generic meta, completeness-only, or vague open-questions prompts when the strict
+        contract requires a single concrete blocking fact from the operator.
   - id: REQ-WORKFLOW-002
     title: Config-driven workflow v2 graph, ledger, rules, and safe templates
     statement: >-
-      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge, linear_workflow_ref delegate), and rulesets;
-      coordinator workflows such as arrietty_room_v2 may run hydrate/ensure/spread ingress capabilities in the entry phase before
-      delegating to a linear_workflow_ref submodule. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
+      Workflows may declare workflowSchema v2 with phases, capabilities (legacy_action bridge, linear_workflow_ref delegate,
+      configurable_steps inline linear-style steps), and rulesets; coordinator workflows such as arrietty_room_v2 may run
+      hydrate/ensure/spread ingress capabilities in the entry phase before delegating to a linear_workflow_ref submodule or
+      embedded configurable_steps segment. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; OPEN ledger items after upsert drive
       planningUserInputRequired; canonical_v1 profiles reconcile OPEN items from profile coordinatorClarification gaps before upsert;
-      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
+      coordinator clarification follows a strict contract (one concrete blocking question when a required fact is missing; no generic
+      meta/completeness prompts; open-question substance grounded in unresolved plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
     status: active
     priority: high
     type: functional
@@ -2351,12 +2540,17 @@ requirements:
         - PlanningCyclePipeline executes planning cycle; ExecutePlanningRoomCycleAction is a thin facade; planning_cycle_run_expansion,
           planning_cycle_run_inner_round, planning_cycle_finalize split the same pipeline for v2 YAML; Bootstrap also registers
           planning_run_expansion, planning_run_inner_round, planning_finalize_cycle_spread aliases
-        - StructuredLlmArtifactUpsertPass executes generic artifact upsert LLM pass for role-derived prompts
+        - >-
+          StructuredLlmArtifactUpsertPass executes generic artifact upsert LLM pass for role-derived prompts and supplies
+          OpenAiCallContext so each role pass participates in the same OpenAiChatClient Discord progress and safe server logging policy
+          as other planning LLM calls
         - >-
           Work profiles may declare readiness.anyOfGroups and field-level minWords/readinessChecks; GenericReadinessEvaluator
           applies declarative depth before supplemental packet checks
         - >-
-          Open questions are gathered through coordinator clarification one question at a time; when no unresolved questions
+          Open questions are gathered through coordinator clarification one question at a time; prompts are concrete and blocking
+          when user input is required, with generic/meta/completeness lines filtered; unresolved open-question lists in packets derive
+          from FeaturePlanState (governance merge + artifacts), not ad-hoc LLM churn for the clarification slot; when no unresolved questions
           remain, packet depth and critique accept the ready-to-implement sentinel instead of requiring an editable draft list
         - UnresolvedItem carries optional repeatCount in JSON for anti-loop rules; UnresolvedItemLedger.maxOpenItemRepeatCount supports rules
         - >-
@@ -2376,6 +2570,13 @@ requirements:
         - >-
           Planning packet sections and declarative readiness gate messages shown to operators use PlanningUserFacingCopy and
           work-profile titles where applicable so raw artifact paths and enum tokens are not the primary Discord copy
+        - >-
+          PlanningThreadPacketFormatter renders governance subsections as markdown tables with cell caps, adds companion tables for
+          multi-line user stories and acceptance criteria when parseable, applies per-section soft truncation with a visible
+          "Truncated for display length." footnote, and labels split Discord messages as Planning packet parts
+        - >-
+          Open questions in the packet prefer the unresolvedQuestions table; artifact open_questions lines fall back to a table or
+          plain text, and the ready-to-implement sentinel is treated as empty for depth/critique without inventing fake unresolved rows
         - >-
           GraphWorkflowRunner when linear_workflow_ref completes with user-visible text (reply or rich intent) and the phase
           pipeline is exhausted collapses through default/terminal v2 phases and returns that delegated result instead of
@@ -2417,6 +2618,7 @@ requirements:
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
         - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
         - ASSET-PLAN-GOVERNANCE-DERIVER
+        - ASSET-PLANNING-ARTIFACT-TEXTS
         - ASSET-PLAN-CRITIQUE-RUBRIC
         - ASSET-PLAN-CRITIQUE-SUPPORT
         - ASSET-PLAN-READINESS-CALCULATOR
@@ -2447,8 +2649,9 @@ requirements:
         - id: UNIT-GRAPH-WORKFLOW-RUNNER
           title: GraphWorkflowRunnerTest
           intent: >-
-            Verify v2 pipeline runs legacy_action and linear_workflow_ref capabilities and completes; linear_workflow_ref
-            completion with non-empty done message is forwarded through terminal v2 phases (not replaced by empty outer completion)
+            Verify v2 pipeline runs legacy_action, linear_workflow_ref, and configurable_steps capabilities and completes;
+            linear_workflow_ref and configurable_steps completion with non-empty done message is forwarded through terminal v2
+            phases (not replaced by empty outer completion)
           testClass: com.vinekeepers.workflow.v2.GraphWorkflowRunnerTest
           preconditions: []
         - id: UNIT-WORKFLOW-V2-LOADER
@@ -2505,18 +2708,36 @@ requirements:
           preconditions: []
         - id: UNIT-PLANNING-PROMPT-FORMATTER
           title: PlanningPromptFormatterTest
-          intent: Verify plain-English missing-field and internal-path summaries from work profile metadata
+          intent: >-
+            Verify plain-English missing-field prompts use field label and optional promptHint from work profile metadata;
+            coordinator clarification orchestration copy stays concrete and avoids banned meta/completeness phrasing
           testClass: com.vinekeepers.workflow.planning.PlanningPromptFormatterTest
+          preconditions: []
+        - id: UNIT-PLANNING-CYCLE-PIPELINE-CANONICAL-CLARIFICATION
+          title: PlanningCyclePipelineCanonicalClarificationTest
+          intent: >-
+            Verify PlanningCyclePipeline canonical_v1 clarification gating, ledger stray handling, and strict blocking-question contract helpers
+          testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineCanonicalClarificationTest
+          preconditions: []
+        - id: UNIT-PLANNING-THREAD-PACKET-FORMATTER-V2
+          title: PlanningThreadPacketFormatterTest
+          intent: Verify planning packet tables, truncation footnote, Discord chunk labels, and open-question presentation
+          testClass: com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatterTest
           preconditions: []
         - id: UNIT-PLANNING-USER-FACING-COPY
           title: PlanningUserFacingCopyTest
-          intent: Verify humanized critique/readiness/status labels and profile field titles for internal paths
+          intent: >-
+            Verify humanized critique/readiness/status labels, profile field titles, planning room cycle error lines without internal mechanics,
+            repo-grounding pointer after packet post, and plain-language INTAKE_DISCOVERY_INCOMPLETE copy
           testClass: com.vinekeepers.workflow.planreview.PlanningUserFacingCopyTest
           preconditions: []
     anti_patterns:
       - >-
         Do not use raw artifact paths, internal state keys, or critique/readiness enum tokens as primary Discord copy for
         coordinator planning packets or Phase C summaries; use PlanningUserFacingCopy (or equivalent profile titles) for operator text.
+      - >-
+        Do not resurrect coordinator clarification from stale OPEN ledger rows in canonical_v1 when profile gaps are closed, or prompt
+        with generic open-question filler unrelated to unresolved FeaturePlanState.
   - id: REQ-LUNA-001
     title: Luna bot ΓÇö Discord mention trigger, multi-turn gather, Cursor Cloud API, lifecycle room Phase 1
     statement: >-
@@ -2611,8 +2832,9 @@ requirements:
           conversationMode conversational so the workflow does not reset after terminal launch; room channel path keeps
           the legacy capture_field room command branch
         - >-
-          Discovery and approval prompts use plain-English copy from profile labels/hints and gap userFacingDetail;
-          get_profile_missing_fields summary uses human-readable lines (Still needed: …) rather than raw artifact paths
+          Discovery and approval prompts use plain-English copy from profile labels/hints and gap userFacingDetail; structured
+          planning-input asks are framed as explicit questions; get_profile_missing_fields summary uses human-readable lines
+          (Still needed: …) rather than raw artifact paths
         - >-
           launch_cursor_run when contextId is set requires canonical PlanApproval APPROVE or APPROVE_WITH_RISKS unless
           CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true; confirm cancel branches to cancelled done step; channel create failure
@@ -2672,6 +2894,7 @@ requirements:
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
         - ASSET-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
         - ASSET-START-COORDINATOR-PLANNING-ACTION
+        - ASSET-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
         - ASSET-PLANNING-PROPOSAL-JSON
@@ -2952,7 +3175,10 @@ requirements:
           preconditions: []
         - id: UNIT-PHASE-C-PLAN-ACTIONS
           title: PhaseCPlanActionsTest
-          intent: Verify run_plan_critique_and_readiness and persist_plan_approval update FeaturePlanState
+          intent: >-
+            Verify run_plan_critique_and_readiness and persist_plan_approval update FeaturePlanState; build_planning_thread_review_body
+            omits duplicated full packet when planningPacketPostedVersion (or equivalent posted flags) indicate the packet is already
+            in-thread; critique summary uses a short repo pointer when the packet is posted with evidence instead of repeating full repo lines
           testClass: com.vinekeepers.workflow.actions.PhaseCPlanActionsTest
           preconditions: []
         - id: UNIT-PLAN-READINESS-EVALUATOR
@@ -2976,7 +3202,10 @@ requirements:
           preconditions: []
         - id: UNIT-PLAN-GOVERNANCE-DERIVER
           title: PlanGovernanceDeriverTest
-          intent: Verify gap-derived blocking issues and idempotent merge by stable gap id
+          intent: >-
+            Verify governance merge into FeaturePlanState: OPEN gap rows as gap:* issues with non-gap preservation, artifact
+            risk/decision text as synthetic art-risk-* / art-dec-* rows, unresolved questions merged with dedupe excluding the
+            ready-to-implement sentinel
           testClass: com.vinekeepers.workflow.planning.PlanGovernanceDeriverTest
           preconditions: []
         - id: UNIT-PLAN-READINESS-CALCULATOR
@@ -3186,6 +3415,7 @@ features:
       - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
       - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
       - ASSET-PLAN-GOVERNANCE-DERIVER
+      - ASSET-PLANNING-ARTIFACT-TEXTS
       - ASSET-PLAN-CRITIQUE-RUBRIC
       - ASSET-PLAN-READINESS-CALCULATOR
       - ASSET-PLANNING-APPROVAL-GATE-SUPPORT
@@ -3247,6 +3477,7 @@ features:
       - ASSET-RUN-PLAN-CRITIQUE-AND-READINESS-ACTION
       - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
       - ASSET-PLAN-GOVERNANCE-DERIVER
+      - ASSET-PLANNING-ARTIFACT-TEXTS
       - ASSET-PLAN-CRITIQUE-RUBRIC
       - ASSET-PLAN-READINESS-CALCULATOR
       - ASSET-PLANNING-APPROVAL-GATE-SUPPORT

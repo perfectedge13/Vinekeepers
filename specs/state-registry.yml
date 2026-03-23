@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T00:20:00Z"
+  updated_utc: "2026-03-22T23:50:00Z"
 
 project:
   id: vinekeepers
@@ -295,9 +295,13 @@ requirements:
         - RepoWorkspaceService resolves absolute local git directories and records branch/commit; optional clone when env allows; creates VINEKEEPERS_REPO_WORKSPACE_ROOT when missing; deletes existing per-context workspace directory before shallow clone when present; fails closed if stale directory cannot be removed; logs milestones and supports optional progress callback; surfaces git output snippet on clone failure
         - FeaturePlanState carries optional profileId and artifacts map (per-artifact section/field values) alongside legacy planning fields; with* methods preserve profileId and artifacts
         - >-
-          FeaturePlanState holds governance lists (PlanAssumption, PlanIssue, PlanRisk, PlanDecision), packet delivery
-          metadata after a successful thread post, critique lifecycle status, enriched PlanCritiqueSnapshot (rubric scores,
-          blocking counts), and PlanConfidence with numeric score for approval gating
+          FeaturePlanState holds governance lists (PlanAssumption, PlanIssue, PlanRisk, PlanDecision, unresolvedQuestions),
+          packet delivery metadata after a successful thread post, critique lifecycle status, enriched PlanCritiqueSnapshot (rubric scores,
+          blocking counts), and PlanConfidence with numeric score for approval gating; derive_plan_governance normalizes gap-derived
+          gap:* issues, synthetic art-risk-* / art-dec-* rows from artifact text, and merged unresolved question lines for Discord packet tables;
+          unresolvedQuestions is the canonical persisted basis for “open questions” in coordinator UX (versus ad-hoc clarification filler);
+          derive_plan_governance and packet formatters filter generic/meta or internal-looking lines so displayed open questions reflect
+          substantive unresolved state only
         - >-
           packetPostedAt on FeaturePlanState is the canonical persisted signal that the planning packet was posted;
           PlanReadinessEvaluator treats it as authoritative for "packet posted" when workflow state map is omitted; workflow

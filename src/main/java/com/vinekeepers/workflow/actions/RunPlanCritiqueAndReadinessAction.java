@@ -53,26 +53,31 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
 
     @Override
     public Object run(Event event, Map<String, Object> state, Map<String, Object> bind) {
-        Map<String, Object> err = baseErrorSpread("Plan store or work profile registry not available.");
+        Map<String, Object> err =
+                baseErrorSpread("Planning storage or work profiles are not available on this server. Check configuration.");
         if (planStateStore == null || workProfileRegistry == null) {
             putReadinessStatus(err, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return err;
         }
         String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
         if (contextId == null || contextId.isBlank()) {
-            Map<String, Object> m = baseErrorSpread("Missing contextId for run_plan_critique_and_readiness.");
+            Map<String, Object> m =
+                    baseErrorSpread(
+                            "Planning could not be tied to this thread. Continue from the feature room or reopen the intake thread.");
             putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return m;
         }
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
         if (plan == null) {
-            Map<String, Object> m = baseErrorSpread("No FeaturePlanState for contextId: " + contextId);
+            Map<String, Object> m =
+                    baseErrorSpread("No planning draft is linked to this thread yet. Start or resume planning from the feature room.");
             putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return m;
         }
         String profileId = plan.getProfileId();
         if (profileId == null || profileId.isBlank()) {
-            Map<String, Object> m = baseErrorSpread("FeaturePlanState has no profileId.");
+            Map<String, Object> m =
+                    baseErrorSpread("This planning draft has no work profile selected; pick a profile before review.");
             putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             return m;
         }
@@ -89,7 +94,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                         "PROCESS",
                         "MUST_FIX",
                         "INTAKE_DISCOVERY_INCOMPLETE",
-                        "Complete the coordinator discovery kickoff in this thread (reply to the first planning prompt) before the plan can advance to approval.",
+                        "Finish the first planning questions in this thread (reply to the prompt above) before we can move to approval.",
                         ""));
             }
             Instant now = Instant.now();
@@ -134,7 +139,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                 legacyStatus = PlanReadinessStatus.NEEDS_HUMAN_DECISION;
                 summaryForSpread =
                         summaryForSpread
-                                + "\n\n(Automatic full replanning after critique is limited. Use the coordinator menu or **Revise plan first** to continue.)";
+                                + "\n\nAutomatic full replanning after critique is limited. Use **Revise plan** (or the in-thread menu) to run another drafting pass.";
                 confidenceForStore =
                         new PlanConfidence(
                                 confidence.getLevel(),
@@ -175,7 +180,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             return spread;
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "critique failed";
-            Map<String, Object> m = baseErrorSpread(msg);
+            Map<String, Object> m = baseErrorSpread("Readiness check hit an error: " + truncateForDiscord(msg, 400));
             putReadinessStatus(m, com.vinekeepers.state.planning.PlanReadinessStatus.BLOCKED);
             try {
                 m.put("planCritiqueFindingsJson", JSON.writeValueAsString(List.of()));
@@ -282,7 +287,36 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         if (ev == null || ev.isBlank()) {
             return critique;
         }
-        return critique + "\n\n**Repo grounding (same signals as packet):**\n" + ev;
+        if (planningPacketLikelyVisibleInThread(state)) {
+            return critique + "\n\n" + PlanningUserFacingCopy.repoGroundingPointerAfterPacket();
+        }
+        return critique + "\n\n**Repo / workspace (grounding)**\n" + ev;
+    }
+
+    private static boolean planningPacketLikelyVisibleInThread(Map<String, Object> state) {
+        if (state == null) {
+            return false;
+        }
+        if ("true".equalsIgnoreCase(String.valueOf(state.get("planningPacketPosted")))) {
+            return true;
+        }
+        if ("true".equalsIgnoreCase(String.valueOf(state.get("planningPacketSkippedDuplicate")))) {
+            return true;
+        }
+        try {
+            int v = Integer.parseInt(String.valueOf(state.getOrDefault("planningPacketPostedVersion", "0")).trim());
+            return v > 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    private static String truncateForDiscord(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.replace("\r\n", " ").replace('\n', ' ').trim();
+        return t.length() <= max ? t : t.substring(0, max - 1) + "…";
     }
 
     private static String getString(Map<String, Object> map, String key) {

@@ -7,9 +7,12 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Maps work-profile metadata to plain-English prompts (avoids exposing internal artifact/field ids to users).
+ * Each prompt is a single concrete ask for a missing fact, aligned with the Arrietty clarification contract (no generic
+ * completeness or meta “anything else?” style wording).
  */
 public final class PlanningPromptFormatter {
 
@@ -29,18 +32,20 @@ public final class PlanningPromptFormatter {
                 : "this item";
         StringBuilder sb = new StringBuilder();
         if (repeatableRowIndex >= 0) {
-            sb.append("**")
+            sb.append("**Question:** What should we record for **")
                     .append(label)
-                    .append("** (item ")
+                    .append(' ')
                     .append(repeatableRowIndex + 1)
-                    .append(" in this list) — reply in **one message** with: ");
+                    .append("** in this list? Reply in **one message** so we can save it on the plan. Include: ");
         } else {
-            sb.append("**").append(label).append("**: ");
+            sb.append("**Question:** What should we record for **")
+                    .append(label)
+                    .append("** on the plan? ");
         }
         if (field.getPromptHint() != null && !field.getPromptHint().isBlank()) {
             sb.append(field.getPromptHint().trim());
         } else {
-            sb.append("share concrete detail we should capture in the planning packet.");
+            sb.append("send the specific text or decision to store on the plan.");
         }
         return sb.toString();
     }
@@ -48,23 +53,23 @@ public final class PlanningPromptFormatter {
     public static String repeatableSectionEmptyPrompt(ArtifactDefinition artifact, SectionDefinition section) {
         String sectionTitle = section.getTitle() != null && !section.getTitle().isBlank()
                 ? section.getTitle()
-                : section.getSectionId();
+                : titleCaseSnake(section.getSectionId());
         String artTitle = artifact.getTitle() != null && !artifact.getTitle().isBlank()
                 ? artifact.getTitle()
-                : artifact.getArtifactId();
-        return "The _" + sectionTitle + "_ section (" + artTitle + ") needs at least one entry. "
-                + "Reply with the first item to add.";
+                : titleCaseSnake(artifact.getArtifactId());
+        return "**Question:** The _" + sectionTitle + "_ section (" + artTitle + ") needs at least one entry. "
+                + "Reply with the first item to add so we can save it on the plan.";
     }
 
     public static String requiredSectionMissingPrompt(ArtifactDefinition artifact, SectionDefinition section) {
         String sectionTitle = section.getTitle() != null && !section.getTitle().isBlank()
                 ? section.getTitle()
-                : section.getSectionId();
+                : titleCaseSnake(section.getSectionId());
         String artTitle = artifact.getTitle() != null && !artifact.getTitle().isBlank()
                 ? artifact.getTitle()
-                : artifact.getArtifactId();
-        return "The _" + sectionTitle + "_ block (" + artTitle + ") is missing. "
-                + "Reply with the main content we should add for that section.";
+                : titleCaseSnake(artifact.getArtifactId());
+        return "**Question:** The _" + sectionTitle + "_ block (" + artTitle + ") is missing. "
+                + "Reply with the main content we should add for that section so we can save it on the plan.";
     }
 
     /**
@@ -168,5 +173,23 @@ public final class PlanningPromptFormatter {
                 .filter(f -> f.getFieldId().equals(fieldId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static String titleCaseSnake(String id) {
+        if (id == null || id.isBlank()) {
+            return "";
+        }
+        String[] parts = id.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p.isBlank()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(p.substring(0, 1).toUpperCase(Locale.ROOT)).append(p.substring(1).toLowerCase(Locale.ROOT));
+        }
+        return sb.toString();
     }
 }

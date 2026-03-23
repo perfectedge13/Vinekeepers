@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PhaseCPlanActionsTest {
@@ -207,5 +208,87 @@ class PhaseCPlanActionsTest {
         assertTrue(body.contains("Step one; step two."));
         assertTrue(body.contains("Validation strategy"));
         assertTrue(body.contains("Run mvn test"));
+    }
+
+    @Test
+    void buildPlanningThreadReviewBody_skipsFullPacketWhenPostedVersionRecorded() {
+        WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "c-packet", "channelId", "roomP"),
+                        Map.of("profileId", "software_feature_planning")));
+
+        var upsert = new UpsertArtifactSectionDataAction(store, reg);
+        assertEquals(
+                "OK",
+                upsert.run(
+                        null,
+                        Map.of("contextId", "c-packet"),
+                        Map.of(
+                                "artifactId", "overall_plan",
+                                "sectionId", "outline",
+                                "mode", "replace",
+                                "data", Map.of("plan_body", "Should not appear when packet already in thread."))));
+
+        var build = new BuildPlanningThreadReviewBodyAction(store);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread =
+                (Map<String, Object>)
+                        build.run(
+                                null,
+                                Map.of("contextId", "c-packet", "planningPacketPostedVersion", "1"),
+                                Map.of());
+        String body = (String) spread.get("planningThreadReviewBody");
+        assertTrue(body.contains("**Planning packet**"));
+        assertFalse(body.contains("Should not appear when packet already in thread."));
+    }
+
+    @Test
+    void runPlanCritique_usesRepoGroundingPointerWhenPacketAlreadyPosted() {
+        WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of("contextId", "c-ground", "channelId", "roomG", "codeChange", "Do a thing."),
+                        Map.of("profileId", "software_feature_planning")));
+        var upsert = new UpsertArtifactSectionDataAction(store, reg);
+        assertEquals(
+                "OK",
+                upsert.run(
+                        null,
+                        Map.of("contextId", "c-ground"),
+                        Map.of(
+                                "artifactId", "overall_plan",
+                                "sectionId", "outline",
+                                "mode", "replace",
+                                "data", Map.of("plan_body", "Enough text for critique to run."))));
+        String evidence = "{\"contextId\":\"c-ground\",\"repoRef\":\"org/demo\",\"featureSlug\":\"feat\"}";
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread =
+                (Map<String, Object>)
+                        new RunPlanCritiqueAndReadinessAction(store, reg)
+                                .run(
+                                        null,
+                                        Map.of(
+                                                "contextId",
+                                                "c-ground",
+                                                "humanDiscoveryCompleted",
+                                                "true",
+                                                "planningPacketPosted",
+                                                "true",
+                                                "planningRepoEvidenceJson",
+                                                evidence),
+                                        Map.of());
+        String summary = String.valueOf(spread.get("planCritiqueSummary"));
+        assertTrue(summary.contains("Workspace/repo signals are in the"));
+        assertTrue(summary.contains("planning packet above"));
+        assertFalse(summary.contains("- Repo: `org/demo`"));
     }
 }

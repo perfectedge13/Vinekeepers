@@ -154,7 +154,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         String waiting =
                 PlanningCyclePipeline.buildOrchestratorSummary(
                         plan, true, "", rankedNoAsk, 1, false, false, "", true, false);
-        assertTrue(waiting.contains("holding the thread"));
+        assertTrue(waiting.contains("Paused until the detail below is answered"));
         assertFalse(waiting.contains("keep going"));
 
         RankedClarification rankedAsk =
@@ -162,7 +162,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         String moving =
                 PlanningCyclePipeline.buildOrchestratorSummary(
                         plan, true, "", rankedAsk, 1, false, false, "", false, false);
-        assertFalse(moving.contains("holding the thread"));
+        assertFalse(moving.contains("Paused until the detail below is answered"));
     }
 
     @Test

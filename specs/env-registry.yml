@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-18T18:00:00Z"
+  updated_utc: "2026-03-22T22:00:00Z"
 
 project:
   id: vinekeepers
@@ -78,6 +78,11 @@ requirements:
         - >-
           Optional engine event executor keys (VINEKEEPERS_ENGINE_EVENT_THREADS default 1,
           VINEKEEPERS_ENGINE_EVENT_QUEUE_CAPACITY default 8000) are read via Env in EngineEventExecutorFactory
+        - >-
+          Optional OpenAI planning observability keys OPENAI_PLANNING_DISCORD_PROGRESS (default true; false disables
+          **Update:** Discord posts for planning OpenAI calls), OPENAI_LOG_PLANNING_BODIES (default true; false suppresses
+          truncated system/user/assistant body logs while still logging failure outcomes), and OPENAI_LOG_BODY_MAX_CHARS
+          (default 4096, clamped between 256 and 32768) are read via Env in OpenAiChatClient and OpenAiPlanningProgressPoster
       examples: []
     traceability:
       assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]

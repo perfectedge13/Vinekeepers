@@ -4,6 +4,9 @@ import com.vinekeepers.profile.ArtifactState;
 import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.FeaturePlanState;
 
+import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -91,19 +94,33 @@ public final class PlanningArtifactTexts {
         return v != null ? v.toString().trim() : "";
     }
 
+    /**
+     * Unresolved-question lines safe to show in the planning packet (drops meta/completeness filler and internal errors).
+     */
+    public static List<String> substantiveUnresolvedQuestionLines(FeaturePlanState plan) {
+        if (plan == null || plan.getUnresolvedQuestions().isEmpty()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String q : plan.getUnresolvedQuestions()) {
+            if (q == null || q.isBlank()) {
+                continue;
+            }
+            String t = q.trim();
+            if (ClarificationPromptQualityGate.isSubstantiveOpenQuestionLine(t)) {
+                out.add(t);
+            }
+        }
+        return List.copyOf(out);
+    }
+
     public static String effectiveOpenQuestions(FeaturePlanState plan) {
         if (plan == null) {
             return "";
         }
-        if (!plan.getUnresolvedQuestions().isEmpty()) {
-            return plan.getUnresolvedQuestions().stream()
-                    .map(q -> q != null ? q.trim() : "")
-                    .filter(q -> !q.isBlank())
-                    .collect(Collectors.joining("\n"));
-        }
-        String artifactValue = artifactField(plan, "open_questions_block", "backlog", "open_questions");
-        if (!artifactValue.isBlank()) {
-            return artifactValue;
+        List<String> lines = substantiveUnresolvedQuestionLines(plan);
+        if (!lines.isEmpty()) {
+            return lines.stream().collect(Collectors.joining("\n"));
         }
         return NO_OPEN_QUESTIONS_READY;
     }

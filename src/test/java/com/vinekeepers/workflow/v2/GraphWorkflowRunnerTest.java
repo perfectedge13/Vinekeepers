@@ -170,4 +170,84 @@ class GraphWorkflowRunnerTest {
         assertTrue(st.isPresent());
         assertEquals("__v2_done", st.get().get(GraphWorkflowRunner.PHASE_KEY));
     }
+
+    @Test
+    void configurableStepsRunsInlineStepsWithoutSiblingWorkflowRef() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+        reg.register("v2_noop", (e, s, b) -> Map.of("inlineEmbedRan", "true"));
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "p");
+        Map<String, Object> phases = new LinkedHashMap<>();
+        phases.put("p", Map.of("pipeline", List.of("cap_embed"), "defaultNextPhase", "done"));
+        phases.put("done", Map.of("pipeline", List.of(), "terminal", true));
+        wf.put("phases", phases);
+        wf.put(
+                "capabilities",
+                Map.of(
+                        "cap_embed",
+                        Map.of(
+                                "kind",
+                                "configurable_steps",
+                                "steps",
+                                List.of(Map.of("type", "call_action", "action", "v2_noop", "storeSpread", true)))));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("outer_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model, reg, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, "channel", Map.of(), null);
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "hi"));
+
+        StateStore store = new StateStore();
+        WorkflowRunResult res = runner.runResult(event, store, "b");
+        assertTrue(res.isCompleted());
+        String key = "bot:b:conv:ch1";
+        var st = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class);
+        assertTrue(st.isPresent());
+        assertEquals("true", st.get().get("inlineEmbedRan"));
+    }
+
+    @Test
+    void configurableStepsForwardsNonEmptyDoneMessageThroughTerminalPhase() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "p");
+        Map<String, Object> phases = new LinkedHashMap<>();
+        phases.put("p", Map.of("pipeline", List.of("cap_embed"), "defaultNextPhase", "done"));
+        phases.put("done", Map.of("pipeline", List.of(), "terminal", true));
+        wf.put("phases", phases);
+        wf.put(
+                "capabilities",
+                Map.of(
+                        "cap_embed",
+                        Map.of(
+                                "kind",
+                                "configurable_steps",
+                                "steps",
+                                List.of(Map.of("type", "done", "message", "Embedded planning rejected.")))));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("outer_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model, reg, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, "channel", Map.of(), null);
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "hi"));
+
+        StateStore store = new StateStore();
+        WorkflowRunResult res = runner.runResult(event, store, "b");
+        assertTrue(res.isCompleted());
+        assertEquals("Embedded planning rejected.", res.getReplyMessage());
+    }
 }

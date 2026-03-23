@@ -4,6 +4,7 @@ import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 
 import java.util.ArrayList;
@@ -43,10 +44,10 @@ public final class CoordinatorClarificationGapEvaluator {
                 continue;
             }
             String q = rule.getQuestionTemplate();
-            if (q.isBlank()) {
+            if (q.isBlank() || ClarificationPromptQualityGate.isGenericOrMetaClarification(q)) {
                 continue;
             }
-            out.add(new OpenGap(rule.getId(), rule.isBlocking(), q));
+            out.add(new OpenGap(rule.getId(), rule.isBlocking(), q.trim()));
         }
         return List.copyOf(out);
     }

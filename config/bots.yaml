@@ -136,13 +136,11 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: "**Workspace** — {{repoWorkspaceStatusSummary}}\n\n          Thanks\
-          \ — I am pulling repo context where available and drafting requirements,\
-          \ architecture notes, and a validation\n          plan from your request.\
-          \ I will only pause you if something **blocks** a solid plan. Shorter updates\
-          \ will show up\n          here; the full planning packet will land in this\
-          \ thread when it is ready to read. Until the workspace is ready,\n     \
-          \     snippets from disk may be limited."
+        content: "**Workspace** — {{repoWorkspaceStatusSummary}}\n\nI'm pulling repo\
+          \ context and drafting the plan from your request. I'll only interrupt\
+          \ if something blocks progress. Short updates will appear here, and the\
+          \ full planning packet will post here when it's ready. If the workspace\
+          \ is still coming online, snippets from disk may be limited."
         asRole: orchestrator
         target: thread
     - type: branch
@@ -417,19 +415,13 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Draft blocked — packet not posted** — {{planningRoomCycleError}}
+        content: '**Draft blocked — packet not posted**
 
-
-
+          {{planningRoomCycleErrorUserMessage}}
 
           {{planningPacketDepthReason}}
 
-
-
-
-          Retry depth: **planningPacketDepthRetryRecommended** = {{planningPacketDepthRetryRecommended}}.
-          Reply in this thread with more detail, constraints, or risks in **plain
-          text** and I will run another planning pass — no buttons or commands required.'
+          **What helps next:** Reply in this thread with more detail, constraints, or risks in plain text and I will run another planning pass. If depth checks suggest another pass, say **yes** to retry when asked — no slash-commands needed.'
         asRole: orchestrator
         target: thread
     - type: branch
@@ -439,34 +431,21 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: '**Pre-launch review** (planning packet posted above in one or more
-          messages). This block is **readiness + critique** on the draft — your **approve
-          / revise / reject** choices only appear after this passes the workflow gates.
+        content: '**Pre-launch review** — the **Planning packet** above is the full draft; this message is a **short checklist** only.
 
           **Status:** {{planReadinessStatusLabel}}
 
           {{planReadinessSummary}}
 
+          **Assumptions** — {{planAssumptionsSummary}}
 
-          **Assumptions**
+          **Issues / risks** — {{planIssuesSummary}}
 
-          {{planAssumptionsSummary}}
-
-
-          **Issues / risks**
-
-          {{planIssuesSummary}}
-
-
-          **Critique**
-
-          {{planCritiqueSummary}}
-
+          **Critique** — {{planCritiqueSummary}}
 
           {{planningThreadReviewBuildError}}
 
-
-          _Approval choices follow when the packet passes final gates._
+          _When the gates clear, you will get **Approve / Approve with risks / Revise / Reject** — nothing launches until you pick one._
 
           '
         asRole: orchestrator
@@ -559,8 +538,8 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: Feature room ready. Launching Cursor run from the approved planning
-          packet.
+        content: Lifecycle room is ready. Launching the Cursor run from the approved planning
+          packet in this feature room.
         asRole: orchestrator
         target: room
     - type: call_action
@@ -585,7 +564,8 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: 'Planning blocked: readiness is BLOCKED ({{planCritiqueError}}).
+        content: 'Planning is blocked right now — {{planCritiqueError}}
+
           {{planReadinessSummary}}'
         asRole: orchestrator
         target: thread
@@ -621,10 +601,7 @@ workflows:
 
           {{planReadinessSummary}}
 
-
-          **Critique (summary)**
-
-          {{planCritiqueSummary}}
+          **Critique (high level)** — {{planCritiqueSummary}}
 
           '
         asRole: orchestrator
@@ -881,9 +858,8 @@ workflows:
     - type: call_action
       action: post_channel_message
       bind:
-        content: Continue planning in this **intake/spec** thread. Discovery, review,
-          and launch approval all happen here — the coordinator will post next; reply
-          in-thread when prompted.
+        content: Continue in this **intake/spec** thread for planning, review, and
+          launch approval. The coordinator will post next; reply here when prompted.
         asRole: orchestrator
         target: thread
     - type: call_action

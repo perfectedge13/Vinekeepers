@@ -29,3 +29,11 @@
 **Decision:** Treat **`PlanningUserFacingCopy`** as the default formatter for Discord-visible planning packet sections, critique summary lines, depth/readiness explanations, and similar coordinator posts; keep **`planReadinessStatus`** and other spread keys stable for YAML. **`GenericReadinessEvaluator`** and **`PlanGovernanceDeriver`** use profile titles / **`userFacingDetail`** where applicable so gate and governance text stays consistent.
 
 **Consequence:** One code path owns most operator wording; regressions are caught by **`PlanningUserFacingCopyTest`** and related Phase C tests. Internal diagnostics and logs may still use technical ids.
+
+## 2026-03-22 — Thread progress posts and review-body deduplication
+
+**Context:** Operators still perceived “quiet” periods during OpenAI-backed planning passes and saw the same repo or packet context repeated in pre-approval review lines after the full packet had already been chunked into the thread.
+
+**Decision:** Emit optional **Update:**-prefixed progress lines before contextualized planning HTTP calls (**`OpenAiPlanningProgressPoster`** / env **`OPENAI_PLANNING_DISCORD_PROGRESS`**). When the planning packet fingerprint indicates it is already posted in-thread, **build** a concise review body or pointer instead of reprinting the full capped packet; keep critique/readiness spreads and **`planningThreadReviewBody`** aligned so orchestrator templates do not restate grounding the user already saw.
+
+**Consequence:** Long LLM phases have visible heartbeat copy in the intake thread where enabled; review and critique posts stay shorter and less repetitive without changing workflow branch keys or approval gates.

@@ -2,6 +2,7 @@ package com.vinekeepers.workflow.planning;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vinekeepers.connectors.openai.OpenAiCallContext;
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
@@ -56,7 +57,9 @@ public final class StructuredLlmArtifactUpsertPass {
         String user = buildUserPayload(plan, profile.getProfileId(), roleNameForPayload, userTaskHint);
         String raw;
         try {
-            raw = client.complete(system, user);
+            OpenAiCallContext callCtx =
+                    OpenAiCallContext.planning(event, state, coordinatorPassActivityLine(roleNameForPayload));
+            raw = client.complete(system, user, null, null, callCtx);
         } catch (Exception e) {
             log.warn("{} pass failed: {} — {}", roleNameForPayload, e.getClass().getName(), chainBrief(e));
             String msg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
@@ -69,7 +72,7 @@ public final class StructuredLlmArtifactUpsertPass {
             return parseAndApplyUpserts(raw, event, state, contextId, planStore, profileRegistry, roleNameForPayload);
         } catch (Exception e) {
             log.warn("{} pass parse failed: {}", roleNameForPayload, e.getMessage());
-            String repaired = tryRepairJson(client, raw, roleNameForPayload);
+            String repaired = tryRepairJson(client, raw, roleNameForPayload, event, state);
             if (repaired != null) {
                 try {
                     return parseAndApplyUpserts(
@@ -99,7 +102,12 @@ public final class StructuredLlmArtifactUpsertPass {
         return new RolePassResult(applied, followUps, "", false);
     }
 
-    private static String tryRepairJson(OpenAiChatClient client, String rawAssistant, String roleNameForPayload) {
+    private static String tryRepairJson(
+            OpenAiChatClient client,
+            String rawAssistant,
+            String roleNameForPayload,
+            Event event,
+            Map<String, Object> state) {
         if (client == null || !client.isConfigured()) {
             return null;
         }
@@ -112,7 +120,12 @@ public final class StructuredLlmArtifactUpsertPass {
                         + snippet;
         String out;
         try {
-            out = client.complete(JSON_REPAIR_SYSTEM, user, "gpt-4o-mini", null);
+            OpenAiCallContext repairCtx =
+                    OpenAiCallContext.planning(
+                            event,
+                            state,
+                            jsonRepairActivityLine(roleNameForPayload));
+            out = client.complete(JSON_REPAIR_SYSTEM, user, "gpt-4o-mini", null, repairCtx);
         } catch (Exception e) {
             log.debug("{} JSON repair call failed: {}", roleNameForPayload, e.getMessage());
             return null;
@@ -121,6 +134,30 @@ public final class StructuredLlmArtifactUpsertPass {
             return null;
         }
         return out;
+    }
+
+    private static String coordinatorPassActivityLine(String roleNameForPayload) {
+        String r = roleNameForPayload != null ? roleNameForPayload.trim().toUpperCase() : "";
+        String who =
+                switch (r) {
+                    case "ARCHITECT" -> "Architect";
+                    case "AUDITOR" -> "Auditor";
+                    case "SCRIBE" -> "Scribe";
+                    default -> "Coordinator";
+                };
+        return who + " is updating the structured plan draft (asking ChatGPT).";
+    }
+
+    private static String jsonRepairActivityLine(String roleNameForPayload) {
+        String r = roleNameForPayload != null ? roleNameForPayload.trim().toUpperCase() : "";
+        String who =
+                switch (r) {
+                    case "ARCHITECT" -> "Architect";
+                    case "AUDITOR" -> "Auditor";
+                    case "SCRIBE" -> "Scribe";
+                    default -> "Planner";
+                };
+        return "Fixing " + who + " JSON output so we can apply updates (asking ChatGPT).";
     }
 
     private static String truncateOneLine(String s, int max) {

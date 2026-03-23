@@ -2,7 +2,7 @@
 
 # Coverage
 
-Unit tests cover Luna gathering state, YAML-configured mention routing, the legacy workflow test harness, the Cursor adapter implementation (including error parsing, auth, and transport), the launch tool, the cloud-run monitor, structured discovery support, Phase B discovery workflow actions, assumption/issue classification, Phase C critique/readiness actions, plain-English planning copy (**PlanningUserFacingCopy**, **PlanningPromptFormatter**), and planning packet depth.
+Unit tests cover Luna gathering state, YAML-configured mention routing, the legacy workflow test harness, the Cursor adapter implementation (including error parsing, auth, and transport), the launch tool, the cloud-run monitor, structured discovery support, Phase B discovery workflow actions, assumption/issue classification, Phase C critique/readiness actions, plain-English planning copy (**PlanningUserFacingCopy**, **PlanningPromptFormatter**), planning packet formatting (**PlanningThreadPacketFormatter**), governance derivation (**PlanGovernanceDeriver**), role/review thread bodies (**BuildRolePlanningThreadMessagesAction**, **BuildPlanningThreadReviewBodyAction**), planning packet depth, planning OpenAI client logging/progress hooks (**OpenAiChatClient**, **OpenAiPlanningProgressPoster**), and legacy **synthesize_plan_drafts** workspace messaging.
 
 # Test list
 
@@ -47,9 +47,16 @@ Unit tests cover Luna gathering state, YAML-configured mention routing, the lega
 | UNIT-ARRIETTY-ROOM-WORKFLOW-YAML | ArriettyRoomWorkflowYamlTest | com.vinekeepers.config.ArriettyRoomWorkflowYamlTest | — | Verify arrietty_room branch next indices are within the compiled step list |
 | UNIT-PLANNING-PACKET-DEPTH-EVALUATOR | PlanningPacketDepthEvaluatorTest | com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluatorTest | — | Verify depth word counts and evaluate thresholds |
 | UNIT-PLANNING-PROMPT-FORMATTER | PlanningPromptFormatterTest | com.vinekeepers.workflow.planning.PlanningPromptFormatterTest | — | Verify plain-English missing-field and internal-path summaries from work profile metadata |
+| UNIT-PLANNING-THREAD-PACKET-FORMATTER | PlanningThreadPacketFormatterTest | com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatterTest | — | Verify planning packet markdown tables, truncation footnotes, and governance section rendering |
+| UNIT-PLAN-GOVERNANCE-DERIVER | PlanGovernanceDeriverTest | com.vinekeepers.workflow.planning.PlanGovernanceDeriverTest | — | Verify merge of gaps, artifacts, and ledgers into canonical governance lists for packet display |
+| UNIT-BUILD-ROLE-PLANNING-THREAD-MESSAGES | BuildRolePlanningThreadMessagesActionTest | com.vinekeepers.workflow.actions.BuildRolePlanningThreadMessagesActionTest | — | Verify role thread bodies including architect decision-log table formatting |
+| UNIT-BUILD-PLANNING-THREAD-REVIEW-BODY | BuildPlanningThreadReviewBodyActionTest | com.vinekeepers.workflow.actions.BuildPlanningThreadReviewBodyActionTest | — | Verify pre-approval review body build and explicit truncation when capped |
 | UNIT-PLANNING-USER-FACING-COPY | PlanningUserFacingCopyTest | com.vinekeepers.workflow.planreview.PlanningUserFacingCopyTest | — | Verify humanized critique/readiness/status labels and profile field titles for internal paths |
 | UNIT-PHASE-C-PLAN-ACTIONS | PhaseCPlanActionsTest | com.vinekeepers.workflow.actions.PhaseCPlanActionsTest | — | Verify run_plan_critique_and_readiness and persist_plan_approval update FeaturePlanState |
 | UNIT-PLAN-READINESS-EVALUATOR | PlanReadinessEvaluatorTest | com.vinekeepers.workflow.planreview.PlanReadinessEvaluatorTest | — | Verify readiness classification from gaps, findings, and plan issues |
 | UNIT-PLAN-CRITIQUE-SUBSTANCE | PlanCritiqueSupportTest | com.vinekeepers.workflow.planreview.PlanCritiqueSupportTest | — | Verify MUST_FIX substance findings block readiness until request/outline/validation meet minimums |
 | UNIT-RUN-LLM-PLANNING-SYNTHESIS-JSON | RunLlmPlanningSynthesisActionJsonTest | com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisActionJsonTest | — | Verify JSON extraction from assistant content for synthesis |
+| UNIT-SYNTHESIZE-PLAN-DRAFTS-ACTION | SynthesizePlanDraftsActionTest | com.vinekeepers.workflow.actions.SynthesizePlanDraftsActionTest | — | Verify synthesize_plan_drafts workspace-not-ready note uses humanized repo workspace status labels |
+| UNIT-OPENAI-CHAT-CLIENT | OpenAiChatClientTest | com.vinekeepers.connectors.openai.OpenAiChatClientTest | — | Verify planning OpenAI client progress notification, optional body logging toggles, truncation/redaction, and error paths |
+| UNIT-OPENAI-PLANNING-PROGRESS-POSTER | OpenAiPlanningProgressPosterTest | com.vinekeepers.workflow.actions.OpenAiPlanningProgressPosterTest | — | Verify OpenAiPlanningProgressPoster posts Update lines via PostChannelMessageAction when Discord progress env is enabled |
 

@@ -43,7 +43,7 @@ class SpreadPlanWorkspaceSignalsActionTest {
         assertEquals("true", out.get("repoWorkspaceReady"));
         assertEquals("true", out.get("repoLocalPathPresent"));
         String summary = String.valueOf(out.get("repoWorkspaceStatusSummary"));
-        assertTrue(summary.contains("MATERIALIZED"));
+        assertTrue(summary.contains("Materialized (files on disk)"));
         assertTrue(summary.contains("local path recorded"));
         assertTrue(summary.contains("ssh ok"));
         String json = String.valueOf(out.get("planningRepoEvidenceJson"));

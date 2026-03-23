@@ -106,7 +106,7 @@ public final class PlanningGapEvaluator {
         boolean applyOrText = orHeuristic || "bounded_choice".equalsIgnoreCase(inputKind);
         RankedClarification rehydrated =
                 PlanningQuestionRankingPolicy.rank(
-                        plan, List.of(q), 3, ledgerAfterUpsert, allowBoundedPass, applyOrText);
+                        plan, List.of(q), 1, ledgerAfterUpsert, allowBoundedPass, applyOrText);
         List<String> assumptions = new ArrayList<>(rankedFromLlm.assumptionsToRecord());
         assumptions.addAll(rehydrated.assumptionsToRecord());
         int blocking =

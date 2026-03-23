@@ -61,7 +61,11 @@ public final class SynthesizePlanDraftsAction implements com.vinekeepers.workflo
             return spread;
         }
         if (!PlanningDraftSupport.workspaceLikelyReady(plan.getRepoWorkspaceStatus())) {
-            spread.put("synthesizePlanDraftsNote", "Workspace not ready (status: " + plan.getRepoWorkspaceStatus() + ").");
+            String hum = PlanningDraftSupport.humanizeRepoWorkspaceStatus(plan.getRepoWorkspaceStatus());
+            spread.put(
+                    "synthesizePlanDraftsNote",
+                    "Workspace is not ready yet"
+                            + (hum.isBlank() ? "." : " (" + hum + ")."));
             return spread;
         }
         String profileId = plan.getProfileId();

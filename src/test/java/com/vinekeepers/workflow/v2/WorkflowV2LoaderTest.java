@@ -31,4 +31,24 @@ class WorkflowV2LoaderTest {
         assertEquals("test_profile", m.getDeliberation().get("profileHint"));
         assertEquals("unit_deliberation", m.getDeliberation().get("label"));
     }
+
+    @Test
+    void loadsConfigurableStepsInlineSteps() {
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("entryPhase", "a");
+        wf.put("phases", Map.of("a", Map.of("pipeline", List.of("emb"))));
+        wf.put(
+                "capabilities",
+                Map.of(
+                        "emb",
+                        Map.of(
+                                "kind",
+                                "configurable_steps",
+                                "steps",
+                                List.of(Map.of("type", "done", "message", "ok")))));
+
+        WorkflowV2Model m = WorkflowV2Loader.load("w", wf);
+        assertEquals(1, m.getCapabilities().get("emb").getSteps().size());
+        assertEquals("done", m.getCapabilities().get("emb").getSteps().get(0).get("type"));
+    }
 }

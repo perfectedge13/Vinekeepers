@@ -62,7 +62,7 @@ class ExecutePlanningRoomCycleActionSummaryTest {
                         plan, true, "", ranked, 1, false, false, "", true, false);
         assertTrue(summary.contains("exponential backoff"));
         assertTrue(summary.contains("What I'm tracking"));
-        assertTrue(summary.contains("One thing I need from you"));
+        assertTrue(summary.contains("Need from you"));
         assertTrue(summary.contains("plain text"));
         assertFalse(ranked.useStructuredChoices());
     }
@@ -111,7 +111,7 @@ class ExecutePlanningRoomCycleActionSummaryTest {
         String summary =
                 com.vinekeepers.workflow.planning.PlanningCyclePipeline.buildOrchestratorSummary(
                         plan, true, "", ranked, 1, false, false, "", false, true);
-        assertTrue(summary.contains("invalid JSON"));
+        assertTrue(summary.contains("could not be applied cleanly"));
         assertFalse(summary.contains("In good shape"));
     }
 

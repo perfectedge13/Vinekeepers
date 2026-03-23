@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vinekeepers.connectors.openai.OpenAiCallContext;
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
@@ -103,7 +104,12 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         Long timeoutMs = parseTimeoutMs(firstNonBlank(getString(bind, "llmTimeoutMs"), getString(state, "workflowLlmTimeoutMs")));
         String raw;
         try {
-            raw = openAiChatClient.complete(SYSTEM, userPayload, model, timeoutMs);
+            OpenAiCallContext callCtx =
+                    OpenAiCallContext.planning(
+                            event,
+                            state,
+                            "Synthesizing the draft plan and follow-up questions (asking ChatGPT).");
+            raw = openAiChatClient.complete(SYSTEM, userPayload, model, timeoutMs, callCtx);
         } catch (Exception e) {
             spread.put("planningLlmError", e.getMessage() != null ? e.getMessage() : "synthesis failed");
             log.warn("Planning LLM call failed: {}", spread.get("planningLlmError"));

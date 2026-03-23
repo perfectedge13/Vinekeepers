@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
+import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,7 +15,8 @@ import java.util.regex.Pattern;
 
 /**
  * Ranks LLM/critique follow-up questions, applies safe defaults as assumptions instead of asking,
- * and prepares at most one clarification round. Open questions default to plain-text capture;
+ * and prepares at most one clarification round per cycle ({@code maxQuestions} is typically {@code 1} so only the first
+ * qualifying concrete ask is considered). Open questions default to plain-text capture;
  * structured buttons are used only when the work profile enables bounded UI and the question has an explicit
  * {@code or}-separated alternative pair.
  */
@@ -67,7 +69,8 @@ public final class PlanningQuestionRankingPolicy {
 
     /**
      * @param candidates   raw questions from LLM passes (deduped)
-     * @param maxQuestions budget for how many distinct topics we consider (selection still surfaces one round)
+     * @param maxQuestions budget for how many ranked candidates to collect before taking the first (use {@code 1} for strict
+     *     single-question coordinator contract)
      * @param ledger       items with merge-closed fingerprints are skipped so resolved questions are not re-asked
      * @param allowBoundedChoiceUi when false, never emit button/dropdown clarification from the OR heuristic path
      * @param applyOrTextHeuristic when false, never infer A/B buttons from {@code or} in free text (even if bounded UI is
@@ -91,6 +94,9 @@ public final class PlanningQuestionRankingPolicy {
             String q = raw.trim();
             if (q.length() > 240) {
                 q = q.substring(0, 239) + "…";
+            }
+            if (!ClarificationPromptQualityGate.acceptableClarificationCandidate(q)) {
+                continue;
             }
             if (led.hasFingerprintMergeClosed(q)) {
                 continue;
@@ -140,10 +146,7 @@ public final class PlanningQuestionRankingPolicy {
                     choiceMaps.add(Map.of("id", id, "label", truncate(bounded.labels().get(i), 72), "description", ""));
                 }
                 String choicesJson = JSON.writeValueAsString(choiceMaps);
-                String prompt =
-                        "One implementation decision would help lock the design:\n\n**"
-                                + top
-                                + "**\n\nChoose an option below, or pick **Use recommended default** to record our usual baseline and keep moving.";
+                String prompt = "**" + top + "**\n\nPick an option below, or **Use recommended default** if that fits.";
                 return new RankedClarification(true, prompt, choicesJson, metaJson, blocking, assumptions, true, top);
             }
             meta.put("defaultAssumption", "");

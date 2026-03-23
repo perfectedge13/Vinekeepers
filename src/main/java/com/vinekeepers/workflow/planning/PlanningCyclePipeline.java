@@ -28,6 +28,7 @@ import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -224,7 +225,7 @@ public final class PlanningCyclePipeline {
         spread.put("planningAssumptionsUsed", String.valueOf(rankedLlm.assumptionsToRecord().size()));
 
         if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
-            spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
+            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
         String rolePassErr =
                 spread.get("planningRolePassLastError") != null
@@ -234,8 +235,8 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningCycleUserVisibleFailure",
                 buildUserVisibleFailure(
-                        spread.get("planningRoomCycleError") != null
-                                ? spread.get("planningRoomCycleError").toString()
+                        spread.get("planningRoomCycleErrorUserMessage") != null
+                                ? spread.get("planningRoomCycleErrorUserMessage").toString()
                                 : "",
                         llmErr));
 
@@ -247,8 +248,8 @@ public final class PlanningCyclePipeline {
                         depthReason,
                         ranked,
                         userInputRequired,
-                        spread.get("planningRoomCycleError") != null
-                                ? spread.get("planningRoomCycleError").toString()
+                        spread.get("planningRoomCycleErrorUserMessage") != null
+                                ? spread.get("planningRoomCycleErrorUserMessage").toString()
                                 : "",
                         rolePassErr,
                         lastRoleRoundSummary,
@@ -433,7 +434,7 @@ public final class PlanningCyclePipeline {
         spread.put("planningAssumptionsUsed", String.valueOf(rankedLlmFin.assumptionsToRecord().size()));
 
         if (!readyToPost && !userInputRequired && cycleIteration >= 4) {
-            spread.put("planningRoomCycleError", "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
+            putPlanningRoomCycleError(spread, "DEPTH_FAIL_AFTER_RETRIES: " + depthReason);
         }
         String rolePassErr =
                 spread.get("planningRolePassLastError") != null
@@ -443,8 +444,8 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningCycleUserVisibleFailure",
                 buildUserVisibleFailure(
-                        spread.get("planningRoomCycleError") != null
-                                ? spread.get("planningRoomCycleError").toString()
+                        spread.get("planningRoomCycleErrorUserMessage") != null
+                                ? spread.get("planningRoomCycleErrorUserMessage").toString()
                                 : "",
                         llmErr));
 
@@ -456,8 +457,8 @@ public final class PlanningCyclePipeline {
                         depthReason,
                         ranked,
                         userInputRequired,
-                        spread.get("planningRoomCycleError") != null
-                                ? spread.get("planningRoomCycleError").toString()
+                        spread.get("planningRoomCycleErrorUserMessage") != null
+                                ? spread.get("planningRoomCycleErrorUserMessage").toString()
                                 : "",
                         rolePassErr,
                         lastRoleRoundSummary,
@@ -539,7 +540,7 @@ public final class PlanningCyclePipeline {
                 PlanningQuestionRankingPolicy.rank(
                         plan,
                         aggregatedFollowUps,
-                        3,
+                        1,
                         ledger,
                         profile.isBoundedClarificationChoicesEnabled(),
                         profile.isInferBoundedChoiceFromOrInTextEnabled());
@@ -626,7 +627,7 @@ public final class PlanningCyclePipeline {
                         && profile.isBoundedClarificationChoicesEnabled();
         boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
         RankedClarification reranked =
-                PlanningQuestionRankingPolicy.rank(plan, List.of(synth), 3, ledger, bounded, inferOr);
+                PlanningQuestionRankingPolicy.rank(plan, List.of(synth), 1, ledger, bounded, inferOr);
         reranked = mergeRankedAssumptions(ranked, reranked);
         String rqt = reranked.questionText() != null ? reranked.questionText().trim() : "";
         if (reranked.userInputRequired() && !rqt.isBlank()) {
@@ -688,7 +689,7 @@ public final class PlanningCyclePipeline {
                         && profile.isBoundedClarificationChoicesEnabled();
         boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
         RankedClarification ranked =
-                PlanningQuestionRankingPolicy.rank(plan, List.of(q), 3, ledger, bounded, inferOr);
+                PlanningQuestionRankingPolicy.rank(plan, List.of(q), 1, ledger, bounded, inferOr);
         return withCoordinatorGapMeta(ranked, top.gapId(), top.blocking());
     }
 
@@ -740,20 +741,26 @@ public final class PlanningCyclePipeline {
         }
     }
 
+    private static void putPlanningRoomCycleError(Map<String, Object> spread, String machine) {
+        String m = machine != null ? machine : "";
+        spread.put("planningRoomCycleError", m);
+        spread.put("planningRoomCycleErrorUserMessage", PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine(m));
+    }
+
     private LoadedCycle loadCycleOrAbort(
             Event event, Map<String, Object> state, Map<String, Object> bind, Map<String, Object> spread) {
         if (planStateStore == null || workProfileRegistry == null) {
-            spread.put("planningRoomCycleError", "MISSING_DEPS");
+            putPlanningRoomCycleError(spread, "MISSING_DEPS");
             return null;
         }
         String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
         if (contextId == null || contextId.isBlank()) {
-            spread.put("planningRoomCycleError", "NO_CONTEXT");
+            putPlanningRoomCycleError(spread, "NO_CONTEXT");
             return null;
         }
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
         if (plan == null) {
-            spread.put("planningRoomCycleError", "NO_PLAN");
+            putPlanningRoomCycleError(spread, "NO_PLAN");
             return null;
         }
         String profileId = plan.getProfileId();
@@ -762,7 +769,7 @@ public final class PlanningCyclePipeline {
                         ? workProfileRegistry.get(profileId).orElse(null)
                         : null;
         if (profile == null || profile.findSection("request_exploration", "analysis").isEmpty()) {
-            spread.put("planningRoomCycleError", "PROFILE_NOT_V2");
+            putPlanningRoomCycleError(spread, "PROFILE_NOT_V2");
             return null;
         }
         Map<String, Object> work = new LinkedHashMap<>();
@@ -938,13 +945,17 @@ public final class PlanningCyclePipeline {
     private static String buildUserVisibleFailure(String cycleError, String planningLlmError) {
         StringBuilder sb = new StringBuilder();
         if (cycleError != null && !cycleError.isBlank()) {
-            sb.append(truncateOneLine(cycleError, 200));
+            sb.append(
+                    truncateOneLine(
+                            PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine(cycleError), 200));
         }
         if (planningLlmError != null && !planningLlmError.isBlank()) {
             if (sb.length() > 0) {
                 sb.append(' ');
             }
-            sb.append(truncateOneLine(planningLlmError, 200));
+            sb.append(
+                    truncateOneLine(
+                            PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(planningLlmError), 200));
         }
         return sb.toString().trim();
     }
@@ -965,8 +976,7 @@ public final class PlanningCyclePipeline {
         spread.put(
                 "planningClarificationStuckHint",
                 stuck
-                        ? "I'm still missing a bit more detail on the point below — try a concrete example, who owns the "
-                                + "decision, or one edge case. If you see a default option, you can pick that to move on."
+                        ? "Same question as before — reply with a concrete example, who decides, or one edge case you care about."
                         : "");
     }
 
@@ -976,11 +986,12 @@ public final class PlanningCyclePipeline {
         }
         String err = getString(synthSpread, "planningLlmError");
         if (err != null && !err.isBlank()) {
-            return truncateOneLine(err, 140);
+            return truncateOneLine(PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(err), 140);
         }
         String skip = getString(synthSpread, "planningLlmSkipReason");
         if (skip != null && !skip.isBlank() && !"OK".equalsIgnoreCase(skip)) {
-            return "Synthesis skipped: " + truncateOneLine(skip, 120);
+            return truncateOneLine(
+                    PlanningUserFacingCopy.humanizePlanningCycleFailureFragment("Synthesis skipped: " + skip), 140);
         }
         return previous;
     }
@@ -1155,7 +1166,7 @@ public final class PlanningCyclePipeline {
             sb.append("A coordinator LLM call was interrupted; retry when ready. ");
         }
         if (structuredParseFailed) {
-            sb.append("Structured coordinator output was not valid JSON; another pass may help. ");
+            sb.append("A drafting step returned output we could not apply; another pass may clear it. ");
         }
         sb.append(truncateOneLine(roleRoundSummary != null ? roleRoundSummary : "", 200)).append(' ');
         if (synthesisNote != null && !synthesisNote.isBlank()) {
@@ -1167,19 +1178,28 @@ public final class PlanningCyclePipeline {
         if (rolePassError != null && !rolePassError.isBlank()) {
             sb.append(truncateOneLine(rolePassError, 120)).append(' ');
         }
-        if (planningLlmError != null && planningLlmError.startsWith("ERROR:")) {
-            sb.append(truncateOneLine(planningLlmError, 120)).append(' ');
+        if (planningLlmError != null && !planningLlmError.isBlank()) {
+            sb.append(
+                    truncateOneLine(
+                            PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(planningLlmError), 120))
+                    .append(' ');
         } else if (planningLlmSkipReason != null
                 && !planningLlmSkipReason.isBlank()
                 && !"MISSING_DEPS".equals(planningLlmSkipReason)) {
-            sb.append(truncateOneLine(planningLlmSkipReason, 100)).append(' ');
+            sb.append(
+                    truncateOneLine(
+                            PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(
+                                    "Synthesis skipped: " + planningLlmSkipReason),
+                            100))
+                    .append(' ');
         }
         if (userInputRequired) {
-            sb.append("Waiting on your reply to one open question before I wrap the draft.");
+            sb.append("Waiting on your reply to the question below before continuing.");
         } else if (structuredParseFailed) {
-            sb.append("Holding until coordinator roles return valid structured JSON for this pass.");
+            sb.append("Holding for another drafting pass — the last output could not be applied.");
         } else if (depthOk) {
-            sb.append("Draft looks solid enough to move forward. Next I'll post the planning packet and run readiness checks.");
+            sb.append(
+                    "Draft looks solid enough to move forward. **Next:** I post the full planning packet in this thread, then run automated readiness checks (about a minute).");
         } else {
             sb.append("Still tightening the draft: ")
                     .append(truncateOneLine(depthReason != null ? depthReason : "details pending", 140));
@@ -1268,12 +1288,13 @@ public final class PlanningCyclePipeline {
 
         sb.append("\n\n**Draft:** ");
         if (userInputRequired) {
-            sb.append("I'm holding the thread here until we clear one detail — see below.");
+            sb.append("Paused until the detail below is answered.");
         } else if (readyToPostPacket) {
-            sb.append("Ready to drop the full write-up in this thread for your review. Next I'll post the packet and run readiness checks.");
-        } else if (structuredParseFailed) {
             sb.append(
-                    "The last structured planner pass returned invalid JSON; I need a clean pass before treating the draft as reliable.");
+                    "Ready to drop the full write-up in this thread for your review. Next I'll post the packet and run readiness checks. "
+                            + "(Several messages if the draft is long, then automated checks — usually about a minute.)");
+        } else if (structuredParseFailed) {
+            sb.append("The last drafting pass could not be applied cleanly; another pass should retry it.");
         } else if (depthOk) {
             sb.append("In good shape; I'll keep going or post when the next step runs.");
         } else {
@@ -1294,20 +1315,14 @@ public final class PlanningCyclePipeline {
 
         if (userInputRequired) {
             String q = ranked.questionText() != null ? ranked.questionText().trim() : "";
-            sb.append("\n**One thing I need from you:** ");
+            sb.append("\n**Need from you:** ");
             if (!q.isBlank()) {
                 sb.append(q).append("\n\n");
             }
-            if (ranked.blockingQuestionCount() > 0) {
-                sb.append(
-                        "This one affects compatibility, security, or migrations — a wrong guess gets expensive to unwind, so I'd rather confirm.\n\n");
-            } else {
-                sb.append("Your answer keeps scope and implementation aligned with what you expect.\n\n");
-            }
             if (ranked.useStructuredChoices()) {
-                sb.append("Pick an option below if you see buttons, or **Use recommended default** to go with the baseline.");
+                sb.append("Use the choices below if shown, or **Use recommended default**.");
             } else {
-                sb.append("Reply in plain text — examples and edge cases welcome.");
+                sb.append("Reply in plain text in this thread.");
             }
         }
         return sb.toString().trim();
@@ -1325,7 +1340,7 @@ public final class PlanningCyclePipeline {
         StringBuilder w = new StringBuilder();
         w.append("\n**Workspace:** ");
         if (!st.isBlank()) {
-            w.append("status ").append(st);
+            w.append(PlanningDraftSupport.humanizeRepoWorkspaceStatus(st));
         }
         if (!path.isBlank()) {
             if (!st.isBlank()) {

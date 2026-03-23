@@ -27,8 +27,8 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
 
     private static final Logger log = LoggerFactory.getLogger(PostPlanningPacketThreadAction.class);
     private static final String PRE_POST_NOTICE =
-            "**Update:** I'm posting the planning packet now and then running readiness checks. "
-                    + "That can take about a minute.";
+            "**Update:** I'm posting the planning packet now (may be several messages), then running automated readiness checks. "
+                    + "You'll get a short **pre-launch review** summary right after — approval buttons come once that passes.";
 
     private final ReplySender replySender;
     private final FeaturePlanStateStore planStore;
@@ -84,15 +84,17 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                 truthy(getString(state, "planningReviewReady")) || truthy(getString(state, "reviewReady"));
         if (legacyDepthOnly) {
             if (state != null && "false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")))) {
-                spread.put("planningPacketPostError", "Depth gate not satisfied; packet post skipped (legacy depth-only mode).");
+                spread.put(
+                        "planningPacketPostError",
+                        "The draft still needs more depth before the packet can post (legacy depth-only mode). Add detail in this thread and run another pass.");
                 return spread;
             }
         } else {
             if (state != null && !depthOk && !reviewReady) {
                 spread.put(
                         "planningPacketPostError",
-                        "Review readiness and depth gate both failed; packet post skipped. "
-                                + "Complete depth evaluation or set review-ready flags before posting.");
+                        "The draft is not ready to post yet (depth and review gates). "
+                                + "Reply in this thread with more detail or wait for the coordinator to finish another drafting pass.");
                 return spread;
             }
         }

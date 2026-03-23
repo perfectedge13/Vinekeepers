@@ -99,6 +99,7 @@ import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
 import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
 import com.vinekeepers.workflow.actions.RunScribePlanningPassAction;
 import com.vinekeepers.workflow.actions.RunPlanCritiqueAndReadinessAction;
+import com.vinekeepers.workflow.actions.OpenAiPlanningProgressPoster;
 import com.vinekeepers.workflow.actions.PostChannelMessageAction;
 import com.vinekeepers.workflow.actions.ProvisionBotInstanceAction;
 import com.vinekeepers.workflow.actions.ProvisionRoomParticipantsAction;
@@ -314,7 +315,9 @@ public final class Bootstrap {
     }
 
     private void registerLifecycleActions(WorkflowActionRegistry registry) {
-        OpenAiChatClient openAiChatClient = new OpenAiChatClient();
+        PostChannelMessageAction openAiProgressChannelPost = new PostChannelMessageAction(outboundDeliveryRouter);
+        OpenAiChatClient openAiChatClient =
+                new OpenAiChatClient(new OpenAiPlanningProgressPoster(openAiProgressChannelPost));
         PlanningCyclePipeline planningCyclePipeline =
                 new PlanningCyclePipeline(openAiChatClient, featurePlanStateStore, workProfileRegistry);
         registry.register(

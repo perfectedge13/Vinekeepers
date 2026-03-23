@@ -29,21 +29,41 @@ public final class OpenAiChatClient {
     private final String baseUrl;
     private final String apiKey;
     private final String model;
+    private final OpenAiPlanningProgressSink progressSink;
 
     public OpenAiChatClient() {
-        this(defaultHttpClient(), defaultBaseUrl(), Env.get("OPENAI_API_KEY", ""), Env.get("OPENAI_PLANNING_MODEL", "gpt-4o-mini"));
+        this(
+                defaultHttpClient(),
+                defaultBaseUrl(),
+                Env.get("OPENAI_API_KEY", ""),
+                Env.get("OPENAI_PLANNING_MODEL", "gpt-4o-mini"),
+                OpenAiPlanningProgressSink.NOOP);
+    }
+
+    public OpenAiChatClient(OpenAiPlanningProgressSink progressSink) {
+        this(
+                defaultHttpClient(),
+                defaultBaseUrl(),
+                Env.get("OPENAI_API_KEY", ""),
+                Env.get("OPENAI_PLANNING_MODEL", "gpt-4o-mini"),
+                progressSink);
     }
 
     public OpenAiChatClient(HttpClient httpClient, String baseUrl, String apiKey, String model) {
+        this(httpClient, baseUrl, apiKey, model, OpenAiPlanningProgressSink.NOOP);
+    }
+
+    public OpenAiChatClient(
+            HttpClient httpClient, String baseUrl, String apiKey, String model, OpenAiPlanningProgressSink progressSink) {
         this.httpClient = Objects.requireNonNull(httpClient, "httpClient");
         this.baseUrl = trimSlash(Objects.requireNonNull(baseUrl, "baseUrl"));
         this.apiKey = apiKey != null ? apiKey : "";
         this.model = model != null && !model.isBlank() ? model : "gpt-4o-mini";
+        this.progressSink = progressSink != null ? progressSink : OpenAiPlanningProgressSink.NOOP;
     }
 
     private static HttpClient defaultHttpClient() {
         long connectMs = parseLongMs(Env.get("OPENAI_HTTP_CONNECT_TIMEOUT_MS", "15000"), 15000);
-        long requestMs = parseLongMs(Env.get("OPENAI_HTTP_REQUEST_TIMEOUT_MS", "120000"), 120000);
         return HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectMs))
                 .build();
@@ -87,7 +107,7 @@ public final class OpenAiChatClient {
      * @return assistant message content or error prefix {@code ERROR: ...}
      */
     public String complete(String systemPrompt, String userMessage) {
-        return complete(systemPrompt, userMessage, null, null);
+        return complete(systemPrompt, userMessage, null, null, null);
     }
 
     /**
@@ -96,9 +116,20 @@ public final class OpenAiChatClient {
      * @return assistant message content or error prefix {@code ERROR: ...}
      */
     public String complete(String systemPrompt, String userMessage, String modelOverride, Long timeoutMsOverride) {
+        return complete(systemPrompt, userMessage, modelOverride, timeoutMsOverride, null);
+    }
+
+    /**
+     * @param callContext when non-null and {@link OpenAiCallContext#activitySummary()} is non-blank, notifies
+     *                    {@link OpenAiPlanningProgressSink} and applies server logging policy for this exchange
+     * @return assistant message content or error prefix {@code ERROR: ...}
+     */
+    public String complete(
+            String systemPrompt, String userMessage, String modelOverride, Long timeoutMsOverride, OpenAiCallContext callContext) {
         if (!isConfigured()) {
             return "ERROR: OPENAI_API_KEY not set.";
         }
+        notifyProgressIfNeeded(callContext);
         long startNs = System.nanoTime();
         try {
             long requestMs = timeoutMsOverride != null && timeoutMsOverride > 0
@@ -122,19 +153,43 @@ public final class OpenAiChatClient {
             HttpResponse<String> resp = httpClient.send(b.build(), HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
                 log.warn("OpenAI HTTP {}: {}", resp.statusCode(), truncate(resp.body(), 500));
+                if (callContext != null) {
+                    logPlanningBodies(
+                            activityLabel(callContext),
+                            systemPrompt,
+                            userMessage,
+                            null,
+                            "HTTP " + resp.statusCode());
+                }
                 return "ERROR: HTTP " + resp.statusCode();
             }
             JsonNode root = JSON.readTree(resp.body());
             JsonNode choices = root.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
+                if (callContext != null) {
+                    logPlanningBodies(activityLabel(callContext), systemPrompt, userMessage, null, "empty choices");
+                }
                 return "ERROR: empty choices";
             }
             String content = choices.get(0).path("message").path("content").asText("");
             if (content.isBlank()) {
+                if (callContext != null) {
+                    logPlanningBodies(
+                            activityLabel(callContext), systemPrompt, userMessage, null, "blank assistant content");
+                }
                 return "ERROR: blank assistant content";
             }
             long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
-            log.debug("OpenAI complete ok durationMs={} model={}", durationMs, useModel);
+            if (callContext != null) {
+                log.info(
+                        "OpenAI planning call finished activity=\"{}\" durationMs={} model={}",
+                        activityLabel(callContext),
+                        durationMs,
+                        useModel);
+                logPlanningBodies(activityLabel(callContext), systemPrompt, userMessage, content, null);
+            } else {
+                log.debug("OpenAI complete ok durationMs={} model={}", durationMs, useModel);
+            }
             return content;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -143,6 +198,9 @@ public final class OpenAiChatClient {
                     "OpenAI request interrupted durationMs={} thread={}",
                     durationMs,
                     Thread.currentThread().getName());
+            if (callContext != null) {
+                logPlanningBodies(activityLabel(callContext), systemPrompt, userMessage, null, "interrupted");
+            }
             return "ERROR: interrupted";
         } catch (Exception e) {
             long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
@@ -153,8 +211,87 @@ public final class OpenAiChatClient {
                     formatExceptionChain(e));
             String detail =
                     e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
+            if (callContext != null) {
+                logPlanningBodies(activityLabel(callContext), systemPrompt, userMessage, null, detail);
+            }
             return "ERROR: " + detail;
         }
+    }
+
+    private void notifyProgressIfNeeded(OpenAiCallContext ctx) {
+        if (ctx == null) {
+            return;
+        }
+        String line = ctx.activitySummary();
+        if (line == null || line.isBlank()) {
+            return;
+        }
+        try {
+            progressSink.publish(ctx.event(), ctx.workflowState(), line);
+        } catch (Exception e) {
+            log.debug("OpenAI progress notification skipped: {}", e.getMessage());
+        }
+    }
+
+    private static String activityLabel(OpenAiCallContext ctx) {
+        if (ctx == null || ctx.activitySummary() == null || ctx.activitySummary().isBlank()) {
+            return "openai";
+        }
+        return truncateOneLine(ctx.activitySummary(), 120);
+    }
+
+    private static void logPlanningBodies(
+            String activity, String systemPrompt, String userMessage, String assistantText, String failureHint) {
+        if (!logPlanningBodiesEnabled()) {
+            if (failureHint != null && !failureHint.isBlank()) {
+                log.info("OpenAI planning call activity=\"{}\" outcome={}", activity, truncateOneLine(failureHint, 200));
+            }
+            return;
+        }
+        int max = logBodyMaxChars();
+        log.info(
+                "OpenAI planning activity=\"{}\" systemPrompt(truncated)={}",
+                activity,
+                truncate(redactSecrets(systemPrompt != null ? systemPrompt : ""), max));
+        log.info(
+                "OpenAI planning activity=\"{}\" userMessage(truncated)={}",
+                activity,
+                truncate(redactSecrets(userMessage != null ? userMessage : ""), max));
+        if (assistantText != null && !assistantText.isBlank()) {
+            log.info(
+                    "OpenAI planning activity=\"{}\" assistantReply(truncated)={}",
+                    activity,
+                    truncate(redactSecrets(assistantText), max));
+        } else if (failureHint != null && !failureHint.isBlank()) {
+            log.info(
+                    "OpenAI planning activity=\"{}\" assistantReply= failure={}",
+                    activity,
+                    truncateOneLine(redactSecrets(failureHint), max));
+        }
+    }
+
+    private static boolean logPlanningBodiesEnabled() {
+        String v = Env.get("OPENAI_LOG_PLANNING_BODIES", "true");
+        return v == null || !"false".equalsIgnoreCase(v.trim());
+    }
+
+    private static int logBodyMaxChars() {
+        return (int) Math.min(32_768L, Math.max(256L, parseLongMs(Env.get("OPENAI_LOG_BODY_MAX_CHARS", "4096"), 4096)));
+    }
+
+    private static String redactSecrets(String s) {
+        if (s == null || s.isEmpty()) {
+            return "";
+        }
+        return s.replaceAll("(?i)(sk-[a-z0-9]{8})[a-z0-9]+", "$1…");
+    }
+
+    private static String truncateOneLine(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.replace("\r\n", " ").replace("\n", " ").trim();
+        return t.length() <= max ? t : t.substring(0, max - 1) + "…";
     }
 
     /** Planning calls prefer {@code OPENAI_PLANNING_TIMEOUT_MS}, then {@code OPENAI_HTTP_REQUEST_TIMEOUT_MS}. */

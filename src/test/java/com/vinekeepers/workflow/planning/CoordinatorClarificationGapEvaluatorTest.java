@@ -113,6 +113,26 @@ class CoordinatorClarificationGapEvaluatorTest {
     }
 
     @Test
+    void genericQuestionTemplateIsNeverSurfacedEvenWhenRuleWouldTrigger() {
+        CoordinatorClarificationSettings settings =
+                new CoordinatorClarificationSettings(
+                        CoordinatorClarificationMode.CANONICAL_V1,
+                        List.of(
+                                new CoordinatorClarificationGapRule(
+                                        "g_meta",
+                                        false,
+                                        "Please list any open questions you still have about this plan.",
+                                        List.of("scope"),
+                                        List.of(),
+                                        List.of())));
+        FeaturePlanState plan = minimalPlan("ctx", "unclear scope");
+        List<CoordinatorClarificationGapEvaluator.OpenGap> open =
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
+                        plan, settings, List.of("We should clarify product scope"));
+        assertTrue(open.isEmpty());
+    }
+
+    @Test
     void narrowGapOpensFromCanonicalAllOfWhenFirstResolved() {
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(

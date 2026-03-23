@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T00:20:00Z"
+  updated_utc: "2026-03-22T23:50:00Z"
 
 project:
   id: vinekeepers
@@ -61,6 +61,8 @@ assets:
       optional workflow steps provision_room_participants and initialize_feature_room_state for multi-bot feature room;
       four feature-room bots (Arrietty, Architect, Auditor, Scribe) use sessionKeyStrategy thread for per-thread session keys;
       arrietty_room_legacy launch success path ends with one post_channel_message plus done (no redundant duplicate terminal pair);
+      coordinator posts in arrietty_room_legacy use refreshed copy (workspace kickoff, draft-blocked with {{planningRoomCycleErrorUserMessage}}
+      for humanized cycle errors plus depth reason, pre-launch checklist vs full packet framing, lifecycle launch line);
       operator DevOps bot workflowRef devops_deploy and routing discordChannels for ops channel id at top of file)
     requires: [REQ-CONFIG-001, REQ-LUNA-001, REQ-GADGET-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING, FEAT-DEVOPS-GADGET]
@@ -80,7 +82,8 @@ assets:
     kind: config
     path: config/work-profiles.yaml
     role: >-
-      Declarative work profiles (profiles map) defining artifacts, sections, required fields, optional or default readiness.anyOfGroups,
+      Declarative work profiles (profiles map) defining artifacts, sections, required fields, optional field promptHint strings
+      for coordinator missing-field prompts (PlanningPromptFormatter), optional or default readiness.anyOfGroups,
       optional packetQuality.forbiddenSubstrings, and field-level richness keys for GenericReadinessEvaluator; default profile
       software_feature_planning includes a readiness gate for review-packet substance
     requires: [REQ-CONFIG-001]
@@ -138,6 +141,17 @@ requirements:
         - >-
           Work profiles may declare readiness.anyOfGroups and per-field richness keys (minWords, readinessChecks, echo overlap);
           WorkProfileDefinition.hasDeclarativeReadiness drives GenericReadinessEvaluator when evaluating packet depth
+        - >-
+          Work profile field promptHint (when present) is woven into PlanningPromptFormatter required-field coordinator prompts so
+          operators see concrete guidance instead of only internal labels
+        - >-
+          Work profile coordinatorClarification (canonical_v1 gap rules and mode) is the config contract for which missing facts
+          block Arrietty planning; runtime behavior pairs it with ledger reconciliation and strict single-question, non-meta clarification UX;
+          gap questionTemplate values that read as generic meta or completeness prompts are ignored at evaluation time
+        - >-
+          bots.yaml arrietty_room_legacy orchestrator templates interpolate planningRoomCycleErrorUserMessage (plain-language cycle
+          error line) alongside planning depth fields in the draft-blocked path, and keep pre-launch review copy scoped as a short
+          checklist when the full planning packet is already in-thread
       examples: []
     traceability:
       assets:

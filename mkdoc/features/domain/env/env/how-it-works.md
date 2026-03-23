@@ -2,13 +2,14 @@
 
 # Overview
 
-The application calls EnvLoader.load(".env") before bootstrap. The loader reads the file and sets system properties. Env.get(key, default) reads from system properties or returns the default.
+The application calls EnvLoader.load(".env") before bootstrap. The loader reads the file and sets system properties. Env.get(key, default) reads from system properties or returns the default. Optional OpenAI planning keys (API URL, model, timeouts) and observability keys for Discord progress lines and server-side body logging are read the same way—see **Contracts** and **README** / **`.env.example`**.
 
 # Flow
 
 1. VinekeepersApp starts; calls EnvLoader.load(".env").
 2. EnvLoader parses .env and sets each key=value into system properties.
 3. Code uses Env.get(key, default) for configuration access.
+4. Connectors and workflow actions (for example **`OpenAiChatClient`**, **`OpenAiPlanningProgressPoster`**) read planning and observability keys via **`Env`** when those features are enabled.
 
 # Inputs and outputs
 

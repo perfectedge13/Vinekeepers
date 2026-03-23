@@ -150,7 +150,7 @@ public final class EnsureRepoWorkspaceAction implements com.vinekeepers.workflow
             case CLONING -> "**Arrietty:** Cloning repository…";
             case READY_LOCAL -> "**Arrietty:** Using local repository"
                     + (detail != null && !detail.isBlank() ? ": `" + truncateChat(detail) + "`" : ".");
-            case READY_CLONED -> "**Arrietty:** Repo ready — `" + (detail != null ? truncateChat(detail) : "?") + "`";
+            case READY_CLONED -> "**Arrietty:** Repo ready: `" + (detail != null ? truncateChat(detail) : "?") + "`";
             case FAILED -> "**Arrietty:** Workspace issue — " + truncateChat(detail != null ? detail : "unknown error");
         };
     }

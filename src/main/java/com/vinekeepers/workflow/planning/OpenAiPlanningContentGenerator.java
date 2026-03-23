@@ -1,9 +1,11 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.connectors.openai.OpenAiCallContext;
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
 
 /**
- * Default {@link PlanningContentGenerator} delegating to {@link OpenAiChatClient#complete(String, String, String, Long)}.
+ * Default {@link PlanningContentGenerator} delegating to {@link OpenAiChatClient#complete(String, String, String, Long,
+ * OpenAiCallContext)}.
  */
 public final class OpenAiPlanningContentGenerator implements PlanningContentGenerator {
 
@@ -17,10 +19,11 @@ public final class OpenAiPlanningContentGenerator implements PlanningContentGene
             String systemPrompt,
             String userPayload,
             String modelOverride,
-            Long timeoutMsOverride) {
+            Long timeoutMsOverride,
+            OpenAiCallContext callContext) {
         if (client == null) {
             return "ERROR: no OpenAI client";
         }
-        return client.complete(systemPrompt, userPayload, modelOverride, timeoutMsOverride);
+        return client.complete(systemPrompt, userPayload, modelOverride, timeoutMsOverride, callContext);
     }
 }

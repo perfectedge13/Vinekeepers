@@ -4,14 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanAssumption;
+import com.vinekeepers.state.planning.PlanDecision;
 import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.PlanIssueStatus;
+import com.vinekeepers.state.planning.PlanRisk;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
-
 /**
  * Builds the human-readable planning packet for thread review and splits it for Discord size limits.
  */
@@ -21,6 +21,10 @@ public final class PlanningThreadPacketFormatter {
     public static final int DISCORD_CHUNK_TARGET = 1750;
 
     private static final int SECTION_SOFT_MAX = 1200;
+
+    private static final int TABLE_CELL_MAX = 320;
+
+    private static final String TRUNCATION_FOOTNOTE = "\n\n_(Truncated for display length.)_";
 
     private static final ObjectMapper REPO_EVIDENCE_JSON = new ObjectMapper();
 
@@ -49,7 +53,8 @@ public final class PlanningThreadPacketFormatter {
                 PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "current_state_summary"),
                 SECTION_SOFT_MAX);
         String scope = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"), SECTION_SOFT_MAX);
-        String stories = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories"), SECTION_SOFT_MAX);
+        String storiesRaw = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories");
+        String stories = truncate(storiesRaw, SECTION_SOFT_MAX);
         String acceptance = truncate(PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"), SECTION_SOFT_MAX);
         String planBody = truncate(PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"), SECTION_SOFT_MAX);
         String validation = truncate(PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes"), SECTION_SOFT_MAX);
@@ -73,12 +78,17 @@ public final class PlanningThreadPacketFormatter {
         appendSection(sb, "**Proposed behavior / outline**", orPlaceholder(planBody));
         appendSection(sb, "**Scope & non-goals**", orPlaceholder(scope));
         if (!stories.isBlank()) {
-            appendSection(sb, "**User stories / scenarios**", stories);
+            String storiesBlock = stories;
+            String storiesTable = bulletLinesAsMarkdownTable("Story / scenario", storiesRaw);
+            if (!storiesTable.isBlank()) {
+                storiesBlock = storiesBlock + "\n\n" + storiesTable;
+            }
+            appendSection(sb, "**User stories / scenarios**", storiesBlock);
         } else {
             appendSection(sb, "**User stories / scenarios**", "_None recorded._");
         }
         appendSection(sb, "**Acceptance criteria**", orPlaceholder(acceptance));
-        String table = acceptanceCriteriaTable(acceptance);
+        String table = bulletLinesAsMarkdownTable("Requirement", acceptance);
         if (!table.isBlank()) {
             appendSection(sb, "**Requirements table (from criteria)**", table);
         }
@@ -110,6 +120,28 @@ public final class PlanningThreadPacketFormatter {
         StringBuilder out = new StringBuilder(core);
         appendSection(out, "**Repo / workspace (grounding)**", grounding);
         return out.toString().trim();
+    }
+
+    /**
+     * Short follow-up copy when the full packet already lives in-thread: avoids repeating the same draft body after
+     * {@link com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction}.
+     */
+    public static String buildConciseThreadReviewBodyAfterPacket(FeaturePlanState plan, String requestFallback) {
+        if (plan == null) {
+            return "";
+        }
+        String request = firstNonBlank(plan.getInitialRequest(), requestFallback);
+        String gist =
+                request != null && request.length() > 200 ? request.substring(0, 199) + "…" : (request != null ? request : "");
+        StringBuilder sb = new StringBuilder();
+        sb.append(
+                "**Planning packet** — The messages above labeled **Planning packet** are the full draft; treat them as the source of truth.\n\n");
+        if (!gist.isBlank()) {
+            sb.append("**Request focus:** ").append(gist.trim()).append("\n\n");
+        }
+        sb.append(
+                "**This review message** only adds readiness, assumptions/issues, and critique bullets — not a second copy of the packet.");
+        return sb.toString().trim();
     }
 
     /**
@@ -173,18 +205,22 @@ public final class PlanningThreadPacketFormatter {
         if (plan.getAssumptions().isEmpty()) {
             return "_None recorded._";
         }
-        return plan.getAssumptions().stream()
-                .map(PlanningThreadPacketFormatter::formatAssumptionLine)
-                .collect(Collectors.joining("\n"));
-    }
-
-    private static String formatAssumptionLine(PlanAssumption a) {
-        return "• ["
-                + PlanningUserFacingCopy.humanizeAssumptionStatus(a.getStatus())
-                + " / "
-                + PlanningUserFacingCopy.humanizeGovernanceSeverity(a.getSeverity())
-                + "] "
-                + a.getStatement().trim();
+        StringBuilder tb = new StringBuilder();
+        tb.append("| # | Status | Severity | Assumption |\n");
+        tb.append("|:-:|--------|----------|------------|\n");
+        int i = 1;
+        for (PlanAssumption a : plan.getAssumptions()) {
+            tb.append("| ")
+                    .append(i++)
+                    .append(" | ")
+                    .append(escapeTableCell(PlanningUserFacingCopy.humanizeAssumptionStatus(a.getStatus())))
+                    .append(" | ")
+                    .append(escapeTableCell(PlanningUserFacingCopy.humanizeGovernanceSeverity(a.getSeverity())))
+                    .append(" | ")
+                    .append(escapeTableCell(a.getStatement().trim(), TABLE_CELL_MAX))
+                    .append(" |\n");
+        }
+        return tb.toString().trim();
     }
 
     private static String formatIssuesSection(FeaturePlanState plan) {
@@ -195,37 +231,58 @@ public final class PlanningThreadPacketFormatter {
         sorted.sort(
                 Comparator.comparing((PlanIssue i) -> !PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()))
                         .thenComparing(PlanIssue::getId));
-        return sorted.stream().map(PlanningThreadPacketFormatter::formatIssueLine).collect(Collectors.joining("\n"));
-    }
-
-    private static String formatIssueLine(PlanIssue i) {
-        String head =
-                PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus())
-                        ? "**Blocking issue** — "
-                        : "";
-        String st = PlanningUserFacingCopy.humanizeIssueStatus(i.getStatus());
-        String sev = PlanningUserFacingCopy.humanizeGovernanceSeverity(i.getSeverity());
-        String title = i.getTitle() != null ? i.getTitle().trim() : "";
-        String det = i.getDetail() != null ? i.getDetail().trim() : "";
-        if (!det.isBlank() && !det.equals(title)) {
-            return "• " + head + "[" + st + " / " + sev + "] " + title + " — " + det;
+        StringBuilder tb = new StringBuilder();
+        tb.append("| Priority | Status | Severity | Topic |\n");
+        tb.append("|----------|--------|----------|-------|\n");
+        for (PlanIssue i : sorted) {
+            String blocking =
+                    PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()) ? "Blocking" : "—";
+            String st = escapeTableCell(PlanningUserFacingCopy.humanizeIssueStatus(i.getStatus()));
+            String sev = escapeTableCell(PlanningUserFacingCopy.humanizeGovernanceSeverity(i.getSeverity()));
+            String title = i.getTitle() != null ? i.getTitle().trim() : "";
+            String det = i.getDetail() != null ? i.getDetail().trim() : "";
+            String topic;
+            if (!det.isBlank() && !det.equals(title)) {
+                topic = title + " — " + det;
+            } else {
+                topic = !title.isBlank() ? title : (!det.isBlank() ? det : "Issue details pending.");
+            }
+            tb.append("| ")
+                    .append(blocking)
+                    .append(" | ")
+                    .append(st)
+                    .append(" | ")
+                    .append(sev)
+                    .append(" | ")
+                    .append(escapeTableCell(topic, TABLE_CELL_MAX))
+                    .append(" |\n");
         }
-        String body = !title.isBlank() ? title : (!det.isBlank() ? det : "Issue details pending.");
-        return "• " + head + "[" + st + " / " + sev + "] " + body;
+        return tb.toString().trim();
     }
 
     private static String formatRisksSection(FeaturePlanState plan, String artifactFallback) {
         if (!plan.getRisks().isEmpty()) {
-            return plan.getRisks().stream()
-                    .map(
-                            r -> "• ["
-                                    + PlanningUserFacingCopy.humanizeRiskDecisionStatus(r.getStatus())
-                                    + "] "
-                                    + r.getStatement().trim()
-                                    + (r.getImpact().isBlank() ? "" : " (impact: " + r.getImpact() + ")"))
-                    .collect(Collectors.joining("\n"));
+            StringBuilder tb = new StringBuilder();
+            tb.append("| Status | Risk | Impact | Likelihood |\n");
+            tb.append("|--------|------|--------|------------|\n");
+            for (PlanRisk r : plan.getRisks()) {
+                tb.append("| ")
+                        .append(escapeTableCell(PlanningUserFacingCopy.humanizeRiskDecisionStatus(r.getStatus())))
+                        .append(" | ")
+                        .append(escapeTableCell(r.getStatement().trim(), TABLE_CELL_MAX))
+                        .append(" | ")
+                        .append(escapeTableCell(r.getImpact().trim(), 120))
+                        .append(" | ")
+                        .append(escapeTableCell(r.getLikelihood().trim(), 80))
+                        .append(" |\n");
+            }
+            return tb.toString().trim();
         }
         if (artifactFallback != null && !artifactFallback.isBlank()) {
+            String tab = bulletLinesAsMarkdownTable("Risk", artifactFallback);
+            if (!tab.isBlank()) {
+                return tab;
+            }
             return artifactFallback;
         }
         return "_None recorded._";
@@ -233,25 +290,52 @@ public final class PlanningThreadPacketFormatter {
 
     private static String formatDecisionsSection(FeaturePlanState plan, String artifactFallback) {
         if (!plan.getDecisions().isEmpty()) {
-            return plan.getDecisions().stream()
-                    .map(
-                            d -> "• ["
-                                    + PlanningUserFacingCopy.humanizeRiskDecisionStatus(d.getStatus())
-                                    + "] "
-                                    + d.getDecision().trim())
-                    .collect(Collectors.joining("\n"));
+            StringBuilder tb = new StringBuilder();
+            tb.append("| Status | Decision | Rationale |\n");
+            tb.append("|--------|----------|-----------|\n");
+            for (PlanDecision d : plan.getDecisions()) {
+                tb.append("| ")
+                        .append(escapeTableCell(PlanningUserFacingCopy.humanizeRiskDecisionStatus(d.getStatus())))
+                        .append(" | ")
+                        .append(escapeTableCell(d.getDecision().trim(), TABLE_CELL_MAX))
+                        .append(" | ")
+                        .append(escapeTableCell(d.getRationale().trim(), TABLE_CELL_MAX))
+                        .append(" |\n");
+            }
+            return tb.toString().trim();
         }
         if (artifactFallback != null && !artifactFallback.isBlank()) {
+            String tab = bulletLinesAsMarkdownTable("Decision (from artifact)", artifactFallback);
+            if (!tab.isBlank()) {
+                return tab;
+            }
             return artifactFallback;
         }
         return "_None recorded._";
     }
 
     private static String formatOpenQuestionsSection(FeaturePlanState plan, String artifactFallback) {
-        if (!plan.getUnresolvedQuestions().isEmpty()) {
-            return plan.getUnresolvedQuestions().stream()
-                    .map(q -> "• " + q.trim())
-                    .collect(Collectors.joining("\n"));
+        List<String> rows = PlanningArtifactTexts.substantiveUnresolvedQuestionLines(plan);
+        if (!rows.isEmpty()) {
+            StringBuilder tb = new StringBuilder();
+            tb.append("| # | Open question |\n");
+            tb.append("|:-:|---------------|\n");
+            int i = 1;
+            for (String q : rows) {
+                tb.append("| ")
+                        .append(i++)
+                        .append(" | ")
+                        .append(escapeTableCell(q, TABLE_CELL_MAX))
+                        .append(" |\n");
+            }
+            return tb.toString().trim();
+        }
+        if (artifactFallback != null && !artifactFallback.isBlank()) {
+            String tab = bulletLinesAsMarkdownTable("Open question", artifactFallback);
+            if (!tab.isBlank()) {
+                return tab;
+            }
+            return orPlaceholder(artifactFallback);
         }
         return orPlaceholder(artifactFallback);
     }
@@ -260,7 +344,7 @@ public final class PlanningThreadPacketFormatter {
         var c = plan.getPlanConfidence();
         var snap = plan.getPlanCritiqueSnapshot();
         if (snap == null) {
-            return "_Critique not run yet for this draft — see the pre-approval review message after critique runs._";
+            return "_Readiness has not been computed for this draft yet — it will appear after the next review pass._";
         }
         StringBuilder sb = new StringBuilder();
         if (c != null) {
@@ -288,11 +372,11 @@ public final class PlanningThreadPacketFormatter {
         }
         if (snap.getRubricScores() != null) {
             var rs = snap.getRubricScores();
-            sb.append("**Rubric (0–1):** completeness ")
+            sb.append("**Quality checks (0–1 scale):** completeness ")
                     .append(fmt(rs.getCompleteness()))
                     .append(", repo alignment ")
                     .append(fmt(rs.getRepoAlignment()))
-                    .append(", approval ")
+                    .append(", approval readiness ")
                     .append(fmt(rs.getApprovalReadiness()));
         }
         String out = sb.toString().trim();
@@ -342,17 +426,21 @@ public final class PlanningThreadPacketFormatter {
         return Math.min(best, rest.length());
     }
 
-    static String acceptanceCriteriaTable(String acceptance) {
-        if (acceptance == null || acceptance.isBlank()) {
+    /**
+     * Renders bullet- or numbered lines as a markdown table (two columns) when there are at least two rows.
+     * Shared by planning packets and role thread summaries.
+     */
+    public static String bulletLinesAsMarkdownTable(String itemColumnTitle, String multilineText) {
+        if (multilineText == null || multilineText.isBlank()) {
             return "";
         }
         List<String> rows = new ArrayList<>();
-        for (String line : acceptance.split("\\R")) {
+        for (String line : multilineText.split("\\R")) {
             String t = line.trim();
             if (t.isEmpty()) {
                 continue;
             }
-            t = t.replaceFirst("^[-*•]\\s*", "").trim();
+            t = t.replaceFirst("^\\d+\\.\\s*", "").replaceFirst("^[-*•]\\s*", "").trim();
             if (!t.isEmpty()) {
                 rows.add(t);
             }
@@ -361,13 +449,16 @@ public final class PlanningThreadPacketFormatter {
             return "";
         }
         StringBuilder tb = new StringBuilder();
-        tb.append("| # | Requirement |\n|---|-------------|\n");
+        tb.append("| # | ")
+                .append(escapeTableCell(itemColumnTitle != null ? itemColumnTitle : "Item"))
+                .append(" |\n");
+        tb.append("|:-:|-------------|\n");
         for (int i = 0; i < rows.size(); i++) {
-            String cell = rows.get(i).replace("|", "\\|");
-            if (cell.length() > 200) {
-                cell = cell.substring(0, 199) + "…";
-            }
-            tb.append("| ").append(i + 1).append(" | ").append(cell).append(" |\n");
+            tb.append("| ")
+                    .append(i + 1)
+                    .append(" | ")
+                    .append(escapeTableCell(rows.get(i), TABLE_CELL_MAX))
+                    .append(" |\n");
         }
         return tb.toString().trim();
     }
@@ -394,7 +485,22 @@ public final class PlanningThreadPacketFormatter {
         if (s.length() <= max) {
             return s;
         }
-        return s.substring(0, max - 1) + "…";
+        return s.substring(0, max - 1) + "…" + TRUNCATION_FOOTNOTE;
+    }
+
+    private static String escapeTableCell(String s) {
+        return escapeTableCell(s, Integer.MAX_VALUE);
+    }
+
+    private static String escapeTableCell(String s, int maxLen) {
+        if (s == null || s.isBlank()) {
+            return "—";
+        }
+        String t = s.replace('\r', ' ').replace('\n', ' ').replace("|", "\\|").trim();
+        if (t.length() > maxLen) {
+            t = t.substring(0, Math.max(0, maxLen - 1)) + "…";
+        }
+        return t.isBlank() ? "—" : t;
     }
 
     private static String firstNonBlank(String a, String b) {

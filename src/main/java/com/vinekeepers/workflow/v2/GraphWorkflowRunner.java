@@ -203,6 +203,35 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
                     }
                     continue;
                 }
+                if ("configurable_steps".equalsIgnoreCase(capKind)) {
+                    WorkflowRunResult delegated = runConfigurableSteps(cap, event, stateStore, botId);
+                    state = stateStore.get(stateKey, ConfigurableWorkflowState.class).orElse(state);
+                    if (delegated.isWaiting()) {
+                        return delegated;
+                    }
+                    String errCs = delegated.getErrorMessage();
+                    if (errCs != null && !errCs.isBlank()) {
+                        state.markError();
+                        stateStore.put(stateKey, state);
+                        return delegated;
+                    }
+                    pipeIdx++;
+                    state.put(PIPELINE_INDEX_KEY, String.valueOf(pipeIdx));
+                    state.markActive();
+                    stateStore.put(stateKey, state);
+                    if (delegated.isCompleted()
+                            && completedRunHasUserVisibleOutcome(delegated)
+                            && pipeIdx >= pipeline.size()) {
+                        WorkflowRunResult forwarded =
+                                collapseThroughEmptyTerminalPhases(
+                                        stateKey, state, phaseId, pipeIdx, delegated, stateStore);
+                        if (forwarded != null) {
+                            return forwarded;
+                        }
+                        state = stateStore.get(stateKey, ConfigurableWorkflowState.class).orElse(state);
+                    }
+                    continue;
+                }
                 if (!"legacy_action".equalsIgnoreCase(capKind)) {
                     state.markError();
                     stateStore.put(stateKey, state);
@@ -317,6 +346,37 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
                         WorkflowDefinition.copyLlmMap(wm.get("llm")),
                         schemaFromWorkflowRoot(wm),
                         WorkflowTemplatePolicy.fromYaml(wm.get("templates")));
+        ConfigurableWorkflowRunner inner =
+                new ConfigurableWorkflowRunner(
+                        def,
+                        actionRegistry,
+                        toolRunner,
+                        toolPolicy,
+                        conversationMode,
+                        sessionKeyStrategyName,
+                        choiceProviderRegistry);
+        return inner.runResult(event, stateStore, botId);
+    }
+
+    /**
+     * Runs inline {@code steps} on the same session as the v2 graph, using the parent v2 workflow's {@code llm} defaults
+     * and template policy (same merge behavior as {@link #runLinearWorkflowRef} for sibling workflows).
+     */
+    private WorkflowRunResult runConfigurableSteps(
+            WorkflowV2CapabilityModel cap, Event event, StateStore stateStore, String botId) {
+        List<Map<String, Object>> steps = cap.getSteps();
+        if (steps == null || steps.isEmpty()) {
+            return WorkflowRunResult.error(
+                    "configurable_steps: missing or empty steps for capability: " + cap.getId());
+        }
+        String defId = model.getId() + ":" + cap.getId();
+        WorkflowDefinition def =
+                new WorkflowDefinition(
+                        defId,
+                        steps,
+                        WorkflowDefinition.copyLlmMap(model.getLlm()),
+                        null,
+                        model.getTemplatePolicy());
         ConfigurableWorkflowRunner inner =
                 new ConfigurableWorkflowRunner(
                         def,

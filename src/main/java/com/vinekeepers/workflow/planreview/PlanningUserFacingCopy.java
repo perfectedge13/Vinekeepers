@@ -110,6 +110,87 @@ public final class PlanningUserFacingCopy {
     }
 
     /**
+     * Plain-language line for coordinator cycle errors surfaced in Discord (machine tokens like {@code NO_PLAN},
+     * {@code MISSING_DEPS}, or {@code DEPTH_FAIL_AFTER_RETRIES: …}).
+     */
+    public static String humanizePlanningRoomCycleErrorLine(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String t = raw.trim();
+        String up = t.toUpperCase(Locale.ROOT);
+        if (up.startsWith("DEPTH_FAIL_AFTER_RETRIES:")) {
+            return "After several drafting passes the plan still needs more concrete detail before review.";
+        }
+        return humanizePlanningRoomCycleErrorCode(t);
+    }
+
+    /** Machine-only coordinator cycle error codes from {@link com.vinekeepers.workflow.planning.PlanningCyclePipeline}. */
+    public static String humanizePlanningRoomCycleErrorCode(String code) {
+        if (code == null || code.isBlank()) {
+            return "";
+        }
+        String c = code.trim();
+        return switch (c.toUpperCase(Locale.ROOT)) {
+            case "MISSING_DEPS" ->
+                    "Something this step needs (workspace setup, API access, or profile data) is not available.";
+            case "NO_CONTEXT" -> "No planning context is linked to this thread.";
+            case "NO_PLAN" -> "No planning draft is loaded for this session yet.";
+            case "PROFILE_NOT_V2" ->
+                    "This work profile does not enable the full coordinator drafting loop for this room.";
+            default -> "Planning hit an unexpected issue; try again or check configuration.";
+        };
+    }
+
+    /**
+     * User-safe text for {@code planningClarificationMergeError} in Discord (never raw exception / stack tokens).
+     */
+    public static String humanizePlanningClarificationMergeError(String codeOrMessage) {
+        if (codeOrMessage == null || codeOrMessage.isBlank()) {
+            return "";
+        }
+        String raw = codeOrMessage.trim();
+        return switch (raw.toUpperCase(Locale.ROOT)) {
+            case "MISSING_DEPS" ->
+                    "A required dependency (plan store or profile registry) is not available.";
+            case "NO_CONTEXT" -> "No planning context is linked to this thread.";
+            case "NO_CHOICE" -> "Pick an option or send a text reply first.";
+            case "NO_PLAN" -> "No planning draft is loaded for this session yet.";
+            default -> "That reply could not be applied; try again.";
+        };
+    }
+
+    /** Strips model / transport noise from strings merged into {@code planningCycleUserVisibleFailure}. */
+    public static String humanizePlanningCycleFailureFragment(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String t = raw.replace("\r\n", " ").replace('\n', ' ').trim();
+        String lower = t.toLowerCase(Locale.ROOT);
+        if (lower.contains("json") && (lower.contains("parse") || lower.contains("invalid"))) {
+            return "A drafting step returned output we could not apply.";
+        }
+        if (lower.contains("interrupted")) {
+            return "A drafting step was interrupted.";
+        }
+        if (lower.startsWith("ERROR:")) {
+            t = t.substring(6).trim();
+        }
+        if (t.length() > 140) {
+            return t.substring(0, 139) + "…";
+        }
+        return t;
+    }
+
+    /**
+     * After the planning packet is posted in-thread, critique blocks should not repeat repo grounding that already
+     * appears under {@code **Repo / workspace (grounding)**} in the packet.
+     */
+    public static String repoGroundingPointerAfterPacket() {
+        return "_Workspace/repo signals are in the **Repo / workspace (grounding)** section of the planning packet above._";
+    }
+
+    /**
      * Readable label for artifact / section / field, using work profile titles and field labels when available.
      */
     public static String describePlanningFieldPath(
@@ -196,7 +277,7 @@ public final class PlanningUserFacingCopy {
         }
         return switch (c) {
             case "INTAKE_DISCOVERY_INCOMPLETE" ->
-                    "Complete the coordinator discovery kickoff in this thread before the plan can advance.";
+                    "Finish the first planning questions in this thread before the plan can move toward approval.";
             case "OPEN_ISSUES" -> "Open issues are recorded on the plan; resolve or waive them before approval.";
             case "OPEN_ASSUMPTIONS" -> "Open assumptions are recorded; confirm or adjust them before implementation.";
             case "MISSING_PROFILE" -> "This plan has no work profile selected.";

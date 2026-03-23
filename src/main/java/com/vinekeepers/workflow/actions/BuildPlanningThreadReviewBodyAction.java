@@ -45,14 +45,56 @@ public final class BuildPlanningThreadReviewBodyAction implements com.vinekeeper
 
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
         String repo = firstNonBlank(plan.getRepoRef(), getString(state, "project"));
-        String body =
-                truncate(
-                        PlanningThreadPacketFormatter.buildFullPacketBody(
-                                plan, request, repo, getString(state, "planningRepoEvidenceJson")),
-                        TOTAL_CAP);
+        String body;
+        if (packetCanonicalInThread(state)) {
+            body = PlanningThreadPacketFormatter.buildConciseThreadReviewBodyAfterPacket(plan, request);
+        } else {
+            body =
+                    truncate(
+                            PlanningThreadPacketFormatter.buildFullPacketBody(
+                                    plan, request, repo, getString(state, "planningRepoEvidenceJson")),
+                            TOTAL_CAP);
+        }
 
         spread.put("planningThreadReviewBody", body);
         return spread;
+    }
+
+    /**
+     * True when the coordinator path has already posted (or intentionally skipped repost of) the full packet in this
+     * thread, so follow-up review copy should not duplicate it.
+     */
+    private static boolean packetCanonicalInThread(Map<String, Object> state) {
+        if (state == null) {
+            return false;
+        }
+        if (truthy(String.valueOf(state.get("planningPacketPosted")))) {
+            return true;
+        }
+        if (truthy(String.valueOf(state.get("planningPacketSkippedDuplicate")))) {
+            return true;
+        }
+        return parsePostedVersion(state) > 0;
+    }
+
+    private static int parsePostedVersion(Map<String, Object> state) {
+        Object v = state.get("planningPacketPostedVersion");
+        if (v == null) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(v.toString().trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static boolean truthy(String s) {
+        if (s == null) {
+            return false;
+        }
+        String t = s.trim().toLowerCase();
+        return "true".equals(t) || "1".equals(t) || "yes".equals(t);
     }
 
     private static String truncate(String s, int max) {
@@ -62,7 +104,10 @@ public final class BuildPlanningThreadReviewBodyAction implements com.vinekeeper
         if (s.length() <= max) {
             return s;
         }
-        return s.substring(0, max - 1) + "…";
+        return s.substring(0, max - 1)
+                + "…\n\n_(Planning thread review truncated to fit the workflow cap of "
+                + max
+                + " characters.)_";
     }
 
     private static String getString(Map<String, Object> map, String key) {

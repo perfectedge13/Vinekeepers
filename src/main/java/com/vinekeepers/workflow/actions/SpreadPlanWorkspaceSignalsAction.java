@@ -5,6 +5,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.repo.RepoWorkspaceStatus;
+import com.vinekeepers.workflow.planning.PlanningDraftSupport;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,12 +50,13 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
         out.put("repoWorkspaceReady", materialized ? "true" : "false");
         out.put("repoLocalPathPresent", pathOk ? "true" : "false");
         String notes = plan.getRepoAccessNotes() != null ? plan.getRepoAccessNotes().trim() : "";
+        String humanizedStatus = PlanningDraftSupport.humanizeRepoWorkspaceStatus(statusName);
         StringBuilder sb = new StringBuilder();
-        sb.append("Workspace status: ").append(statusName.isBlank() ? "unknown" : statusName);
+        sb.append(humanizedStatus.isBlank() ? (statusName.isBlank() ? "Unknown" : statusName) : humanizedStatus);
         if (pathOk) {
             sb.append("; local path recorded.");
         } else {
-            sb.append("; no local clone path (exploration will use request text only).");
+            sb.append("; local path not available yet.");
         }
         if (!notes.isBlank()) {
             sb.append(" Notes: ").append(truncate(notes, 280));

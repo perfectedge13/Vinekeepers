@@ -13,6 +13,7 @@ import com.vinekeepers.workflow.deliberation.DeliberationDirtyPassIndex;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planning.CoordinatorClarificationGapEvaluator;
 import com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSync;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,23 +44,31 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
         spread.put("planningClarificationMergeError", "");
         spread.put("planningClarificationMergeOk", "false");
         if (planStateStore == null || workProfileRegistry == null) {
-            spread.put("planningClarificationMergeError", "MISSING_DEPS");
+            spread.put(
+                    "planningClarificationMergeError",
+                    PlanningUserFacingCopy.humanizePlanningClarificationMergeError("MISSING_DEPS"));
             return spread;
         }
         String contextId = firstNonBlank(getString(bind, "contextId"), getString(state, "contextId"));
         if (contextId == null || contextId.isBlank()) {
-            spread.put("planningClarificationMergeError", "NO_CONTEXT");
+            spread.put(
+                    "planningClarificationMergeError",
+                    PlanningUserFacingCopy.humanizePlanningClarificationMergeError("NO_CONTEXT"));
             return spread;
         }
         String choice = firstNonBlank(getString(bind, "planningClarificationRaw"), getString(state, "planningClarificationRaw"));
         if (choice == null || choice.isBlank()) {
-            spread.put("planningClarificationMergeError", "NO_CHOICE");
+            spread.put(
+                    "planningClarificationMergeError",
+                    PlanningUserFacingCopy.humanizePlanningClarificationMergeError("NO_CHOICE"));
             return spread;
         }
         String metaRaw = firstNonBlank(getString(state, "planningClarificationMetaJson"), "{}");
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(null);
         if (plan == null) {
-            spread.put("planningClarificationMergeError", "NO_PLAN");
+            spread.put(
+                    "planningClarificationMergeError",
+                    PlanningUserFacingCopy.humanizePlanningClarificationMergeError("NO_PLAN"));
             return spread;
         }
         try {
@@ -173,7 +182,10 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                     com.vinekeepers.workflow.planning.PlanningCyclePipeline.normalizeClarificationQuestion(qForPrev));
             return spread;
         } catch (Exception e) {
-            spread.put("planningClarificationMergeError", e.getMessage() != null ? e.getMessage() : "merge failed");
+            spread.put(
+                    "planningClarificationMergeError",
+                    PlanningUserFacingCopy.humanizePlanningClarificationMergeError(
+                            e.getMessage() != null ? e.getMessage() : "merge failed"));
             return spread;
         }
     }

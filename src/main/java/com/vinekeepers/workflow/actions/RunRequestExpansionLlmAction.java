@@ -3,6 +3,7 @@ package com.vinekeepers.workflow.actions;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vinekeepers.connectors.openai.OpenAiCallContext;
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
@@ -115,7 +116,12 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         long t0 = System.currentTimeMillis();
         String raw;
         try {
-            raw = generator.complete(openAiChatClient, SYSTEM, userPayload, model, timeout);
+            OpenAiCallContext callCtx =
+                    OpenAiCallContext.planning(
+                            event,
+                            state,
+                            "Expanding your request into structured planning notes (asking ChatGPT).");
+            raw = generator.complete(openAiChatClient, SYSTEM, userPayload, model, timeout, callCtx);
         } catch (Exception e) {
             spread.put("planningLlmError", e.getMessage() != null ? e.getMessage() : "expansion failed");
             spread.put("planningExpansionFallbackUsed", "true");
@@ -341,10 +347,28 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         appendBul(sb, "**Design options**", text(root, "design_options"));
         JsonNode oq = root.path("candidate_open_questions");
         if (oq.isArray() && oq.size() > 0) {
-            sb.append("**Open questions (candidates)**\n");
+            List<String> oqLines = new ArrayList<>();
             for (JsonNode n : oq) {
                 if (n.isTextual()) {
-                    sb.append("- ").append(n.asText().trim()).append("\n");
+                    String t = n.asText().trim();
+                    if (!t.isBlank()) {
+                        oqLines.add(t);
+                    }
+                }
+            }
+            sb.append("**Open questions (candidates)**\n");
+            if (oqLines.size() >= 2) {
+                sb.append("| # | Question |\n|:-:|----------|\n");
+                for (int i = 0; i < oqLines.size(); i++) {
+                    String cell = oqLines.get(i).replace("|", "\\|").replace('\r', ' ').replace('\n', ' ');
+                    if (cell.length() > 280) {
+                        cell = cell.substring(0, 279) + "…";
+                    }
+                    sb.append("| ").append(i + 1).append(" | ").append(cell).append(" |\n");
+                }
+            } else {
+                for (String line : oqLines) {
+                    sb.append("- ").append(line).append("\n");
                 }
             }
         }

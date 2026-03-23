@@ -111,6 +111,14 @@ class EnsureRepoWorkspaceActionTest {
     }
 
     @Test
+    void formatProgressChatLine_readyClonedUsesCompactCopy() {
+        assertEquals(
+                "**Arrietty:** Repo ready: `main @ ba83567`",
+                EnsureRepoWorkspaceAction.formatProgressChatLine(
+                        RepoWorkspaceProgressPhase.READY_CLONED, "main @ ba83567"));
+    }
+
+    @Test
     void postsArriettyProgressWhenExplicitSenderAndTargetsPresent(@TempDir Path tmp) throws Exception {
         Assumptions.assumeTrue(gitWorks());
         Path repo = tmp.resolve("r");

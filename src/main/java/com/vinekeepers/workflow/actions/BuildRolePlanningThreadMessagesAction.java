@@ -4,6 +4,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
+import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,7 +38,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
             return out;
         }
         String outline = PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body");
-        String decisions = PlanningArtifactTexts.firstRepeatableField(plan, "decision_log", "decisions", "decision_text");
+        String decisions = PlanningArtifactTexts.allRepeatableFieldLines(plan, "decision_log", "decisions", "decision_text");
         String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
         String featureSummary = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
         String acceptance = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria");
@@ -71,7 +72,13 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
             sb.append("_No plan outline recorded yet._");
         }
         if (decisions != null && !decisions.isBlank()) {
-            sb.append("\n\n**Decisions**\n").append(decisions.trim());
+            String decTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Decision", decisions);
+            sb.append("\n\n**Decisions**\n");
+            if (!decTable.isBlank()) {
+                sb.append(decTable);
+            } else {
+                sb.append(decisions.trim());
+            }
         }
         return sb.toString();
     }
@@ -80,10 +87,22 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         StringBuilder sb = new StringBuilder();
         sb.append("**Auditor — validation & risks**\n");
         if (risks != null && !risks.isBlank()) {
-            sb.append("**Risk register**\n").append(risks.trim()).append("\n\n");
+            String riskTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Risk", risks);
+            sb.append("**Risk register**\n");
+            if (!riskTable.isBlank()) {
+                sb.append(riskTable).append("\n\n");
+            } else {
+                sb.append(risks.trim()).append("\n\n");
+            }
         }
         if (openQ != null && !openQ.isBlank()) {
-            sb.append("**Open questions**\n").append(openQ.trim()).append("\n\n");
+            String oqTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Question", openQ);
+            sb.append("**Open questions**\n");
+            if (!oqTable.isBlank()) {
+                sb.append(oqTable).append("\n\n");
+            } else {
+                sb.append(openQ.trim()).append("\n\n");
+            }
         }
         if (validation != null && !validation.isBlank()) {
             sb.append("**Validation**\n").append(validation.trim());
@@ -107,10 +126,25 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         sb.append("\n\n**Scope:** ");
         sb.append(scope != null && !scope.isBlank() ? scope.trim() : "_Not specified._");
         if (stories != null && !stories.isBlank()) {
-            sb.append("\n\n**User stories / scenarios:**\n").append(stories.trim());
+            String stTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Story / scenario", stories);
+            sb.append("\n\n**User stories / scenarios:**\n");
+            if (!stTable.isBlank()) {
+                sb.append(stTable);
+            } else {
+                sb.append(stories.trim());
+            }
         }
         sb.append("\n\n**Acceptance criteria:** ");
-        sb.append(acceptance != null && !acceptance.isBlank() ? acceptance.trim() : "_Not specified._");
+        if (acceptance != null && !acceptance.isBlank()) {
+            String acTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Criterion", acceptance);
+            if (!acTable.isBlank()) {
+                sb.append(acTable);
+            } else {
+                sb.append(acceptance.trim());
+            }
+        } else {
+            sb.append("_Not specified._");
+        }
         if (contextSummary != null && !contextSummary.isBlank()) {
             sb.append("\n\n**Context:**\n").append(contextSummary.trim());
         }

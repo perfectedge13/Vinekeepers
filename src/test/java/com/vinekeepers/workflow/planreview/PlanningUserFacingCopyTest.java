@@ -118,6 +118,47 @@ class PlanningUserFacingCopyTest {
     }
 
     @Test
+    void humanizePlanningClarificationMergeErrorNeverEchoesRawExceptionText() {
+        assertEquals(
+                "That reply could not be applied; try again.",
+                PlanningUserFacingCopy.humanizePlanningClarificationMergeError("java.lang.NullPointerException"));
+        assertEquals(
+                "That reply could not be applied; try again.",
+                PlanningUserFacingCopy.humanizePlanningClarificationMergeError("Something vague went wrong"));
+    }
+
+    @Test
+    void humanizePlanningRoomCycleErrorMapsCodesAndDepthPrefix() {
+        assertTrue(
+                PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine("NO_PLAN")
+                        .toLowerCase()
+                        .contains("draft"));
+        assertEquals(
+                "After several drafting passes the plan still needs more concrete detail before review.",
+                PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine(
+                        "DEPTH_FAIL_AFTER_RETRIES: thin outline"));
+        assertEquals("", PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine("  "));
+        assertEquals(
+                "Planning hit an unexpected issue; try again or check configuration.",
+                PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode("CUSTOM_CODE"));
+    }
+
+    @Test
+    void repoGroundingPointerMentionsPacketSection() {
+        String p = PlanningUserFacingCopy.repoGroundingPointerAfterPacket();
+        assertTrue(p.contains("Repo / workspace (grounding)"));
+        assertTrue(p.contains("planning packet"));
+    }
+
+    @Test
+    void defaultMessageForIntakeDiscoveryUsesPlainLanguage() {
+        assertTrue(
+                PlanningUserFacingCopy.defaultMessageForCritiqueCode("INTAKE_DISCOVERY_INCOMPLETE")
+                        .toLowerCase()
+                        .contains("first planning"));
+    }
+
+    @Test
     void formatCritiqueFindingBulletReplacesRawRefInMessageAndAddsAreaWhenOmitted() {
         WorkProfileDefinition profile = sampleProfile();
         PlanCritiqueFinding withRawRef = new PlanCritiqueFinding(
