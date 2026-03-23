@@ -4,7 +4,7 @@
 
 - Luna remains config-driven in YAML; the feature documents the shipped workflow rather than hardcoded bot registration.
 - Discord mention activation belongs to routing, while the gathered project/code-change sequence belongs to this workflow feature.
-- Repository operations are delegated through `cursor.fullRun` and the Cursor adapter instead of being embedded directly in workflow steps.
+- Cursor-backed repository operations stay delegated through the dedicated launch path (`launch_cursor_run` and the Cursor adapter) instead of being embedded directly in workflow steps.
 
 ## 2026-03-19 — Phase B structured discovery in luna_cursor
 
@@ -16,9 +16,9 @@
 
 ## 2026-03-22 — Readiness checkpoint: plain-English prompts for operators
 
-**Context:** Discord operators saw **`NEEDS_HUMAN_DECISION`** and ADR-style “decision” asks without a clear explanation of what action the bot wanted (approve launch vs revise plan vs answer a structured decision slot). Raw readiness enums, internal artifact paths, and jargon made the intake thread feel opaque (“this is awful”).
+**Context:** Discord operators saw opaque readiness checkpoints and ADR-style “decision” asks without a clear explanation of what action the bot wanted (approve launch vs revise plan vs answer a structured decision slot). Raw readiness enums, internal artifact paths, and jargon made the intake thread feel opaque (“this is awful”).
 
-**Decision:** Keep workflow branches and state keys machine-readable (**`planReadinessStatus`**, **`prompt_for_field`** targets). Surface human copy only through **`PlanningUserFacingCopy`** (status labels, **`planReadinessCheckpointGuide`** when **`NEEDS_HUMAN_DECISION`**, critique severity wording) and **`PlanningPromptFormatter`** plus **`config/work-profiles.yaml`** hints so prompts explain *what you are being asked to do* and *what happens next*, without exposing internal paths or enum names in Discord text.
+**Decision:** Keep workflow branches and state keys machine-readable (**`planReadinessStatus`**, **`prompt_for_field`** targets). Surface human copy only through **`PlanningUserFacingCopy`** (status labels, **`planReadinessCheckpointGuide`** when the packet is **`REVIEWABLE`**, critique severity wording) and **`PlanningPromptFormatter`** plus **`config/work-profiles.yaml`** hints so prompts explain *what you are being asked to do* and *what happens next*, without exposing internal paths or enum names in Discord text.
 
 **Consequence:** Operators get a short status line plus an explicit guide block on the human-decision path; decision-log and field prompts use full sentences. Specs and tests trace **`ASSET-PLANNING-PROMPT-FORMATTER`**, **`ASSET-PLANNING-USER-FACING-COPY`**, and related workflow actions.
 

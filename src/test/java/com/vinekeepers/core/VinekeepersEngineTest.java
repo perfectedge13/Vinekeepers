@@ -449,6 +449,33 @@ class VinekeepersEngineTest {
         assertTrue(captured.get().getIntent().isPresent());
     }
 
+    @Test
+    void richReplyIntentDoesNotFallBackToPlainReplySenderWhenSinkMissing() {
+        BotDefinition bot = new BotDefinition(
+                "plain-bot",
+                new Persona("Plain", ""),
+                new ModelProfile("stub", "stub"),
+                ToolPolicy.allowAll(),
+                new MemoryPolicy(4096));
+        engine.registerBot(bot);
+        AtomicReference<String> capturedReply = new AtomicReference<>();
+        engine.setReplySender("discord", (channelId, messageId, content) -> capturedReply.set(content));
+        engine.registerReplyTargetResolver("discord", new DiscordReplyTargetResolver());
+        OutboundResponse rich = OutboundResponse.ofIntent(
+                new com.vinekeepers.interactions.PresentChoices(
+                        "Choose one",
+                        java.util.List.of(new com.vinekeepers.interactions.ResponseIntent.Choice("continue", "Continue", null))));
+        engine.registerRunner("plain-bot", (event, store, botId) ->
+                com.vinekeepers.workflow.WorkflowRunResult.completed(rich));
+        engine.registerReasoner("plain-bot", new StubReasoner());
+        router.addRouting(new RoutingRule(new RoutingFilter(null, null, null, null, null, null), "plain-bot"));
+
+        Event event = new Event("discord:g:ch", "message", Map.of("channelId", "ch-2"));
+        engine.onEvent(event);
+
+        assertNull(capturedReply.get());
+    }
+
     // --- Discord waiting-session routing (engine adds bots with WAITING_INPUT for event session key) ---
 
     @Test

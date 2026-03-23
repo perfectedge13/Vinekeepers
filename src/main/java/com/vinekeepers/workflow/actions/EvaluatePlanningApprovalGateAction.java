@@ -52,13 +52,13 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         boolean humanOk = intakeDiscoveryCompleteForApproval(plan, state);
         boolean noPendingClarification = !PlanningReadinessSpread.hasPendingClarification(state);
 
-        boolean reviewSignal = posted && depthOk && noPendingClarification;
+        boolean reviewSignal = posted && depthOk && noPendingClarification && reviewReadinessSatisfied(readinessStatus);
         spread.put("planningReviewReady", reviewSignal ? "true" : "false");
         spread.put("reviewReady", reviewSignal ? "true" : "false");
         if (reviewSignal) {
             spread.put(
                     "planningReviewReadyReason",
-                    "The planning packet is posted, depth checks passed, and no clarification is pending — ready for human review.");
+                    "The planning packet is posted, depth checks passed, critique is complete, and the packet is ready for human review.");
             spread.put("reviewReadyReason", spread.get("planningReviewReadyReason"));
         } else {
             StringBuilder rr = new StringBuilder();
@@ -70,6 +70,9 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
             }
             if (!noPendingClarification) {
                 rr.append("A clarification is still open. ");
+            }
+            if (!reviewReadinessSatisfied(readinessStatus)) {
+                rr.append("The packet still needs machine revision before a human review checkpoint should appear. ");
             }
             String rrs = rr.toString().trim();
             spread.put("planningReviewReadyReason", rrs.isEmpty() ? "Review readiness could not be confirmed." : rrs);
@@ -148,9 +151,15 @@ public final class EvaluatePlanningApprovalGateAction implements com.vinekeepers
         }
         return switch (spreadStatus.trim()) {
             case PlanReadinessStatus.NEEDS_REVISION -> PlanReadinessStatus.NOT_READY;
-            case PlanReadinessStatus.NEEDS_HUMAN_DECISION -> PlanReadinessStatus.CONDITIONALLY_READY;
+            case PlanReadinessStatus.NEEDS_HUMAN_DECISION -> PlanReadinessStatus.REVIEWABLE;
             default -> spreadStatus.trim();
         };
+    }
+
+    private static boolean reviewReadinessSatisfied(String readinessStatus) {
+        return PlanReadinessStatus.REVIEWABLE.equals(readinessStatus)
+                || PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus)
+                || PlanReadinessStatus.READY.equals(readinessStatus);
     }
 
     private static boolean approvalReadinessSatisfied(String readinessStatus, boolean humanAcknowledged) {

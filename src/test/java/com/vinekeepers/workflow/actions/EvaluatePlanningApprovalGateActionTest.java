@@ -111,6 +111,33 @@ class EvaluatePlanningApprovalGateActionTest {
         assertEquals("true", spread.get("approvalReady"));
     }
 
+    @Test
+    void reviewReadyButApprovalClosedWhenPacketIsOnlyReviewable() {
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        Instant t = Instant.now();
+        FeaturePlanState plan = approvalReadyPlan("c5", t)
+                .withPlanConfidence(new PlanConfidence(
+                        "MEDIUM",
+                        "reviewable",
+                        PlanReadinessStatus.REVIEWABLE,
+                        t,
+                        0.62,
+                        List.of()));
+        store.put(plan);
+
+        Map<String, Object> state = new HashMap<>();
+        state.put("contextId", "c5");
+        state.put("planningPacketPostedVersion", "1");
+        state.put("planningPacketDepthOk", "true");
+        state.put("planningUserInputRequired", "false");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> spread =
+                (Map<String, Object>) new EvaluatePlanningApprovalGateAction(store)
+                        .run(new Event("x", "m", Map.of()), state, Map.of());
+        assertEquals("true", spread.get("planningReviewReady"));
+        assertEquals("false", spread.get("planningReadyForApproval"));
+    }
+
     private static FeaturePlanState approvalReadyPlan(String contextId, Instant t) {
         PlanCritiqueRubricScores rubric =
                 new PlanCritiqueRubricScores(0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9);

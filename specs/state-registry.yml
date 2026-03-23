@@ -166,7 +166,7 @@ assets:
   - id: ASSET-PLAN-READINESS-STATUS
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/PlanReadinessStatus.java
-    role: String constants BLOCKED, NEEDS_REVISION, NEEDS_HUMAN_DECISION, READY for machine readiness
+    role: String constants for canonical machine readiness (BLOCKED, NOT_READY, REVIEWABLE, CONDITIONALLY_READY, READY) plus legacy compatibility aliases
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLAN-APPROVAL-STATUS

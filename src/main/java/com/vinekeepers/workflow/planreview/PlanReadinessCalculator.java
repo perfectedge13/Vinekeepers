@@ -15,6 +15,7 @@ import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.SolutionOutline;
+import com.vinekeepers.workflow.planning.PlanningPostDraftGovernor;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
 import java.time.Instant;
@@ -55,11 +56,19 @@ public final class PlanReadinessCalculator {
         int unresolvedQ = countNonBlankUnresolvedQuestions(plan);
         boolean clarificationPending = hasPendingClarification(plan, workflowState);
         boolean repoGroundingMissing = repoGroundingMissing(plan, workflowState);
+        boolean structuredMaterialGaps = PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan);
         int knownFacts = countStructuredKnownFacts(plan);
         List<String> unknownLabels =
-                buildMaterialUnknownLabels(gaps, plan, blockingIssues, clarificationPending, repoGroundingMissing);
+                buildMaterialUnknownLabels(
+                        gaps, findings, plan, blockingIssues, blockingFindings, clarificationPending, repoGroundingMissing);
         int materialUnknowns =
-                computeMaterialUnknownCount(gapCount, unresolvedQ, blockingIssues, clarificationPending, repoGroundingMissing);
+                computeMaterialUnknownCount(
+                        gapCount,
+                        unresolvedQ,
+                        blockingIssues,
+                        blockingFindings,
+                        clarificationPending,
+                        repoGroundingMissing);
 
         if (blockerGap) {
             reasons.add("At least one discovery gap is marked BLOCKER.");
@@ -85,6 +94,9 @@ public final class PlanReadinessCalculator {
         if (repoGroundingMissing) {
             reasons.add("Repository grounding has not been completed strongly enough for approval.");
         }
+        if (structuredMaterialGaps && !clarificationPending) {
+            reasons.add("The plan still contains unresolved material questions that should be clarified before approval.");
+        }
         reasons.add(
                 "Structured planning signals: "
                         + knownFacts
@@ -92,29 +104,13 @@ public final class PlanReadinessCalculator {
                         + materialUnknowns
                         + " material unknown(s).");
 
-        String readiness;
-        if (blockerGap) {
-            readiness = PlanReadinessStatus.BLOCKED;
-        } else if (!packetPostedOnPlan
-                || blockingIssues > 0
-                || blockingFindings > 0
-                || openGaps
-                || clarificationPending
-                || repoGroundingMissing) {
-            readiness = PlanReadinessStatus.NOT_READY;
-        } else if (needsConditional(plan, findings)) {
-            readiness = PlanReadinessStatus.CONDITIONALLY_READY;
-            reasons.add("Residual assumptions or warnings require explicit human acknowledgment.");
-        } else {
-            readiness = PlanReadinessStatus.READY;
-        }
-
         double base = rubric != null ? rubric.meanScore() : 0.5;
         base += Math.min(0.18, knownFacts * 0.012);
         base -= Math.min(0.48, materialUnknowns * 0.085);
         base -= PlanCritiqueRubric.governanceAssumptionPenalty(plan);
         base -= Math.min(0.5, blockingIssues * 0.14);
         base -= Math.min(0.45, blockingFindings * 0.12);
+        base -= critiqueConfidencePenalty(findings);
         if (clarificationPending) {
             base -= 0.18;
         }
@@ -125,6 +121,27 @@ public final class PlanReadinessCalculator {
             base -= 0.25;
         }
         double score = Math.max(0.0, Math.min(1.0, base));
+
+        String readiness;
+        if (blockerGap) {
+            readiness = PlanReadinessStatus.BLOCKED;
+        } else if (!packetPostedOnPlan
+                || blockingIssues > 0
+                || blockingFindings > 0
+                || openGaps
+                || clarificationPending
+                || repoGroundingMissing
+                || structuredMaterialGaps) {
+            readiness = PlanReadinessStatus.NOT_READY;
+        } else if (needsConditional(plan, findings)) {
+            readiness = PlanReadinessStatus.CONDITIONALLY_READY;
+            reasons.add("Residual assumptions or warnings require explicit human acknowledgment.");
+        } else if (score < APPROVAL_CONFIDENCE_THRESHOLD) {
+            readiness = PlanReadinessStatus.REVIEWABLE;
+            reasons.add("The packet is coherent enough for human review, but confidence is still below approval threshold.");
+        } else {
+            readiness = PlanReadinessStatus.READY;
+        }
 
         String level;
         if (score >= APPROVAL_CONFIDENCE_THRESHOLD) {
@@ -152,11 +169,13 @@ public final class PlanReadinessCalculator {
             int gapCount,
             int unresolvedQuestions,
             int blockingIssues,
+            int blockingFindings,
             boolean clarificationPending,
             boolean repoGroundingMissing) {
         return Math.max(0, gapCount)
                 + Math.max(0, unresolvedQuestions)
                 + Math.max(0, blockingIssues)
+                + Math.max(0, blockingFindings)
                 + (clarificationPending ? 1 : 0)
                 + (repoGroundingMissing ? 1 : 0);
     }
@@ -228,8 +247,10 @@ public final class PlanReadinessCalculator {
 
     private static List<String> buildMaterialUnknownLabels(
             List<DiscoveryGap> gaps,
+            List<PlanCritiqueFinding> findings,
             FeaturePlanState plan,
             int blockingIssues,
+            int blockingFindings,
             boolean clarificationPending,
             boolean repoGroundingMissing) {
         Set<String> out = new LinkedHashSet<>();
@@ -263,6 +284,20 @@ public final class PlanReadinessCalculator {
                     continue;
                 }
                 String label = firstNonBlank(issue.getTitle(), issue.getDetail());
+                if (label != null && !label.isBlank()) {
+                    out.add(truncateLabel(label));
+                }
+            }
+        }
+        if (findings != null && blockingFindings > 0) {
+            for (PlanCritiqueFinding finding : findings) {
+                if (out.size() >= MAX_MATERIAL_UNKNOWN_LABELS) {
+                    break;
+                }
+                if (!finding.isBlocksApproval()) {
+                    continue;
+                }
+                String label = firstNonBlank(finding.getMessage(), finding.getCode());
                 if (label != null && !label.isBlank()) {
                     out.add(truncateLabel(label));
                 }
@@ -372,6 +407,25 @@ public final class PlanReadinessCalculator {
             }
         }
         return n;
+    }
+
+    private static double critiqueConfidencePenalty(List<PlanCritiqueFinding> findings) {
+        if (findings == null || findings.isEmpty()) {
+            return 0.0;
+        }
+        double penalty = 0.0;
+        for (PlanCritiqueFinding finding : findings) {
+            String code = finding.getCode() != null ? finding.getCode().trim().toUpperCase() : "";
+            switch (code) {
+                case "INSUFFICIENT_REQUEST_EXPLORATION" -> penalty += 0.18;
+                case "INSUFFICIENT_OPEN_QUESTIONS", "PLACEHOLDER_PLANNING_FIELD" -> penalty += 0.14;
+                case "INSUFFICIENT_CURRENT_STATE", "INSUFFICIENT_ARCHITECTURE_NOTES" -> penalty += 0.12;
+                case "FEATURE_SUMMARY_ECHOES_REQUEST" -> penalty += 0.08;
+                default -> {
+                }
+            }
+        }
+        return Math.min(0.42, penalty);
     }
 
     private static String summarizeCounts(

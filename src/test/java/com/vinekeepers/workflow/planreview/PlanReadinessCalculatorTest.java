@@ -132,6 +132,18 @@ class PlanReadinessCalculatorTest {
         PlanCritiqueRubricScores rubric = PlanCritiqueRubric.compute(plan, f, 1);
         PlanConfidence c = PlanReadinessCalculator.evaluate(plan, List.of(), f, rubric, T, true, null);
         assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
+        assertTrue(c.getMaterialUnknownCount() >= 1);
+        assertTrue(c.getMaterialUnknownLabels().stream().anyMatch(l -> l.contains("fix")));
+    }
+
+    @Test
+    void cleanButLowConfidencePlanBecomesReviewable() {
+        FeaturePlanState plan = basePlan(null).withPacketPosted(T, "", "fp", 1);
+        PlanCritiqueRubricScores rubric = new PlanCritiqueRubricScores(0.62, 0.62, 0.62, 0.62, 0.62, 0.62, 0.62);
+        PlanConfidence c =
+                PlanReadinessCalculator.evaluate(plan, List.of(), List.of(), rubric, T, true, null);
+        assertEquals(PlanReadinessStatus.REVIEWABLE, c.getReadinessStatus());
+        assertTrue(c.getConfidenceScore() < PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD);
     }
 
     @Test

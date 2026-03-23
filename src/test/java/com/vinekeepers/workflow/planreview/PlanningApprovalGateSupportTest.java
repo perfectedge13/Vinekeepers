@@ -52,6 +52,21 @@ class PlanningApprovalGateSupportTest {
     }
 
     @Test
+    void validateApproveAllowed_blocksWhenOnlyReviewable() {
+        FeaturePlanState plan = approvalBasePlan(0.7)
+                .withPlanConfidence(new PlanConfidence(
+                        "MEDIUM",
+                        "reviewable",
+                        PlanReadinessStatus.REVIEWABLE,
+                        T,
+                        0.7,
+                        List.of()));
+        String block = PlanningApprovalGateSupport.validateApproveAllowed(plan, Map.of("planningPacketPostedVersion", 1));
+        assertNotNull(block);
+        assertTrue(block.contains("REVIEWABLE"));
+    }
+
+    @Test
     void validateApproveAllowed_allowsConditionalReadinessAfterHumanAck() {
         FeaturePlanState plan = approvalBasePlan(PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD)
                 .withPlanConfidence(new PlanConfidence(

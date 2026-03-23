@@ -22,6 +22,8 @@ import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
 import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
+import com.vinekeepers.workflow.planning.PlanningPostDraftGovernor;
+import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,7 +40,7 @@ import java.util.stream.Collectors;
 public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    /** Max automatic NEEDS_REVISION → full replan loops per session before forcing human decision. */
+    /** Max automatic NOT_READY → full replan loops per session before blocking for human intervention. */
     private static final int MAX_PLANNING_AUTO_REVISION_AFTER_CRITIQUE = 2;
 
     private final FeaturePlanStateStore planStateStore;
@@ -116,30 +118,28 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                             blockingFc,
                             revisions);
             PlanConfidence confidence = PlanReadinessEvaluator.evaluate(plan, gaps, findings, now, state);
-            String legacyStatus = PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus());
+            String readinessStatus = PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus());
             String summaryForSpread = confidence.getNotes() != null ? confidence.getNotes() : "";
             String prevCtr = getString(state, "planningCritiqueAutoRevisionCount");
             int prevRevision = parseNonNegativeInt(prevCtr, 0);
             PlanConfidence confidenceForStore = confidence;
             boolean critiqueAutoReplansCapped = false;
-            if (PlanReadinessStatus.NEEDS_REVISION.equals(legacyStatus)
+            if (PlanReadinessStatus.NOT_READY.equals(readinessStatus)
                     && prevRevision >= MAX_PLANNING_AUTO_REVISION_AFTER_CRITIQUE) {
                 critiqueAutoReplansCapped = true;
-                legacyStatus = PlanReadinessStatus.NEEDS_HUMAN_DECISION;
                 summaryForSpread =
                         summaryForSpread
-                                + "\n\nAutomatic full replanning after critique is limited. Use **Revise plan** (or the in-thread menu) to run another drafting pass.";
-                confidenceForStore =
-                        new PlanConfidence(
-                                confidence.getLevel(),
-                                summaryForSpread,
-                                PlanReadinessStatus.NEEDS_HUMAN_DECISION,
-                                now,
-                                confidence.getConfidenceScore(),
-                                confidence.getConfidenceReasons(),
-                                confidence.getStructuredKnownFactCount(),
-                                confidence.getMaterialUnknownCount(),
-                                confidence.getMaterialUnknownLabels());
+                                + "\n\nAutomatic internal replanning after critique is limited. A human needs to choose whether to revise the plan again.";
+                confidenceForStore = new PlanConfidence(
+                        confidence.getLevel(),
+                        summaryForSpread,
+                        confidence.getReadinessStatus(),
+                        now,
+                        confidence.getConfidenceScore(),
+                        confidence.getConfidenceReasons(),
+                        confidence.getStructuredKnownFactCount(),
+                        confidence.getMaterialUnknownCount(),
+                        confidence.getMaterialUnknownLabels());
             }
             FeaturePlanState next =
                     plan.withPlanCritiqueSnapshot(snapshot)
@@ -150,23 +150,26 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             Map<String, Object> spread = new LinkedHashMap<>();
             spread.put("planCritiqueError", "");
             spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.READINESS_GATE.name());
-            if (PlanReadinessStatus.READY.equals(legacyStatus)) {
+            if (PlanReadinessStatus.READY.equals(readinessStatus)
+                    || PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus)
+                    || PlanReadinessStatus.REVIEWABLE.equals(readinessStatus)) {
                 spread.put("planningCritiqueAutoRevisionCount", "0");
             } else if (critiqueAutoReplansCapped) {
                 spread.put("planningCritiqueAutoRevisionCount", "0");
-            } else if (PlanReadinessStatus.NEEDS_REVISION.equals(legacyStatus)) {
+            } else if (PlanReadinessStatus.NOT_READY.equals(readinessStatus)) {
                 spread.put("planningCritiqueAutoRevisionCount", String.valueOf(prevRevision + 1));
             } else if (prevCtr != null && !prevCtr.isBlank()) {
                 spread.put("planningCritiqueAutoRevisionCount", prevCtr);
             }
-            putReadinessStatus(spread, legacyStatus);
-            boolean critiqueWantsClarification =
-                    findings.stream()
-                            .anyMatch(
-                                    f -> f.isBlocksApproval()
-                                            && "MUST_FIX".equalsIgnoreCase(f.getSeverity())
-                                            && !"INTAKE_DISCOVERY_INCOMPLETE".equalsIgnoreCase(f.getCode()));
+            putReadinessStatus(spread, readinessStatus);
+            boolean critiqueWantsClarification = wantsClarificationSweep(next, state, findings);
+            String critiqueNextAction =
+                    deriveCritiqueNextAction(readinessStatus, critiqueAutoReplansCapped, critiqueWantsClarification);
+            spread.put("planningCritiqueNextAction", critiqueNextAction);
+            spread.put("planningNextActionLabel", humanizeNextAction(critiqueNextAction));
+            spread.put("planningNextActionSummary", nextActionSummary(critiqueNextAction));
             spread.put("planningCritiqueOpenClarificationSweep", critiqueWantsClarification ? "true" : "false");
+            spread.put("planningCritiqueAutoRevisionCapped", critiqueAutoReplansCapped ? "true" : "false");
             spread.put("planConfidenceLevel", confidenceForStore.getLevel() != null ? confidenceForStore.getLevel() : "");
             spread.put(
                     "planConfidenceScore",
@@ -256,7 +259,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                 s.isBlank() ? "" : PlanningUserFacingCopy.humanizeReadinessStatus(s));
         spread.put(
                 "planReadinessCheckpointGuide",
-                PlanReadinessStatus.NEEDS_HUMAN_DECISION.equals(s)
+                PlanReadinessStatus.REVIEWABLE.equals(s)
                         ? PlanningUserFacingCopy.readinessCheckpointGuideForDiscord()
                         : "");
     }
@@ -333,6 +336,69 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
+    }
+
+    private static boolean wantsClarificationSweep(
+            FeaturePlanState plan,
+            Map<String, Object> state,
+            List<PlanCritiqueFinding> findings) {
+        if (PlanningReadinessSpread.hasPendingClarification(state)
+                || PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan)) {
+            return true;
+        }
+        return findings.stream()
+                .anyMatch(
+                        f -> f.isBlocksApproval()
+                                && "MUST_FIX".equalsIgnoreCase(f.getSeverity())
+                                && !"INTAKE_DISCOVERY_INCOMPLETE".equalsIgnoreCase(f.getCode()));
+    }
+
+    private static String deriveCritiqueNextAction(
+            String readinessStatus,
+            boolean critiqueAutoReplansCapped,
+            boolean critiqueWantsClarification) {
+        if (critiqueWantsClarification) {
+            return "ASK_ONE_QUESTION";
+        }
+        if (PlanReadinessStatus.BLOCKED.equals(readinessStatus) || critiqueAutoReplansCapped) {
+            return "BLOCK";
+        }
+        if (PlanReadinessStatus.NOT_READY.equals(readinessStatus)) {
+            return "REVISE_INTERNAL";
+        }
+        if (PlanReadinessStatus.REVIEWABLE.equals(readinessStatus)) {
+            return "REVIEWABLE";
+        }
+        if (PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus)
+                || PlanReadinessStatus.READY.equals(readinessStatus)) {
+            return "APPROVAL";
+        }
+        return "BLOCK";
+    }
+
+    private static String humanizeNextAction(String nextAction) {
+        return switch (nextAction) {
+            case "ASK_ONE_QUESTION" -> "Needs one more clarification";
+            case "REVISE_INTERNAL" -> "Needs internal revision";
+            case "REVIEWABLE" -> "Ready for human review";
+            case "APPROVAL" -> "Ready for approval";
+            default -> "Blocked";
+        };
+    }
+
+    private static String nextActionSummary(String nextAction) {
+        return switch (nextAction) {
+            case "ASK_ONE_QUESTION" ->
+                    "Needs one more clarification before the packet can move forward.";
+            case "REVISE_INTERNAL" ->
+                    "Needs another internal revision pass before human review.";
+            case "REVIEWABLE" ->
+                    "Ready for human review, but not yet ready for approval.";
+            case "APPROVAL" ->
+                    "Ready for approval once you review the checklist below.";
+            default ->
+                    "Blocked until a human revises the plan or resolves the remaining blockers.";
+        };
     }
 
     private static int parseNonNegativeInt(String raw, int dflt) {

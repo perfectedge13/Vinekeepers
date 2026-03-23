@@ -12,7 +12,7 @@
 
 **Was:** Readiness checkpoints and decision prompts could read like internal signals (status only, or ADR-shaped asks) without explaining the operator’s choices in plain language.
 
-**Now:** **`planReadinessCheckpointGuide`** is spread with critique/readiness when **`planReadinessStatus`** is **`NEEDS_HUMAN_DECISION`**; **`PlanningPromptFormatter`** and profile-driven hints improve **`prompt_for_field`** and decision-log wording. See **decisions** (same date) and **change-log** **2026-03-22**.
+**Now:** **`planReadinessCheckpointGuide`** is spread with critique/readiness when **`planReadinessStatus`** is **`REVIEWABLE`**; **`PlanningPromptFormatter`** and profile-driven hints improve **`prompt_for_field`** and decision-log wording, and the review prompt includes a text fallback (`continue` / `revise`) when the action menu does not render. See **decisions** (same date) and **change-log** **2026-03-22**.
 
 ## Planning packet and critique showed machine-like tokens (2026-03-22)
 

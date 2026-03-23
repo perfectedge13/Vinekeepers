@@ -1571,19 +1571,19 @@ assets:
     role: >-
       Workflow action run_plan_critique_and_readiness — builds findings, PlanCritiqueRubric rollup, PlanReadinessCalculator
       output; persists PlanCritiqueSnapshot (rubric, blocking counts, required revisions), PlanConfidence (readiness,
-      confidenceScore, confidenceReasons, structuredKnownFactCount, materialUnknownCount, materialUnknownLabels), critiqueLifecycleStatus COMPLETE; storeSpread planReadinessStatus (legacy spread
-      via PlanReadinessStatus.legacySpreadValue where applicable), planReadinessStatusLabel (PlanningUserFacingCopy for Discord templates),
-      planConfidenceScore, planConfidenceLevel,
+      confidenceScore, confidenceReasons, structuredKnownFactCount, materialUnknownCount, materialUnknownLabels), critiqueLifecycleStatus COMPLETE; storeSpread canonical planReadinessStatus,
+      planReadinessStatusLabel (PlanningUserFacingCopy for Discord templates), planningCritiqueNextAction, planningNextActionLabel,
+      planningNextActionSummary, planConfidenceScore, planConfidenceLevel,
       planReadinessSummary, planReadinessCheckpointGuide (plain-English explanatory checkpoint copy when planReadinessStatus is
-      NEEDS_HUMAN_DECISION; points the operator to the upcoming interactive choice prompt instead of restating button labels;
+      REVIEWABLE; points the operator to the upcoming interactive choice prompt and text fallback instead of restating button labels;
       empty otherwise; PlanningUserFacingCopy.readinessCheckpointGuideForDiscord),
       planCritiqueFindingsJson, planCritiqueSummary (plain-language severity + field-area hints via
       PlanningUserFacingCopy; when repo evidence exists and the planning packet is already visible in-thread, appends a short pointer
       instead of repeating full repo grounding); adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
       FeaturePlanState PlanningIntakeStage is GATHERING_CONTEXT (complements canonical
-      intake stage with legacy spread); no longer rewrites stored readiness on human proceed;
-      planningCritiqueAutoRevisionCount tracks NEEDS_REVISION-driven full replan attempts; after threshold spreads NEEDS_HUMAN_DECISION
-      and persists PlanConfidence with the same status so auto critique→replan loops stop without silent storms
+      intake stage); no longer rewrites stored readiness on human proceed;
+      planningCritiqueAutoRevisionCount tracks NOT_READY-driven internal replan attempts; after threshold spreads a BLOCK next action
+      instead of silently escalating to human-review copy
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -2310,16 +2310,16 @@ requirements:
           recompute_plan_progress spreads discoveryHasOpenGaps false and discoveryRecomputeError when contextId is missing;
           when plan has artifacts, persists projected section statuses and returns a refreshed gap spread map
         - >-
-          Coordinator Discord prompts that gate plan readiness or NEEDS_HUMAN_DECISION include plain-English explanation of what
+          Coordinator Discord prompts that gate plan readiness or REVIEWABLE checkpoints include plain-English explanation of what
           the operator is choosing (e.g. move to launch approval vs revise the plan first) rather than only internal status tokens,
-          and the explanatory checkpoint copy stays distinct from the separate interactive present_choices prompt
+          and the explanatory checkpoint copy stays distinct from the separate interactive present_choices prompt with a plain-text fallback
         - >-
           When the workflow asks for structured plan input (e.g. decision log rows), user-visible copy frames the message as a
           question, explains one-reply-per-row expectations in plain language, states that text is stored on the plan, and avoids
           unexplained jargon (ADR-only framing)
         - >-
           Critique summaries, readiness lines, and similar coordinator posts use PlanningUserFacingCopy (or equivalent) for
-          severities and statuses instead of exposing raw MUST_FIX / NEEDS_HUMAN_DECISION strings to Discord
+          severities and statuses instead of exposing raw MUST_FIX / REVIEWABLE tokens to Discord
         - >-
           derive_plan_governance merges OPEN discovery gaps into gap:* PlanIssue rows while preserving non-gap issues, splits
           artifact risk/decision text into canonical PlanRisk / PlanDecision rows with art-risk-* / art-dec-* ids, and merges

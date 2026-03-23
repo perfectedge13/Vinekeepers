@@ -115,7 +115,7 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
                 out.put("planReadinessStatusLabel", PlanningUserFacingCopy.humanizeReadinessStatus(rs));
                 out.put(
                         "planReadinessCheckpointGuide",
-                        PlanReadinessStatus.NEEDS_HUMAN_DECISION.equals(rs)
+                        PlanReadinessStatus.REVIEWABLE.equals(rs)
                                 ? PlanningUserFacingCopy.readinessCheckpointGuideForDiscord()
                                 : "");
             }

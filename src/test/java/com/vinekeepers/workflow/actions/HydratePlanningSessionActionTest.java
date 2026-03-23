@@ -68,7 +68,7 @@ class HydratePlanningSessionActionTest {
     }
 
     @Test
-    void intakeThread_hydrateSpreadsCheckpointGuideWhenNeedsHumanDecision() {
+    void intakeThread_hydrateSpreadsCheckpointGuideWhenReviewable() {
         var rooms = new FeatureRoomStateStore();
         var plans = new FeaturePlanStateStore();
         var reg = TestWorkProfiles.loadFromRepoConfig();
@@ -104,7 +104,7 @@ class HydratePlanningSessionActionTest {
                         new PlanConfidence(
                                 "MEDIUM",
                                 "Open gaps: 0.",
-                                PlanReadinessStatus.NEEDS_HUMAN_DECISION,
+                                PlanReadinessStatus.REVIEWABLE,
                                 Instant.now(),
                                 0.6,
                                 List.of())));
@@ -116,7 +116,8 @@ class HydratePlanningSessionActionTest {
                 Map.of(),
                 Map.of());
         String guide = String.valueOf(out.getOrDefault("planReadinessCheckpointGuide", ""));
-        assertTrue(guide.contains("buttons in the next message"));
+        assertEquals(PlanReadinessStatus.REVIEWABLE, out.get("planReadinessStatus"));
+        assertTrue(guide.contains("reply with `continue` or `revise`"));
         assertFalse(guide.isBlank());
     }
 }

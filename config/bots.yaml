@@ -114,6 +114,9 @@ workflows:
       - planningPacketSkipReason
       - planReadinessStatus
       - planReadinessStatusLabel
+      - planningCritiqueNextAction
+      - planningNextActionLabel
+      - planningNextActionSummary
       - planReadinessSummary
       - planAssumptionsSummary
       - planIssuesSummary
@@ -183,14 +186,14 @@ workflows:
       planning_preapproval_review:
         pipeline:
         - cap_set_stage_readiness_gate
-        - cap_post_prelaunch_review
         - cap_evaluate_planning_approval_gate
+        - cap_post_prelaunch_review
         rulesRef: rs_preapproval_review
         defaultNextPhase: planning_approval_hold
       planning_approval_hold:
         pipeline:
         - cap_post_approval_hold
-        defaultNextPhase: planning_revision_reset
+        defaultNextPhase: done
       planning_revision_reset:
         pipeline:
         - cap_planning_revision_reset
@@ -425,11 +428,13 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: '**Human review requested**
+            content: '**Planning review requested**
 
               {{planReadinessCheckpointGuide}}
 
               **Status:** {{planReadinessStatusLabel}}
+
+              **Next action:** {{planningNextActionLabel}}
 
               {{planReadinessSummary}}
 
@@ -439,11 +444,13 @@ workflows:
             asRole: orchestrator
             target: thread
         - type: prompt_for_field
-          prompt: '**Pick what happens next** using the buttons below.
+          prompt: '**Choose the next step** for this packet.
 
-            **Continue to approval** opens **Approve / Approve with risks / Revise / Reject** for this packet.
+            **Continue to approval** checks whether the approval menu can open for this packet.
 
             **Revise plan first** runs another drafting round, then brings you back to this checkpoint.
+
+            If the action menu does not render, reply with `continue` or `revise`.
 
             This step still does **not** launch code by itself.'
           storeIn: readinessProceedRaw
@@ -460,6 +467,10 @@ workflows:
           - when:
               key: readinessProceedRaw
               value: proceed
+            next: 4
+          - when:
+              key: readinessProceedRaw
+              value: continue
             next: 4
           - when:
               key: readinessProceedRaw
@@ -482,6 +493,8 @@ workflows:
 
             **Status:** {{planReadinessStatusLabel}}
 
+            **Next action:** {{planningNextActionLabel}}
+
             {{planReadinessSummary}}
 
             **Assumptions** — {{planAssumptionsSummary}}
@@ -492,7 +505,7 @@ workflows:
 
             {{planningThreadReviewBuildError}}
 
-            _When the gates clear, you will get **Approve / Approve with risks / Revise / Reject** — nothing launches until you pick one._
+            _If the approval gates pass in this step, you will get **Approve / Approve with risks / Revise / Reject** — nothing launches until you pick one._
 
             '
           asRole: orchestrator
@@ -507,7 +520,9 @@ workflows:
         bind:
           content: '**Approval held** — {{planningApprovalGateReason}}
 
-            We will run another planning round to strengthen the packet before you approve.'
+            {{planningNextActionSummary}}
+
+            Reply with `revise` to run another planning round, or `continue` after you have more context to review.'
           asRole: orchestrator
           target: thread
       cap_planning_revision_reset:
@@ -701,20 +716,26 @@ workflows:
       rs_critique:
         - when:
             equals:
-              key: planReadinessStatus
-              value: BLOCKED
+              key: planningCritiqueNextAction
+              value: BLOCK
           then:
           - transition: planning_blocked
         - when:
             equals:
-              key: planReadinessStatus
-              value: NEEDS_HUMAN_DECISION
+              key: planningCritiqueNextAction
+              value: ASK_ONE_QUESTION
+          then:
+          - transition: planning_clarification
+        - when:
+            equals:
+              key: planningCritiqueNextAction
+              value: REVIEWABLE
           then:
           - transition: planning_human_review
         - when:
             equals:
-              key: planReadinessStatus
-              value: NEEDS_REVISION
+              key: planningCritiqueNextAction
+              value: REVISE_INTERNAL
           then:
           - transition: planning_revision_reset
       rs_human_review:

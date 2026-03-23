@@ -545,6 +545,9 @@ public final class VinekeepersEngine implements EventSubscriber {
         }
         ReplySender sender = replySendersByConnectorId.get(sourcePrefix);
         if (sender != null) {
+            if (outbound.getIntent().isPresent()) {
+                return false;
+            }
             String text = outbound.getText().orElse("");
             if (!text.isEmpty()) {
                 String channelId = resolved.channelId();

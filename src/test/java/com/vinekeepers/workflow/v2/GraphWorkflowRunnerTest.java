@@ -359,7 +359,7 @@ class GraphWorkflowRunnerTest {
                                                 "type",
                                                 "prompt_for_field",
                                                 "prompt",
-                                                "Pick what happens next using the buttons below.",
+                                                "Choose the next step for this packet. If the action menu does not render, reply with continue or revise.",
                                                 "storeIn",
                                                 "readinessProceedRaw",
                                                 "intent",

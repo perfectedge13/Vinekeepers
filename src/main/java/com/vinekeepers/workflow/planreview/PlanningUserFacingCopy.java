@@ -17,14 +17,13 @@ public final class PlanningUserFacingCopy {
     private PlanningUserFacingCopy() {}
 
     /**
-     * Canonical plain-English copy for the {@code NEEDS_HUMAN_DECISION} readiness fork (Discord templates via
-     * {@code planReadinessCheckpointGuide}); kept in code so behavior and wording stay aligned.
+     * Canonical plain-English copy for the review checkpoint shown before approval is opened.
      */
     public static String readinessCheckpointGuideForDiscord() {
         return "**What we need from you**\n"
-                + "This is a **checkpoint before launch approval**.\n\n"
-                + "Read the review summary in this thread, then use the **buttons in the next message** to choose whether to "
-                + "open the launch-approval menu or send the packet through another planning pass first.\n\n"
+                + "This is a **planning review checkpoint** before launch approval opens.\n\n"
+                + "Read the review summary in this thread, then choose whether to keep revising the packet or continue toward "
+                + "approval evaluation. If the action menu does not render, reply with `continue` or `revise`.\n\n"
                 + "**Not asking for:** a merge, a production deploy, or a Cursor run — only how to route the workflow.";
     }
 
@@ -48,6 +47,7 @@ public final class PlanningUserFacingCopy {
         return switch (status.trim().toUpperCase(Locale.ROOT)) {
             case "BLOCKED" -> "Blocked";
             case "NOT_READY" -> "Not ready";
+            case "REVIEWABLE" -> "Ready for review";
             case "NEEDS_REVISION" -> "Needs revision";
             case "NEEDS_HUMAN_DECISION" -> "Needs your decision";
             case "READY" -> "Ready";

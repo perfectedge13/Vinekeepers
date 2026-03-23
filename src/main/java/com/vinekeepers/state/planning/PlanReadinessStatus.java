@@ -8,6 +8,8 @@ public final class PlanReadinessStatus {
     public static final String BLOCKED = "BLOCKED";
     public static final String NEEDS_REVISION = "NEEDS_REVISION";
     public static final String NEEDS_HUMAN_DECISION = "NEEDS_HUMAN_DECISION";
+    /** Packet is coherent enough for human review, but not yet ready for approval. */
+    public static final String REVIEWABLE = "REVIEWABLE";
     public static final String READY = "READY";
     /** Explicit not-ready umbrella (maps from BLOCKED / NEEDS_REVISION in new policy). */
     public static final String NOT_READY = "NOT_READY";
@@ -21,11 +23,11 @@ public final class PlanReadinessStatus {
         if (readiness == null || readiness.isBlank()) {
             return "";
         }
-        if (NOT_READY.equals(readiness)) {
-            return NEEDS_REVISION;
+        if (NEEDS_REVISION.equals(readiness)) {
+            return NOT_READY;
         }
-        if (CONDITIONALLY_READY.equals(readiness)) {
-            return NEEDS_HUMAN_DECISION;
+        if (NEEDS_HUMAN_DECISION.equals(readiness)) {
+            return REVIEWABLE;
         }
         return readiness;
     }

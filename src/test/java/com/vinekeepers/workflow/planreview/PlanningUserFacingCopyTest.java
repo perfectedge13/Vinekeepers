@@ -39,8 +39,8 @@ class PlanningUserFacingCopyTest {
     @Test
     void humanizeReadinessStatusUsesPlainEnglishForDecisionGate() {
         assertEquals(
-                "Needs your decision",
-                PlanningUserFacingCopy.humanizeReadinessStatus("NEEDS_HUMAN_DECISION"));
+                "Ready for review",
+                PlanningUserFacingCopy.humanizeReadinessStatus("REVIEWABLE"));
         assertEquals("Ready", PlanningUserFacingCopy.humanizeReadinessStatus("READY"));
         assertEquals("Not ready", PlanningUserFacingCopy.humanizeReadinessStatus("NOT_READY"));
     }
@@ -48,8 +48,8 @@ class PlanningUserFacingCopyTest {
     @Test
     void readinessCheckpointGuideExplainsForkInPlainLanguage() {
         String g = PlanningUserFacingCopy.readinessCheckpointGuideForDiscord();
-        assertTrue(g.contains("buttons in the next message"));
-        assertTrue(g.contains("launch-approval menu"));
+        assertTrue(g.contains("planning review checkpoint"));
+        assertTrue(g.contains("reply with `continue` or `revise`"));
         assertTrue(g.contains("Not asking for"));
         assertFalse(g.contains("**Continue to approval**"));
         assertFalse(g.toLowerCase().contains("needs_human_decision"));
@@ -94,6 +94,7 @@ class PlanningUserFacingCopyTest {
     void humanizeReadinessAndRelatedStatusesUsePlainEnglish() {
         assertEquals("Blocked", PlanningUserFacingCopy.humanizeReadinessStatus("BLOCKED"));
         assertEquals("Needs revision", PlanningUserFacingCopy.humanizeReadinessStatus("NEEDS_REVISION"));
+        assertEquals("Ready for review", PlanningUserFacingCopy.humanizeReadinessStatus("REVIEWABLE"));
         assertEquals(
                 "Conditionally ready",
                 PlanningUserFacingCopy.humanizeReadinessStatus("CONDITIONALLY_READY"));
