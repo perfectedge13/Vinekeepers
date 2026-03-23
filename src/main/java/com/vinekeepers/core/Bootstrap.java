@@ -39,6 +39,7 @@ import com.vinekeepers.tools.EchoTool;
 import com.vinekeepers.tools.ToolRegistry;
 import com.vinekeepers.tools.ToolRunner;
 import com.vinekeepers.devops.DeployTargetRegistry;
+import com.vinekeepers.devops.HostComposeOpsRunner;
 import com.vinekeepers.profile.WorkProfileLoader;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.providers.DeployComposeServicesChoiceProvider;
@@ -185,7 +186,9 @@ public final class Bootstrap {
         registerLegacyActions(actionRegistry);
         registerLifecycleActions(actionRegistry);
         actionRegistry.register("resolve_deploy_branch", new ResolveDeployBranchAction());
-        DeployTargetRegistry bootstrapTargets = DeployTargetRegistry.load(DeployTargetRegistry.resolveManifestPath());
+        Path deployManifestPath = DeployTargetRegistry.resolveManifestPath();
+        DeployTargetRegistry bootstrapTargets = DeployTargetRegistry.load(deployManifestPath);
+        HostComposeOpsRunner.logContainerDirectComposeWarnings(bootstrapTargets, deployManifestPath);
         actionRegistry.register("deploy_resolve_project", new DeployResolveProjectAction(bootstrapTargets));
         actionRegistry.register("start_ansible_deploy", new StartAnsibleDeployAction(outboundDeliveryRouter, bootstrapTargets));
         actionRegistry.register("run_deploy_compose", new RunDeployComposeAction(outboundDeliveryRouter, bootstrapTargets));

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T12:00:00Z"
+  updated_utc: "2026-03-24T00:00:00Z"
 
 project:
   id: vinekeepers
@@ -71,7 +71,8 @@ assets:
       solution/traceability/context, sectionStatuses, repo workspace linkage, profileId, artifacts map, PlanRisk /
       PlanDecision, unresolvedQuestions, critiqueLifecycleStatus, packet delivery fields (packetPostedAt, optional
       packetMessageRef,       packetPostedFingerprint, chunk count), PlanCritiqueSnapshot, PlanConfidence (readiness, level,
-      notes, confidenceScore, confidenceReasons, computedAt), PlanApproval (status, actorId, at, optional rationale);
+      notes, confidenceScore, confidenceReasons, structuredKnownFactCount, materialUnknownCount, materialUnknownLabels,
+      computedAt), PlanApproval (status, actorId, at, optional rationale);
       durable PlanningIntakeStage with stageEnteredAt, intakeKickoffPostedVersion / intakeKickoffPostedFingerprint for
       idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED; repo workspace fields
       (repoWorkspaceStatus, repoLocalPath, repoRef, repoAccessNotes) feed spread_plan_workspace_signals and JSON evidence spreads in workflow state;
@@ -179,7 +180,9 @@ assets:
   - id: ASSET-PLAN-CONFIDENCE
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/PlanConfidence.java
-    role: Readiness status, qualitative level, notes, numeric confidenceScore, confidenceReasons, computedAt
+    role: >-
+      Readiness status, qualitative level, notes, numeric confidenceScore, confidenceReasons, structuredKnownFactCount /
+      materialUnknownCount / materialUnknownLabels (JSON-friendly tallies), computedAt
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLAN-CRITIQUE-RUBRIC-SCORES
@@ -307,7 +310,8 @@ requirements:
         - >-
           FeaturePlanState holds governance lists (PlanAssumption, PlanIssue, PlanRisk, PlanDecision, unresolvedQuestions),
           packet delivery metadata after a successful thread post, critique lifecycle status, enriched PlanCritiqueSnapshot (rubric scores,
-          blocking counts), and PlanConfidence with numeric score for approval gating; derive_plan_governance normalizes gap-derived
+          blocking counts), and PlanConfidence with numeric confidenceScore, confidenceReasons (including a known-vs-unknown signal summary),
+          structuredKnownFactCount, materialUnknownCount, and capped materialUnknownLabels for approval gating and audit; derive_plan_governance normalizes gap-derived
           gap:* issues, synthetic art-risk-* / art-dec-* rows from artifact text, and merged unresolved question lines for Discord packet tables;
           unresolvedQuestions is the canonical persisted basis for “open questions” in coordinator UX (versus ad-hoc clarification filler);
           derive_plan_governance and packet formatters filter generic/meta or internal-looking lines so displayed open questions reflect

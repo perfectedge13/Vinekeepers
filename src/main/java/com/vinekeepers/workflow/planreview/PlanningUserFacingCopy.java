@@ -22,12 +22,9 @@ public final class PlanningUserFacingCopy {
      */
     public static String readinessCheckpointGuideForDiscord() {
         return "**What we need from you**\n"
-                + "This is a **fork before launch approval** — pick what should happen next.\n\n"
-                + "• **Continue to approval** — Opens the menu where you **approve**, **approve with risks**, **revise**, or "
-                + "**reject** this planning packet. Nothing launches until you choose there; this button alone does **not** "
-                + "start Cursor or run code.\n"
-                + "• **Revise plan first** — Runs another planning pass to improve the draft; you will return to this "
-                + "checkpoint afterward.\n\n"
+                + "This is a **checkpoint before launch approval**.\n\n"
+                + "Read the review summary in this thread, then use the **buttons in the next message** to choose whether to "
+                + "open the launch-approval menu or send the packet through another planning pass first.\n\n"
                 + "**Not asking for:** a merge, a production deploy, or a Cursor run — only how to route the workflow.";
     }
 

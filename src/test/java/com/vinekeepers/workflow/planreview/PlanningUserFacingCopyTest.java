@@ -48,9 +48,10 @@ class PlanningUserFacingCopyTest {
     @Test
     void readinessCheckpointGuideExplainsForkInPlainLanguage() {
         String g = PlanningUserFacingCopy.readinessCheckpointGuideForDiscord();
-        assertTrue(g.contains("Continue to approval"));
-        assertTrue(g.contains("Revise plan first"));
+        assertTrue(g.contains("buttons in the next message"));
+        assertTrue(g.contains("launch-approval menu"));
         assertTrue(g.contains("Not asking for"));
+        assertFalse(g.contains("**Continue to approval**"));
         assertFalse(g.toLowerCase().contains("needs_human_decision"));
     }
 

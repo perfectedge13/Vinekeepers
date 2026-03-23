@@ -125,7 +125,10 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                 PlanReadinessStatus.READY,
                                 now,
                                 confidence.getConfidenceScore(),
-                                confidence.getConfidenceReasons());
+                                confidence.getConfidenceReasons(),
+                                confidence.getStructuredKnownFactCount(),
+                                confidence.getMaterialUnknownCount(),
+                                confidence.getMaterialUnknownLabels());
             }
             String legacyStatus = PlanReadinessStatus.legacySpreadValue(confidence.getReadinessStatus());
             String summaryForSpread = confidence.getNotes() != null ? confidence.getNotes() : "";
@@ -147,7 +150,10 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                 PlanReadinessStatus.NEEDS_HUMAN_DECISION,
                                 now,
                                 confidence.getConfidenceScore(),
-                                confidence.getConfidenceReasons());
+                                confidence.getConfidenceReasons(),
+                                confidence.getStructuredKnownFactCount(),
+                                confidence.getMaterialUnknownCount(),
+                                confidence.getMaterialUnknownLabels());
             }
             FeaturePlanState next =
                     plan.withPlanCritiqueSnapshot(snapshot)

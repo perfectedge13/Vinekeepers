@@ -116,7 +116,7 @@ class HydratePlanningSessionActionTest {
                 Map.of(),
                 Map.of());
         String guide = String.valueOf(out.getOrDefault("planReadinessCheckpointGuide", ""));
-        assertTrue(guide.contains("Continue to approval"));
+        assertTrue(guide.contains("buttons in the next message"));
         assertFalse(guide.isBlank());
     }
 }

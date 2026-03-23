@@ -3,6 +3,8 @@ package com.vinekeepers.workflow.v2;
 import com.vinekeepers.bot.ConversationMode;
 import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.interactions.PresentChoices;
+import com.vinekeepers.interactions.ResponseIntent;
 import com.vinekeepers.state.StateStore;
 import com.vinekeepers.tools.Tool;
 import com.vinekeepers.tools.ToolRegistry;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GraphWorkflowRunnerTest {
@@ -331,6 +334,62 @@ class GraphWorkflowRunnerTest {
         assertEquals("one", finalState.get().get("firstAnswer"));
         assertEquals("two", finalState.get().get("secondAnswer"));
         assertEquals("__v2_done", finalState.get().get(GraphWorkflowRunner.PHASE_KEY));
+    }
+
+    @Test
+    void configurableStepsHumanReviewPromptPreservesPresentChoicesRichReply() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "planning_human_review");
+        Map<String, Object> phases = new LinkedHashMap<>();
+        phases.put("planning_human_review", Map.of("pipeline", List.of("cap_planning_human_review")));
+        wf.put("phases", phases);
+        wf.put(
+                "capabilities",
+                Map.of(
+                        "cap_planning_human_review",
+                        Map.of(
+                                "kind",
+                                "configurable_steps",
+                                "steps",
+                                List.of(
+                                        Map.of(
+                                                "type",
+                                                "prompt_for_field",
+                                                "prompt",
+                                                "Pick what happens next using the buttons below.",
+                                                "storeIn",
+                                                "readinessProceedRaw",
+                                                "intent",
+                                                "present_choices",
+                                                "choices",
+                                                List.of(
+                                                        Map.of("id", "proceed", "label", "Continue to approval"),
+                                                        Map.of("id", "revise", "label", "Revise plan first"))),
+                                        Map.of("type", "capture_field", "storeIn", "readinessProceedRaw"),
+                                        Map.of("type", "done", "message", "")))));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("outer_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model, reg, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, "channel", Map.of(), null);
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "ch1", "authorId", "u1", "content", "start"));
+
+        WorkflowRunResult res = runner.runResult(event, new StateStore(), "b");
+        assertTrue(res.isWaiting());
+        assertEquals("readinessProceedRaw", res.getWaitingForField());
+        assertTrue(res.getRichReply().isPresent());
+        PresentChoices choices = assertInstanceOf(
+                PresentChoices.class,
+                res.getRichReply().orElseThrow().getIntent().orElseThrow());
+        assertEquals(List.of("proceed", "revise"), choices.choices().stream().map(ResponseIntent.Choice::id).toList());
     }
 
     @Test

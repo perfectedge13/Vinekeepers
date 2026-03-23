@@ -1,7 +1,12 @@
 package com.vinekeepers.workflow.planning;
 
 import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.PlanAssumption;
+import com.vinekeepers.state.planning.PlanAssumptionStatus;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
+import com.vinekeepers.state.planning.PlanGovernanceSeverity;
+import com.vinekeepers.state.planning.PlanIssue;
+import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
@@ -103,6 +108,9 @@ public final class PlanningPostDraftGovernor {
                         PlanningPostDraftAction.ASK_ONE_QUESTION,
                         "",
                         true);
+            }
+            if (hasStructuredMaterialPlanningGaps(plan)) {
+                return new Result(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
             }
             return new Result(
                     PlanningPostDraftAction.ASSUME_AND_CONTINUE,
@@ -273,6 +281,67 @@ public final class PlanningPostDraftGovernor {
     public static String firstOpenPlanningQuestionTextOrEmpty(UnresolvedItemLedger ledger) {
         String q = firstOpenPlanningQuestion(ledger);
         return q != null ? q : "";
+    }
+
+    /**
+     * Ledger-first (canonical clarification), then structured plan fields — not packet display text.
+     */
+    public static String firstUserFacingClarificationTextOrEmpty(
+            UnresolvedItemLedger ledger, FeaturePlanState plan) {
+        String fromLedger = firstOpenPlanningQuestionTextOrEmpty(ledger);
+        if (!fromLedger.isBlank()) {
+            return fromLedger;
+        }
+        return firstStructuredMaterialQuestion(plan);
+    }
+
+    /** True when unresolved questions, open blocking issues, or open high-severity assumptions need human input. */
+    public static boolean hasStructuredMaterialPlanningGaps(FeaturePlanState plan) {
+        return !firstStructuredMaterialQuestion(plan).isBlank();
+    }
+
+    /**
+     * One concrete line derived from {@link FeaturePlanState} governance fields (not rendered packet bodies).
+     */
+    public static String firstStructuredMaterialQuestion(FeaturePlanState plan) {
+        if (plan == null) {
+            return "";
+        }
+        for (String uq : plan.getUnresolvedQuestions()) {
+            if (uq != null) {
+                String t = uq.trim();
+                if (!t.isBlank()) {
+                    return t;
+                }
+            }
+        }
+        for (PlanIssue issue : plan.getIssues()) {
+            if (!issue.isBlocking() || !PlanIssueStatus.OPEN.equalsIgnoreCase(issue.getStatus())) {
+                continue;
+            }
+            String title = issue.getTitle() != null ? issue.getTitle().trim() : "";
+            if (!title.isBlank()) {
+                return title;
+            }
+            String detail = issue.getDetail() != null ? issue.getDetail().trim() : "";
+            if (!detail.isBlank()) {
+                return detail;
+            }
+        }
+        for (PlanAssumption a : plan.getAssumptions()) {
+            if (!PlanAssumptionStatus.OPEN.equalsIgnoreCase(a.getStatus())) {
+                continue;
+            }
+            if (!PlanGovernanceSeverity.HIGH.equalsIgnoreCase(a.getSeverity())) {
+                continue;
+            }
+            String s = a.getStatement() != null ? a.getStatement().trim() : "";
+            if (!s.isBlank()) {
+                String head = s.length() <= 220 ? s : s.substring(0, 219) + "…";
+                return "Confirm or correct this high-severity assumption: " + head;
+            }
+        }
+        return "";
     }
 
     private static String firstOpenPlanningQuestion(UnresolvedItemLedger ledger) {

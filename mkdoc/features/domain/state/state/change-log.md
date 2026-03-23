@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-03-23
+
+- **Plan confidence (known vs unknown):** **`PlanConfidence`** documents and persists **structuredKnownFactCount**, **materialUnknownCount**, and **materialUnknownLabels** so critique/readiness and approval gating can reflect how much of the plan is grounded vs still unknown. **`FeaturePlanState`** / **`REQ-STATE-001`** wording aligned in **state-registry** with workflow **PlanReadinessCalculator** / **PlanningApprovalGateSupport** (launch bar **0.85**). Docs: summary, how-it-works, contracts.
+
 ## 2026-03-22
 
 - **Canonical planning projections and readiness seam:** **`FeaturePlanState`** remains the durable source for packet timing (**`packetPostedAt`**, fingerprint/chunk fields) and **`PlanConfidence`**; **`PlanReadinessEvaluator`** treats “packet posted” as authoritative from plan state when workflow spread omits it. **`hydrate_planning_session`** projects **`planningPacketPosted`**, **`planningPacketPostedVersion`**, and **`planReadinessStatus`** from persisted plan when present; **`evaluate_planning_approval_gate`** prefers stored **`PlanConfidence`** for the approval-ready check. Specs: **state-registry**, **workflow-registry**; tests: **PlanReadinessEvaluatorTest**, **HydratePlanningSessionActionTest**, **SpreadPlanWorkspaceSignalsActionTest**.

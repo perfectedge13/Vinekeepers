@@ -692,10 +692,11 @@ public final class PlanningCyclePipeline {
             }
             String qt = getString(spread, "planningClarificationQuestionText");
             if (qt == null || qt.isBlank()) {
-                String fromLedger =
-                        PlanningPostDraftGovernor.firstOpenPlanningQuestionTextOrEmpty(clr.upsert().ledger());
-                if (!fromLedger.isBlank()) {
-                    spread.put("planningClarificationQuestionText", fromLedger);
+                String clar =
+                        PlanningPostDraftGovernor.firstUserFacingClarificationTextOrEmpty(
+                                clr.upsert().ledger(), plan);
+                if (!clar.isBlank()) {
+                    spread.put("planningClarificationQuestionText", clar);
                 }
             }
         } else {

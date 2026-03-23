@@ -179,6 +179,17 @@ public final class HostComposeOpsRunner {
         return validateDirectComposePrerequisites(workingDirectory, composeFile, dockerBinary);
     }
 
+    /** Visible for tests. */
+    static List<String> describeContainerDirectComposeWarningsForTest(DeployTargetRegistry registry, Path manifestPath) {
+        return describeContainerDirectComposeWarnings(registry, manifestPath, true);
+    }
+
+    public static void logContainerDirectComposeWarnings(DeployTargetRegistry registry, Path manifestPath) {
+        for (String warning : describeContainerDirectComposeWarnings(registry, manifestPath, runningInContainer())) {
+            log.warn(warning);
+        }
+    }
+
     private static void runViaCursorAgent(OutboundDeliveryRouter router,
                                           String workflowBotId,
                                           String channelId,
@@ -264,6 +275,45 @@ public final class HostComposeOpsRunner {
                     + "` is not mounted in the Vinekeepers container. Mount `/var/run/docker.sock:/var/run/docker.sock` to use direct host compose operations.";
         }
         return null;
+    }
+
+    private static List<String> describeContainerDirectComposeWarnings(
+            DeployTargetRegistry registry, Path manifestPath, boolean runningInContainer) {
+        if (!runningInContainer || registry == null) {
+            return List.of();
+        }
+        List<String> warnings = new ArrayList<>();
+        String manifest = manifestPath != null ? manifestPath.toString() : "config/deploy-targets.yaml";
+        if (!Files.exists(DOCKER_SOCKET_PATH)) {
+            warnings.add("Direct compose targets are configured but Docker socket `" + escape(DOCKER_SOCKET_PATH.toString())
+                    + "` is not mounted in the Vinekeepers container. Mount `/var/run/docker.sock:/var/run/docker.sock` before using `run_deploy_compose` (manifest: `"
+                    + escape(manifest) + "`).");
+        }
+        for (DeployTarget target : registry.getTargets()) {
+            if (target == null) {
+                continue;
+            }
+            DeployTargetCompose compose = target.getCompose();
+            if (compose == null || !compose.isConfigured() || compose.getExecutor() != ComposeHostExecutor.DIRECT) {
+                continue;
+            }
+            Path workingDirectory = Path.of(compose.getWorkingDirectory());
+            if (!Files.isDirectory(workingDirectory)) {
+                warnings.add("Direct compose target `" + escape(target.getId()) + "` expects working directory `"
+                        + escape(workingDirectory.toString())
+                        + "` inside the Vinekeepers container, but that path is missing. Bind-mount the host stack at the same in-container path or point `DEPLOY_TARGETS_PATH` at a container-specific manifest (current manifest: `"
+                        + escape(manifest) + "`).");
+                continue;
+            }
+            Path composePath = workingDirectory.resolve(compose.getFile()).normalize();
+            if (!Files.isRegularFile(composePath)) {
+                warnings.add("Direct compose target `" + escape(target.getId()) + "` expects compose file `"
+                        + escape(composePath.toString())
+                        + "` inside the Vinekeepers container, but it is missing. Mount the stack directory contents or use a manifest whose workingDirectory matches the mounted path (current manifest: `"
+                        + escape(manifest) + "`).");
+            }
+        }
+        return warnings;
     }
 
     private static String validateComposeCli(String dockerBinary) {

@@ -179,6 +179,54 @@ class PlanningPostDraftGovernorTest {
     }
 
     @Test
+    void derive_forcesAskWhenStalledWithStructuredPlanGapsAndNoLedgerQuestion() {
+        UnresolvedItem it =
+                new UnresolvedItem(
+                        "uq_1",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "",
+                        "normal",
+                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        List.of(),
+                        List.of(),
+                        1);
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(it);
+        Map<String, Object> persisted = new LinkedHashMap<>();
+        persisted.put(PlanningPostDraftGovernor.BASELINE_REPO_HASH_KEY, String.valueOf("{}".hashCode()));
+        persisted.put(PlanningPostDraftGovernor.BASELINE_ASSUMPTION_COUNT_KEY, "0");
+        persisted.put(PlanningPostDraftGovernor.BASELINE_CRITIQUE_BLOCKING_KEY, "0");
+        Map<String, Object> signal = new LinkedHashMap<>();
+        signal.put("planningRepoEvidenceJson", "{}");
+        String situation =
+                PlanningPostDraftGovernor.revisionSituationFingerprint(
+                        false, false, "thin", false, false, ledger);
+        persisted.put(PlanningPostDraftGovernor.LAST_REVISION_SITUATION_KEY, situation);
+
+        FeaturePlanState plan =
+                minimalPlan()
+                        .withGovernanceRecords(
+                                List.of(), List.of(), List.of(), List.of(), List.of("What latency SLO applies?"));
+
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        persisted,
+                        signal,
+                        plan,
+                        ledger,
+                        false,
+                        false,
+                        false,
+                        false,
+                        "thin",
+                        "",
+                        false);
+        assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
+        assertTrue(r.forceUserInputRequired());
+    }
+
+    @Test
     void derive_assumeWhenStalledWithoutLedgerQuestion() {
         UnresolvedItem it =
                 new UnresolvedItem(

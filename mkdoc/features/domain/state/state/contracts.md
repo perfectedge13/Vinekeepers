@@ -19,4 +19,5 @@ State: JSON-shaped per workflow (e.g. TicketDraft, ReviewDraft). Key: (botId, co
 - **DiscoveryQuestion:** prompt text and optional apply target when kind is REQUIRED_FIELD.
 - **DiscoveryAgenda:** ordered questions plus summary fields for workflow state snapshots.
 - **DiscoveryFinding:** optional metadata for a captured answer (future persistence).
+- **PlanConfidence:** readiness status, qualitative level, notes, **confidenceScore** (0–1), **confidenceReasons** (including summaries tied to known-vs-unknown signals), **structuredKnownFactCount**, **materialUnknownCount**, **materialUnknownLabels**, **computedAt**.
 

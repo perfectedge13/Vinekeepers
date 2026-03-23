@@ -2,6 +2,11 @@
 
 # Entries
 
+## 2026-03-23
+
+- **Plan confidence + approval threshold + material-gap pause (mk sync):** Documented **`PlanConfidence`** known-vs-unknown tallies, **`PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD`** (**0.85**) for **`evaluate_planning_approval_gate`**, and **`PlanningPostDraftGovernor`** / pipeline behavior: **one concrete clarifying question per cycle** while material gaps remain. Cross-links **workflow-steps** and **state** dossiers. Specs: **`workflow-registry`**, **`state-registry`**.
+- **Readiness fork button clarity:** The **`NEEDS_HUMAN_DECISION`** checkpoint guide now stays explanatory and explicitly points to the **next message's buttons**, while the following **`prompt_for_field`** remains the single authoritative **Continue to approval / Revise plan first** decision. Added regression coverage for the v2 configurable-steps rich-reply path and updated workflow spec wording so decision checkpoints stay button-driven while open-ended clarifications remain text-first.
+
 ## 2026-03-22
 
 - **Optional Qdrant planning RAG:** Documented **`prep_planning_repo_grounding`** after **`ensure_repo_workspace`**, **`spread_plan_workspace_signals`** merge of **`planningRag*`** into **`planningRepoEvidenceJson`**, and synthesis use of **`planningRagRetrievalText`**. Cross-links **workflow-steps** and **env** dossiers. Specs: **workflow-registry**, **REQ-LUNA-001** acceptance.

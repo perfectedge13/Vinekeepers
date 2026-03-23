@@ -1,10 +1,6 @@
-# Deploy targets: playbook path is relative to DEPLOY_ANSIBLE_ROOT / GADGET_ANSIBLE_ROOT.
-# Host-native/default manifest. Containerized host-ops runs may instead point DEPLOY_TARGETS_PATH
-# at config/deploy-targets.docker.yaml so compose workingDirectory values match container mounts.
-# Root key: targets (legacy gadget-projects.yaml may use projects:).
-# optional gitRemote: branch UX via deployGitBranches (git ls-remote --heads).
-# extraVars: merged into ansible-playbook -e.
-# optional compose: file, workingDirectory, services[], hostOpsExecutor: direct | cursor_agent
+# Containerized host-ops manifest for compose.host-ops.yaml.
+# Use DEPLOY_TARGETS_PATH=/app/config/deploy-targets.docker.yaml so direct compose
+# targets resolve against mounted in-container paths without shadowing /app.
 targets:
   - id: vinekeepers
     label: Vinekeepers
@@ -13,7 +9,7 @@ targets:
     extraVars: {}
     compose:
       file: compose.yaml
-      workingDirectory: .
+      workingDirectory: /workspace/vinekeepers
       services:
         - vinekeepers
       hostOpsExecutor: direct

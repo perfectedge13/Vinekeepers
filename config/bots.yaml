@@ -439,13 +439,13 @@ workflows:
             asRole: orchestrator
             target: thread
         - type: prompt_for_field
-          prompt: '**Pick what happens next** (still **not** a code launch — only routing the workflow).
+          prompt: '**Pick what happens next** using the buttons below.
 
-            • **Continue to approval** → you get **Approve / Approve with risks / Revise / Reject** for this packet.
+            **Continue to approval** opens **Approve / Approve with risks / Revise / Reject** for this packet.
 
-            • **Revise plan first** → another drafting round; you will return here afterward.
+            **Revise plan first** runs another drafting round, then brings you back to this checkpoint.
 
-            Use the button that matches what you want.'
+            This step still does **not** launch code by itself.'
           storeIn: readinessProceedRaw
           intent: present_choices
           choices:

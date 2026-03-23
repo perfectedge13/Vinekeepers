@@ -71,4 +71,44 @@ class HostComposeOpsRunnerTest {
         assertTrue(msg.contains("Docker binary"));
         assertTrue(msg.contains("DEPLOY_COMPOSE_BINARY"));
     }
+
+    @Test
+    void containerWarningsMentionMissingSocketAndWorkingDirectory() {
+        DeployTargetRegistry registry = new DeployTargetRegistry(List.of(
+                new DeployTarget(
+                        "wikijs",
+                        "Wiki.js",
+                        null,
+                        null,
+                        java.util.Map.of(),
+                        new DeployTargetCompose("docker-compose.yml", "/definitely/missing/wikijs", List.of("wikijs"), ComposeHostExecutor.DIRECT))));
+
+        List<String> warnings = HostComposeOpsRunner.describeContainerDirectComposeWarningsForTest(
+                registry, Path.of("config", "deploy-targets.yaml"));
+
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.get(0).contains("/var/run/docker.sock"));
+        assertTrue(warnings.get(1).contains("wikijs"));
+        assertTrue(warnings.get(1).contains("DEPLOY_TARGETS_PATH"));
+    }
+
+    @Test
+    void containerWarningsMentionMissingComposeFileInsideMountedDirectory() throws Exception {
+        Path workingDir = Files.createTempDirectory("host-compose-warning-test");
+        DeployTargetRegistry registry = new DeployTargetRegistry(List.of(
+                new DeployTarget(
+                        "neo4j",
+                        "Neo4j",
+                        null,
+                        null,
+                        java.util.Map.of(),
+                        new DeployTargetCompose("docker-compose.yml", workingDir.toString(), List.of("neo4j"), ComposeHostExecutor.DIRECT))));
+
+        List<String> warnings = HostComposeOpsRunner.describeContainerDirectComposeWarningsForTest(
+                registry, Path.of("config", "deploy-targets.docker.yaml"));
+
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.get(1).contains("docker-compose.yml"));
+        assertTrue(warnings.get(1).contains("deploy-targets.docker.yaml"));
+    }
 }

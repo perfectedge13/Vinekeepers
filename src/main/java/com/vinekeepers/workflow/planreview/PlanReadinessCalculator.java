@@ -1,5 +1,7 @@
 package com.vinekeepers.workflow.planreview;
 
+import com.vinekeepers.profile.ArtifactState;
+import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanAssumptionStatus;
@@ -7,18 +9,25 @@ import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.state.planning.PlanCritiqueRubricScores;
 import com.vinekeepers.state.planning.PlanGovernanceSeverity;
+import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.SolutionOutline;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Evidence-based readiness and confidence derived from gaps, critique, rubric, and governance tallies.
  */
 public final class PlanReadinessCalculator {
 
-    public static final double APPROVAL_CONFIDENCE_THRESHOLD = 0.75;
+    /** Launch approval: single source of truth for {@link PlanningApprovalGateSupport}. */
+    public static final double APPROVAL_CONFIDENCE_THRESHOLD = 0.85;
+
+    private static final int MAX_MATERIAL_UNKNOWN_LABELS = 12;
 
     private PlanReadinessCalculator() {}
 
@@ -33,9 +42,14 @@ public final class PlanReadinessCalculator {
         List<String> reasons = new ArrayList<>();
         int blockingIssues = PlanCritiqueRubric.countUnresolvedBlockingIssues(plan);
         int blockingFindings = countBlockingFindings(findings);
-        boolean openGaps = gaps != null && !gaps.isEmpty();
+        int gapCount = gaps != null ? gaps.size() : 0;
+        boolean openGaps = gapCount > 0;
         boolean blockerGap =
                 gaps != null && gaps.stream().anyMatch(g -> "BLOCKER".equalsIgnoreCase(g.getSeverity()));
+        int unresolvedQ = countNonBlankUnresolvedQuestions(plan);
+        int knownFacts = countStructuredKnownFacts(plan);
+        List<String> unknownLabels = buildMaterialUnknownLabels(gaps, plan, blockingIssues);
+        int materialUnknowns = computeMaterialUnknownCount(gapCount, unresolvedQ, blockingIssues);
 
         if (blockerGap) {
             reasons.add("At least one discovery gap is marked BLOCKER.");
@@ -50,8 +64,17 @@ public final class PlanReadinessCalculator {
             reasons.add(blockingFindings + " critique finding(s) block approval.");
         }
         if (openGaps) {
-            reasons.add("Open discovery gaps: " + gaps.size() + ".");
+            reasons.add("Open discovery gaps: " + gapCount + ".");
         }
+        if (unresolvedQ > 0) {
+            reasons.add(unresolvedQ + " unresolved question line(s) on the plan.");
+        }
+        reasons.add(
+                "Structured planning signals: "
+                        + knownFacts
+                        + " known fact(s) captured vs "
+                        + materialUnknowns
+                        + " material unknown(s).");
 
         String readiness;
         if (blockerGap) {
@@ -69,19 +92,18 @@ public final class PlanReadinessCalculator {
         }
 
         double base = rubric != null ? rubric.meanScore() : 0.5;
+        base += Math.min(0.18, knownFacts * 0.012);
+        base -= Math.min(0.48, materialUnknowns * 0.085);
         base -= PlanCritiqueRubric.governanceAssumptionPenalty(plan);
         base -= Math.min(0.5, blockingIssues * 0.14);
         base -= Math.min(0.45, blockingFindings * 0.12);
-        if (openGaps) {
-            base -= 0.2;
-        }
         if (!packetPostedOnPlan) {
             base -= 0.25;
         }
         double score = Math.max(0.0, Math.min(1.0, base));
 
         String level;
-        if (score >= 0.82) {
+        if (score >= APPROVAL_CONFIDENCE_THRESHOLD) {
             level = "HIGH";
         } else if (score >= 0.55) {
             level = "MEDIUM";
@@ -89,8 +111,142 @@ public final class PlanReadinessCalculator {
             level = "LOW";
         }
 
-        String notes = summarizeCounts(gaps, findings, plan);
-        return new PlanConfidence(level, notes, readiness, now, score, List.copyOf(reasons));
+        String notes = summarizeCounts(gaps, findings, plan, knownFacts, materialUnknowns);
+        return new PlanConfidence(
+                level,
+                notes,
+                readiness,
+                now,
+                score,
+                List.copyOf(reasons),
+                knownFacts,
+                materialUnknowns,
+                List.copyOf(unknownLabels));
+    }
+
+    private static int computeMaterialUnknownCount(int gapCount, int unresolvedQuestions, int blockingIssues) {
+        return Math.max(0, gapCount) + Math.max(0, unresolvedQuestions) + Math.max(0, blockingIssues);
+    }
+
+    private static int countNonBlankUnresolvedQuestions(FeaturePlanState plan) {
+        if (plan == null || plan.getUnresolvedQuestions() == null) {
+            return 0;
+        }
+        int n = 0;
+        for (String q : plan.getUnresolvedQuestions()) {
+            if (q != null && !q.isBlank()) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static int countStructuredKnownFacts(FeaturePlanState plan) {
+        if (plan == null) {
+            return 0;
+        }
+        int n = plan.getRequirements().size();
+        n += plan.getDecisions().size();
+        n += plan.getValidationNotes().size();
+        n += plan.getRisks().size();
+        SolutionOutline so = plan.getSolutionOutline();
+        if (so != null && so.getSummary() != null && !so.getSummary().isBlank()) {
+            n += 2;
+        }
+        String pc = plan.getProjectContext() != null ? plan.getProjectContext().getText() : null;
+        if (pc != null && pc.trim().length() >= 12) {
+            n++;
+        }
+        String tr = plan.getTraceability() != null ? plan.getTraceability().getText() : null;
+        if (tr != null && tr.trim().length() >= 8) {
+            n++;
+        }
+        n += countArtifactValueSignals(plan);
+        return n;
+    }
+
+    private static int countArtifactValueSignals(FeaturePlanState plan) {
+        if (plan.getArtifacts() == null || plan.getArtifacts().isEmpty()) {
+            return 0;
+        }
+        int c = 0;
+        for (ArtifactState art : plan.getArtifacts().values()) {
+            if (art.getSectionsById() == null) {
+                continue;
+            }
+            for (SectionState sec : art.getSectionsById().values()) {
+                if (sec == null) {
+                    continue;
+                }
+                if (!SectionState.STATUS_EMPTY.equalsIgnoreCase(sec.getStatus())) {
+                    c++;
+                }
+                if (sec.getValues() != null) {
+                    for (Object v : sec.getValues().values()) {
+                        if (v != null && !v.toString().isBlank() && v.toString().trim().length() >= 8) {
+                            c++;
+                        }
+                    }
+                }
+            }
+        }
+        return Math.min(36, c);
+    }
+
+    private static List<String> buildMaterialUnknownLabels(
+            List<DiscoveryGap> gaps, FeaturePlanState plan, int blockingIssues) {
+        Set<String> out = new LinkedHashSet<>();
+        if (gaps != null) {
+            for (DiscoveryGap g : gaps) {
+                if (out.size() >= MAX_MATERIAL_UNKNOWN_LABELS) {
+                    break;
+                }
+                String label = firstNonBlank(g.getUserFacingDetail(), g.getGapId());
+                if (label != null && !label.isBlank()) {
+                    out.add(truncateLabel(label));
+                }
+            }
+        }
+        if (plan != null && plan.getUnresolvedQuestions() != null) {
+            for (String q : plan.getUnresolvedQuestions()) {
+                if (out.size() >= MAX_MATERIAL_UNKNOWN_LABELS) {
+                    break;
+                }
+                if (q != null && !q.isBlank()) {
+                    out.add(truncateLabel(q.trim()));
+                }
+            }
+        }
+        if (plan != null && blockingIssues > 0) {
+            for (var issue : plan.getIssues()) {
+                if (out.size() >= MAX_MATERIAL_UNKNOWN_LABELS) {
+                    break;
+                }
+                if (!issue.isBlocking() || !PlanIssueStatus.OPEN.equalsIgnoreCase(issue.getStatus())) {
+                    continue;
+                }
+                String label = firstNonBlank(issue.getTitle(), issue.getDetail());
+                if (label != null && !label.isBlank()) {
+                    out.add(truncateLabel(label));
+                }
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        if (b != null && !b.isBlank()) {
+            return b.trim();
+        }
+        return "";
+    }
+
+    private static String truncateLabel(String s) {
+        String t = s.replace("\r\n", " ").replace("\n", " ").trim();
+        return t.length() <= 160 ? t : t.substring(0, 159) + "…";
     }
 
     private static boolean needsConditional(FeaturePlanState plan, List<PlanCritiqueFinding> findings) {
@@ -134,8 +290,13 @@ public final class PlanReadinessCalculator {
     }
 
     private static String summarizeCounts(
-            List<DiscoveryGap> gaps, List<PlanCritiqueFinding> findings, FeaturePlanState plan) {
+            List<DiscoveryGap> gaps,
+            List<PlanCritiqueFinding> findings,
+            FeaturePlanState plan,
+            int knownFacts,
+            int materialUnknowns) {
         StringBuilder sb = new StringBuilder();
+        sb.append("Known signals ~").append(knownFacts).append(", material unknowns ~").append(materialUnknowns).append(". ");
         if (gaps != null && !gaps.isEmpty()) {
             sb.append("Open gaps: ").append(gaps.size()).append(". ");
         }

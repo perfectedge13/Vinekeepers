@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T23:45:00Z"
+  updated_utc: "2026-03-24T00:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -425,7 +425,9 @@ assets:
       Post-draft routing governor: derives PlanningPostDraftAction from clarification, depth, parse health, ledger repeat, and
       material-change signals (merged user answer, repo evidence hash, assumption count, critique blocking count, draft
       fingerprint when canonical exploration/summary text changed); revision situation fingerprint stops unchanged non-posting
-      loops; optional forced user ask when stalled with a ledger question; AUTONOMOUS_REDRAFT only when material changed
+      loops; when redraft would otherwise assume-through, ASK_ONE_QUESTION if FeaturePlanState still has structured material
+      gaps (unresolvedQuestions, open blocking issues, open HIGH assumptions) via firstStructuredMaterialQuestion — not packet
+      display text; firstUserFacingClarificationTextOrEmpty merges ledger then plan for forced clarification copy
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -778,13 +780,34 @@ assets:
     feature_ids:
       - FEAT-CONFIG
       - FEAT-DEVOPS-GADGET
+  - id: ASSET-GADGET-PROJECTS-DOCKER-YAML
+    kind: config
+    path: config/deploy-targets.docker.yaml
+    role: >-
+      Containerized deploy target manifest for compose.host-ops.yaml; selected via DEPLOY_TARGETS_PATH so direct host compose
+      uses mounted in-container paths (/workspace/vinekeepers and /opt/stacks/*) without shadowing /app
+    requires:
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
+  - id: ASSET-COMPOSE-HOST-OPS-YAML
+    kind: config
+    path: compose.host-ops.yaml
+    role: >-
+      Optional Docker Compose override for containerized Gadget host compose operations; mounts docker.sock and sample host stack
+      paths, mounts the repo under /workspace/vinekeepers, and sets DEPLOY_TARGETS_PATH to the docker-specific manifest
+    requires:
+      - REQ-GADGET-001
+    feature_ids:
+      - FEAT-DEVOPS-GADGET
   - id: ASSET-HOST-COMPOSE-OPS-RUNNER
     kind: source
     path: src/main/java/com/vinekeepers/devops/HostComposeOpsRunner.java
     role: >-
       docker compose up/stop/restart/ps or cursor agent non-interactive prompt for compose ops; streams output to Discord;
       direct executor uses manifest workingDirectory as ProcessBuilder directory; cursor_agent passes same path as --workspace;
-      DEPLOY_HOST_OPS_DISABLED (GADGET_HOST_OPS_DISABLED alias) kill switch
+      logs startup warnings for missing socket/mount/file prerequisites in containerized direct-compose runs; DEPLOY_HOST_OPS_DISABLED
+      (GADGET_HOST_OPS_DISABLED alias) kill switch
     requires:
       - REQ-GADGET-001
     feature_ids:
@@ -1534,11 +1557,12 @@ assets:
     role: >-
       Workflow action run_plan_critique_and_readiness — builds findings, PlanCritiqueRubric rollup, PlanReadinessCalculator
       output; persists PlanCritiqueSnapshot (rubric, blocking counts, required revisions), PlanConfidence (readiness,
-      confidenceScore, confidenceReasons), critiqueLifecycleStatus COMPLETE; storeSpread planReadinessStatus (legacy spread
+      confidenceScore, confidenceReasons, structuredKnownFactCount, materialUnknownCount, materialUnknownLabels), critiqueLifecycleStatus COMPLETE; storeSpread planReadinessStatus (legacy spread
       via PlanReadinessStatus.legacySpreadValue where applicable), planReadinessStatusLabel (PlanningUserFacingCopy for Discord templates),
       planConfidenceScore, planConfidenceLevel,
-      planReadinessSummary, planReadinessCheckpointGuide (plain-English fork explanation when planReadinessStatus is
-      NEEDS_HUMAN_DECISION; empty otherwise; PlanningUserFacingCopy.readinessCheckpointGuideForDiscord),
+      planReadinessSummary, planReadinessCheckpointGuide (plain-English explanatory checkpoint copy when planReadinessStatus is
+      NEEDS_HUMAN_DECISION; points the operator to the upcoming interactive choice prompt instead of restating button labels;
+      empty otherwise; PlanningUserFacingCopy.readinessCheckpointGuideForDiscord),
       planCritiqueFindingsJson, planCritiqueSummary (plain-language severity + field-area hints via
       PlanningUserFacingCopy; when repo evidence exists and the planning packet is already visible in-thread, appends a short pointer
       instead of repeating full repo grounding); adds MUST_FIX INTAKE_DISCOVERY_INCOMPLETE when
@@ -1729,8 +1753,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanReadinessCalculator.java
     role: >-
       Evidence-based PlanConfidence (readiness NOT_READY / CONDITIONALLY_READY / READY / BLOCKED, confidenceScore,
-      reasons) from gaps, blocking issues, blocking findings, rubric mean, packetPostedOnPlan; APPROVAL_CONFIDENCE_THRESHOLD
-      for gates
+      reasons, known-vs-unknown tallies) from gaps, unresolved questions, blocking issues, blocking findings, rubric mean,
+      structured captured signals, packetPostedOnPlan; APPROVAL_CONFIDENCE_THRESHOLD (0.85) is the single launch-approval
+      bar shared with PlanningApprovalGateSupport
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1755,7 +1780,9 @@ assets:
   - id: ASSET-PLANNING-APPROVAL-GATE-SUPPORT
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningApprovalGateSupport.java
-    role: Shared validateApproveAllowed and persist status mapping for evaluate_planning_approval_gate and persist_plan_approval
+    role: >-
+      Shared validateApproveAllowed (including PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD on stored
+      confidenceScore) and persist status mapping for evaluate_planning_approval_gate and persist_plan_approval
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -2220,6 +2247,13 @@ requirements:
           run_plan_critique_and_readiness prepends a MUST_FIX intake finding when PlanningIntakeStage is GATHERING_CONTEXT and
           PlanningIntakeStage remains GATHERING_CONTEXT; PlanCritiqueSupport still maps structured discovery gaps into critique findings
         - >-
+          PlanReadinessCalculator (via PlanReadinessEvaluator in run_plan_critique_and_readiness) persists PlanConfidence with
+          confidenceScore, confidenceReasons (including structured known-vs-unknown summary text), structuredKnownFactCount,
+          materialUnknownCount, and capped materialUnknownLabels alongside machine readiness status
+        - >-
+          PlanningApprovalGateSupport.validateApproveAllowed rejects launch approval when persisted PlanConfidence.confidenceScore is
+          set and below PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD (0.85), in addition to packet, critique lifecycle, and READY readiness checks
+        - >-
           evaluate_planning_approval_gate treats coordinator discovery as satisfied when canonical PlanningIntakeStage has advanced beyond
           planningIntakeStage on FeaturePlanState is not GATHERING_CONTEXT, alongside posted packet, depth, READY readiness,
           no pending clarification, and PlanningApprovalGateSupport.validateApproveAllowed
@@ -2251,7 +2285,8 @@ requirements:
           when plan has artifacts, persists projected section statuses and returns a refreshed gap spread map
         - >-
           Coordinator Discord prompts that gate plan readiness or NEEDS_HUMAN_DECISION include plain-English explanation of what
-          the operator is choosing (e.g. move to launch approval vs revise the plan first) rather than only internal status tokens
+          the operator is choosing (e.g. move to launch approval vs revise the plan first) rather than only internal status tokens,
+          and the explanatory checkpoint copy stays distinct from the separate interactive present_choices prompt
         - >-
           When the workflow asks for structured plan input (e.g. decision log rows), user-visible copy frames the message as a
           question, explains one-reply-per-row expectations in plain language, states that text is stored on the plan, and avoids
@@ -2770,7 +2805,10 @@ requirements:
           PlanningPostDraftGovernor spreads planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
           AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, and durable material/revision baselines in workflow session state so an
           unchanged non-posting revision situation cannot re-enter autonomous drafting without a merged user answer, new repo evidence,
-          new assumptions, new critique blocking findings, or materially different canonical draft/exploration text
+          new assumptions, new critique blocking findings, or materially different canonical draft/exploration text; when that
+          deny-redraft path would otherwise ASSUME_AND_CONTINUE, an OPEN planning clarification question or structured material gaps on
+          FeaturePlanState (e.g. unresolved questions, open blocking issues, open HIGH assumptions) forces ASK_ONE_QUESTION with
+          forceUserInputRequired instead of silently assuming through
         - >-
           evaluate_planning_packet_depth invokes PlanningPacketDepthEvaluator with relaxOpenQuestionSupplementalChecks derived from
           workflow state so thin artifact open_questions text alone does not fail depth when planningCanonicalUserInputRequired is false
@@ -2986,7 +3024,8 @@ requirements:
         - id: UNIT-PLANNING-POST-DRAFT-GOVERNOR
           title: PlanningPostDraftGovernorTest
           intent: >-
-            Verify post-draft action derivation, material-change detection, revision-situation repeat blocking, and notice markdown
+            Verify post-draft action derivation, material-change detection, revision-situation repeat blocking, ASK_ONE_QUESTION when
+            deny-redraft would assume-through but structured material gaps or OPEN ledger questions remain, and notice markdown
           testClass: com.vinekeepers.workflow.planning.PlanningPostDraftGovernorTest
           preconditions: []
         - id: UNIT-PLANNING-PACKET-DEPTH-EVALUATOR-RELAX-OPEN-Q
@@ -3512,8 +3551,17 @@ requirements:
           preconditions: []
         - id: UNIT-PLAN-READINESS-CALCULATOR
           title: PlanReadinessCalculatorTest
-          intent: Verify blocking issues and blocking critique findings force NOT_READY when packet is posted
+          intent: >-
+            Verify blocking issues and blocking critique findings force NOT_READY when packet is posted; PlanConfidence carries
+            structured known-vs-unknown tallies aligned with calculator output
           testClass: com.vinekeepers.workflow.planreview.PlanReadinessCalculatorTest
+          preconditions: []
+        - id: UNIT-PLANNING-APPROVAL-GATE-SUPPORT
+          title: PlanningApprovalGateSupportTest
+          intent: >-
+            Verify validateApproveAllowed blocks approval when confidence is below PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD
+            and allows at the threshold with other gate inputs satisfied
+          testClass: com.vinekeepers.workflow.planreview.PlanningApprovalGateSupportTest
           preconditions: []
         - id: UNIT-EVALUATE-PLANNING-APPROVAL-GATE-ACTION
           title: EvaluatePlanningApprovalGateActionTest
@@ -3568,7 +3616,8 @@ requirements:
           HostComposeOpsRunner runs allowlisted docker compose up/stop/restart/ps per target manifest; uses compose workingDirectory as
           host cwd for ProcessBuilder (direct) or as Cursor agent --workspace (cursor_agent); direct execution fails fast with
           operator-facing prerequisite errors when the Docker CLI, compose file, workingDirectory mount, or /var/run/docker.sock
-          mount is missing inside a containerized Vinekeepers runtime; DEPLOY_HOST_OPS_DISABLED disables host ops
+          mount is missing inside a containerized Vinekeepers runtime; startup logs warn early when direct compose targets are
+          mis-mounted; DEPLOY_HOST_OPS_DISABLED disables host ops
         - >-
           config/bots.yaml workflows.devops_deploy main menu includes compose_restart; branch step next indices reference valid step
           indices (DevopsDeployWorkflowYamlTest)
@@ -3578,6 +3627,9 @@ requirements:
         - >-
           Shipped config/deploy-targets.yaml includes compose-only neo4j and wikijs targets with host stack workingDirectory and
           allowlisted services
+        - >-
+          Shipped compose.host-ops.yaml mounts /var/run/docker.sock, the repo at /workspace/vinekeepers, and sample /opt/stacks/*
+          targets while switching DEPLOY_TARGETS_PATH to config/deploy-targets.docker.yaml for containerized direct compose
         - >-
           ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies
           ansible tree, sets GADGET_ANSIBLE_ROOT / DEPLOY_ANSIBLE_ROOT, and installs ansible plus the Docker CLI/Compose plugin
@@ -3591,6 +3643,8 @@ requirements:
         - ASSET-GADGET-RESOLVE-BRANCH-ACTION
         - ASSET-START-GADGET-DEPLOY-ACTION
         - ASSET-GADGET-PROJECTS-YAML
+        - ASSET-GADGET-PROJECTS-DOCKER-YAML
+        - ASSET-COMPOSE-HOST-OPS-YAML
         - ASSET-HOST-COMPOSE-OPS-RUNNER
         - ASSET-RUN-DEPLOY-COMPOSE-ACTION
         - ASSET-DEPLOY-COMPOSE-SERVICES-CHOICE-PROVIDER

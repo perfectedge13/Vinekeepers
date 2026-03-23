@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.planreview;
 
+import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
@@ -14,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlanReadinessCalculatorTest {
 
@@ -88,6 +90,35 @@ class PlanReadinessCalculatorTest {
         PlanConfidence c =
                 PlanReadinessCalculator.evaluate(plan, List.of(), List.of(), rubric, T, true);
         assertEquals(PlanReadinessStatus.READY, c.getReadinessStatus());
+        assertTrue(c.getConfidenceScore() >= PlanReadinessCalculator.APPROVAL_CONFIDENCE_THRESHOLD);
+        assertEquals(0, c.getMaterialUnknownCount());
+        assertTrue(c.getNotes().contains("Known signals"));
+        assertTrue(
+                c.getConfidenceReasons().stream()
+                        .anyMatch(r -> r.contains("Structured planning signals")));
+    }
+
+    @Test
+    void openGapIncreasesMaterialUnknownsAndLabels() {
+        FeaturePlanState plan = basePlan(null).withPacketPosted(T, "", "fp", 1);
+        PlanCritiqueRubricScores rubric = new PlanCritiqueRubricScores(0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95);
+        DiscoveryGap gap =
+                new DiscoveryGap(
+                        "g-open",
+                        "REQUIRED_FIELD",
+                        "a",
+                        "s",
+                        "f",
+                        "missing",
+                        "HIGH",
+                        "OPEN",
+                        "profile",
+                        "Need API shape");
+        PlanConfidence c =
+                PlanReadinessCalculator.evaluate(plan, List.of(gap), List.of(), rubric, T, true);
+        assertEquals(PlanReadinessStatus.NOT_READY, c.getReadinessStatus());
+        assertTrue(c.getMaterialUnknownCount() >= 1);
+        assertTrue(c.getMaterialUnknownLabels().stream().anyMatch(l -> l.contains("Need API")));
     }
 
     @Test

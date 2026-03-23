@@ -1,0 +1,9 @@
+services:
+  vinekeepers:
+    environment:
+      DEPLOY_TARGETS_PATH: /app/config/deploy-targets.docker.yaml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${VINEKEEPERS_HOST_REPO_ROOT:-.}:/workspace/vinekeepers:ro
+      - ${VINEKEEPERS_HOST_STACK_NEO4J:-/opt/stacks/neo4j}:/opt/stacks/neo4j
+      - ${VINEKEEPERS_HOST_STACK_WIKIJS:-/opt/stacks/wikijs}:/opt/stacks/wikijs
