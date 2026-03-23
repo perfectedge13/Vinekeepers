@@ -28,7 +28,7 @@ Runs the project test command (from specs validation or project.yml); shell-safe
 3. Run the test command **without** `-q` or quiet flags so the runner prints a full summary (e.g. Maven Surefire prints "Tests run: X, Failures: Y, Errors: Z, Skipped: W").
 4. After the run, **show the full test output** in the agent console (stdout/stderr), including the summary line(s) at the end.
 5. **Extract and report counts** from the output: how many tests ran, how many passed, how many failed, how many skipped (or errors). For Maven Surefire: use the "Tests run: N, Failures: F, Errors: E, Skipped: S" line; passed = N - F - E - S. Include these counts in the step result and in the final output.
-6. Record: **Pass** (exit 0, all passed), **Fail** (exit non-zero — report failed class/method), or **Blocked** (tests cannot run: missing TestNG, no test dir, etc.). **Always print the specific quantity** of tests run, passed, and failed (e.g. "Tests run: 42, Passed: 40, Failed: 2") in the step result, for every outcome (Pass, Fail, or Blocked when a partial run occurred).
+6. Record: **Pass** (exit 0, all passed), **Fail** (exit non-zero — report failed class/method), or **Blocked** (tests cannot run: missing JUnit/Maven test runtime, no test dir, etc.). **Always print the specific quantity** of tests run, passed, and failed (e.g. "Tests run: 42, Passed: 40, Failed: 2") in the step result, for every outcome (Pass, Fail, or Blocked when a partial run occurred).
 7. On Fail: orchestrator will return to implement step. On Blocked: raise a spec issue with the missing prerequisite; do not proceed to commit.
 ```
 

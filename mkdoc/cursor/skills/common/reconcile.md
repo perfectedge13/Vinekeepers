@@ -24,7 +24,7 @@ Ensures no dangling refs, traceability consistent, spec matches code, README mat
 
 ## Instructions
 
-1. **No dangling refs**: All index entrypoints exist; all `assets[].path` exist; all validation references point to existing TestNG test classes/methods (or real files).
+1. **No dangling refs**: All index entrypoints exist; all `assets[].path` exist; all validation references point to existing JUnit test classes/methods (or real files).
 2. **Traceability consistent**: Requirements ↔ assets ↔ symbols links are consistent.
 3. **Spec matches code**: If something in code is not reflected in specs, update specs within existing schema. If a requirement appears unmet, do not delete the requirement; raise an issue.
 4. **README matches**: Entrypoints, commands, options, and deprecations in README match code and specs. Update README if outdated (or invoke **nova-update-readme** for a dedicated pass).
