@@ -64,15 +64,13 @@ class PlanningThreadPacketFormatterTest {
     }
 
     @Test
-    void bulletLinesAsMarkdownTableBuildsTwoColumnTable() {
+    void bulletLinesAsDiscordListBuildsLabeledItems() {
         String tab =
-                PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable(
+                PlanningThreadPacketFormatter.bulletLinesAsDiscordList(
                         "Requirement", "- One thing\n- Two things");
-        assertTrue(tab.contains("| # | Requirement |"));
-        assertTrue(tab.contains("| 1 |"));
-        assertTrue(tab.contains("One thing"));
-        assertTrue(tab.contains("| 2 |"));
-        assertTrue(tab.contains("Two things"));
+        assertTrue(tab.contains("1. Requirement: One thing"));
+        assertTrue(tab.contains("2. Requirement: Two things"));
+        assertFalse(tab.contains("| # |"));
     }
 
     @Test
@@ -171,10 +169,47 @@ class PlanningThreadPacketFormatterTest {
     }
 
     @Test
-    void bulletLinesAsMarkdownTableStripsNumberedPrefixes() {
+    void bulletLinesAsDiscordListStripsNumberedPrefixes() {
         String tab =
-                PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Item", "1. First\n2. Second");
-        assertTrue(tab.contains("First"));
-        assertTrue(tab.contains("Second"));
+                PlanningThreadPacketFormatter.bulletLinesAsDiscordList("Item", "1. First\n2. Second");
+        assertTrue(tab.contains("1. Item: First"));
+        assertTrue(tab.contains("2. Item: Second"));
+    }
+
+    @Test
+    void splitForDiscordPrefersNumberedItemBoundaries() {
+        String body = """
+                **Issues (tracked)**
+                1. Priority: Blocking | Status: Blocking | Severity: High
+                   Topic: alpha-start %s alpha-end
+
+                2. Priority: Blocking | Status: Blocking | Severity: High
+                   Topic: beta-start %s beta-end
+
+                3. Priority: Blocking | Status: Blocking | Severity: High
+                   Topic: gamma-start %s gamma-end
+
+                **Validation strategy**
+                Run targeted tests.
+                """.formatted("x".repeat(780), "y".repeat(780), "z".repeat(780));
+        List<String> chunks = PlanningThreadPacketFormatter.splitForDiscord(body);
+        assertTrue(chunks.size() > 1);
+        assertTokenPairLivesInSingleChunk(chunks, "alpha-start", "alpha-end");
+        assertTokenPairLivesInSingleChunk(chunks, "beta-start", "beta-end");
+        assertTokenPairLivesInSingleChunk(chunks, "gamma-start", "gamma-end");
+        assertTrue(chunks.get(0).startsWith("**Planning packet"));
+    }
+
+    private static void assertTokenPairLivesInSingleChunk(List<String> chunks, String start, String end) {
+        boolean foundPair = false;
+        for (String chunk : chunks) {
+            boolean hasStart = chunk.contains(start);
+            boolean hasEnd = chunk.contains(end);
+            assertEquals(hasStart, hasEnd, "token pair split across chunks");
+            if (hasStart) {
+                foundPair = true;
+            }
+        }
+        assertTrue(foundPair, "token pair not found");
     }
 }

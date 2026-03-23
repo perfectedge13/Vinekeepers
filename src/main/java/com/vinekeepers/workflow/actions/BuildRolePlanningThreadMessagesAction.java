@@ -72,7 +72,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
             sb.append("_No plan outline recorded yet._");
         }
         if (decisions != null && !decisions.isBlank()) {
-            String decTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Decision", decisions);
+            String decTable = PlanningThreadPacketFormatter.bulletLinesAsDiscordList("Decision", decisions);
             sb.append("\n\n**Decisions**\n");
             if (!decTable.isBlank()) {
                 sb.append(decTable);
@@ -87,7 +87,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         StringBuilder sb = new StringBuilder();
         sb.append("**Auditor — validation & risks**\n");
         if (risks != null && !risks.isBlank()) {
-            String riskTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Risk", risks);
+            String riskTable = PlanningThreadPacketFormatter.bulletLinesAsDiscordList("Risk", risks);
             sb.append("**Risk register**\n");
             if (!riskTable.isBlank()) {
                 sb.append(riskTable).append("\n\n");
@@ -96,7 +96,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
             }
         }
         if (openQ != null && !openQ.isBlank()) {
-            String oqTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Question", openQ);
+            String oqTable = PlanningThreadPacketFormatter.bulletLinesAsDiscordList("Question", openQ);
             sb.append("**Open questions**\n");
             if (!oqTable.isBlank()) {
                 sb.append(oqTable).append("\n\n");
@@ -126,7 +126,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         sb.append("\n\n**Scope:** ");
         sb.append(scope != null && !scope.isBlank() ? scope.trim() : "_Not specified._");
         if (stories != null && !stories.isBlank()) {
-            String stTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Story / scenario", stories);
+            String stTable = PlanningThreadPacketFormatter.bulletLinesAsDiscordList("Story / scenario", stories);
             sb.append("\n\n**User stories / scenarios:**\n");
             if (!stTable.isBlank()) {
                 sb.append(stTable);
@@ -136,7 +136,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         }
         sb.append("\n\n**Acceptance criteria:** ");
         if (acceptance != null && !acceptance.isBlank()) {
-            String acTable = PlanningThreadPacketFormatter.bulletLinesAsMarkdownTable("Criterion", acceptance);
+            String acTable = PlanningThreadPacketFormatter.bulletLinesAsDiscordList("Criterion", acceptance);
             if (!acTable.isBlank()) {
                 sb.append(acTable);
             } else {

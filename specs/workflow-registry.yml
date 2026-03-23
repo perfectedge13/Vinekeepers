@@ -1170,7 +1170,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPromptFormatter.java
     role: >-
       Maps work profile labels and optional field promptHint to plain-English missing-field and discovery copy (avoids raw artifact paths in user text);
-      requiredFieldPrompt weaves label + repeatable index + hint (or a generic concrete-detail fallback when hint absent),
+      requiredFieldPrompt weaves label + repeatable-entry wording + hint (or a generic concrete-detail fallback when hint absent),
       with clarification-safe wording for open_questions_block so the intake ask survives the quality gate;
       coordinator clarification orchestration lines stay actionable (what to answer next) and avoid meta completeness prompts when
       the contract calls for a single blocking fact; frames structured-input asks as explicit questions and complements PlanningUserFacingCopy for coordinator-facing
@@ -1766,9 +1766,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningThreadPacketFormatter.java
     role: >-
-      Builds full planning packet body from FeaturePlanState with markdown tables for assumptions, issues (blocking first),
-      risks, decisions, and open questions (cells escaped and width-capped; open-question rows use PlanningArtifactTexts
-      substantiveUnresolvedQuestionLines only); companion bulletLinesAsMarkdownTable adds tables for
+      Builds full planning packet body from FeaturePlanState with Discord-friendly labeled list items for assumptions, issues (blocking first),
+      risks, decisions, and open questions (inline fields width-capped; open-question rows use PlanningArtifactTexts
+      substantiveUnresolvedQuestionLines only); companion bulletLinesAsDiscordList adds numbered lists for
       user stories and acceptance criteria when at least two lines parse; narrative sections soft-truncate per section with ellipsis
       plus "Truncated for display length." footnote; splitForDiscord labels chunks "Planning packet (part i/n)" under Discord size target;
       buildConciseThreadReviewBodyAfterPacket points readers at prior **Planning packet** messages instead of duplicating the draft;
@@ -1803,6 +1803,7 @@ assets:
       ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), a single recommended_action aligned with
       post-draft routing semantics, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
       planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
+      parse uses shared PlanningLlmJsonSupport extraction and attempts one JSON repair before surfacing planningLlmError;
       failures return ERROR-prefixed or exception messages without hanging
     requires:
       - REQ-WORKFLOW-001
@@ -2224,7 +2225,8 @@ requirements:
           evaluate_planning_packet_depth sets planningPacketDepthOk and planningPacketDepthReason from PlanningPacketDepthEvaluator
         - >-
           run_llm_planning_synthesis calls OpenAiChatClient when OPENAI_API_KEY is set; otherwise skips with planningLlmSkipReason;
-          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely; when planningRagAvailable is true in workflow state, includes planningRagRetrievalText in the synthesis prompt context
+          on HTTP or parse errors spreads planningLlmError without blocking the workflow indefinitely, attempting one JSON repair first;
+          when planningRagAvailable is true in workflow state, includes planningRagRetrievalText in the synthesis prompt context
         - >-
           prep_planning_repo_grounding (PrepPlanningRepoGroundingAction + PlanningRepoGroundingService) runs after a materialized checkout path exists on FeaturePlanState;
           loads .vinekeepers/repo-grounding.parquet when present before embedding; indexes only missing chunk hashes into Qdrant with payload scoped by repo ref and branch;
@@ -2259,8 +2261,8 @@ requirements:
           artifact risk/decision text into canonical PlanRisk / PlanDecision rows with art-risk-* / art-dec-* ids, and merges
           open_questions lines into unresolvedQuestions with dedupe excluding the ready-to-implement sentinel
         - >-
-          PlanningThreadPacketFormatter renders governance and multi-line bullets as markdown tables where applicable, soft-truncates
-          long sections with an explicit display-length footnote, and splits oversized bodies into labeled Discord chunks
+          PlanningThreadPacketFormatter renders governance and multi-line bullets as labeled Discord lists where applicable,
+          soft-truncates long sections with an explicit display-length footnote, and splits oversized bodies into labeled Discord chunks
         - >-
           build_role_planning_thread_messages remains available as a compatibility helper for legacy role-labeled packets,
           though production Arrietty planning now posts a single consolidated coordinator packet
@@ -2609,7 +2611,7 @@ requirements:
           preconditions: []
         - id: UNIT-PLANNING-THREAD-PACKET-FORMATTER
           title: PlanningThreadPacketFormatterTest
-          intent: Verify planning packet tables, truncation footnote, Discord chunk labels, and companion markdown tables from bullets
+          intent: Verify planning packet labeled lists, truncation footnote, Discord chunk labels, and companion numbered lists from bullets
           testClass: com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatterTest
           preconditions: []
         - id: UNIT-BUILD-PLANNING-THREAD-REVIEW-BODY-ACTION
@@ -2817,11 +2819,11 @@ requirements:
           Planning packet sections and declarative readiness gate messages shown to operators use PlanningUserFacingCopy and
           work-profile titles where applicable so raw artifact paths and enum tokens are not the primary Discord copy
         - >-
-          PlanningThreadPacketFormatter renders governance subsections as markdown tables with cell caps, adds companion tables for
+          PlanningThreadPacketFormatter renders governance subsections as labeled Discord lists with capped inline fields, adds companion lists for
           multi-line user stories and acceptance criteria when parseable, applies per-section soft truncation with a visible
           "Truncated for display length." footnote, and labels split Discord messages as Planning packet parts
         - >-
-          Open questions in the packet prefer the unresolvedQuestions table; artifact open_questions lines fall back to a table or
+          Open questions in the packet prefer the unresolvedQuestions list; artifact open_questions lines fall back to a labeled list or
           plain text, and the ready-to-implement sentinel is treated as empty for depth/critique without inventing fake unresolved rows
         - >-
           GraphWorkflowRunner when linear_workflow_ref completes with user-visible text (reply or rich intent) and the phase
@@ -3014,7 +3016,7 @@ requirements:
           preconditions: []
         - id: UNIT-PLANNING-THREAD-PACKET-FORMATTER-V2
           title: PlanningThreadPacketFormatterTest
-          intent: Verify planning packet tables, truncation footnote, Discord chunk labels, and open-question presentation
+          intent: Verify planning packet labeled lists, truncation footnote, Discord chunk labels, and open-question presentation
           testClass: com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatterTest
           preconditions: []
         - id: UNIT-PLANNING-USER-FACING-COPY
@@ -3531,10 +3533,11 @@ requirements:
       Operator bot (e.g. id gadget) with Discord token env GADGET_DISCORD_TOKEN; routing uses discordMention and discordChannels
       allowlist (ops channel id); workflow devops_deploy uses extract_event for channelId, main menu (Ansible deploy vs compose up/stop/restart/ps or Cancel),
       choiceProvider deployTargets from config/deploy-targets.yaml, branch choices main/develop/other with resolve_deploy_branch,
-      create_thread for progress thread (thread name deploy-progress), start_ansible_deploy to run ansible-playbook asynchronously
-      and run_deploy_compose for docker compose or optional cursor agent executor; OutboundDeliveryRouter.sendAs workflow bot id from state;
-      progress falls back to parent channel when THREAD_CREATE_FAILED; compose-only targets may omit playbook and use host
-      workingDirectory paths (e.g. /opt/stacks/neo4j, /opt/stacks/wikijs) so docker compose resolves the stack file on the deploy host
+      create_thread for progress/status threads (thread name deploy-progress for mutating actions, DevOps Status for compose ps),
+      start_ansible_deploy to run ansible-playbook asynchronously and run_deploy_compose for docker compose or optional cursor
+      agent executor; OutboundDeliveryRouter.sendAs workflow bot id from state; progress falls back to parent channel when
+      THREAD_CREATE_FAILED; compose-only targets may omit playbook and use host workingDirectory paths (e.g. /opt/stacks/neo4j,
+      /opt/stacks/wikijs) so docker compose resolves the stack file on the deploy host
     status: active
     priority: medium
     type: functional
@@ -3557,16 +3560,22 @@ requirements:
           extraVars; respects DEPLOY_ANSIBLE_DISABLED/GADGET_ANSIBLE_DISABLED for dry run; posts via sendAs workflow bot id from state
         - >-
           HostComposeOpsRunner runs allowlisted docker compose up/stop/restart/ps per target manifest; uses compose workingDirectory as
-          host cwd for ProcessBuilder (direct) or as Cursor agent --workspace (cursor_agent); DEPLOY_HOST_OPS_DISABLED disables host ops
+          host cwd for ProcessBuilder (direct) or as Cursor agent --workspace (cursor_agent); direct execution fails fast with
+          operator-facing prerequisite errors when the Docker CLI, compose file, workingDirectory mount, or /var/run/docker.sock
+          mount is missing inside a containerized Vinekeepers runtime; DEPLOY_HOST_OPS_DISABLED disables host ops
         - >-
           config/bots.yaml workflows.devops_deploy main menu includes compose_restart; branch step next indices reference valid step
           indices (DevopsDeployWorkflowYamlTest)
+        - >-
+          config/bots.yaml uses thread name DevOps Status for compose ps and deploy-progress for mutating compose actions; compose
+          status kickoff copy says updates will appear in the selected status target
         - >-
           Shipped config/deploy-targets.yaml includes compose-only neo4j and wikijs targets with host stack workingDirectory and
           allowlisted services
         - >-
           ansible/playbooks ships example site.yml (staging dir + JSON manifest; extend for real deploy); Dockerfile copies
-          ansible tree, sets GADGET_ANSIBLE_ROOT / DEPLOY_ANSIBLE_ROOT, installs ansible via apt on Ubuntu Jammy runtime (not Alpine pip)
+          ansible tree, sets GADGET_ANSIBLE_ROOT / DEPLOY_ANSIBLE_ROOT, and installs ansible plus the Docker CLI/Compose plugin
+          in the Ubuntu Jammy runtime image
       examples: []
     traceability:
       assets:

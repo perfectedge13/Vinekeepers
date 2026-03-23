@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class BuildRolePlanningThreadMessagesActionTest {
 
     @Test
-    void architectMessage_rendersDecisionsAsMarkdownTableWhenMultipleLines() {
+    void architectMessage_rendersDecisionsAsLabeledListWhenMultipleLines() {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         var init = new InitializeFeaturePlanStateAction(store, new FeatureRoomStateStore(), reg);
@@ -62,7 +62,8 @@ class BuildRolePlanningThreadMessagesActionTest {
                 (Map<String, Object>) action.run(null, Map.of("contextId", "role-arch"), Map.of());
         String arch = (String) out.get("architectThreadMessage");
         assertTrue(arch.contains("**Decisions**"));
-        assertTrue(arch.contains("| # | Decision |"));
+        assertTrue(arch.contains("1. Decision: Use Postgres for primary store"));
+        assertTrue(arch.contains("2. Decision: Expose read models via cached projections"));
         assertTrue(arch.contains("Postgres"));
         assertTrue(arch.contains("cached projections"));
     }

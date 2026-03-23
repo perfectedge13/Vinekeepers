@@ -12,6 +12,8 @@ import com.vinekeepers.state.planning.PlanRisk;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 /**
  * Builds the human-readable planning packet for thread review and splits it for Discord size limits.
  */
@@ -22,9 +24,11 @@ public final class PlanningThreadPacketFormatter {
 
     private static final int SECTION_SOFT_MAX = 1200;
 
-    private static final int TABLE_CELL_MAX = 320;
+    private static final int ITEM_TEXT_MAX = 320;
 
     private static final String TRUNCATION_FOOTNOTE = "\n\n_(Truncated for display length.)_";
+
+    private static final Pattern NUMBERED_ITEM_BOUNDARY = Pattern.compile("\\n\\n\\d+\\.\\s");
 
     private static final ObjectMapper REPO_EVIDENCE_JSON = new ObjectMapper();
 
@@ -79,18 +83,18 @@ public final class PlanningThreadPacketFormatter {
         appendSection(sb, "**Scope & non-goals**", orPlaceholder(scope));
         if (!stories.isBlank()) {
             String storiesBlock = stories;
-            String storiesTable = bulletLinesAsMarkdownTable("Story / scenario", storiesRaw);
-            if (!storiesTable.isBlank()) {
-                storiesBlock = storiesBlock + "\n\n" + storiesTable;
+            String storiesList = bulletLinesAsDiscordList("Story / scenario", storiesRaw);
+            if (!storiesList.isBlank()) {
+                storiesBlock = storiesBlock + "\n\n" + storiesList;
             }
             appendSection(sb, "**User stories / scenarios**", storiesBlock);
         } else {
             appendSection(sb, "**User stories / scenarios**", "_None recorded._");
         }
         appendSection(sb, "**Acceptance criteria**", orPlaceholder(acceptance));
-        String table = bulletLinesAsMarkdownTable("Requirement", acceptance);
-        if (!table.isBlank()) {
-            appendSection(sb, "**Requirements table (from criteria)**", table);
+        String criteriaList = bulletLinesAsDiscordList("Requirement", acceptance);
+        if (!criteriaList.isBlank()) {
+            appendSection(sb, "**Requirements list (from criteria)**", criteriaList);
         }
         if (!comps.isBlank() || !arch.isBlank()) {
             appendSection(
@@ -206,19 +210,16 @@ public final class PlanningThreadPacketFormatter {
             return "_None recorded._";
         }
         StringBuilder tb = new StringBuilder();
-        tb.append("| # | Status | Severity | Assumption |\n");
-        tb.append("|:-:|--------|----------|------------|\n");
         int i = 1;
         for (PlanAssumption a : plan.getAssumptions()) {
-            tb.append("| ")
-                    .append(i++)
-                    .append(" | ")
-                    .append(escapeTableCell(PlanningUserFacingCopy.humanizeAssumptionStatus(a.getStatus())))
-                    .append(" | ")
-                    .append(escapeTableCell(PlanningUserFacingCopy.humanizeGovernanceSeverity(a.getSeverity())))
-                    .append(" | ")
-                    .append(escapeTableCell(a.getStatement().trim(), TABLE_CELL_MAX))
-                    .append(" |\n");
+            appendItemSeparator(tb);
+            tb.append(i++)
+                    .append(". Status: ")
+                    .append(normalizeInlineText(PlanningUserFacingCopy.humanizeAssumptionStatus(a.getStatus()), 80))
+                    .append(" | Severity: ")
+                    .append(normalizeInlineText(PlanningUserFacingCopy.humanizeGovernanceSeverity(a.getSeverity()), 80))
+                    .append('\n');
+            appendIndentedField(tb, "Assumption", a.getStatement(), ITEM_TEXT_MAX);
         }
         return tb.toString().trim();
     }
@@ -232,13 +233,12 @@ public final class PlanningThreadPacketFormatter {
                 Comparator.comparing((PlanIssue i) -> !PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()))
                         .thenComparing(PlanIssue::getId));
         StringBuilder tb = new StringBuilder();
-        tb.append("| Priority | Status | Severity | Topic |\n");
-        tb.append("|----------|--------|----------|-------|\n");
+        int idx = 1;
         for (PlanIssue i : sorted) {
             String blocking =
                     PlanIssueStatus.BLOCKING.equalsIgnoreCase(i.getStatus()) ? "Blocking" : "—";
-            String st = escapeTableCell(PlanningUserFacingCopy.humanizeIssueStatus(i.getStatus()));
-            String sev = escapeTableCell(PlanningUserFacingCopy.humanizeGovernanceSeverity(i.getSeverity()));
+            String st = normalizeInlineText(PlanningUserFacingCopy.humanizeIssueStatus(i.getStatus()), 80);
+            String sev = normalizeInlineText(PlanningUserFacingCopy.humanizeGovernanceSeverity(i.getSeverity()), 80);
             String title = i.getTitle() != null ? i.getTitle().trim() : "";
             String det = i.getDetail() != null ? i.getDetail().trim() : "";
             String topic;
@@ -247,15 +247,16 @@ public final class PlanningThreadPacketFormatter {
             } else {
                 topic = !title.isBlank() ? title : (!det.isBlank() ? det : "Issue details pending.");
             }
-            tb.append("| ")
-                    .append(blocking)
-                    .append(" | ")
+            appendItemSeparator(tb);
+            tb.append(idx++)
+                    .append(". Priority: ")
+                    .append(normalizeInlineText(blocking, 40))
+                    .append(" | Status: ")
                     .append(st)
-                    .append(" | ")
+                    .append(" | Severity: ")
                     .append(sev)
-                    .append(" | ")
-                    .append(escapeTableCell(topic, TABLE_CELL_MAX))
-                    .append(" |\n");
+                    .append('\n');
+            appendIndentedField(tb, "Topic", topic, ITEM_TEXT_MAX);
         }
         return tb.toString().trim();
     }
@@ -263,25 +264,25 @@ public final class PlanningThreadPacketFormatter {
     private static String formatRisksSection(FeaturePlanState plan, String artifactFallback) {
         if (!plan.getRisks().isEmpty()) {
             StringBuilder tb = new StringBuilder();
-            tb.append("| Status | Risk | Impact | Likelihood |\n");
-            tb.append("|--------|------|--------|------------|\n");
+            int idx = 1;
             for (PlanRisk r : plan.getRisks()) {
-                tb.append("| ")
-                        .append(escapeTableCell(PlanningUserFacingCopy.humanizeRiskDecisionStatus(r.getStatus())))
-                        .append(" | ")
-                        .append(escapeTableCell(r.getStatement().trim(), TABLE_CELL_MAX))
-                        .append(" | ")
-                        .append(escapeTableCell(r.getImpact().trim(), 120))
-                        .append(" | ")
-                        .append(escapeTableCell(r.getLikelihood().trim(), 80))
-                        .append(" |\n");
+                appendItemSeparator(tb);
+                tb.append(idx++)
+                        .append(". Status: ")
+                        .append(normalizeInlineText(PlanningUserFacingCopy.humanizeRiskDecisionStatus(r.getStatus()), 80))
+                        .append(" | Impact: ")
+                        .append(normalizeInlineText(r.getImpact(), 120))
+                        .append(" | Likelihood: ")
+                        .append(normalizeInlineText(r.getLikelihood(), 80))
+                        .append('\n');
+                appendIndentedField(tb, "Risk", r.getStatement(), ITEM_TEXT_MAX);
             }
             return tb.toString().trim();
         }
         if (artifactFallback != null && !artifactFallback.isBlank()) {
-            String tab = bulletLinesAsMarkdownTable("Risk", artifactFallback);
-            if (!tab.isBlank()) {
-                return tab;
+            String list = bulletLinesAsDiscordList("Risk", artifactFallback);
+            if (!list.isBlank()) {
+                return list;
             }
             return artifactFallback;
         }
@@ -291,23 +292,23 @@ public final class PlanningThreadPacketFormatter {
     private static String formatDecisionsSection(FeaturePlanState plan, String artifactFallback) {
         if (!plan.getDecisions().isEmpty()) {
             StringBuilder tb = new StringBuilder();
-            tb.append("| Status | Decision | Rationale |\n");
-            tb.append("|--------|----------|-----------|\n");
+            int idx = 1;
             for (PlanDecision d : plan.getDecisions()) {
-                tb.append("| ")
-                        .append(escapeTableCell(PlanningUserFacingCopy.humanizeRiskDecisionStatus(d.getStatus())))
-                        .append(" | ")
-                        .append(escapeTableCell(d.getDecision().trim(), TABLE_CELL_MAX))
-                        .append(" | ")
-                        .append(escapeTableCell(d.getRationale().trim(), TABLE_CELL_MAX))
-                        .append(" |\n");
+                appendItemSeparator(tb);
+                tb.append(idx++)
+                        .append(". Status: ")
+                        .append(normalizeInlineText(PlanningUserFacingCopy.humanizeRiskDecisionStatus(d.getStatus()), 80))
+                        .append('\n');
+                appendIndentedField(tb, "Decision", d.getDecision(), ITEM_TEXT_MAX);
+                tb.append('\n');
+                appendIndentedField(tb, "Rationale", d.getRationale(), ITEM_TEXT_MAX);
             }
             return tb.toString().trim();
         }
         if (artifactFallback != null && !artifactFallback.isBlank()) {
-            String tab = bulletLinesAsMarkdownTable("Decision (from artifact)", artifactFallback);
-            if (!tab.isBlank()) {
-                return tab;
+            String list = bulletLinesAsDiscordList("Decision", artifactFallback);
+            if (!list.isBlank()) {
+                return list;
             }
             return artifactFallback;
         }
@@ -318,22 +319,19 @@ public final class PlanningThreadPacketFormatter {
         List<String> rows = PlanningArtifactTexts.substantiveUnresolvedQuestionLines(plan);
         if (!rows.isEmpty()) {
             StringBuilder tb = new StringBuilder();
-            tb.append("| # | Open question |\n");
-            tb.append("|:-:|---------------|\n");
             int i = 1;
             for (String q : rows) {
-                tb.append("| ")
-                        .append(i++)
-                        .append(" | ")
-                        .append(escapeTableCell(q, TABLE_CELL_MAX))
-                        .append(" |\n");
+                appendItemSeparator(tb);
+                tb.append(i++)
+                        .append(". Open question: ")
+                        .append(normalizeInlineText(q, ITEM_TEXT_MAX));
             }
             return tb.toString().trim();
         }
         if (artifactFallback != null && !artifactFallback.isBlank()) {
-            String tab = bulletLinesAsMarkdownTable("Open question", artifactFallback);
-            if (!tab.isBlank()) {
-                return tab;
+            String list = bulletLinesAsDiscordList("Open question", artifactFallback);
+            if (!list.isBlank()) {
+                return list;
             }
             return orPlaceholder(artifactFallback);
         }
@@ -388,7 +386,7 @@ public final class PlanningThreadPacketFormatter {
     }
 
     /**
-     * Splits a large packet into Discord-sized chunks, preferring breaks at section boundaries ({@code **Heading**}).
+     * Splits a large packet into Discord-sized chunks, preferring breaks at section or numbered-item boundaries.
      */
     public static List<String> splitForDiscord(String fullBody) {
         if (fullBody == null || fullBody.isBlank()) {
@@ -419,18 +417,19 @@ public final class PlanningThreadPacketFormatter {
     private static int findCutPoint(String rest, int max) {
         int end = Math.min(max, rest.length());
         int best = end;
-        int idx = rest.lastIndexOf("\n\n**", end);
-        if (idx >= 400) {
-            best = idx;
+        int sectionIdx = rest.lastIndexOf("\n\n**", end);
+        int itemIdx = findLastMatchStart(NUMBERED_ITEM_BOUNDARY, rest, end);
+        if (sectionIdx >= 400 || itemIdx >= 400) {
+            best = Math.max(sectionIdx, itemIdx);
         }
-        return Math.min(best, rest.length());
+        return Math.min(best > 0 ? best : end, rest.length());
     }
 
     /**
-     * Renders bullet- or numbered lines as a markdown table (two columns) when there are at least two rows.
+     * Renders bullet- or numbered lines as a Discord-friendly numbered list when there are at least two rows.
      * Shared by planning packets and role thread summaries.
      */
-    public static String bulletLinesAsMarkdownTable(String itemColumnTitle, String multilineText) {
+    public static String bulletLinesAsDiscordList(String itemColumnTitle, String multilineText) {
         if (multilineText == null || multilineText.isBlank()) {
             return "";
         }
@@ -449,18 +448,19 @@ public final class PlanningThreadPacketFormatter {
             return "";
         }
         StringBuilder tb = new StringBuilder();
-        tb.append("| # | ")
-                .append(escapeTableCell(itemColumnTitle != null ? itemColumnTitle : "Item"))
-                .append(" |\n");
-        tb.append("|:-:|-------------|\n");
         for (int i = 0; i < rows.size(); i++) {
-            tb.append("| ")
-                    .append(i + 1)
-                    .append(" | ")
-                    .append(escapeTableCell(rows.get(i), TABLE_CELL_MAX))
-                    .append(" |\n");
+            appendItemSeparator(tb);
+            tb.append(i + 1).append(". ");
+            if (itemColumnTitle != null && !itemColumnTitle.isBlank()) {
+                tb.append(normalizeInlineText(itemColumnTitle, 80)).append(": ");
+            }
+            tb.append(normalizeInlineText(rows.get(i), ITEM_TEXT_MAX));
         }
         return tb.toString().trim();
+    }
+
+    public static String bulletLinesAsMarkdownTable(String itemColumnTitle, String multilineText) {
+        return bulletLinesAsDiscordList(itemColumnTitle, multilineText);
     }
 
     private static void appendSection(StringBuilder sb, String heading, String content) {
@@ -488,15 +488,36 @@ public final class PlanningThreadPacketFormatter {
         return s.substring(0, max - 1) + "…" + TRUNCATION_FOOTNOTE;
     }
 
-    private static String escapeTableCell(String s) {
-        return escapeTableCell(s, Integer.MAX_VALUE);
+    private static void appendItemSeparator(StringBuilder sb) {
+        if (sb.length() > 0) {
+            sb.append("\n\n");
+        }
     }
 
-    private static String escapeTableCell(String s, int maxLen) {
+    private static void appendIndentedField(StringBuilder sb, String label, String value, int maxLen) {
+        sb.append("   ")
+                .append(label)
+                .append(": ")
+                .append(normalizeInlineText(value, maxLen));
+    }
+
+    private static int findLastMatchStart(Pattern pattern, String text, int maxInclusive) {
+        Matcher matcher = pattern.matcher(text);
+        int best = -1;
+        while (matcher.find()) {
+            if (matcher.start() > maxInclusive) {
+                break;
+            }
+            best = matcher.start();
+        }
+        return best;
+    }
+
+    private static String normalizeInlineText(String s, int maxLen) {
         if (s == null || s.isBlank()) {
             return "—";
         }
-        String t = s.replace('\r', ' ').replace('\n', ' ').replace("|", "\\|").trim();
+        String t = s.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').replaceAll("\\s+", " ").trim();
         if (t.length() > maxLen) {
             t = t.substring(0, Math.max(0, maxLen - 1)) + "…";
         }

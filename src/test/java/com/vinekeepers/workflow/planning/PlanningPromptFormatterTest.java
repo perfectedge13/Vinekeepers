@@ -87,13 +87,14 @@ class PlanningPromptFormatterTest {
     }
 
     @Test
-    void requiredFieldPromptRepeatableRowMentionsRowNumber() {
+    void requiredFieldPromptRepeatableRowIsSelfContained() {
         WorkProfileDefinition profile = sampleProfile();
         ArtifactDefinition art = profile.getArtifactsById().get("governance_decisions");
         SectionDefinition sec = art.getSections().get(0);
         FieldDefinition f = sec.getFields().get(0);
         String line = PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, 0);
-        assertTrue(line.contains("Decision 1"));
+        assertTrue(line.contains("this **Decision** entry"));
+        assertFalse(line.contains("Decision 1"));
         assertTrue(line.contains("save it on the plan"));
     }
 
@@ -144,6 +145,12 @@ class PlanningPromptFormatterTest {
         assertTrue(summary.startsWith("Still needed:"));
         assertTrue(summary.contains("Decision"));
         assertTrue(summary.contains("ADR-style"));
+
+        String repeatableSummary = PlanningPromptFormatter.formatMissingRequiredSummary(
+                profile,
+                List.of("governance_decisions.adr_entry[0].decision_text"));
+        assertTrue(repeatableSummary.contains("this **Decision** entry"));
+        assertFalse(repeatableSummary.contains("Decision 1"));
 
         String emptySec = PlanningPromptFormatter.formatMissingRequiredSummary(
                 profile,

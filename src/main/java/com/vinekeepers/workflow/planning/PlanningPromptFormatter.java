@@ -37,11 +37,9 @@ public final class PlanningPromptFormatter {
                 : "this item";
         StringBuilder sb = new StringBuilder();
         if (repeatableRowIndex >= 0) {
-            sb.append("**Question:** What should we record for **")
+            sb.append("**Question:** What should we record on the plan for this **")
                     .append(label)
-                    .append(' ')
-                    .append(repeatableRowIndex + 1)
-                    .append("** in this list? Reply in **one message** so we can save it on the plan. Include: ");
+                    .append("** entry? Reply in **one message** so we can save it on the plan. Include: ");
         } else {
             sb.append("**Question:** What should we record for **")
                     .append(label)
@@ -145,7 +143,7 @@ public final class PlanningPromptFormatter {
                     String head = path.substring(0, bracket);
                     String tail = path.length() > close + 1 ? path.substring(close + 2) : "";
                     String[] hp = head.split("\\.", 3);
-                    if (hp.length >= 3 && profile != null) {
+                    if (hp.length >= 2 && profile != null) {
                         ArtifactDefinition art = profile.getArtifactsById().get(hp[0]);
                         SectionDefinition sec = findSection(art, hp[1]);
                         FieldDefinition fld = findField(sec, tail);
