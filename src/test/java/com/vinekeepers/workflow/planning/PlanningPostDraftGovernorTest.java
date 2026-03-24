@@ -560,6 +560,97 @@ class PlanningPostDraftGovernorTest {
     }
 
     @Test
+    void derive_thresholdReachedWithoutFreshQuestion_assumesContinue() {
+        Map<String, Object> persisted = new LinkedHashMap<>();
+        persisted.put(PlanningPostDraftGovernor.AUTONOMOUS_REDRAFT_COUNT_KEY, "2");
+        Map<String, Object> signal = new LinkedHashMap<>();
+        signal.put("planningRepoEvidenceJson", "{}");
+        signal.put(PlanningCyclePipeline.PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY, "0.41");
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        persisted,
+                        signal,
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        false,
+                        false,
+                        "thin",
+                        "",
+                        "",
+                        false,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
+        assertTrue(r.noticeMarkdown().contains("loop cap"));
+    }
+
+    @Test
+    void derive_thresholdReachedWithFreshQuestion_asksOneQuestion() {
+        UnresolvedItem it =
+                new UnresolvedItem(
+                        "uq_1",
+                        "fp",
+                        UnresolvedItemStatus.OPEN,
+                        "",
+                        "Which workflow step still needs a different model?",
+                        "normal",
+                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        List.of(),
+                        List.of(),
+                        0);
+        Map<String, Object> persisted = new LinkedHashMap<>();
+        persisted.put(PlanningPostDraftGovernor.AUTONOMOUS_REDRAFT_COUNT_KEY, "2");
+        Map<String, Object> signal = new LinkedHashMap<>();
+        signal.put("planningRepoEvidenceJson", "{}");
+        signal.put(PlanningCyclePipeline.PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY, "0.38");
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        persisted,
+                        signal,
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty().withAdded(it),
+                        false,
+                        false,
+                        false,
+                        false,
+                        "thin",
+                        "",
+                        "",
+                        false,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASK_ONE_QUESTION, r.action());
+        assertTrue(r.forceUserInputRequired());
+    }
+
+    @Test
+    void derive_highConfidenceBreaksLoopBeforeAnotherRedraft() {
+        Map<String, Object> signal = new LinkedHashMap<>();
+        signal.put("planningRepoEvidenceJson", "{}");
+        signal.put(PlanningCyclePipeline.PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY, "0.86");
+        PlanningPostDraftGovernor.Result r =
+                PlanningPostDraftGovernor.derive(
+                        Map.of(),
+                        signal,
+                        minimalPlan(),
+                        UnresolvedItemLedger.empty(),
+                        false,
+                        false,
+                        false,
+                        false,
+                        "thin",
+                        "",
+                        "",
+                        false,
+                        false,
+                        false);
+        assertEquals(PlanningPostDraftAction.ASSUME_AND_CONTINUE, r.action());
+        assertTrue(r.noticeMarkdown().contains("confidence threshold"));
+    }
+
+    @Test
     void revisionSituationFingerprint_stableForSameInputs() {
         UnresolvedItemLedger ledger = UnresolvedItemLedger.empty();
         String a =

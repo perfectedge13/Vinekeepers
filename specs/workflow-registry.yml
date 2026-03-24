@@ -419,9 +419,10 @@ assets:
       for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens;
       PlanningPostDraftGovernor derives planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
       AUTONOMOUS_REDRAFT) plus a canonical loop outcome, planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount,
-      and material/revision baselines so Arrietty v2 post-assess YAML
+      planningClarificationConfidenceScore/high, and material/revision baselines so Arrietty v2 post-assess YAML
       routes only on that action (no truthy planningUserInputRequired/planningReadyToPostPacket convergence); finalizePlanningCycleSpread
-      persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute);
+      persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute),
+      mirrors selective rerun after a merged clarification, and re-derives plan governance before the governor runs;
       applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
       SYNTHESIS_JSON_INVALID / SYNTHESIS_REPAIR_EXHAUSTED when no upserts applied; applyPostDraftGovernor persists planner recovery
       fields on FeaturePlanState when synthesis failure forces BLOCK; spread also carries planningHardClarificationBlockReason for
@@ -443,7 +444,9 @@ assets:
       also force ASK_ONE_QUESTION when canonical finalize reassessment produced no open gap but no real failure exists; otherwise BLOCK with
       PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode;
       revision situation fingerprint stops unchanged non-posting loops; explicit planningAutonomousRedraftCount and
-      maxAutonomousRedraftsBeforeAsk bias the system toward asking before another low-value redraft; when redraft would otherwise assume-through, ASK_ONE_QUESTION if
+      maxAutonomousRedraftsBeforeAsk now act as a hard autonomous loop cap; planningClarificationConfidenceScore compared with
+      clarificationConfidenceThreshold allows high-confidence saved drafts to continue without another redraft, while low-confidence
+      cycles still prefer ASK_ONE_QUESTION when a fresh clarification exists; when redraft would otherwise assume-through, ASK_ONE_QUESTION if
       FeaturePlanState still has structured material gaps (unresolvedQuestions, open blocking issues, open HIGH assumptions) via
       firstStructuredMaterialQuestion — not packet display text; firstUserFacingClarificationTextOrEmpty merges ledger then plan for forced clarification copy
     requires:
@@ -2906,13 +2909,15 @@ requirements:
           remain, packet depth and critique accept the ready-to-implement sentinel instead of requiring an editable draft list
         - >-
           PlanningPostDraftGovernor spreads planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
-          AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount, and durable material/revision baselines in workflow session state so an
+          AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount, planningClarificationConfidenceScore,
+          and durable material/revision baselines in workflow session state so an
           unchanged non-posting revision situation cannot re-enter autonomous drafting without a merged user answer, new repo evidence,
           new assumptions, new critique blocking findings, or materially different canonical draft/exploration text; when that
-          deny-redraft path would otherwise ASSUME_AND_CONTINUE, or when the autonomous redraft count reaches the configured ask threshold,
+          deny-redraft path would otherwise ASSUME_AND_CONTINUE, or when the autonomous redraft count reaches the configured loop cap,
           an OPEN planning clarification question or structured material gaps on
           FeaturePlanState (e.g. unresolved questions, open blocking issues, open HIGH assumptions) forces ASK_ONE_QUESTION with
-          forceUserInputRequired instead of silently assuming through
+          forceUserInputRequired instead of silently assuming through; otherwise the governor exits deterministically via
+          ASSUME_AND_CONTINUE or BLOCK instead of emitting another AUTONOMOUS_REDRAFT
         - >-
           evaluate_planning_packet_depth invokes PlanningPacketDepthEvaluator with relaxOpenQuestionSupplementalChecks derived from
           workflow state so thin artifact open_questions text alone does not fail depth when planningCanonicalUserInputRequired is false
@@ -2926,8 +2931,9 @@ requirements:
           For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
           ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
           CoordinatorClarificationEnginePolicy (maxClarificationTurns, maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk,
-          repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique) plus repo-grounding signals on FeaturePlanState; surfaced questions still respect the
-          maxQuestions=1 coordinator ranking contract and escalate from open to narrow to bounded prompts as repeated asks accumulate
+          clarificationConfidenceThreshold, repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique) plus
+          repo-grounding signals on FeaturePlanState; each cycle may rank fresh LLM follow-up candidates for a new question, while surfaced
+          questions still respect the maxQuestions=1 coordinator ranking contract and escalate from open to narrow to bounded prompts as repeated asks accumulate
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           informs clarification assessment and ranking so strong on-repo support can reduce unnecessary user asks per policy thresholds

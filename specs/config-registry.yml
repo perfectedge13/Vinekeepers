@@ -101,8 +101,8 @@ assets:
       for coordinator missing-field prompts (PlanningPromptFormatter), optional or default readiness.anyOfGroups,
       optional packetQuality.forbiddenSubstrings, and field-level richness keys for GenericReadinessEvaluator; default profile
       software_feature_planning includes a readiness gate for review-packet substance; software_feature_planning_v2
-      coordinatorClarification.engine may also tune maxClarificationTurnsPerGap and maxAutonomousRedraftsBeforeAsk so
-      clarification escalation and autonomous redraft pacing stay explicit
+      coordinatorClarification.engine may also tune maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk, and
+      clarificationConfidenceThreshold so clarification escalation, loop exit confidence, and autonomous redraft pacing stay explicit
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-WORK-PROFILE-LOADER
@@ -113,13 +113,14 @@ assets:
       packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText, and field-level minWords,
       maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks; parses coordinatorClarification.mode/gaps plus optional
       coordinatorClarification.engine knobs (maxClarificationTurns, maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk,
-      repoEvidenceAskThreshold, clarificationAskPriorityThreshold, allowAssumeAndContinue, allowClarificationAfterCritique)
+      clarificationConfidenceThreshold, repoEvidenceAskThreshold, clarificationAskPriorityThreshold, allowAssumeAndContinue,
+      allowClarificationAfterCritique)
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
     kind: source
     path: src/main/java/com/vinekeepers/profile/CoordinatorClarificationEnginePolicy.java
-    role: Typed defaults and YAML-backed policy for post-draft clarification budgets (total and per gap), autonomous redraft-before-ask pacing, repo-evidence ask threshold, assume/defer, and critique re-entry
+    role: Typed defaults and YAML-backed policy for post-draft clarification budgets (total and per gap), autonomous redraft/loop pacing, clarification confidence exit threshold, repo-evidence ask threshold, assume/defer, and critique re-entry
     requires: [REQ-CONFIG-001, REQ-WORKFLOW-002]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-READINESS-PATH-RULE

@@ -110,7 +110,7 @@ class ClarificationEngineAssessorTest {
     @Test
     void perGapBudgetExhaustedUsesExplicitGapLimit() {
         CoordinatorClarificationEnginePolicy pol =
-                new CoordinatorClarificationEnginePolicy(10, 1, 2, 0.45, 0.0, true, true);
+                new CoordinatorClarificationEnginePolicy(10, 1, 2, 0.72, 0.45, 0.0, true, true);
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan =

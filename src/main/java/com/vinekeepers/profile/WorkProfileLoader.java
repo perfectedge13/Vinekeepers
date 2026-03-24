@@ -134,6 +134,11 @@ public final class WorkProfileLoader {
                 maxRedraftsObj != null
                         ? maxRedraftsObj
                         : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxAutonomousRedraftsBeforeAsk();
+        Double confidenceThresholdObj = doubleObject(em.get("clarificationConfidenceThreshold"));
+        double confidenceThreshold =
+                confidenceThresholdObj != null
+                        ? confidenceThresholdObj
+                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getClarificationConfidenceThreshold();
         Double threshold = doubleObject(em.get("repoEvidenceAskThreshold"));
         double thr =
                 threshold != null
@@ -153,7 +158,7 @@ public final class WorkProfileLoader {
                         ? booleanVal(em.get("allowClarificationAfterCritique"))
                         : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowClarificationAfterCritique();
         return new CoordinatorClarificationEnginePolicy(
-                maxTurns, maxTurnsPerGap, maxRedrafts, thr, askP, allowAssume, allowCrit);
+                maxTurns, maxTurnsPerGap, maxRedrafts, confidenceThreshold, thr, askP, allowAssume, allowCrit);
     }
 
     private static CoordinatorClarificationGapRule parseCoordinatorGap(Map<String, Object> raw) {

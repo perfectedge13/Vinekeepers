@@ -28,5 +28,6 @@ class WorkProfileLoaderTest {
         assertFalse(v2.getCoordinatorClarification().getGaps().isEmpty());
         assertEquals(2, v2.getCoordinatorClarification().getEnginePolicy().getMaxClarificationTurnsPerGap());
         assertEquals(2, v2.getCoordinatorClarification().getEnginePolicy().getMaxAutonomousRedraftsBeforeAsk());
+        assertEquals(0.72, v2.getCoordinatorClarification().getEnginePolicy().getClarificationConfidenceThreshold());
     }
 }

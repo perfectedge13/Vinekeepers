@@ -4,6 +4,7 @@ import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationMode;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.profile.WorkProfileLoader;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
@@ -11,6 +12,7 @@ import com.vinekeepers.state.workflow.UnresolvedItemStatus;
 import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -336,6 +338,45 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         assertFalse(ranked.useStructuredChoices());
     }
 
+    @Test
+    void synthFallbackPrefersFreshRankedQuestionOverLeadingGenericHint() {
+        RankedClarification ranked =
+                invokeRankSynthFallbackQuestion(
+                        bareFeaturePlanV2(),
+                        UnresolvedItemLedger.empty(),
+                        WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"))
+                                .get("software_feature_planning_v2")
+                                .orElseThrow(),
+                        List.of(
+                                "Can you add more detail?",
+                                "Which workflow step should keep the default model when no override is configured?"));
+        assertTrue(ranked.userInputRequired());
+        assertFalse(ranked.questionText().isBlank());
+        assertFalse("Can you add more detail?".equalsIgnoreCase(ranked.questionText()));
+    }
+
+    @Test
+    void splitExpansionSkipsFullRescanAfterMergedClarification() {
+        WorkProfileRegistry registry = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
+        FeaturePlanState plan = bareFeaturePlanV2();
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan);
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, registry);
+        Map<String, Object> spread =
+                pipeline.runExpansionPhaseOnly(
+                        null,
+                        Map.of(
+                                "contextId", "c",
+                                "planningJustMergedClarification", "true",
+                                PlanningCyclePipeline.PARTIAL_AGGREGATED_FOLLOWUPS_KEY,
+                                        "[\"Which workflow step still needs a model override?\"]"),
+                        Map.of());
+        assertTrue("true".equals(spread.get("planningSelectiveRerunActive")));
+        assertTrue(String.valueOf(spread.get("planningSelectiveRerunNote")).contains("skipping a full re-scan"));
+        assertTrue(String.valueOf(spread.get(PlanningCyclePipeline.PARTIAL_AGGREGATED_FOLLOWUPS_KEY))
+                .contains("model override"));
+    }
+
     private static RankedClarification invokeEnsureRankedForOpenCanonicalGap(
             FeaturePlanState plan,
             UnresolvedItemLedger ledger,
@@ -381,6 +422,26 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                             int.class);
             m.setAccessible(true);
             return (RankedClarification) m.invoke(null, plan, ledger, profile, coord, top, priorAskCount);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static RankedClarification invokeRankSynthFallbackQuestion(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            WorkProfileDefinition profile,
+            List<String> aggregatedFollowUps) {
+        try {
+            var m =
+                    PlanningCyclePipeline.class.getDeclaredMethod(
+                            "rankSynthFallbackQuestion",
+                            FeaturePlanState.class,
+                            UnresolvedItemLedger.class,
+                            WorkProfileDefinition.class,
+                            List.class);
+            m.setAccessible(true);
+            return (RankedClarification) m.invoke(null, plan, ledger, profile, aggregatedFollowUps);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -479,6 +540,46 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                 null,
                 null,
                 "software_feature_planning",
+                Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static FeaturePlanState bareFeaturePlanV2() {
+        return new FeaturePlanState(
+                "c",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "Short request",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning_v2",
                 Map.of(),
                 null,
                 null,

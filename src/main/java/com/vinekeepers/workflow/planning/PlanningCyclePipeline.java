@@ -9,9 +9,14 @@ import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanAssumption;
+import com.vinekeepers.state.planning.PlanAssumptionStatus;
+import com.vinekeepers.state.planning.PlanConfidence;
+import com.vinekeepers.state.planning.PlanGovernanceSeverity;
+import com.vinekeepers.state.planning.PlanIssue;
+import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.workflow.ProgressDedupeHelper;
 import com.vinekeepers.state.workflow.ProgressEventLog;
 import com.vinekeepers.state.workflow.UnresolvedItem;
@@ -67,6 +72,8 @@ public final class PlanningCyclePipeline {
     public static final String PARTIAL_LAST_SYNTH_KEY = "planningPartialLastSynthLlmLine";
     public static final String PARTIAL_DEPTH_OK_KEY = "planningPartialDepthOk";
     public static final String PARTIAL_DEPTH_REASON_KEY = "planningPartialDepthReason";
+    public static final String PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY = "planningClarificationConfidenceScore";
+    public static final String PLANNING_CLARIFICATION_CONFIDENCE_HIGH_KEY = "planningClarificationConfidenceHigh";
 
     private record LoadedCycle(
             String contextId, FeaturePlanState plan, WorkProfileDefinition profile, Map<String, Object> work) {}
@@ -202,6 +209,7 @@ public final class PlanningCyclePipeline {
         if (structuredParseFailed) {
             spread.put("planningPacketDepthRetryRecommended", "true");
         }
+        applyClarificationConfidence(spread, state, plan, upsert.ledger(), ranked, profile, userInputRequired, depthOk, structuredParseFailed);
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
         applyPostDraftGovernor(
@@ -305,8 +313,21 @@ public final class PlanningCyclePipeline {
         }
         int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0) + 1;
         spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
-        List<String> aggregatedFollowUps = new ArrayList<>();
-        runExpansionPhase(event, ctx.work(), spread, bind, aggregatedFollowUps);
+        List<String> aggregatedFollowUps = readAggregatedFromState(state);
+        boolean selective = selectiveRerunAfterClarificationEnabled(state, bind);
+        boolean justMerged = "true".equalsIgnoreCase(getString(state, "planningJustMergedClarification"));
+        if (selective && justMerged) {
+            spread.put("planningSelectiveRerunActive", "true");
+            spread.put(
+                    "planningSelectiveRerunNote",
+                    "Thanks — I'm refreshing the draft from your last answer (skipping a full re-scan this pass).");
+            if (aggregatedFollowUps.isEmpty()) {
+                mergeExpansionFollowUpsFromWork(ctx.work(), aggregatedFollowUps);
+            }
+        } else {
+            aggregatedFollowUps = new ArrayList<>();
+            runExpansionPhase(event, ctx.work(), spread, bind, aggregatedFollowUps);
+        }
         putAggregatedJson(spread, aggregatedFollowUps);
         return spread;
     }
@@ -395,6 +416,9 @@ public final class PlanningCyclePipeline {
                 resolvePlanningUserInputRequired(
                         coordFin.isCanonicalV1(), clrFin.canonicalClarificationPending(), upsertFin.ledger());
 
+        PlanGovernanceDeriver.deriveAndPersist(planStateStore, contextId, profileFin);
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
+
         spread.put("planningCanonicalUserInputRequired", clrFin.canonicalClarificationPending() ? "true" : "false");
         spread.put("planningLlmUserInputSuggested", clrFin.llmUserInputSuggested() ? "true" : "false");
         spread.put("planningQuestionsAskedThisRound", rankedLlmFin.userInputRequired() ? "1" : "0");
@@ -416,6 +440,8 @@ public final class PlanningCyclePipeline {
         if (structuredParseFailedFinalize) {
             spread.put("planningPacketDepthRetryRecommended", "true");
         }
+        applyClarificationConfidence(
+                spread, state, plan, upsertFin.ledger(), ranked, profileFin, userInputRequired, depthOk, structuredParseFailedFinalize);
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
         applyPostDraftGovernor(
@@ -482,7 +508,7 @@ public final class PlanningCyclePipeline {
                         llmErr,
                         getString(spread, "planningExpansionFallbackUsed"),
                         getString(spread, "planningLlmSkipReason"),
-                        "",
+                        getString(spread, "planningSelectiveRerunNote"),
                         "true".equalsIgnoreCase(getString(spread, PLANNING_PASS_INTERRUPTED_KEY)),
                         structuredParseFailedFinalize));
         spread.put(
@@ -492,6 +518,8 @@ public final class PlanningCyclePipeline {
                         : "");
 
         enrichUserCopyAndProgressLog(state, spread);
+        spread.put("planningJustMergedClarification", "false");
+        spread.put("planningSelectiveRerunActive", "false");
         finishProgressFingerprint(state, spread);
         String cycleErrFin = getString(spread, "planningRoomCycleError");
         if (cycleErrFin == null || cycleErrFin.isBlank()) {
@@ -1034,18 +1062,184 @@ public final class PlanningCyclePipeline {
             if (q != null && !q.isBlank()) {
                 fallback.add(q.trim());
             }
-            if (!fallback.isEmpty()) {
-                break;
-            }
         }
         if (fallback.isEmpty()) {
             return emptyRankedClarification();
         }
-        String question = fallback.getFirst();
-        if (ClarificationPromptQualityGate.isGenericOrMetaClarification(question)) {
-            return emptyRankedClarification();
+        RankedClarification ranked =
+                PlanningQuestionRankingPolicy.rank(
+                        plan,
+                        fallback,
+                        1,
+                        ledger,
+                        profile != null && profile.isBoundedClarificationChoicesEnabled(),
+                        profile != null && profile.isInferBoundedChoiceFromOrInTextEnabled());
+        String question = ranked.questionText() != null ? ranked.questionText().trim() : "";
+        if (ranked.userInputRequired() && !question.isBlank() && !ClarificationPromptQualityGate.isGenericOrMetaClarification(question)) {
+            return ranked;
         }
-        return new RankedClarification(true, "", "[]", "{}", 0, List.of(), false, question);
+        String bestCandidate = "";
+        int bestScore = Integer.MIN_VALUE;
+        for (String candidate : fallback) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            String trimmed = candidate.trim();
+            if (!ClarificationPromptQualityGate.acceptableClarificationCandidate(trimmed)
+                    || ClarificationPromptQualityGate.isGenericOrMetaClarification(trimmed)
+                    || ledger.hasFingerprintMergeClosed(trimmed)) {
+                continue;
+            }
+            int candidateScore = synthFallbackQuestionScore(trimmed);
+            if (candidateScore > bestScore) {
+                bestCandidate = trimmed;
+                bestScore = candidateScore;
+            }
+        }
+        if (!bestCandidate.isBlank()) {
+            return new RankedClarification(true, "", "[]", "{}", 0, ranked.assumptionsToRecord(), false, bestCandidate);
+        }
+        return emptyRankedClarification();
+    }
+
+    private static int synthFallbackQuestionScore(String question) {
+        String q = question != null ? question.toLowerCase(java.util.Locale.ROOT) : "";
+        int score = Math.min(4, q.length() / 40);
+        if (q.contains("workflow") || q.contains("step")) {
+            score += 4;
+        }
+        if (q.contains("model") || q.contains("provider") || q.contains("override")) {
+            score += 4;
+        }
+        if (q.contains("default") || q.contains("fallback")) {
+            score += 2;
+        }
+        if (q.contains("detail")) {
+            score -= 2;
+        }
+        return score;
+    }
+
+    private static void applyClarificationConfidence(
+            Map<String, Object> spread,
+            Map<String, Object> state,
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            RankedClarification ranked,
+            WorkProfileDefinition profile,
+            boolean userInputRequired,
+            boolean depthOk,
+            boolean structuredParseFailed) {
+        double confidence =
+                clarificationConfidenceScore(plan, ledger, ranked, state, userInputRequired, depthOk, structuredParseFailed);
+        double threshold =
+                profile != null
+                        ? profile.getCoordinatorClarification().getEnginePolicy().getClarificationConfidenceThreshold()
+                        : com.vinekeepers.profile.CoordinatorClarificationEnginePolicy.defaultPolicy()
+                                .getClarificationConfidenceThreshold();
+        spread.put(PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY, formatDouble(confidence));
+        spread.put(PLANNING_CLARIFICATION_CONFIDENCE_HIGH_KEY, confidence >= threshold ? "true" : "false");
+    }
+
+    private static double clarificationConfidenceScore(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            RankedClarification ranked,
+            Map<String, Object> state,
+            boolean userInputRequired,
+            boolean depthOk,
+            boolean structuredParseFailed) {
+        PlanConfidence stored = plan != null ? plan.getPlanConfidence() : null;
+        if (stored != null && stored.getConfidenceScore() >= 0) {
+            return clampScore(stored.getConfidenceScore());
+        }
+        double score = 0.18;
+        if (depthOk) {
+            score += 0.24;
+        }
+        if (!structuredParseFailed) {
+            score += 0.08;
+        }
+        score += 0.28 * ClarificationEngineAssessor.repoEvidenceGroundingScore(plan, getString(state, "planningRepoEvidenceJson"));
+        score += Math.min(0.22, clarificationKnownFactCount(plan) * 0.012);
+        score -= Math.min(
+                0.55,
+                clarificationMaterialUnknownCount(plan, ledger, ranked, userInputRequired, structuredParseFailed) * 0.14);
+        return clampScore(score);
+    }
+
+    private static int clarificationKnownFactCount(FeaturePlanState plan) {
+        if (plan == null) {
+            return 0;
+        }
+        int known = 0;
+        known += plan.getRequirements().size();
+        known += plan.getDecisions().size();
+        known += plan.getValidationNotes().size();
+        known += plan.getRisks().size();
+        String featureSummary = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
+        if (featureSummary != null && featureSummary.trim().length() >= 24) {
+            known += 2;
+        }
+        String exploration = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
+        if (exploration != null && exploration.trim().length() >= 120) {
+            known += 2;
+        }
+        return known;
+    }
+
+    private static int clarificationMaterialUnknownCount(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            RankedClarification ranked,
+            boolean userInputRequired,
+            boolean structuredParseFailed) {
+        int unknowns = 0;
+        if (userInputRequired) {
+            unknowns++;
+        }
+        if (structuredParseFailed) {
+            unknowns++;
+        }
+        if (ranked != null && ranked.userInputRequired() && ranked.questionText() != null && !ranked.questionText().isBlank()) {
+            unknowns++;
+        }
+        if (ledger != null) {
+            for (UnresolvedItem it : ledger.items()) {
+                if (it.getStatus() == UnresolvedItemStatus.OPEN
+                        && "planning_clarification".equals(it.getSource().get("channel"))) {
+                    unknowns++;
+                }
+            }
+        }
+        if (plan == null) {
+            return unknowns;
+        }
+        for (String q : plan.getUnresolvedQuestions()) {
+            if (q != null && !q.isBlank()) {
+                unknowns++;
+            }
+        }
+        for (PlanIssue issue : plan.getIssues()) {
+            if (issue.isBlocking() && PlanIssueStatus.OPEN.equalsIgnoreCase(issue.getStatus())) {
+                unknowns++;
+            }
+        }
+        for (PlanAssumption assumption : plan.getAssumptions()) {
+            if (PlanAssumptionStatus.OPEN.equalsIgnoreCase(assumption.getStatus())
+                    && PlanGovernanceSeverity.HIGH.equalsIgnoreCase(assumption.getSeverity())) {
+                unknowns++;
+            }
+        }
+        return unknowns;
+    }
+
+    private static double clampScore(double score) {
+        return Math.max(0.0, Math.min(1.0, score));
+    }
+
+    private static String formatDouble(double value) {
+        return String.format(java.util.Locale.ROOT, "%.3f", value);
     }
 
     private static RankedClarification emptyRankedClarification() {

@@ -121,6 +121,11 @@ public final class PlanningPostDraftGovernor {
                 wantsRevision
                         && loopPolicy.getMaxAutonomousRedraftsBeforeAsk() > 0
                         && autonomousRedraftCount >= loopPolicy.getMaxAutonomousRedraftsBeforeAsk();
+        double clarificationConfidence =
+                parseDouble(getString(signalState, PlanningCyclePipeline.PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY), -1.0);
+        boolean confidenceGateReached =
+                clarificationConfidence >= 0
+                        && clarificationConfidence >= loopPolicy.getClarificationConfidenceThreshold();
 
         boolean material =
                 detectMaterialChange(
@@ -220,17 +225,34 @@ public final class PlanningPostDraftGovernor {
             return resultFor(PlanningPostDraftAction.POST_PACKET, "", false);
         }
 
+        if (wantsRevision && confidenceGateReached) {
+            return resultFor(
+                    PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                    "**Continuing**\n\nThe current draft is above the clarification confidence threshold, so I'm moving "
+                            + "forward instead of spending another cycle on low-value follow-up questions.",
+                    false);
+        }
+
         boolean ledgerRepeat = ledger != null && ledger.maxOpenItemRepeatCount() >= 1;
         boolean denyRedraft = !material && (sameNonPostingSituation || ledgerRepeat);
 
         if (wantsRevision && redraftAskThresholdReached) {
-            String q = firstOpenPlanningQuestion(ledger);
-            if (q != null && !q.isBlank()) {
+            String q = firstUserFacingClarificationTextOrEmpty(ledger, plan);
+            if (!q.isBlank()) {
                 return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
             }
-            if (hasStructuredMaterialPlanningGaps(plan)) {
-                return resultFor(PlanningPostDraftAction.ASK_ONE_QUESTION, "", true);
+            if (!loopPolicy.isAllowAssumeAndContinue()) {
+                return resultFor(
+                        PlanningPostDraftAction.BLOCK,
+                        "**Planning paused**\n\nThe clarification loop hit its max autonomous passes without reaching a "
+                                + "confident stopping point. A human needs to unblock the next step.",
+                        false);
             }
+            return resultFor(
+                    PlanningPostDraftAction.ASSUME_AND_CONTINUE,
+                    "**Continuing**\n\nI hit the autonomous clarification loop cap without finding another high-value "
+                            + "question, so I'm moving the saved draft forward for review.",
+                    false);
         }
 
         if (wantsRevision && denyRedraft) {
@@ -572,6 +594,17 @@ public final class PlanningPostDraftGovernor {
         }
         try {
             return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return dflt;
+        }
+    }
+
+    private static double parseDouble(String s, double dflt) {
+        if (s == null || s.isBlank()) {
+            return dflt;
+        }
+        try {
+            return Double.parseDouble(s.trim());
         } catch (NumberFormatException e) {
             return dflt;
         }

@@ -132,6 +132,7 @@ profiles:
         maxClarificationTurns: 10
         maxClarificationTurnsPerGap: 2
         maxAutonomousRedraftsBeforeAsk: 2
+        clarificationConfidenceThreshold: 0.72
         repoEvidenceAskThreshold: 0.42
         clarificationAskPriorityThreshold: 0.48
         allowAssumeAndContinue: true
