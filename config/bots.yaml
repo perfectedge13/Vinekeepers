@@ -119,6 +119,7 @@ workflows:
       - planningCanonicalActionLabel
       - planningCanonicalActionSummary
       - planningNextAction
+      - planningNextPhase
       - planningLastConfidence
       - planningNextQuestion
       - planningBlockingReason
@@ -162,9 +163,10 @@ workflows:
         pipeline:
         - cap_planning_clarification
         rulesRef: rs_evaluation_branch
-        defaultNextPhase: planning_blocked
+        defaultNextPhase: planning_routing_invariant
       planning_packet:
         pipeline:
+        - cap_assert_planning_route_packet
         - cap_derive_plan_governance
         - cap_evaluate_planning_packet_depth
         - cap_post_planning_packet_thread
@@ -204,8 +206,13 @@ workflows:
         pipeline:
         - cap_planning_launch
         defaultNextPhase: done
+      planning_routing_invariant:
+        pipeline:
+        - cap_planning_route_invariant
+        defaultNextPhase: failed
       planning_blocked:
         pipeline:
+        - cap_assert_planning_route_blocked
         - cap_set_stage_failed
         - cap_post_blocked_thread
         - cap_post_blocked_room
@@ -327,6 +334,22 @@ workflows:
         kind: legacy_action
         action: planning_run_evaluation
         storeSpread: true
+      cap_assert_planning_route_packet:
+        kind: legacy_action
+        action: assert_planning_route_phase
+        bind:
+          expectedPhase: planning_packet
+        storeSpread: true
+      cap_assert_planning_route_blocked:
+        kind: legacy_action
+        action: assert_planning_route_phase
+        bind:
+          expectedPhase: planning_blocked
+        storeSpread: true
+      cap_planning_route_invariant:
+        kind: legacy_action
+        action: planning_route_invariant_failed
+        storeSpread: true
       cap_planning_clarification:
         kind: configurable_steps
         steps:
@@ -344,8 +367,8 @@ workflows:
         - type: branch
           branches:
           - when:
-              key: planningNextAction
-              value: ASK_USER
+              key: planningNextPhase
+              value: planning_clarification
             next: 3
           - when: else
             next: 13
@@ -675,20 +698,20 @@ workflows:
       rs_evaluation_branch:
         - when:
             equals:
-              key: planningNextAction
-              value: ASK_USER
+              key: planningNextPhase
+              value: planning_clarification
           then:
           - transition: planning_clarification
         - when:
             equals:
-              key: planningNextAction
-              value: READY_FOR_PACKET
+              key: planningNextPhase
+              value: planning_packet
           then:
           - transition: planning_packet
         - when:
             equals:
-              key: planningNextAction
-              value: BLOCKED
+              key: planningNextPhase
+              value: planning_blocked
           then:
           - transition: planning_blocked
       rs_critique:

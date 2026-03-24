@@ -54,6 +54,7 @@ import com.vinekeepers.workflow.WorkflowRunnerFactory;
 import com.vinekeepers.workflow.planning.PlanningCyclePipeline;
 import com.vinekeepers.workflow.actions.AcknowledgeReadinessHumanDecisionAction;
 import com.vinekeepers.workflow.actions.AppendAssumptionAction;
+import com.vinekeepers.workflow.actions.AssertPlanningRoutePhaseAction;
 import com.vinekeepers.workflow.actions.AppendIssueAction;
 import com.vinekeepers.workflow.actions.AppendRequirementAction;
 import com.vinekeepers.workflow.actions.AppendValidationNoteAction;
@@ -88,6 +89,7 @@ import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
 import com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceAction;
 import com.vinekeepers.workflow.actions.PlanningRunSilentSynthesisAction;
 import com.vinekeepers.workflow.actions.PlanningRunEvaluationAction;
+import com.vinekeepers.workflow.actions.PlanningRouteInvariantFailedAction;
 import com.vinekeepers.workflow.actions.PrepPlanningRepoGroundingAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PostPlanningProgressIfChangedAction;
@@ -418,6 +420,8 @@ public final class Bootstrap {
         PlanningRunEvaluationAction planningEvaluation = new PlanningRunEvaluationAction(planningCyclePipeline);
         registry.register("planning_run_silent_synthesis", planningSilentSynthesis);
         registry.register("planning_run_evaluation", planningEvaluation);
+        registry.register("assert_planning_route_phase", new AssertPlanningRoutePhaseAction());
+        registry.register("planning_route_invariant_failed", new PlanningRouteInvariantFailedAction());
         registry.register(
                 "merge_planning_clarification_choice",
                 new MergePlanningClarificationChoiceAction(featurePlanStateStore, workProfileRegistry));

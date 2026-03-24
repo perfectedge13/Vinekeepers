@@ -4,6 +4,7 @@
 
 ## 2026-03-24
 
+- **Evaluation-to-phase handoff:** **`planningNextPhase`** is the explicit v2 graph branch key after **`planning_run_evaluation`**; unmatched phases route to **`planning_routing_invariant`** instead of defaulting to user-facing **`planning_blocked`**. **`assert_planning_route_phase`** guards packet/blocked phase entry. Tests: **`PlanningEvaluationPhaseHandoffIntegrationTest`**, **`ArriettyV2WorkflowYamlTest`**. Specs: **workflow-registry**, **config-registry**.
 - **Canonical clarification narrative (mk sync):** **how-it-works** now matches production — **`PlanningWorkspacePreflightService`**, **`SilentPlanningSynthesisService`**, **`PlanningCyclePipeline`**, **`PlanningEvaluationService`**, and **`CanonicalClarificationSpreadBuilder`** define the live spine, with optional **`planningGapAskCountsJson`** / **`planningConfidenceBreakdownJson`** for observability only. Cross-links **workflow-steps** dossier. Specs: **workflow-registry**, **state-registry**.
 - **Authority cutover note:** Production planning now has one semantic authority: **`PlanningEvaluationService`**. Material pacing remains deterministic shell logic, **`MergePlanningClarificationChoiceAction`** defers open-gap work to the next pipeline cycle, and **`PlanningArchitectureRulesTest`** guards against regressions.
 

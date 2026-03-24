@@ -113,7 +113,7 @@ assets:
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
       hydrate_planning_session, start_coordinator_planning, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
       derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
-      planning_run_silent_synthesis, planning_run_evaluation,
+      planning_run_silent_synthesis, planning_run_evaluation, assert_planning_route_phase, planning_route_invariant_failed,
       post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
       structured discovery and plan actions, coordinator_intake_bootstrap, mark_intake_discovery_complete, classify_planning_ingress, set_planning_intake_stage,
@@ -538,7 +538,7 @@ assets:
   - id: ASSET-PLANNING-SYNTHESIS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningSynthesisAction.java
-    role: Internal synthesis-pacing enum for ASK_USER / ASSUME_AND_CONTINUE / READY_FOR_PACKET / CONTINUE_SYNTHESIS / BLOCK; live YAML routes on planningNextAction only
+    role: Internal synthesis-pacing enum for ASK_USER / ASSUME_AND_CONTINUE / READY_FOR_PACKET / CONTINUE_SYNTHESIS / BLOCK; v2 graph post-evaluation transitions use planningNextPhase derived from planningNextAction
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -2202,7 +2202,7 @@ requirements:
           Bootstrap registers workflow actions initialize_feature_plan_state,           hydrate_planning_session, start_coordinator_planning,
           ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
           derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
-          planning_run_silent_synthesis, planning_run_evaluation,
+          planning_run_silent_synthesis, planning_run_evaluation, assert_planning_route_phase, planning_route_invariant_failed,
           post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
           synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
@@ -2791,13 +2791,14 @@ requirements:
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys.       Planning cycle logic lives in PlanningCyclePipeline; silent synthesis runs before one
       PlanningEvaluationService call, which returns canonical gaps, confidence, one optional question, AIRD deltas, and
-      ready_for_packet. PlanningDecisionNormalizer reduces that result to the exclusive live routing contract
-      (planningNextAction, planningLastConfidence, planningNextQuestion, planningBlockingReason, planningRepoEvidenceStatus),
+      ready_for_packet.       PlanningDecisionNormalizer reduces that result to the exclusive live routing contract
+      (planningNextAction, planningNextPhase, planningLastConfidence, planningNextQuestion, planningBlockingReason, planningRepoEvidenceStatus),
       while PlanningMaterialCyclePacing and PlanningCanonicalDecisionSupport persist continuity state without becoming a second
       routing authority. Coordinator clarification follows a strict contract (one concrete blocking question when a required
       fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved plan state).
-      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. v2 evaluation-branch rulesets route on planningNextAction
-      only (no legacy boolean-first routing); blocked states fail closed instead of reopening a live CONTINUE_SYNTHESIS branch;
+      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. v2 rs_evaluation_branch routes on planningNextPhase
+      only (planning_clarification, planning_packet, planning_blocked; no legacy boolean-first routing); unmatched phase falls
+      through to planning_routing_invariant (internal error, not user blocked-thread copy); blocked states fail closed instead of reopening a live CONTINUE_SYNTHESIS branch;
       packet depth defers generic open-question filler blocking to clarification state when canonical user input is not required
       and the unresolved ledger has no OPEN blocking row.
     status: active
@@ -2851,7 +2852,7 @@ requirements:
         - >-
           For canonical_v1 coordinator transport, PlanningEvaluationService evaluates canonical plan state after drafting;
           code validates that only blocking or branching gaps can surface ASK_USER, enforces maxQuestions=1, persists
-          confidence from evaluation output, and routes only through the normalized planningNextAction snapshot without fallback to generic or ranked questioning when the canonical gap set is closed;
+          confidence from evaluation output, and routes only through the normalized planningNextAction and planningNextPhase snapshot without fallback to generic or ranked questioning when the canonical gap set is closed;
           missing repo inspection alone does not force BLOCKED when no gap is blocking: evaluation may coerce READY_FOR_PACKET when depth
           and structured parse are acceptable and the model withheld ready_for_packet without asserting blocking gaps
         - >-
@@ -2881,8 +2882,8 @@ requirements:
         - >-
           arrietty_room_v2 uses named phases plus embedded configurable_steps segments; configurable_steps persist isolated segment
           cursors; kickoff routes through planning_ingress/planning_kickoff; planning_preflight / planning_silent_synthesis /
-          planning_clarification own the intake spine, and rs_evaluation_branch branches only on planningNextAction
-          (ASK_USER, READY_FOR_PACKET, BLOCKED; fail-closed default planning_blocked); CONTINUE_SYNTHESIS is not a live YAML branch;
+          planning_clarification own the intake spine, and rs_evaluation_branch branches only on planningNextPhase
+          (planning_clarification, planning_packet, planning_blocked; default planning_routing_invariant when unmatched); CONTINUE_SYNTHESIS is not a live YAML branch;
           FeaturePlanState planner recovery fields persist synthesis failure category, phase, recoverable flag, and
           humanized last recovery hint; clarification uses the explicit planning_clarification phase when
           the coordinator must ask the operator; ArriettyV2WorkflowYamlTest guards phase ownership, evaluation branching, and bans
@@ -3082,6 +3083,13 @@ requirements:
             Verify immediate synthesis failures preserve explicit failure categories, set cycle error state consistently, and
             do not crash the evaluation-authorized planning branch
           testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineFailureHandlingTest
+          preconditions: []
+        - id: UNIT-PLANNING-EVALUATION-PHASE-HANDOFF
+          title: PlanningEvaluationPhaseHandoffIntegrationTest
+          intent: >-
+            Verify packet-ready evaluation sets planningNextPhase for rs_evaluation_branch, stale blocked spread keys are
+            overridden, missing phase does not match rules, route assertions and planning_route_invariant_failed behavior
+          testClass: com.vinekeepers.workflow.planning.PlanningEvaluationPhaseHandoffIntegrationTest
           preconditions: []
         - id: UNIT-STRUCTURED-LLM-ARTIFACT-UPSERT-PASS
           title: StructuredLlmArtifactUpsertPassTest

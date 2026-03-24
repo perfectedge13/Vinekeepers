@@ -105,6 +105,9 @@ class PlanningCyclePipelineFailureHandlingTest {
         assertEquals("EVALUATION_INVALID_NO_ELIGIBLE_ASK_GAP", spread.get("planningRoomCycleError"));
         assertEquals("false", spread.get("planningPacketPostingAllowed"));
         assertEquals("BLOCKED", spread.get("planningNextAction"));
+        assertEquals(
+                PlanningRoutingBridge.PHASE_PLANNING_BLOCKED,
+                spread.get(PlanningRoutingBridge.NEXT_PHASE_KEY));
         assertEquals("BLOCK", spread.get("planningCanonicalNextAction"));
         assertFalse("true".equals(spread.get("planningCanonicalUserInputRequired")));
         assertFalse(spread.containsKey("planningUserInputRequired"));

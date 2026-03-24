@@ -125,7 +125,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyPostAssessRoutesOnPlanningNextActionOnly() throws Exception {
+    void arriettyPostAssessRoutesOnPlanningNextPhaseOnly() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -136,27 +136,27 @@ class ArriettyV2WorkflowYamlTest {
                 (Map<String, List<Map<String, Object>>>) room.get("rulesets");
         List<Map<String, Object>> rs = rulesets.get("rs_evaluation_branch");
         assertTrue(rs != null && !rs.isEmpty(), "rs_evaluation_branch must exist");
-        Set<String> actions = new HashSet<>();
+        Set<String> phases = new HashSet<>();
         for (Map<String, Object> rule : rs) {
             @SuppressWarnings("unchecked")
             Map<String, Object> when = (Map<String, Object>) rule.get("when");
             assertTrue(when != null && when.containsKey("equals"), "post-assess rules must use equals on live routing state");
             @SuppressWarnings("unchecked")
             Map<String, Object> eq = (Map<String, Object>) when.get("equals");
-            assertEquals("planningNextAction", String.valueOf(eq.get("key")));
-            actions.add(String.valueOf(eq.get("value")));
+            assertEquals("planningNextPhase", String.valueOf(eq.get("key")));
+            phases.add(String.valueOf(eq.get("value")));
         }
         assertEquals(
                 Set.of(
-                        "ASK_USER",
-                        "READY_FOR_PACKET",
-                        "BLOCKED"),
-                actions,
-                "post-assess must map each live routing action explicitly");
+                        "planning_clarification",
+                        "planning_packet",
+                        "planning_blocked"),
+                phases,
+                "post-assess must map each planningNextPhase explicitly");
     }
 
     @Test
-    void arriettyClarificationCapabilityBranchesOnPlanningNextAction() throws Exception {
+    void arriettyClarificationCapabilityBranchesOnPlanningNextPhase() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -174,8 +174,8 @@ class ArriettyV2WorkflowYamlTest {
         List<Map<String, Object>> branches = (List<Map<String, Object>>) branch.get("branches");
         @SuppressWarnings("unchecked")
         Map<String, Object> when = (Map<String, Object>) branches.get(0).get("when");
-        assertEquals("planningNextAction", String.valueOf(when.get("key")));
-        assertEquals("ASK_USER", String.valueOf(when.get("value")));
+        assertEquals("planningNextPhase", String.valueOf(when.get("key")));
+        assertEquals("planning_clarification", String.valueOf(when.get("value")));
     }
 
     @Test
@@ -198,7 +198,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyPlanningClarificationFailsClosedToBlocked() throws Exception {
+    void arriettyPlanningClarificationDefaultIsRoutingInvariant() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -208,7 +208,7 @@ class ArriettyV2WorkflowYamlTest {
         Map<String, Object> phases = (Map<String, Object>) room.get("phases");
         @SuppressWarnings("unchecked")
         Map<String, Object> assess = (Map<String, Object>) phases.get("planning_clarification");
-        assertEquals("planning_blocked", String.valueOf(assess.get("defaultNextPhase")));
+        assertEquals("planning_routing_invariant", String.valueOf(assess.get("defaultNextPhase")));
     }
 
     @Test

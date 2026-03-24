@@ -1,7 +1,5 @@
 package com.vinekeepers.workflow.planning;
 
-import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -22,7 +20,8 @@ public final class PlanningMaterialSpreadDefaults {
         m.put("planningPacketDepthOk", "false");
         m.put("planningPacketDepthReason", "");
         m.put("planningPacketDepthRetryRecommended", "false");
-        m.put(PlanningRoutingBridge.NEXT_ACTION_KEY, PlanningNextAction.BLOCKED.name());
+        m.put(PlanningRoutingBridge.NEXT_ACTION_KEY, "");
+        m.put(PlanningRoutingBridge.NEXT_PHASE_KEY, "");
         m.put(PlanningRoutingBridge.LAST_CONFIDENCE_KEY, "");
         m.put(PlanningRoutingBridge.NEXT_QUESTION_KEY, "");
         m.put(PlanningRoutingBridge.BLOCKING_REASON_KEY, "");
@@ -70,14 +69,14 @@ public final class PlanningMaterialSpreadDefaults {
         m.put("planningDirtyPassCount", "0");
         m.put("userCopyProgressLine", "");
         m.put("userCopyCoordinatorProgress", "");
-        m.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, PlanningCanonicalNextAction.BLOCK.name());
+        m.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, "");
         m.put(PlanningMaterialSpreadKeys.NOTICE_MARKDOWN_KEY, "");
         m.put(PlanningMaterialSpreadKeys.BASELINE_REPO_HASH_KEY, "");
         m.put(PlanningMaterialSpreadKeys.BASELINE_ASSUMPTION_COUNT_KEY, "");
         m.put(PlanningMaterialSpreadKeys.BASELINE_CRITIQUE_BLOCKING_KEY, "");
         m.put(PlanningMaterialSpreadKeys.BASELINE_DRAFT_FP_KEY, "");
         m.put(PlanningMaterialSpreadKeys.LAST_REVISION_SITUATION_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_ACTION_KEY, PlanningSynthesisAction.BLOCK.name());
+        m.put(PlanningMaterialSpreadKeys.MATERIAL_ACTION_KEY, PlanningSynthesisAction.CONTINUE_SYNTHESIS.name());
         m.put(PlanningMaterialSpreadKeys.MATERIAL_NOTICE_MARKDOWN_KEY, "");
         m.put(PlanningMaterialSpreadKeys.MATERIAL_FORCE_USER_INPUT_KEY, "false");
         m.put(PlanningMaterialSpreadKeys.MATERIAL_USER_INPUT_REQUIRED_KEY, "false");

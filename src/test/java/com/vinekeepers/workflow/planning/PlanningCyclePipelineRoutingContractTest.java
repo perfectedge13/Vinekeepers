@@ -81,6 +81,9 @@ class PlanningCyclePipelineRoutingContractTest {
         Map<String, Object> spread = ctx.pipeline().runEvaluationOnly(null, staleState, Map.of());
 
         assertEquals("BLOCKED", spread.get("planningNextAction"));
+        assertEquals(
+                PlanningRoutingBridge.PHASE_PLANNING_BLOCKED,
+                spread.get(PlanningRoutingBridge.NEXT_PHASE_KEY));
         assertEquals("false", spread.get("planningPacketPostingAllowed"));
         assertEquals("", spread.get("planningNextQuestion"));
         assertEquals("", spread.get("planningClarificationQuestionText"));

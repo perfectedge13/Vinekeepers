@@ -235,6 +235,7 @@ public final class PlanningCyclePipeline {
             String lastSynthLlmLine) {
         applySynthesisDepthFootersToSpread(
                 spread, state, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
+        PlanningRoutingBridge.clearStaleLiveRoutingKeysForEvaluationCycle(spread);
         EvaluationLedgerPhase phase =
                 evaluatePersistAndSyncLedger(
                         event, state, spread, contextId, plan, profile, cycleIteration, depthOk, depthReason);
@@ -243,7 +244,7 @@ public final class PlanningCyclePipeline {
         plan = phase.plan();
         ClarificationProjection projection = phase.projection();
         PlanningDeliberationLedgerSync.UpsertResult upsert = phase.upsert();
-        PlanningRoutingBridge.projectSnapshotToSpread(spread, snapshot);
+        derivePlanningNextPhaseFromEvaluation(spread, snapshot);
 
         PlanningClarificationProjectionAdapter.applyPreCanonicalEvaluationClarification(
                 spread, upsert, projection, snapshot);
@@ -454,9 +455,17 @@ public final class PlanningCyclePipeline {
         return new LoadedCycle(contextId, plan, profile, work);
     }
 
+    /**
+     * Writes the exclusive live routing snapshot from the normalized evaluation decision (and {@link PlanningNextAction}).
+     */
+    private static void derivePlanningNextPhaseFromEvaluation(
+            Map<String, Object> spread, PlanningDecisionSnapshot snapshot) {
+        PlanningRoutingBridge.projectSnapshotToSpread(spread, snapshot);
+    }
+
     private static Map<String, Object> baseSpread() {
         Map<String, Object> spread = PlanningMaterialSpreadDefaults.newPlanningCycleBaseSpread();
-        PlanningRoutingBridge.clearLiveRoutingKeys(spread);
+        PlanningRoutingBridge.seedNeutralCycleRoutingKeys(spread);
         return spread;
     }
 

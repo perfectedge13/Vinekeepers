@@ -183,12 +183,12 @@ requirements:
           UX hints; live planning semantics no longer come from declarative gap engines, thresholds, or ranking rules.
           PlanningEvaluationService now returns the finalized PlanningEvaluationDecision and is the only live-path decision
           brain for gaps/confidence/question selection from canonical plan state; PlanningDecisionNormalizer reduces that
-          output to the exclusive live routing snapshot (planningNextAction, planningLastConfidence, planningNextQuestion,
+          output to the exclusive live routing snapshot (planningNextAction, planningNextPhase, planningLastConfidence, planningNextQuestion,
           planningBlockingReason, planningRepoEvidenceStatus), while YAML still consumes planningClarificationQuestionText
           and planningClarificationMetaJson for the single-question loop only after ASK_USER is authorized
         - >-
-          bots.yaml arrietty_room_v2 rs_evaluation_branch branches only on planningNextAction (ASK_USER, READY_FOR_PACKET,
-          BLOCKED; fail-closed default planning_blocked); CONTINUE_SYNTHESIS is not a live YAML branch; blocked-thread templates interpolate
+          bots.yaml arrietty_room_v2 rs_evaluation_branch branches only on planningNextPhase (planning_clarification,
+          planning_packet, planning_blocked; default planning_routing_invariant when unmatched, not silent planning_blocked); CONTINUE_SYNTHESIS is not a live YAML branch; blocked-thread templates interpolate
           planningBlockingReason and planningCycleUserVisibleFailure for planning-room failures, and those keys must be present in the safe-template allowedKeys list;
           orchestrator templates interpolate planningRoomCycleErrorUserMessage
           alongside planning depth fields where relevant, and pre-launch review copy stays a short
@@ -249,7 +249,7 @@ requirements:
         - id: UNIT-ARRIETTY-V2-WORKFLOW-YAML
           title: ArriettyV2WorkflowYamlTest
           intent: >-
-            Verify arrietty_room_v2 YAML shape, planningNextAction-only post-assess branching, coordinator template contracts, and the ❓ prompt alert marker on Arrietty question steps
+            Verify arrietty_room_v2 YAML shape, planningNextPhase post-assess branching, coordinator template contracts, and the ❓ prompt alert marker on Arrietty question steps
           testClass: com.vinekeepers.config.ArriettyV2WorkflowYamlTest
           preconditions: []
         - id: UNIT-WORK-PROFILE-LOADER

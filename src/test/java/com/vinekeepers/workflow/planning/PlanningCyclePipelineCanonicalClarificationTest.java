@@ -172,6 +172,9 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         Map.of());
 
         assertEquals("ASK_USER", spread.get("planningNextAction"));
+        assertEquals(
+                PlanningRoutingBridge.PHASE_PLANNING_CLARIFICATION,
+                spread.get(PlanningRoutingBridge.NEXT_PHASE_KEY));
         assertEquals("ASK_USER", spread.get("planningCanonicalNextAction"));
         assertEquals("true", spread.get("planningCanonicalUserInputRequired"));
         assertEquals("Who approves the rollout boundary for this feature?", spread.get("planningClarificationQuestionText"));

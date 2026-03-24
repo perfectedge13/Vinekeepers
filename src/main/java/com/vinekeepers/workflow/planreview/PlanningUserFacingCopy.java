@@ -155,6 +155,8 @@ public final class PlanningUserFacingCopy {
                     "Workspace setup is blocking planning; fix the workspace issue shown above before coordinator drafting continues.";
             case "PLANNING_REQUIRES_CANONICAL_V1" ->
                     "This room requires canonical coordinator clarification mode; check the work profile configuration.";
+            case "PLANNING_ROUTE_UNRESOLVED" ->
+                    "Internal planning routing could not pick the next step after evaluation; try again or report this if it repeats.";
             case "CLARIFICATION_COMPOSER_FAILED" ->
                     "The coordinator could not produce a safe clarification question this cycle; try again or adjust profile prompts.";
             default -> "Planning hit an unexpected issue; try again or check configuration.";
