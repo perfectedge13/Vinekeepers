@@ -1,6 +1,6 @@
 package com.vinekeepers.workflow.planning;
 
-/** Relative importance of an unresolved planning gap for ordering (not user-facing ranking scores). */
+/** Relative importance of an unresolved planning gap for stable ordering. */
 public enum CanonicalGapSeverity {
     LOW,
     STANDARD,

@@ -34,6 +34,10 @@ public final class PlanningLlmJsonSupport {
             "You fix JSON. Reply with a single valid JSON object only: no markdown fences, no explanation. "
                     + "Arrays must use [ ]. Objects must use { }. No trailing commas. "
                     + "Do not invent keys or wrap the object in prose.";
+    private static final String DEFAULT_REPAIR_SHAPE_HINT =
+            "Return the same intended single-object shape. Preserve only the original keys when possible. "
+                    + "For planning synthesis, expected keys usually include repo_evidence_this_pass string, upserts array, "
+                    + "top_unresolved_gap string, question_if_needed string, recommended_action string, explicit_assumptions array.";
 
     public record UpsertApplyResult(int attempted, int applied, List<String> rejected) {}
     public record ParsedJsonObjectResult(
@@ -105,10 +109,26 @@ public final class PlanningLlmJsonSupport {
             String roleNameForPayload,
             Event event,
             Map<String, Object> state) {
+        return parseJsonObjectWithRepair(
+                client,
+                rawAssistant,
+                roleNameForPayload,
+                event,
+                state,
+                DEFAULT_REPAIR_SHAPE_HINT);
+    }
+
+    public static ParsedJsonObjectResult parseJsonObjectWithRepair(
+            OpenAiChatClient client,
+            String rawAssistant,
+            String roleNameForPayload,
+            Event event,
+            Map<String, Object> state,
+            String repairShapeHint) {
         try {
             return new ParsedJsonObjectResult(parseJsonObject(rawAssistant), false, false, "");
         } catch (Exception firstFailure) {
-            String repaired = tryRepairJson(client, rawAssistant, roleNameForPayload, event, state);
+            String repaired = tryRepairJson(client, rawAssistant, roleNameForPayload, event, state, repairShapeHint);
             boolean repairAttempted = client != null && client.isConfigured();
             if (repaired != null) {
                 try {
@@ -124,6 +144,16 @@ public final class PlanningLlmJsonSupport {
 
     public static String tryRepairJson(
             OpenAiChatClient client, String rawAssistant, String roleNameForPayload, Event event, Map<String, Object> state) {
+        return tryRepairJson(client, rawAssistant, roleNameForPayload, event, state, DEFAULT_REPAIR_SHAPE_HINT);
+    }
+
+    public static String tryRepairJson(
+            OpenAiChatClient client,
+            String rawAssistant,
+            String roleNameForPayload,
+            Event event,
+            Map<String, Object> state,
+            String repairShapeHint) {
         if (client == null || !client.isConfigured()) {
             return null;
         }
@@ -132,7 +162,11 @@ public final class PlanningLlmJsonSupport {
                 : rawAssistant;
         String user =
                 "The following text was meant to be one JSON object but is invalid. "
-                        + "Return only corrected JSON (same keys/shape intent: repo_evidence_this_pass string, upserts array, top_unresolved_gap string, question_if_needed string, recommended_action string, explicit_assumptions array).\n\n"
+                        + "Return only corrected JSON. "
+                        + (repairShapeHint != null && !repairShapeHint.isBlank()
+                                ? repairShapeHint.trim()
+                                : DEFAULT_REPAIR_SHAPE_HINT)
+                        + "\n\n"
                         + snippet;
         String out;
         try {

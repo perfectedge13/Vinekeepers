@@ -7,6 +7,8 @@ public enum PlanSectionKey {
     REQUIREMENTS,
     ASSUMPTIONS,
     ISSUES,
+    RISKS,
+    DECISIONS,
     VALIDATION_NOTES,
     SOLUTION_OUTLINE,
     TRACEABILITY,

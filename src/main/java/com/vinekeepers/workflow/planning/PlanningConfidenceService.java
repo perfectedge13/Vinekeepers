@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanAssumptionStatus;
+import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanGovernanceSeverity;
 import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.PlanIssueStatus;
@@ -22,6 +23,41 @@ public final class PlanningConfidenceService {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private PlanningConfidenceService() {}
+
+    /**
+     * Cycle clarification confidence in [0,1] for spread keys. Uses persisted {@link PlanConfidence} when present; otherwise
+     * derives from depth, parse health, repo grounding, and material unknowns (no gap selection).
+     */
+    public static double clarificationCycleConfidenceScore(
+            FeaturePlanState plan,
+            UnresolvedItemLedger ledger,
+            ClarificationProjection ranked,
+            String planningRepoEvidenceJson,
+            boolean userInputRequired,
+            boolean depthOk,
+            boolean structuredParseFailed) {
+        PlanConfidence stored = plan != null ? plan.getPlanConfidence() : null;
+        if (stored != null && stored.getConfidenceScore() >= 0) {
+            return clamp01(stored.getConfidenceScore());
+        }
+        double score = 0.18;
+        if (depthOk) {
+            score += 0.24;
+        }
+        if (!structuredParseFailed) {
+            score += 0.08;
+        }
+        score += 0.28 * repoEvidenceGroundingScore(plan, planningRepoEvidenceJson);
+        score += Math.min(0.22, clarificationKnownFactCount(plan) * 0.012);
+        score -= Math.min(
+                0.55,
+                clarificationMaterialUnknownCount(plan, ledger, ranked, userInputRequired, structuredParseFailed) * 0.14);
+        return clamp01(score);
+    }
+
+    private static double clamp01(double score) {
+        return Math.max(0.0, Math.min(1.0, score));
+    }
 
     /** Score in [0,1] from plan materialization + structured repo evidence JSON. */
     public static double repoEvidenceGroundingScore(FeaturePlanState plan, String planningRepoEvidenceJson) {

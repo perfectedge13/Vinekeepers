@@ -5,7 +5,6 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.repo.RepoWorkspaceStatus;
-import com.vinekeepers.workflow.planning.PlanningConfidenceService;
 import com.vinekeepers.workflow.planning.PlanningDraftSupport;
 
 import java.util.LinkedHashMap;
@@ -83,7 +82,7 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
             }
             evidence.put(
                     "repoGroundingScore",
-                    PlanningConfidenceService.repoEvidenceGroundingScore(plan, null));
+                    repoGroundingScore(plan));
             mergePlanningRagEvidence(evidence, state);
             out.put("planningRepoEvidenceJson", JSON.writeValueAsString(evidence));
         } catch (Exception e) {
@@ -134,6 +133,21 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    private static double repoGroundingScore(FeaturePlanState plan) {
+        if (plan == null) {
+            return 0.0;
+        }
+        double score = 0.0;
+        if (plan.getRepoLocalPath() != null && !plan.getRepoLocalPath().isBlank()) {
+            score += 0.5;
+        }
+        String status = plan.getRepoWorkspaceStatus() != null ? plan.getRepoWorkspaceStatus().trim().toUpperCase() : "";
+        if (status.contains("MATERIALIZED") || status.contains("RESOLVED")) {
+            score += 0.5;
+        }
+        return Math.min(1.0, score);
     }
 
     private static String truncate(String s, int max) {

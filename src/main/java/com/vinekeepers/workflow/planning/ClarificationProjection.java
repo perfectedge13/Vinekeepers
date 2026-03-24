@@ -17,12 +17,14 @@ public record ClarificationProjection(
         /** When true, YAML should use {@code present_choices} + {@code planningClarification}. */
         boolean useStructuredChoices,
         /** Canonical question text for meta merge and summaries. */
-        String questionText) {
+        String questionText,
+        /** Stable coordinator gap id when asking; empty when not asking. */
+        String canonicalGapId) {
 
     public static ClarificationProjection fromSelection(CanonicalClarificationSelection s) {
         if (s == null || !s.askUser()) {
             return new ClarificationProjection(
-                    false, "", "[]", "{}", 0, s != null ? s.assumptionsToRecord() : List.of(), false, "");
+                    false, "", "[]", "{}", 0, s != null ? s.assumptionsToRecord() : List.of(), false, "", "");
         }
         int blocking = s.blockingGap() ? 1 : 0;
         return new ClarificationProjection(
@@ -33,6 +35,7 @@ public record ClarificationProjection(
                 blocking,
                 s.assumptionsToRecord(),
                 s.useStructuredChoices(),
-                s.questionText());
+                s.questionText(),
+                s.gapId());
     }
 }

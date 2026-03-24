@@ -17,12 +17,12 @@ public final class PlanningReadinessSpread {
 
     /**
      * After a planning cycle: packet posting may be allowed, but final review/approval readiness is decided only after
-     * packet post + critique gates run.
+     * packet post + critique gates run. Reads material pacing booleans from {@link PlanningMaterialSpreadKeys}.
      */
-    public static void applyCycleReadiness(Map<String, Object> spread, PlanningMaterialRoutingOutcome result) {
-        boolean packetAllowed = result != null && result.packetPostingAllowed();
-        boolean readyToPost = result != null && result.readyToPostPacket();
-        boolean userInputRequired = result != null && result.userInputRequired();
+    public static void applyCycleReadiness(Map<String, Object> spread) {
+        boolean packetAllowed = truthy(spread, PlanningMaterialSpreadKeys.MATERIAL_PACKET_POSTING_ALLOWED_KEY);
+        boolean readyToPost = truthy(spread, PlanningMaterialSpreadKeys.MATERIAL_READY_FOR_PACKET_KEY);
+        boolean userInputRequired = truthy(spread, PlanningMaterialSpreadKeys.MATERIAL_USER_INPUT_REQUIRED_KEY);
         spread.put(PACKET_POSTING_ALLOWED_KEY, packetAllowed ? "true" : "false");
         spread.put(REVIEW_ALLOWED_KEY, (!userInputRequired && packetAllowed) ? "true" : "false");
         spread.put(APPROVAL_ALLOWED_KEY, "false");
@@ -62,7 +62,7 @@ public final class PlanningReadinessSpread {
     }
 
     public static boolean packetPostingAllowed(Map<String, ?> map) {
-        return "POST_PACKET".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY))
+        return "READY_FOR_PACKET".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY))
                 && truthy(map, PACKET_POSTING_ALLOWED_KEY);
     }
 

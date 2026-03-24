@@ -101,8 +101,8 @@ assets:
       for coordinator missing-field prompts (PlanningPromptFormatter), optional or default readiness.anyOfGroups,
       optional packetQuality.forbiddenSubstrings, and field-level richness keys for GenericReadinessEvaluator; default profile
       software_feature_planning includes a readiness gate for review-packet substance; software_feature_planning_v2
-      coordinatorClarification.engine may also tune maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk, and
-      clarificationConfidenceThreshold so clarification escalation, loop exit confidence, and autonomous redraft pacing stay explicit
+      keeps coordinatorClarification as transport/UX configuration only while production planning semantics come from
+      PlanningEvaluationService and deterministic routing code
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-WORK-PROFILE-LOADER
@@ -110,18 +110,10 @@ assets:
     path: src/main/java/com/vinekeepers/profile/WorkProfileLoader.java
     role: >-
       Load work-profiles.yaml into WorkProfileRegistry; parses profile readiness.anyOfGroups, ReadinessPathRule rows,
-      packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText, and field-level minWords,
-      maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks; parses coordinatorClarification.mode/gaps plus optional
-      coordinatorClarification.engine knobs (maxClarificationTurns, maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk,
-      clarificationConfidenceThreshold, repoEvidenceAskThreshold, clarificationAskPriorityThreshold, allowAssumeAndContinue,
-      allowClarificationAfterCritique)
+      packetQuality.forbiddenSubstrings, deliberation.boundedClarificationChoices, deliberation.inferBoundedChoiceFromOrInText,
+      field-level minWords, maxEchoOverlapWithRequest, echoWordSlack, skipReadinessIfBlank, readinessChecks, and
+      coordinatorClarification transport/UX hints for the one-question merge loop
     requires: [REQ-CONFIG-001]
-    feature_ids: [FEAT-CONFIG]
-  - id: ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
-    kind: source
-    path: src/main/java/com/vinekeepers/profile/CoordinatorClarificationEnginePolicy.java
-    role: Typed defaults and YAML-backed policy for post-draft clarification budgets (total and per gap), autonomous redraft/loop pacing, clarification confidence exit threshold, repo-evidence ask threshold, assume/defer, and critique re-entry
-    requires: [REQ-CONFIG-001, REQ-WORKFLOW-002]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-READINESS-PATH-RULE
     kind: source
@@ -187,22 +179,20 @@ requirements:
           Work profile field promptHint (when present) is woven into PlanningPromptFormatter required-field coordinator prompts so
           operators see concrete guidance instead of only internal labels
         - >-
-          Work profile coordinatorClarification (canonical_v1 gap rules and mode) is the config contract for which missing facts
-          block Arrietty planning; optional coordinatorClarification.engine supplies clarification turn budget, repo-evidence ask threshold,
-          per-gap clarification cap, autonomous-redraft-before-ask pacing, assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with CanonicalPlanningGapEngine, PlanningConfidenceService, CanonicalGapResolutionPolicy, and PlanningQuestionComposer, ledger reconciliation,
-          and strict single-question, non-meta clarification UX with escalation from open to narrow to bounded prompts; gap questionTemplate values that read as generic meta or completeness prompts
-          are ignored at evaluation time, resolveAnySubstring aliases may cover real operator phrasings (for example config/schema only,
-          runtime too, named workflow steps, or individual steps), and profile gaps may require explicit model-routing choices such as
-          per-step vs step-type overrides
+          Work profile coordinatorClarification now carries only the canonical clarification transport mode plus optional
+          UX hints; live planning semantics no longer come from declarative gap engines, thresholds, or ranking rules.
+          PlanningEvaluationService now returns the finalized PlanningEvaluationDecision and is the only live-path decision
+          brain for gaps/confidence/question selection from canonical plan state, while YAML still consumes
+          planningClarificationQuestionText and planningClarificationMetaJson for the single-question loop
         - >-
-          bots.yaml arrietty_room_v2 rs_post_draft branches only on planningCanonicalNextAction (fail-closed default planning_blocked);
-          cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; blocked-thread templates interpolate
+          bots.yaml arrietty_room_v2 rs_evaluation_branch branches only on planningCanonicalNextAction (fail-closed default planning_blocked);
+          CONTINUE_SYNTHESIS now routes directly back to planning_silent_synthesis; blocked-thread templates interpolate
           planningCycleUserVisibleFailure for planning-room failures, and that key must be present in the safe-template allowedKeys list;
           orchestrator templates interpolate planningRoomCycleErrorUserMessage
           alongside planning depth fields where relevant, and pre-launch review copy stays a short
           checklist when the full planning packet is already in-thread
         - >-
-          When planningCanonicalNextAction is ASK_ONE_QUESTION, YAML prompts read directly from planningClarificationQuestionText
+          When planningCanonicalNextAction is ASK_USER, YAML prompts read directly from planningClarificationQuestionText
           so the live flow does not rely on a late question-only copy rewrite to keep packet or review preamble out of the ask
         - >-
           arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace
@@ -220,7 +210,6 @@ requirements:
         - ASSET-BOT-DEFINITION
         - ASSET-WORK-PROFILES-YAML
         - ASSET-WORK-PROFILE-LOADER
-        - ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
         - ASSET-READINESS-PATH-RULE
         - ASSET-READINESS-ANY-OF-GROUP
       symbols: []
@@ -282,7 +271,6 @@ features:
       - ASSET-BOT-DEFINITION
       - ASSET-WORK-PROFILES-YAML
       - ASSET-WORK-PROFILE-LOADER
-      - ASSET-COORDINATOR-CLARIFICATION-ENGINE-POLICY
       - ASSET-READINESS-PATH-RULE
       - ASSET-READINESS-ANY-OF-GROUP
     status: active

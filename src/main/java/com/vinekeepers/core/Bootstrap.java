@@ -86,9 +86,8 @@ import com.vinekeepers.workflow.actions.InitializeFeatureRoomStateAction;
 import com.vinekeepers.workflow.actions.LaunchCursorRunAction;
 import com.vinekeepers.workflow.actions.MarkIntakeDiscoveryCompleteAction;
 import com.vinekeepers.workflow.actions.MergePlanningClarificationChoiceAction;
-import com.vinekeepers.workflow.actions.PlanningFinalizePlanningCycleAction;
-import com.vinekeepers.workflow.actions.PlanningRunExpansionPhaseAction;
-import com.vinekeepers.workflow.actions.PlanningRunInnerRoundAction;
+import com.vinekeepers.workflow.actions.PlanningRunSilentSynthesisAction;
+import com.vinekeepers.workflow.actions.PlanningRunEvaluationAction;
 import com.vinekeepers.workflow.actions.PrepPlanningRepoGroundingAction;
 import com.vinekeepers.workflow.actions.PostPlanningPacketThreadAction;
 import com.vinekeepers.workflow.actions.PostPlanningProgressIfChangedAction;
@@ -383,7 +382,9 @@ public final class Bootstrap {
                 featurePlanStateStore, workProfileRegistry));
         registry.register("build_role_planning_thread_messages", new BuildRolePlanningThreadMessagesAction(featurePlanStateStore));
         registry.register("derive_plan_governance", new DerivePlanGovernanceAction(featurePlanStateStore, workProfileRegistry));
-        registry.register("run_plan_critique_and_readiness", new RunPlanCritiqueAndReadinessAction(featurePlanStateStore, workProfileRegistry));
+        registry.register(
+                "run_plan_critique_and_readiness",
+                new RunPlanCritiqueAndReadinessAction(openAiChatClient, featurePlanStateStore, workProfileRegistry));
         registry.register("build_planning_thread_review_body", new BuildPlanningThreadReviewBodyAction(featurePlanStateStore));
         registry.register(
                 "post_planning_packet_thread",
@@ -412,15 +413,11 @@ public final class Bootstrap {
                 new EvaluatePlanningPacketDepthAction(featurePlanStateStore, workProfileRegistry));
         registry.register("evaluate_planning_approval_gate", new EvaluatePlanningApprovalGateAction(featurePlanStateStore));
         registry.register("execute_planning_room_cycle", new ExecutePlanningRoomCycleAction(planningCyclePipeline));
-        PlanningRunExpansionPhaseAction planningExpansion = new PlanningRunExpansionPhaseAction(planningCyclePipeline);
-        PlanningRunInnerRoundAction planningInnerRound = new PlanningRunInnerRoundAction(planningCyclePipeline);
-        PlanningFinalizePlanningCycleAction planningFinalize = new PlanningFinalizePlanningCycleAction(planningCyclePipeline);
-        registry.register("planning_cycle_run_expansion", planningExpansion);
-        registry.register("planning_run_expansion", planningExpansion);
-        registry.register("planning_cycle_run_inner_round", planningInnerRound);
-        registry.register("planning_run_inner_round", planningInnerRound);
-        registry.register("planning_cycle_finalize", planningFinalize);
-        registry.register("planning_finalize_cycle_spread", planningFinalize);
+        PlanningRunSilentSynthesisAction planningSilentSynthesis =
+                new PlanningRunSilentSynthesisAction(planningCyclePipeline);
+        PlanningRunEvaluationAction planningEvaluation = new PlanningRunEvaluationAction(planningCyclePipeline);
+        registry.register("planning_run_silent_synthesis", planningSilentSynthesis);
+        registry.register("planning_run_evaluation", planningEvaluation);
         registry.register(
                 "merge_planning_clarification_choice",
                 new MergePlanningClarificationChoiceAction(featurePlanStateStore, workProfileRegistry));

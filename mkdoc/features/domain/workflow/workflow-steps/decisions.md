@@ -4,7 +4,7 @@
 
 ## 2026-03-23 — Canonical ask beats stay direct
 
-- **Context:** The live planning flow needed a single canonical question source and should not rely on a late copy-rewrite pass to repair ASK_ONE_QUESTION output after decisioning.
+- **Context:** The live planning flow needed a single canonical question source and should not rely on a late copy-rewrite pass to repair ASK_USER output after decisioning.
 - **Decision:** Prompt directly from **`planningClarificationQuestionText`** in YAML, keep canonical question backfill in **`PlanningCyclePipeline`**, and remove the late **`applyAskOneQuestionUserVisibleCopy`** rewrite path. **`RunRequestExpansionLlmAction`** still injects **`planner_instruction`** when workspace path or non-trivial evidence JSON is present so expansion JSON stays grounded in observed repo state.
 - **Consequence:** Clarification beats stay direct, canonical, and single-question without a post-decision copy repair layer; specs and **`PlanningCyclePipelineCanonicalClarificationTest`** / **`RunRequestExpansionLlmActionJsonTest`** lock the behavior.
 

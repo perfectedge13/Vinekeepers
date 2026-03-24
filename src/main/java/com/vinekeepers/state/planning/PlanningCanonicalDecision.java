@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Durable canonical decision for routing and UX projections after post-draft or post-critique normalization.
+ * Durable canonical decision for routing and UX projections after evaluation or critique normalization.
  */
 public record PlanningCanonicalDecision(
         int version,

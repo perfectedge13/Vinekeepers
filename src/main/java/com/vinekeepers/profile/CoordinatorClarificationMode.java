@@ -1,11 +1,11 @@
 package com.vinekeepers.profile;
 
 /**
- * How coordinator clarification rounds are chosen: legacy LLM-follow-up ranking vs canonical gap evaluation.
+ * Clarification transport mode: retained legacy transport vs canonical evaluation-backed transport.
  */
 public enum CoordinatorClarificationMode {
-    /** Prior behavior: rank aggregated LLM follow-ups; ledger OPEN drives {@code planningUserInputRequired}. */
+    /** Prior transport retained only for compatibility. */
     LEGACY,
-    /** Gaps derived from plan + profile rules; LLM strings only trigger configured gaps. */
+    /** Canonical plan gaps plus evaluation-backed routing drive the clarification path. */
     CANONICAL_V1
 }

@@ -1,7 +1,7 @@
 package com.vinekeepers.state.planning;
 
 /**
- * Outcome of the post-draft clarification assessor for a single need or gap candidate.
+ * Outcome of the clarification assessor for a single need or gap candidate.
  */
 public enum ClarificationResolutionDecision {
     ASK_USER,

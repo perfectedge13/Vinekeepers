@@ -33,7 +33,7 @@ class PlanningGapEvaluatorTest {
                         0);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(staleOpen);
         ClarificationProjection rankedFromLlm =
-                new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, "");
+                new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, "", "");
         WorkProfileDefinition profile =
                 new WorkProfileDefinition(
                         "p",

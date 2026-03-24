@@ -76,16 +76,16 @@ assets:
       durable PlanningIntakeStage with stageEnteredAt, intakeKickoffPostedVersion / intakeKickoffPostedFingerprint for
       idempotent coordinator kickoff, and planningOrchestrationFailureReason when intake reaches FAILED; repo workspace fields
       (repoWorkspaceStatus, repoLocalPath, repoRef, repoAccessNotes) feed spread_plan_workspace_signals and JSON evidence spreads in workflow state;
-      autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back post-draft clarification engine and discovery gap gating on the plan record;
+      autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back the planning clarification loop and discovery gap gating on the plan record;
       durable coordinatorConfiguredBotId for routing when FeatureRoomState is evicted; withPlannerRecoveryFields persists
       planningFailureCategory, planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint for typed
       synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads; also persists
-      planningCanonicalDecisionJson plus lastPosted/lastAsked canonical decision ids and a       material-state-change fingerprint
-      so post-draft and post-critique routing can be verified against one durable canonical decision model;
-      planningGapAskCountsJson (gap id → surfaced ask counts) and planningConfidenceBreakdownJson (structured confidence factors)
-      persist canonical clarification telemetry for pacing and audit;
-      planning room cycle may persist PlanningIntakeStage.CLARIFYING when the post-draft governor selects ASK_ONE_QUESTION and intake
-      was not already clarifying
+      planningCanonicalDecisionJson plus lastPosted/lastAsked canonical decision ids and a material-state-change fingerprint
+      so evaluation and post-critique routing can be verified against one durable canonical decision model derived from the
+      finalized PlanningEvaluationDecision handoff; planningGapAskCountsJson (gap id → surfaced ask counts) and
+      planningConfidenceBreakdownJson (structured confidence factors) persist evaluation/clarification telemetry for pacing and audit;
+      planning room cycle may persist PlanningIntakeStage.CLARIFYING when PlanningEvaluationService plus canonical decision
+      projection selects ASK_USER and intake was not already clarifying
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLANNING-CANONICAL-DECISION
@@ -99,7 +99,7 @@ assets:
   - id: ASSET-PLANNING-CANONICAL-NEXT-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/PlanningCanonicalNextAction.java
-    role: Canonical routable next actions for planning (ASK_ONE_QUESTION, AUTONOMOUS_REDRAFT, POST_PACKET, BLOCK)
+    role: Canonical routable next actions for planning (ASK_USER, CONTINUE_SYNTHESIS, READY_FOR_PACKET, BLOCK)
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLANNING-INTERACTION-STATE
@@ -111,7 +111,7 @@ assets:
   - id: ASSET-CLARIFICATION-RESOLUTION-DECISION
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/ClarificationResolutionDecision.java
-    role: Clarification assessor outcomes (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) for canonical coordinator engine
+    role: Clarification assessor outcomes (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) for canonical clarification handling
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLANNING-INTAKE-STAGE
@@ -366,12 +366,12 @@ requirements:
           withPlanningOrchestrationFailure update the canonical intake spine
         - >-
           FeaturePlanState also persists planningCanonicalDecisionJson plus lastPosted/lastAsked decision ids and a
-          material-state-change fingerprint so post-draft and post-critique routing can be verified against one durable canonical decision;
+          material-state-change fingerprint so evaluation and post-critique routing can be verified against one durable canonical decision;
           optional planningGapAskCountsJson and planningConfidenceBreakdownJson record per-gap ask tallies and structured confidence breakdown
-          from the canonical clarification pipeline
+          from the finalized PlanningEvaluationDecision-driven planning pipeline
         - >-
           PlanningCyclePipeline may advance FeaturePlanState to PlanningIntakeStage.CLARIFYING when the persisted
-          PlanningCanonicalNextAction is ASK_ONE_QUESTION (canonical_v1: gap-authorized ask via normalizePostDraftCanonicalV1) and the plan was not already in CLARIFYING
+          PlanningCanonicalNextAction is ASK_USER (evaluation-authorized) and the plan was not already in CLARIFYING
         - >-
           Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, and DiscoveryFinding models for
           structured discovery and internal completeness tracking
@@ -380,20 +380,20 @@ requirements:
           across rows; workflow session flag planningAutonomousFirstPassCompleted (set after a successful planning room cycle) gates
           whether REQUIRED_FIELD gaps are emitted alongside workspace BLOCKER gaps
         - >-
-          FeaturePlanState.autonomousPlanningPassCompleted, clarificationTurnsCompleted, clarificationOutcomeHistory, and
-          clarificationCoordinatorLedgerJson persist the
-          post-draft clarification engine: autonomous cycle completion, user clarification turn budget accounting, short audit lines
-          for assume/defer/block outcomes, and a JSON snapshot of assessed gaps / next ask; ClarificationResolutionDecision models the assessor outcomes used before a question is shown
+          FeaturePlanState.autonomousPlanningPassCompleted, clarificationTurnsCompleted, and clarificationOutcomeHistory persist
+          planning evaluation accounting: autonomous cycle completion, user clarification turn budget, and short audit lines;
+          planningGapAskCountsJson, planningCanonicalDecisionJson, and planningConfidenceBreakdownJson carry canonical gap and
+          confidence snapshots for the single evaluation spine
         - >-
           state.workflow package holds generic UnresolvedItem / UnresolvedItemStatus models for config-driven clarification ledgers
           (used by workflow engine features; JSON-serializable)
         - >-
           Workflow session may persist PlanningMaterialSpreadKeys material baselines and revision fingerprint keys
           (planningMaterialBaselineRepoEvidenceHash, planningMaterialBaselineAssumptionCount, planningMaterialBaselineCritiqueBlockingCount,
-          planningMaterialBaselineDraftFingerprint, planningLastNonPostingRevisionSituation) so autonomous redrafts are gated on real input change
+          planningMaterialBaselineDraftFingerprint, planningLastNonPostingRevisionSituation) so synthesis continuation is gated on real input change
         - >-
           FeaturePlanState carries optional coordinatorConfiguredBotId and planner recovery fields (planningFailureCategory,
-          planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint) updated when post-draft handling
+          planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint) updated when evaluation-authorized synthesis recovery handling
           records a blocking synthesis classification
         - >-
           PlanningIntakeBindingResolver resolves intake/plan binding from FeatureRoomStateStore and/or FeaturePlanStateStore

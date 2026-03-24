@@ -2,6 +2,7 @@ package com.vinekeepers.workflow.actions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
@@ -23,9 +24,16 @@ import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
 import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
+import com.vinekeepers.state.workflow.UnresolvedItemLedger;
+import com.vinekeepers.workflow.planning.CanonicalPlanningGap;
+import com.vinekeepers.workflow.planning.CanonicalClarificationSpreadBuilder;
+import com.vinekeepers.workflow.planning.ClarificationProjection;
 import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
+import com.vinekeepers.workflow.planning.PlanningEvaluationDecision;
 import com.vinekeepers.workflow.planning.PlanningMaterialFingerprint;
+import com.vinekeepers.workflow.planning.PlanningEvaluationService;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
+import com.vinekeepers.workflow.planning.QuestionMode;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -47,12 +55,15 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
 
     private final FeaturePlanStateStore planStateStore;
     private final WorkProfileRegistry workProfileRegistry;
+    private final PlanningEvaluationService planningEvaluationService;
 
     public RunPlanCritiqueAndReadinessAction(
+            OpenAiChatClient openAiChatClient,
             FeaturePlanStateStore planStateStore,
             WorkProfileRegistry workProfileRegistry) {
         this.planStateStore = planStateStore;
         this.workProfileRegistry = workProfileRegistry;
+        this.planningEvaluationService = new PlanningEvaluationService(openAiChatClient);
     }
 
     @Override
@@ -152,6 +163,41 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                             state != null ? new LinkedHashMap<>(state) : Map.of(),
                             next);
             boolean critiqueWantsClarification = wantsClarificationSweep(next, state, findings);
+            String clarificationQuestionText = "";
+            String clarificationGapId = "";
+            if (critiqueWantsClarification && profile != null) {
+                PlanningEvaluationDecision evaluation =
+                        planningEvaluationService.evaluate(
+                                event,
+                                state,
+                                next,
+                                profile,
+                                new PlanningEvaluationService.EvaluationContext(
+                                        "planning_critique",
+                                        getString(state, "planningRepoEvidenceJson"),
+                                        getString(state, "planningRepoEvidenceJson"),
+                                        true,
+                                        "",
+                                        false,
+                                        next.getClarificationTurnsCompleted()));
+                if (evaluation.success() && evaluation.askUserRequired()) {
+                    CanonicalPlanningGap g = evaluation.chosenAskGap();
+                    if (g != null) {
+                        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
+                        ClarificationProjection projection =
+                                CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
+                                        ledger,
+                                        profile,
+                                        profile.getCoordinatorClarification(),
+                                        g,
+                                        evaluation.bestQuestion().text(),
+                                        List.of(),
+                                        QuestionMode.OPEN);
+                        clarificationQuestionText = projection.questionText();
+                        clarificationGapId = g.gapId();
+                    }
+                }
+            }
             PlanningCanonicalDecision canonical =
                     PlanningCanonicalDecisionSupport.normalizePostCritique(
                             next,
@@ -160,7 +206,9 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                             critiqueAutoReplansCapped,
                             getString(state, "planningRepoEvidenceJson"),
                             materialFingerprint,
-                            canonicalActionSummary(readinessStatus, critiqueAutoReplansCapped, critiqueWantsClarification));
+                            canonicalActionSummary(readinessStatus, critiqueAutoReplansCapped, critiqueWantsClarification),
+                            clarificationQuestionText,
+                            clarificationGapId);
             next =
                     next.withPlanningCanonicalDecision(canonical, materialFingerprint, "")
                             .withPlanningIntakeStage(canonical.stage(), null);
@@ -363,9 +411,9 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             return "Blocked";
         }
         return switch (canonical.nextAction()) {
-            case ASK_ONE_QUESTION -> "Needs one more clarification";
-            case AUTONOMOUS_REDRAFT -> "Needs internal revision";
-            case POST_PACKET -> canonical.approvalAllowed() ? "Ready for approval" : "Ready for human review";
+            case ASK_USER -> "Needs one more clarification";
+            case CONTINUE_SYNTHESIS -> "Needs another synthesis pass";
+            case READY_FOR_PACKET -> canonical.approvalAllowed() ? "Ready for approval" : "Ready for human review";
             case BLOCK -> "Blocked";
         };
     }
@@ -375,11 +423,11 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             return "Blocked until a human revises the plan or resolves the remaining blockers.";
         }
         return switch (canonical.nextAction()) {
-            case ASK_ONE_QUESTION ->
+            case ASK_USER ->
                     "Needs one more clarification before the packet can move forward.";
-            case AUTONOMOUS_REDRAFT ->
-                    "Needs another internal revision pass before human review.";
-            case POST_PACKET ->
+            case CONTINUE_SYNTHESIS ->
+                    "Needs another silent synthesis pass before human review.";
+            case READY_FOR_PACKET ->
                     canonical.approvalAllowed()
                             ? "Ready for approval once you review the checklist below."
                             : "Ready for human review, but not yet ready for approval.";

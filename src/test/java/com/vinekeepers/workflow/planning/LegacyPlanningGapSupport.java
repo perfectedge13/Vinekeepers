@@ -66,6 +66,7 @@ final class LegacyPlanningGapSupport {
                 blocking,
                 assumptions,
                 rehydrated.useStructuredChoices(),
-                rehydrated.questionText());
+                rehydrated.questionText(),
+                rehydrated.canonicalGapId());
     }
 }

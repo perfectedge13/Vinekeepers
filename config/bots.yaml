@@ -66,10 +66,10 @@ routing:
     discordChannels:
     - '1484800775342391378'
 workflows:
-  # arrietty_room_v2 planning spine (canonical_v1): workspace preflight → silent synthesis inner rounds →
-  # CanonicalPlanningGapEngine → PlanningConfidenceService → CanonicalGapResolutionPolicy → PlanningQuestionComposer
-  # (when asking) → ledger/spread adapter → PlanningMaterialCyclePacing + PlanningCanonicalDecisionSupport.
-  # Workspace-only prompt_for_field belongs in the workspace blocker loop (e.g. planning_prepare), not as generic profile gaps.
+  # arrietty_room_v2 planning spine (canonical_v1): ingress/hydrate/workspace → silent synthesis → evaluation →
+  # deterministic branch to clarification, another synthesis pass, or packet/critique/readiness/approval.
+  # Clarification merge uses meta gapId + mergeTargetPath contract.
+  # Workspace-only prompt_for_field belongs in the workspace blocker loop (e.g. planning_preflight), not as generic profile gaps.
   arrietty_room_v2:
     workflowSchema: v2
     llm:
@@ -138,35 +138,25 @@ workflows:
         - cap_spread_plan_workspace_signals
         - cap_classify_planning_ingress
         rulesRef: rs_ingress
-        defaultNextPhase: planning_prepare
+        defaultNextPhase: planning_preflight
       planning_kickoff:
         pipeline:
         - cap_coordinator_intake_bootstrap
-        defaultNextPhase: planning_prepare
-      planning_prepare:
+        defaultNextPhase: planning_preflight
+      planning_preflight:
         pipeline:
-        - cap_planning_prepare
-        defaultNextPhase: planning_autonomous_draft
-      planning_autonomous_draft:
+        - cap_planning_preflight
+        defaultNextPhase: planning_silent_synthesis
+      planning_silent_synthesis:
         pipeline:
-        - cap_set_stage_drafting
-        - cap_planning_run_expansion
-        - cap_planning_run_inner_round
-        defaultNextPhase: planning_assess_clarification
-      planning_assess_clarification:
-        pipeline:
-        - cap_planning_finalize_cycle_spread
-        rulesRef: rs_post_draft
-        defaultNextPhase: planning_blocked
-      planning_redraft_notice:
-        pipeline:
-        - cap_post_draft_blocked
-        defaultNextPhase: planning_autonomous_draft
+        - cap_mark_stage_drafting
+        - cap_planning_run_silent_synthesis
+        defaultNextPhase: planning_clarification
       planning_clarification:
         pipeline:
-        - cap_set_stage_clarifying
         - cap_planning_clarification
-        defaultNextPhase: planning_autonomous_draft
+        rulesRef: rs_evaluation_branch
+        defaultNextPhase: planning_blocked
       planning_packet:
         pipeline:
         - cap_derive_plan_governance
@@ -198,7 +188,7 @@ workflows:
       planning_revision_reset:
         pipeline:
         - cap_planning_revision_reset
-        defaultNextPhase: planning_autonomous_draft
+        defaultNextPhase: planning_silent_synthesis
       planning_approval:
         pipeline:
         - cap_set_stage_awaiting_approval
@@ -240,7 +230,7 @@ workflows:
         kind: legacy_action
         action: coordinator_intake_bootstrap
         storeSpread: true
-      cap_set_stage_drafting:
+      cap_mark_stage_drafting:
         kind: legacy_action
         action: set_planning_intake_stage
         bind:
@@ -276,7 +266,7 @@ workflows:
         bind:
           stage: FAILED
         storeSpread: true
-      cap_planning_prepare:
+      cap_planning_preflight:
         kind: configurable_steps
         steps:
         - type: call_action
@@ -323,36 +313,44 @@ workflows:
           storeSpread: true
         - type: done
           message: ''
-      cap_planning_run_expansion:
+      cap_planning_run_silent_synthesis:
         kind: legacy_action
-        action: planning_run_expansion
+        action: planning_run_silent_synthesis
         storeSpread: true
-      cap_planning_run_inner_round:
+      cap_planning_run_evaluation:
         kind: legacy_action
-        action: planning_run_inner_round
+        action: planning_run_evaluation
         storeSpread: true
-      cap_planning_finalize_cycle_spread:
-        kind: legacy_action
-        action: planning_finalize_cycle_spread
-        storeSpread: true
-      cap_post_draft_blocked:
-        kind: legacy_action
-        action: post_channel_message
-        bind:
-          content: '{{planningPostDraftNoticeMarkdown}}'
-          asRole: orchestrator
-          target: thread
       cap_planning_clarification:
         kind: configurable_steps
         steps:
         - type: branch
           branches:
           - when:
+              key: planningCanonicalDecisionSource
+              value: post_critique
+            next: 2
+          - when: else
+            next: 1
+        - type: call_action
+          action: planning_run_evaluation
+          storeSpread: true
+        - type: branch
+          branches:
+          - when:
+              key: planningCanonicalNextAction
+              value: ASK_USER
+            next: 3
+          - when: else
+            next: 13
+        - type: branch
+          branches:
+          - when:
               key: planningClarificationStuck
               value: 'true'
-            next: 1
+            next: 4
           - when: else
-            next: 2
+            next: 5
         - type: call_action
           action: post_channel_message
           bind:
@@ -372,9 +370,9 @@ workflows:
           - when:
               key: planningClarificationMergeOk
               value: 'true'
-            next: 6
+            next: 9
           - when: else
-            next: 8
+            next: 11
         - type: call_action
           action: post_channel_message
           bind:
@@ -392,9 +390,11 @@ workflows:
         - type: branch
           branches:
           - when: else
-            next: 2
+            next: 5
             clear:
             - planningClarificationRaw
+        - type: done
+          message: ''
       cap_derive_plan_governance:
         kind: legacy_action
         action: derive_plan_governance
@@ -662,25 +662,25 @@ workflows:
               value: APPROVAL_INTERACTION
           then:
           - transition: planning_preapproval_review
-      rs_post_draft:
+      rs_evaluation_branch:
         - when:
             equals:
               key: planningCanonicalNextAction
-              value: ASK_ONE_QUESTION
+              value: ASK_USER
           then:
           - transition: planning_clarification
         - when:
             equals:
               key: planningCanonicalNextAction
-              value: POST_PACKET
+              value: READY_FOR_PACKET
           then:
           - transition: planning_packet
         - when:
             equals:
               key: planningCanonicalNextAction
-              value: AUTONOMOUS_REDRAFT
+              value: CONTINUE_SYNTHESIS
           then:
-          - transition: planning_redraft_notice
+          - transition: planning_silent_synthesis
         - when:
             equals:
               key: planningCanonicalNextAction
@@ -697,13 +697,13 @@ workflows:
         - when:
             equals:
               key: planningCanonicalNextAction
-              value: ASK_ONE_QUESTION
+              value: ASK_USER
           then:
           - transition: planning_clarification
         - when:
             equals:
               key: planningCanonicalNextAction
-              value: AUTONOMOUS_REDRAFT
+              value: CONTINUE_SYNTHESIS
           then:
           - transition: planning_revision_reset
         - when:

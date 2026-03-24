@@ -83,7 +83,7 @@ public final class PlanningQuestionRankingPolicy {
             }
         }
         if (pending.isEmpty()) {
-            return new ClarificationProjection(false, "", "[]", "{}", 0, assumptions, false, "");
+            return new ClarificationProjection(false, "", "[]", "{}", 0, assumptions, false, "", "");
         }
         String top = pending.get(0);
         ClarificationOptions bounded =
@@ -113,16 +113,16 @@ public final class PlanningQuestionRankingPolicy {
                 }
                 String choicesJson = JSON.writeValueAsString(choiceMaps);
                 String prompt = "**" + top + "**\n\nPick an option below, or **Use recommended default** if that fits.";
-                return new ClarificationProjection(true, prompt, choicesJson, metaJson, blocking, assumptions, true, top);
+                return new ClarificationProjection(true, prompt, choicesJson, metaJson, blocking, assumptions, true, top, "");
             }
             meta.put("defaultAssumption", "");
             meta.put("optA", "");
             meta.put("optB", "");
             meta.put("optC", "");
             String metaJson = JSON.writeValueAsString(meta);
-            return new ClarificationProjection(true, "", "[]", metaJson, blocking, assumptions, false, top);
+            return new ClarificationProjection(true, "", "[]", metaJson, blocking, assumptions, false, top, "");
         } catch (JsonProcessingException e) {
-            return new ClarificationProjection(false, "", "[]", "{}", 0, assumptions, false, "");
+            return new ClarificationProjection(false, "", "[]", "{}", 0, assumptions, false, "", "");
         }
     }
 

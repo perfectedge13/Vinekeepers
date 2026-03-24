@@ -22,7 +22,8 @@ public final class CoordinatorClarificationGapEvaluator {
     private static final String GAP_CONFIG_RUNTIME_SPECIFICS = "config_runtime_specifics";
     private static final String GAP_MODEL_OVERRIDE_GRANULARITY = "model_override_granularity";
 
-    public record OpenGap(String gapId, boolean blocking, String questionText) {}
+    /** Package-private: only {@link CanonicalPlanningGapEngine} maps these to {@link CanonicalPlanningGap} in production. */
+    record OpenGap(String gapId, boolean blocking, String questionText) {}
 
     private CoordinatorClarificationGapEvaluator() {}
 
@@ -30,7 +31,7 @@ public final class CoordinatorClarificationGapEvaluator {
      * Returns ordered open gaps (at most one is typically surfaced per cycle). Empty when mode is not canonical or no
      * rules fire.
      */
-    public static List<OpenGap> evaluateOpenGaps(
+    static List<OpenGap> evaluateOpenGaps(
             FeaturePlanState plan, CoordinatorClarificationSettings settings) {
         return evaluateOpenGaps(plan, settings, true);
     }
@@ -39,7 +40,7 @@ public final class CoordinatorClarificationGapEvaluator {
      * @param semanticGapsAllowed when false, returns no open gaps (hard / workspace-only path is handled outside this
      *     evaluator; post-draft clarification sets this true once drafting has run).
      */
-    public static List<OpenGap> evaluateOpenGaps(
+    static List<OpenGap> evaluateOpenGaps(
             FeaturePlanState plan,
             CoordinatorClarificationSettings settings,
             boolean semanticGapsAllowed) {
@@ -155,7 +156,7 @@ public final class CoordinatorClarificationGapEvaluator {
     }
 
     /** Gap ids still considered open (for ledger reconciliation). */
-    public static Set<String> openGapIds(List<OpenGap> open) {
+    static Set<String> openGapIds(List<OpenGap> open) {
         if (open == null || open.isEmpty()) {
             return Set.of();
         }

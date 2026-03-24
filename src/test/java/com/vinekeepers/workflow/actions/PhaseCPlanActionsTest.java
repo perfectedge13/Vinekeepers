@@ -63,7 +63,7 @@ class PhaseCPlanActionsTest {
                                 + "staging soak before production flag."))));
         store.update(store.getByContextId("c1").orElseThrow().withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, null));
         @SuppressWarnings("unchecked")
-        Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
+        Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(null, store, reg)
                 .run(null, Map.of("contextId", "c1"), Map.of());
         assertTrue(spread.containsKey("planReadinessStatus"));
         assertTrue(spread.containsKey("planReadinessStatusLabel"));
@@ -122,7 +122,7 @@ class PhaseCPlanActionsTest {
                 store.getByContextId("c-review").orElseThrow().withPlanningIntakeStage(PlanningIntakeStage.DRAFTING, null));
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(store, reg)
+        Map<String, Object> spread = (Map<String, Object>) new RunPlanCritiqueAndReadinessAction(null, store, reg)
                 .run(null, Map.of("contextId", "c-review"), Map.of());
         assertEquals("", spread.get("planCritiqueError"));
         String body = (String) spread.get("planningThreadReviewBody");
@@ -281,7 +281,7 @@ class PhaseCPlanActionsTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>)
-                        new RunPlanCritiqueAndReadinessAction(store, reg)
+                        new RunPlanCritiqueAndReadinessAction(null, store, reg)
                                 .run(
                                         null,
                                         Map.of(

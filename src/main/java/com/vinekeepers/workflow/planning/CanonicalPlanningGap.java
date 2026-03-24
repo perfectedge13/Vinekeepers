@@ -1,12 +1,13 @@
 package com.vinekeepers.workflow.planning;
 
-import com.vinekeepers.profile.CoordinatorClarificationGapRule;
-
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * Production representation of unresolved coordinator planning uncertainty. Built from profile rules and plan state;
- * resolution policy decides ask / assume / defer / block.
+ * Production representation of unresolved planning uncertainty sourced from
+ * {@link PlanningEvaluationService} and deterministic merge metadata.
  */
 public record CanonicalPlanningGap(
         String gapId,
@@ -17,51 +18,111 @@ public record CanonicalPlanningGap(
         String mergeTargetPath,
         CanonicalGapSeverity severity,
         boolean blocking,
+        boolean branching,
         boolean askable,
         boolean assumable,
         boolean deferable,
-        /** Template / seed text from the rule; final user-facing wording comes from {@link PlanningQuestionComposer}. */
+        String resolutionReason,
+        String questionIntent,
+        List<String> evidenceSources,
+        /** Seed text supplied by planning evaluation for the one allowed user question. */
         String questionSeed,
         /** Short rationale for logs (not prompt wording). */
         String evidenceSummary) {
+
+    public CanonicalPlanningGap(
+            String gapId,
+            CanonicalGapKind kind,
+            String artifactPath,
+            String mergeTargetPath,
+            CanonicalGapSeverity severity,
+            boolean blocking,
+            boolean askable,
+            boolean assumable,
+            boolean deferable,
+            String questionSeed,
+            String evidenceSummary) {
+        this(
+                gapId,
+                kind,
+                artifactPath,
+                mergeTargetPath,
+                severity,
+                blocking,
+                kind == CanonicalGapKind.BRANCHING_DECISION,
+                askable,
+                assumable,
+                deferable,
+                "",
+                "",
+                List.of(),
+                questionSeed,
+                evidenceSummary);
+    }
 
     public CanonicalPlanningGap {
         gapId = gapId != null ? gapId.trim() : "";
         artifactPath = artifactPath != null ? artifactPath.trim() : "";
         mergeTargetPath = mergeTargetPath != null ? mergeTargetPath.trim() : "";
+        resolutionReason = resolutionReason != null ? resolutionReason.trim() : "";
+        questionIntent = questionIntent != null ? questionIntent.trim() : "";
+        evidenceSources = evidenceSources != null ? List.copyOf(evidenceSources) : List.of();
         questionSeed = questionSeed != null ? questionSeed : "";
         evidenceSummary = evidenceSummary != null ? evidenceSummary : "";
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(severity, "severity");
     }
 
-    public static CanonicalPlanningGap fromCoordinatorOpenGap(
-            CoordinatorClarificationGapEvaluator.OpenGap open,
-            CoordinatorClarificationGapRule rule,
-            int siblingIndex) {
-        if (open == null) {
-            throw new IllegalArgumentException("open");
+    public static CanonicalPlanningGap fromEvaluation(
+            String gapId,
+            String kindText,
+            String description,
+            boolean blocking,
+            boolean askable,
+            boolean assumable,
+            String mergeTargetPath,
+            List<String> evidenceSources) {
+        CanonicalGapKind kind = CanonicalGapKind.fromRuleId(kindText);
+        if (kind == CanonicalGapKind.COORDINATOR_OTHER && kindText != null && !kindText.isBlank()) {
+            try {
+                kind = CanonicalGapKind.valueOf(kindText.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+            }
         }
-        String ruleId = open.gapId();
-        CanonicalGapKind kind = CanonicalGapKind.fromRuleId(ruleId);
-        String mergePath = CanonicalMergeTargetPaths.defaultMergeTargetPath(ruleId);
-        String gapId = CanonicalPlanningGapIds.stableCoordinatorGapId(kind, mergePath, ruleId, siblingIndex);
-        CanonicalGapSeverity severity = open.blocking() ? CanonicalGapSeverity.HIGH : CanonicalGapSeverity.STANDARD;
-        String artifactPath = artifactPathFromMergeTarget(mergePath);
-        String seed = open.questionText() != null ? open.questionText().trim() : "";
-        String evidence = evidenceLine(rule);
+        String mergePath =
+                mergeTargetPath != null && !mergeTargetPath.isBlank()
+                        ? mergeTargetPath.trim()
+                        : CanonicalMergeTargetPaths.defaultMergeTargetPath(gapId);
         return new CanonicalPlanningGap(
                 gapId,
                 kind,
-                artifactPath,
+                artifactPathFromMergeTarget(mergePath),
                 mergePath,
-                severity,
-                open.blocking(),
-                true,
-                true,
-                true,
-                seed,
-                evidence);
+                blocking ? CanonicalGapSeverity.HIGH : CanonicalGapSeverity.STANDARD,
+                blocking,
+                kind == CanonicalGapKind.BRANCHING_DECISION,
+                askable,
+                assumable,
+                !blocking,
+                blocking ? "Blocking or branching gap requires explicit resolution." : "Safe to continue without user input.",
+                kind == CanonicalGapKind.BRANCHING_DECISION ? "CHOOSE_DIRECTION" : "UNBLOCK_PROGRESS",
+                evidenceSources,
+                description,
+                description != null ? description : "");
+    }
+
+    /** Stable gap ids for ledger reconciliation (order preserved). */
+    public static Set<String> openGapIds(List<CanonicalPlanningGap> gaps) {
+        if (gaps == null || gaps.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> s = new LinkedHashSet<>();
+        for (CanonicalPlanningGap g : gaps) {
+            if (g != null && g.gapId() != null && !g.gapId().isBlank()) {
+                s.add(g.gapId().trim());
+            }
+        }
+        return s;
     }
 
     private static String artifactPathFromMergeTarget(String mergeTargetPath) {
@@ -75,11 +136,4 @@ public record CanonicalPlanningGap(
         return mergeTargetPath.trim();
     }
 
-    private static String evidenceLine(CoordinatorClarificationGapRule rule) {
-        if (rule == null) {
-            return "";
-        }
-        int n = rule.getResolveAnySubstring() != null ? rule.getResolveAnySubstring().size() : 0;
-        return "rule=" + rule.getId() + ";resolveMarkers=" + n;
-    }
 }

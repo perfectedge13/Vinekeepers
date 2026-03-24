@@ -15,7 +15,6 @@ import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.SolutionOutline;
-import com.vinekeepers.workflow.planning.PlanningPostDraftGovernor;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
 import java.time.Instant;
@@ -56,7 +55,7 @@ public final class PlanReadinessCalculator {
         int unresolvedQ = countNonBlankUnresolvedQuestions(plan);
         boolean clarificationPending = hasPendingClarification(plan, workflowState);
         boolean repoGroundingMissing = repoGroundingMissing(plan, workflowState);
-        boolean structuredMaterialGaps = PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan);
+        boolean structuredMaterialGaps = PlanStructuredMaterialDiagnostics.hasStructuredMaterialPlanningGaps(plan);
         int knownFacts = countStructuredKnownFacts(plan);
         List<String> unknownLabels =
                 buildMaterialUnknownLabels(

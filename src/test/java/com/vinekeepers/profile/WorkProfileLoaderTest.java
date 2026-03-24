@@ -25,9 +25,6 @@ class WorkProfileLoaderTest {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         WorkProfileDefinition v2 = reg.get("software_feature_planning_v2").orElseThrow();
         assertTrue(v2.getCoordinatorClarification().isCanonicalV1());
-        assertFalse(v2.getCoordinatorClarification().getGaps().isEmpty());
-        assertEquals(2, v2.getCoordinatorClarification().getEnginePolicy().getMaxClarificationTurnsPerGap());
-        assertEquals(2, v2.getCoordinatorClarification().getEnginePolicy().getMaxAutonomousRedraftsBeforeAsk());
-        assertEquals(0.72, v2.getCoordinatorClarification().getEnginePolicy().getClarificationConfidenceThreshold());
+        assertTrue(v2.getCoordinatorClarification().getGaps().isEmpty());
     }
 }

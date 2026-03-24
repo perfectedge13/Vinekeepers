@@ -61,8 +61,6 @@ public final class FeaturePlanState {
     private final int clarificationTurnsCompleted;
     /** Short audit lines for clarification engine outcomes (budget, assume, defer). */
     private final List<String> clarificationOutcomeHistory;
-    /** Serialized coordinator clarification ledger JSON (canonical engine). */
-    private final String clarificationCoordinatorLedgerJson;
     /** Durable coordinator bot id for routing when {@link FeatureRoomState} is evicted. */
     private final String coordinatorConfiguredBotId;
     private final String planningFailureCategory;
@@ -162,15 +160,14 @@ public final class FeaturePlanState {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
                 Boolean.FALSE,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -224,7 +221,6 @@ public final class FeaturePlanState {
             Boolean autonomousPlanningPassCompleted,
             Integer clarificationTurnsCompleted,
             List<String> clarificationOutcomeHistory,
-            String clarificationCoordinatorLedgerJson,
             String coordinatorConfiguredBotId,
             String planningFailureCategory,
             String planningFailurePhase,
@@ -275,7 +271,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -334,7 +329,6 @@ public final class FeaturePlanState {
             Boolean autonomousPlanningPassCompleted,
             Integer clarificationTurnsCompleted,
             List<String> clarificationOutcomeHistory,
-            String clarificationCoordinatorLedgerJson,
             String coordinatorConfiguredBotId,
             String planningFailureCategory,
             String planningFailurePhase,
@@ -398,10 +392,6 @@ public final class FeaturePlanState {
                 clarificationTurnsCompleted != null && clarificationTurnsCompleted >= 0 ? clarificationTurnsCompleted : 0;
         this.clarificationOutcomeHistory =
                 clarificationOutcomeHistory != null ? List.copyOf(clarificationOutcomeHistory) : List.of();
-        this.clarificationCoordinatorLedgerJson =
-                clarificationCoordinatorLedgerJson != null && !clarificationCoordinatorLedgerJson.isBlank()
-                        ? clarificationCoordinatorLedgerJson
-                        : "{}";
         this.coordinatorConfiguredBotId =
                 coordinatorConfiguredBotId != null && !coordinatorConfiguredBotId.isBlank()
                         ? coordinatorConfiguredBotId.trim()
@@ -491,6 +481,132 @@ public final class FeaturePlanState {
         return copy(sm, requirements, assumptions, n, validationNotes, solutionOutline, Instant.now());
     }
 
+    public FeaturePlanState withAppendedRisk(PlanRisk e) {
+        List<PlanRisk> n = new ArrayList<>(risks);
+        n.add(Objects.requireNonNull(e));
+        EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
+        sm.put(PlanSectionKey.RISKS, PlanSectionStatus.DRAFT);
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sm,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                n,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
+    }
+
+    public FeaturePlanState withAppendedDecision(PlanDecision e) {
+        List<PlanDecision> n = new ArrayList<>(decisions);
+        n.add(Objects.requireNonNull(e));
+        EnumMap<PlanSectionKey, PlanSectionStatus> sm = new EnumMap<>(sectionStatuses);
+        sm.put(PlanSectionKey.DECISIONS, PlanSectionStatus.DRAFT);
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sm,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                n,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
+    }
+
     public FeaturePlanState withAppendedValidationNote(ValidationEntry e) {
         List<ValidationEntry> n = new ArrayList<>(validationNotes);
         n.add(Objects.requireNonNull(e));
@@ -563,7 +679,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -626,7 +741,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -680,7 +794,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -734,7 +847,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -790,7 +902,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -844,7 +955,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -902,7 +1012,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -970,7 +1079,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1031,7 +1139,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1215,10 +1322,6 @@ public final class FeaturePlanState {
         return clarificationOutcomeHistory;
     }
 
-    public String getClarificationCoordinatorLedgerJson() {
-        return clarificationCoordinatorLedgerJson;
-    }
-
     public String getCoordinatorConfiguredBotId() {
         return coordinatorConfiguredBotId;
     }
@@ -1317,7 +1420,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1381,7 +1483,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1445,12 +1546,17 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 id,
                 planningFailureCategory,
                 planningFailurePhase,
                 planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     public FeaturePlanState withPlannerRecoveryFields(
@@ -1513,73 +1619,11 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 cat,
                 ph,
                 hint,
                 recoverableDraft);
-    }
-
-    /**
-     * Replace the JSON clarification assessment ledger (see {@link com.vinekeepers.workflow.planning.ClarificationCoordinatorLedger}).
-     */
-    public FeaturePlanState withClarificationCoordinatorLedgerJson(String json) {
-        String j = json != null && !json.isBlank() ? json : "{}";
-        if (j.equals(clarificationCoordinatorLedgerJson)) {
-            return this;
-        }
-        return new FeaturePlanState(
-                contextId,
-                featureId,
-                featureSlug,
-                roomChannelId,
-                intakeThreadId,
-                repoRef,
-                title,
-                initialRequest,
-                planStatus,
-                requirements,
-                assumptions,
-                issues,
-                validationNotes,
-                solutionOutline,
-                traceability,
-                projectContext,
-                sectionStatuses,
-                planConfidence,
-                planApproval,
-                planCritiqueSnapshot,
-                repoWorkspaceId,
-                repoWorkspaceStatus,
-                repoLocalPath,
-                repoAccessNotes,
-                profileId,
-                artifacts,
-                risks,
-                decisions,
-                unresolvedQuestions,
-                critiqueLifecycleStatus,
-                packetPostedAt,
-                packetMessageRef,
-                packetPostedFingerprint,
-                packetPostedChunkCount,
-                createdAt,
-                Instant.now(),
-                planningIntakeStage,
-                planningIntakeStageEnteredAt,
-                intakeKickoffPostedVersion,
-                intakeKickoffPostedFingerprint,
-                planningOrchestrationFailureReason,
-                autonomousPlanningPassCompleted,
-                clarificationTurnsCompleted,
-                clarificationOutcomeHistory,
-                j,
-                coordinatorConfiguredBotId,
-                planningFailureCategory,
-                planningFailurePhase,
-                planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
     }
 
     public FeaturePlanState withAutonomousPlanningPassCompleted(boolean completed) {
@@ -1631,7 +1675,6 @@ public final class FeaturePlanState {
                 completed,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1690,12 +1733,17 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 next,
                 hist,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
                 planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     public FeaturePlanState withClarificationEngineNote(String auditLine) {
@@ -1748,12 +1796,17 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 hist,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
                 planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     public FeaturePlanState withPlanningCanonicalDecision(
@@ -1809,7 +1862,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1873,7 +1925,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -1948,7 +1999,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -2008,7 +2058,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 planningFailureCategory,
                 planningFailurePhase,
@@ -2076,7 +2125,6 @@ public final class FeaturePlanState {
                 autonomousPlanningPassCompleted,
                 clarificationTurnsCompleted,
                 clarificationOutcomeHistory,
-                clarificationCoordinatorLedgerJson,
                 coordinatorConfiguredBotId,
                 cat,
                 ph,

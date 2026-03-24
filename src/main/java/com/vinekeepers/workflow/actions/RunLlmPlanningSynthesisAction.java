@@ -44,8 +44,8 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                 }
               ],
               "top_unresolved_gap": "string or empty",
-              "recommended_action": "ASK_ONE_QUESTION | AUTONOMOUS_REDRAFT | POST_PACKET | BLOCK",
-              "question_if_needed": "single string — empty unless recommended_action is ASK_ONE_QUESTION",
+              "recommended_action": "ASK_USER | CONTINUE_SYNTHESIS | READY_FOR_PACKET | BLOCK",
+              "question_if_needed": "single string — empty unless recommended_action is ASK_USER",
               "explicit_assumptions": ["short strings"]
             }
             Always put any single clarification in question_if_needed only.
@@ -53,14 +53,14 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             feature_summary, scope_summary, user_stories, and acceptance_criteria. Keep values concise.
             Return exactly one JSON object as the full response body. Do not add prefatory text, explanations, or trailing notes.
             If you are unsure, prefer {"upserts":[],"explicit_assumptions":[],"question_if_needed":"",
-            "top_unresolved_gap":"","recommended_action":"AUTONOMOUS_REDRAFT","repo_evidence_this_pass":"not_inspected"}
+            "top_unresolved_gap":"","recommended_action":"CONTINUE_SYNTHESIS","repo_evidence_this_pass":"not_inspected"}
             over malformed JSON or placeholder keys.
             Wrong: {"artifactId":"requirements_spec","sectionId":"feature_summary","data":{"current_state_summary":"x"}}
             Right: {"artifactId":"requirements_spec","sectionId":"narrative","data":{"feature_summary":"x","current_state_summary":"y"}}
             Separate observed repo facts this pass from inference and unknowns; do not name paths/packages unless observed.
             At most one clarification question per response, only in question_if_needed.
             If nothing should change, return {"upserts":[],"explicit_assumptions":[],
-            "question_if_needed":"","top_unresolved_gap":"","recommended_action":"AUTONOMOUS_REDRAFT","repo_evidence_this_pass":"not_inspected"}.
+            "question_if_needed":"","top_unresolved_gap":"","recommended_action":"CONTINUE_SYNTHESIS","repo_evidence_this_pass":"not_inspected"}.
             """;
 
     private final OpenAiChatClient openAiChatClient;

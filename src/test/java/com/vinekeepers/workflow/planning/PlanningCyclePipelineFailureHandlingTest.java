@@ -1,26 +1,29 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.profile.TestWorkProfiles;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.FeatureRoomStateStore;
-import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningFailureCategory;
-import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class PlanningCyclePipelineFailureHandlingTest {
 
@@ -65,65 +68,52 @@ class PlanningCyclePipelineFailureHandlingTest {
     }
 
     @Test
-    void finalizeCycleSpreadGovernor_blankCategoryWithCycleErrorDoesNotThrow() throws Exception {
-        TestContext ctx = createContext("ctx-post-draft");
-        Class<?> outcomeClass =
-                Class.forName("com.vinekeepers.workflow.planning.PlanningCyclePipeline$ClarificationRoundOutcome");
-        Constructor<?> ctor = outcomeClass.getDeclaredConstructors()[0];
-        ctor.setAccessible(true);
-        Object outcome =
-                ctor.newInstance(
-                        ctx.plan(),
-                        new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, ""),
-                        new PlanningDeliberationLedgerSync.UpsertResult(UnresolvedItemLedger.empty(), Optional.empty()),
-                        false,
-                        false,
-                        false,
-                        "");
-        Method m =
-                PlanningCyclePipeline.class.getDeclaredMethod(
-                        "applyMaterialRoutingAndCanonicalDecision",
-                        String.class,
-                        Map.class,
-                        Map.class,
-                        FeaturePlanState.class,
-                        outcomeClass,
-                        ClarificationProjection.class,
-                        WorkProfileDefinition.class,
-                        boolean.class,
-                        boolean.class,
-                        boolean.class,
-                        boolean.class,
-                        String.class);
-        m.setAccessible(true);
+    void runEvaluationOnly_failClosesOnInvalidEvaluation() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> evaluationResponse = assistantResponse(
+                """
+                {
+                  "confidence": { "score": 44, "level": "medium", "summary": "Invalid ask result." },
+                  "gaps": [
+                    { "id": "gap_one", "kind": "WEAK_VALIDATION", "description": "Validation is thin.", "blocking": false, "askable": false, "assumable": true }
+                  ],
+                  "ask_user_required": true,
+                  "best_question": { "text": "Who approves this rollout?", "rationale": "Should fail closed." },
+                  "assumptions_to_add": [],
+                  "issues_to_add": [],
+                  "risks_to_add": [],
+                  "decisions_to_add": [],
+                  "ready_for_packet": false
+                }
+                """);
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(evaluationResponse);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+        TestContext ctx = createContext("ctx-invalid-eval", client);
 
-        Map<String, Object> spread = new LinkedHashMap<>();
-        spread.put("planningRoomCycleError", "SYNTHESIS_UPSERTS_NOT_APPLIED");
-        spread.put("planningSynthesisFailureCategory", "");
+        Map<String, Object> spread =
+                ctx.pipeline().runEvaluationOnly(
+                        null,
+                        Map.of(
+                                "contextId", ctx.plan().getContextId(),
+                                PlanningCyclePipeline.PARTIAL_DEPTH_OK_KEY, "true",
+                                PlanningCyclePipeline.PARTIAL_DEPTH_REASON_KEY, "",
+                                PlanningCyclePipeline.PARTIAL_LAST_ROLE_SUMMARY_KEY, "silent synthesis complete",
+                                PlanningCyclePipeline.PARTIAL_LAST_SYNTH_KEY, "evaluation next"),
+                        Map.of());
 
-        assertDoesNotThrow(
-                () ->
-                        m.invoke(
-                                ctx.pipeline(),
-                                ctx.plan().getContextId(),
-                                Map.of(),
-                                spread,
-                                ctx.plan(),
-                                outcome,
-                    new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, ""),
-                                ctx.profile(),
-                                false,
-                                false,
-                                false,
-                                false,
-                                "thin"));
-        assertEquals(
-                PlanningCanonicalNextAction.BLOCK.name(),
-                spread.get(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY));
-        assertEquals("false", spread.get("planningReadyToPostPacket"));
+        assertEquals("EVALUATION_INVALID_NO_ELIGIBLE_ASK_GAP", spread.get("planningRoomCycleError"));
+        assertEquals("false", spread.get("planningPacketPostingAllowed"));
+        assertEquals("BLOCK", spread.get("planningCanonicalNextAction"));
+        assertFalse("true".equals(spread.get("planningCanonicalUserInputRequired")));
+        assertFalse(spread.containsKey("planningUserInputRequired"));
     }
 
     private static TestContext createContext(String contextId) {
+        return createContext(contextId, null);
+    }
+
+    private static TestContext createContext(String contextId, OpenAiChatClient openAiChatClient) {
         FeaturePlanStateStore planStore = new FeaturePlanStateStore();
         WorkProfileRegistry registry = TestWorkProfiles.loadFromRepoConfig();
         InitializeFeaturePlanStateAction init =
@@ -140,8 +130,23 @@ class PlanningCyclePipelineFailureHandlingTest {
                         Map.of("profileId", "software_feature_planning_v2")));
         FeaturePlanState plan = planStore.getByContextId(contextId).orElseThrow();
         WorkProfileDefinition profile = registry.get("software_feature_planning_v2").orElseThrow();
-        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, planStore, registry);
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(openAiChatClient, planStore, registry);
         return new TestContext(pipeline, plan, profile, planStore, registry);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static HttpResponse<String> assistantResponse(String body) {
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn("""
+                {"choices":[{"message":{"content":%s}}]}
+                """.formatted(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(body).toString()));
+        return response;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static HttpResponse.BodyHandler<String> anyBodyHandler() {
+        return (HttpResponse.BodyHandler) any(HttpResponse.BodyHandler.class);
     }
 
     private record TestContext(

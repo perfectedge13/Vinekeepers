@@ -41,9 +41,8 @@ class ArriettyV2WorkflowYamlTest {
         if ("planning_ingress".equals(entryPhase)) {
             for (String phaseId : List.of(
                     "planning_ingress",
-                    "planning_prepare",
-                    "planning_autonomous_draft",
-                    "planning_assess_clarification",
+                    "planning_preflight",
+                    "planning_silent_synthesis",
                     "planning_clarification",
                     "planning_packet",
                     "planning_critique",
@@ -135,8 +134,8 @@ class ArriettyV2WorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, List<Map<String, Object>>> rulesets =
                 (Map<String, List<Map<String, Object>>>) room.get("rulesets");
-        List<Map<String, Object>> rs = rulesets.get("rs_post_draft");
-        assertTrue(rs != null && !rs.isEmpty(), "rs_post_draft must exist");
+        List<Map<String, Object>> rs = rulesets.get("rs_evaluation_branch");
+        assertTrue(rs != null && !rs.isEmpty(), "rs_evaluation_branch must exist");
         Set<String> actions = new HashSet<>();
         for (Map<String, Object> rule : rs) {
             @SuppressWarnings("unchecked")
@@ -149,9 +148,9 @@ class ArriettyV2WorkflowYamlTest {
         }
         assertEquals(
                 Set.of(
-                        "ASK_ONE_QUESTION",
-                        "POST_PACKET",
-                        "AUTONOMOUS_REDRAFT",
+                        "ASK_USER",
+                        "READY_FOR_PACKET",
+                        "CONTINUE_SYNTHESIS",
                         "BLOCK"),
                 actions,
                 "post-assess must map each canonical action explicitly (no legacy boolean fallthrough)");
@@ -177,7 +176,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyPlanningAssessFailsClosedToBlockedWithoutImplicitRedraft() throws Exception {
+    void arriettyPlanningClarificationFailsClosedToBlocked() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -186,12 +185,12 @@ class ArriettyV2WorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> phases = (Map<String, Object>) room.get("phases");
         @SuppressWarnings("unchecked")
-        Map<String, Object> assess = (Map<String, Object>) phases.get("planning_assess_clarification");
+        Map<String, Object> assess = (Map<String, Object>) phases.get("planning_clarification");
         assertEquals("planning_blocked", String.valueOf(assess.get("defaultNextPhase")));
     }
 
     @Test
-    void arriettyPlanningPrepare_removesProposalAndMissingFieldNoiseFromLivePath() throws Exception {
+    void arriettyPlanningPreflight_removesProposalAndMissingFieldNoiseFromLivePath() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -200,7 +199,7 @@ class ArriettyV2WorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
         @SuppressWarnings("unchecked")
-        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_planning_prepare");
+        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_planning_preflight");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) cap.get("steps");
         List<String> actions = steps.stream()
@@ -214,7 +213,7 @@ class ArriettyV2WorkflowYamlTest {
         long promptCount = steps.stream()
                 .filter(step -> "prompt_for_field".equals(String.valueOf(step.get("type"))))
                 .count();
-        assertEquals(1L, promptCount, "planning_prepare should prompt only for workspace blockers");
+        assertEquals(1L, promptCount, "planning_preflight should prompt only for workspace blockers");
         Map<String, Object> promptStep = steps.stream()
                 .filter(step -> "prompt_for_field".equals(String.valueOf(step.get("type"))))
                 .findFirst()
@@ -243,7 +242,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyRedraftNoticeUsesDynamicPostDraftNoticeOnly() throws Exception {
+    void arriettyDoesNotKeepSeparateContinuationNoticePhase() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -251,11 +250,7 @@ class ArriettyV2WorkflowYamlTest {
         Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
         @SuppressWarnings("unchecked")
         Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_post_draft_blocked");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> bind = (Map<String, Object>) cap.get("bind");
-        assertEquals("{{planningPostDraftNoticeMarkdown}}", String.valueOf(bind.get("content")));
+        assertFalse(capabilities.containsKey("cap_post_draft_blocked"));
     }
 
     @Test

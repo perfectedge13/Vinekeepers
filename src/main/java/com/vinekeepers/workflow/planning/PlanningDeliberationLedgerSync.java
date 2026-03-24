@@ -1,10 +1,11 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.state.planning.FeaturePlanState;
+import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
-
-import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,10 +15,12 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Keeps {@link UnresolvedItemLedger} in sync with planning clarification ranking and merge (dual-write with
+ * Keeps {@link UnresolvedItemLedger} in sync with planning clarification projection and merge (dual-write with
  * {@link com.vinekeepers.state.planning.FeaturePlanState}).
  */
 public final class PlanningDeliberationLedgerSync {
+
+    public static final String PLANNING_CLARIFICATION_CHANNEL = "planning_clarification";
 
     private PlanningDeliberationLedgerSync() {}
 
@@ -304,6 +307,54 @@ public final class PlanningDeliberationLedgerSync {
             }
         }
         return Optional.ofNullable(last);
+    }
+
+    /** Escalation label persisted on ledger rows ({@code OPEN} / {@code NARROW} / {@code BOUNDED}). */
+    public static String escalationLevelForPriorAskCount(int priorAsksBeforeThisCycle) {
+        if (priorAsksBeforeThisCycle >= 2) {
+            return "BOUNDED";
+        }
+        if (priorAsksBeforeThisCycle >= 1) {
+            return "NARROW";
+        }
+        return "OPEN";
+    }
+
+    public static String firstOpenPlanningClarificationQuestionText(UnresolvedItemLedger ledger) {
+        if (ledger == null) {
+            return "";
+        }
+        for (UnresolvedItem it : ledger.items()) {
+            if (it.getStatus() != UnresolvedItemStatus.OPEN) {
+                continue;
+            }
+            if (!PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"))) {
+                continue;
+            }
+            String q = it.getQuestionText();
+            if (q != null && !q.isBlank()) {
+                return q.trim();
+            }
+        }
+        return "";
+    }
+
+    public static FeaturePlanState applyCanonicalGapAskSurfaced(
+            FeaturePlanState plan,
+            FeaturePlanStateStore store,
+            String contextId,
+            CanonicalPlanningGap gap,
+            int cycleIteration) {
+        if (plan == null || store == null || gap == null || contextId == null || contextId.isBlank()) {
+            return plan;
+        }
+        FeaturePlanState next =
+                plan.withClarificationQuestionSurfaced("ask:" + gap.gapId() + ":" + cycleIteration)
+                        .withPlanningGapAskCountsJson(
+                                PlanningGapAskCounts.incrementAsk(plan.getPlanningGapAskCountsJson(), gap.gapId()))
+                        .withPlanningIntakeStage(PlanningIntakeStage.CLARIFYING, java.time.Instant.now());
+        store.update(next);
+        return store.getByContextId(contextId).orElse(next);
     }
 
     private static UnresolvedItemLedger replaceMerged(

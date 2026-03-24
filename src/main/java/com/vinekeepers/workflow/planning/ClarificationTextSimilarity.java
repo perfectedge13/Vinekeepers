@@ -3,7 +3,7 @@ package com.vinekeepers.workflow.planning;
 import java.util.Locale;
 
 /**
- * Duplicate / paraphrase detection for coordinator clarification text (ledger continuity). Lives outside any ranker.
+ * Duplicate / paraphrase detection for coordinator clarification text (ledger continuity).
  */
 public final class ClarificationTextSimilarity {
 

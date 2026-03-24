@@ -6,7 +6,6 @@ import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
-import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,9 +14,8 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Builds {@link ClarificationProjection} for {@code canonical_v1} without legacy ranker scoring
- * (no score thresholds, default-resolution assumptions, or generic fallback questions). Used only on the live
- * Arrietty coordinator clarification path.
+ * Packages {@link CanonicalClarificationSelection} / {@link ClarificationProjection} for {@code canonical_v1} from
+ * evaluation-backed {@link CanonicalPlanningGap} data. This class only shapes spread JSON and choice metadata.
  */
 public final class CanonicalClarificationSpreadBuilder {
 
@@ -28,35 +26,7 @@ public final class CanonicalClarificationSpreadBuilder {
 
     private CanonicalClarificationSpreadBuilder() {}
 
-    /**
-     * Projects one canonical ASK_USER gap into spread/ledger shape. Returns {@code userInputRequired == false} when the
-     * text is blank, fails the quality gate, or is merge-closed — callers must not route to user clarification.
-     */
-    public static ClarificationProjection projectCanonicalGap(
-            UnresolvedItemLedger ledger,
-            WorkProfileDefinition profile,
-            CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top,
-            String resolvedQuestionText,
-            List<String> carryAssumptions) {
-        return projectCanonicalGap(
-                ledger, profile, coord, top, resolvedQuestionText, carryAssumptions, QuestionMode.OPEN);
-    }
-
-    public static ClarificationProjection projectCanonicalGap(
-            UnresolvedItemLedger ledger,
-            WorkProfileDefinition profile,
-            CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top,
-            String resolvedQuestionText,
-            List<String> carryAssumptions,
-            QuestionMode questionMode) {
-        return ClarificationProjection.fromSelection(
-                buildCanonicalSelection(
-                        ledger, profile, coord, top, resolvedQuestionText, carryAssumptions, questionMode));
-    }
-
-    /** Adapter for {@link CanonicalPlanningGap}: same spread shape as legacy {@link CoordinatorClarificationGapEvaluator.OpenGap}. */
+    /** Production adapter: uses {@link CanonicalPlanningGap#mergeTargetPath()} for merge metadata. */
     public static ClarificationProjection projectCanonicalPlanningGap(
             UnresolvedItemLedger ledger,
             WorkProfileDefinition profile,
@@ -68,50 +38,54 @@ public final class CanonicalClarificationSpreadBuilder {
         if (top == null) {
             return ClarificationProjection.fromSelection(CanonicalClarificationSelection.none());
         }
-        CoordinatorClarificationGapEvaluator.OpenGap synthetic =
-                new CoordinatorClarificationGapEvaluator.OpenGap(
-                        top.gapId(), top.blocking(), top.questionSeed());
-        return projectCanonicalGap(
-                ledger, profile, coord, synthetic, resolvedQuestionText, carryAssumptions, questionMode);
+        String mergePath = top.mergeTargetPath();
+        if (mergePath == null || mergePath.isBlank()) {
+            return ClarificationProjection.fromSelection(CanonicalClarificationSelection.none());
+        }
+        return ClarificationProjection.fromSelection(
+                buildSelectionForAsk(
+                        profile,
+                        coord,
+                        top.gapId(),
+                        top.blocking(),
+                        resolvedQuestionText,
+                        carryAssumptions,
+                        questionMode,
+                        mergePath));
     }
 
-    public static CanonicalClarificationSelection buildCanonicalSelection(
-            UnresolvedItemLedger ledger,
+    private static CanonicalClarificationSelection buildSelectionForAsk(
             WorkProfileDefinition profile,
             CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top,
+            String gapId,
+            boolean blocking,
             String resolvedQuestionText,
             List<String> carryAssumptions,
-            QuestionMode questionMode) {
+            QuestionMode questionMode,
+            String mergeTargetPath) {
         List<String> assumptions = carryAssumptions != null ? new ArrayList<>(carryAssumptions) : new ArrayList<>();
-        String gapId = top != null && top.gapId() != null ? top.gapId().trim() : "";
+        String gid = gapId != null ? gapId.trim() : "";
         String q = resolvedQuestionText != null ? resolvedQuestionText.trim() : "";
         if (q.length() > 240) {
             q = q.substring(0, 239) + "…";
         }
-        if (q.isBlank() || !ClarificationPromptQualityGate.acceptableClarificationCandidate(q)) {
+        if (q.isBlank() || mergeTargetPath == null || mergeTargetPath.isBlank()) {
             return new CanonicalClarificationSelection(
-                    false, gapId, "", "", questionMode, false, false, "", "[]", "{}", assumptions);
+                    false, gid, "", "", questionMode, false, false, "", "[]", "{}", assumptions);
         }
-        UnresolvedItemLedger led = ledger != null ? ledger : UnresolvedItemLedger.empty();
-        if (led.hasFingerprintMergeClosed(q)) {
-            return new CanonicalClarificationSelection(
-                    false, gapId, "", "", questionMode, false, false, "", "[]", "{}", assumptions);
-        }
-        CoordinatorClarificationGapRule rule = coord != null ? coord.findGapRule(top.gapId()).orElse(null) : null;
+        CoordinatorClarificationGapRule rule = coord != null ? coord.findGapRule(gid).orElse(null) : null;
         boolean bounded =
                 rule != null
                         && rule.isUseBoundedChoiceUi()
                         && profile != null
                         && profile.isBoundedClarificationChoicesEnabled();
         boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
-        ClarificationOptions boundedOpts =
-                bounded && inferOr ? inferBoundedOrOptions(q) : null;
-        String mergePath = CanonicalMergeTargetPaths.defaultMergeTargetPath(gapId);
+        ClarificationOptions boundedOpts = bounded && inferOr ? inferBoundedOrOptions(q) : null;
+        String mergePath = mergeTargetPath.trim();
         try {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("questionText", q);
-            meta.put("gapId", gapId);
+            meta.put("gapId", gid);
             meta.put("mergeTargetPath", mergePath);
             meta.put("questionMode", questionMode.name());
             if (boundedOpts != null) {
@@ -147,11 +121,11 @@ public final class CanonicalClarificationSpreadBuilder {
                 String prompt = "**" + q + "**\n\nPick an option below, or **Use recommended default** if that fits.";
                 return new CanonicalClarificationSelection(
                         true,
-                        gapId,
+                        gid,
                         mergePath,
                         q,
                         questionMode,
-                        top.blocking(),
+                        blocking,
                         true,
                         prompt,
                         choicesJson,
@@ -165,11 +139,11 @@ public final class CanonicalClarificationSpreadBuilder {
             String metaJson = JSON.writeValueAsString(meta);
             return new CanonicalClarificationSelection(
                     true,
-                    gapId,
+                    gid,
                     mergePath,
                     q,
                     questionMode,
-                    top.blocking(),
+                    blocking,
                     false,
                     "",
                     "[]",
@@ -177,7 +151,7 @@ public final class CanonicalClarificationSpreadBuilder {
                     assumptions);
         } catch (JsonProcessingException e) {
             return new CanonicalClarificationSelection(
-                    false, gapId, "", "", questionMode, false, false, "", "[]", "{}", assumptions);
+                    false, gid, "", "", questionMode, false, false, "", "[]", "{}", assumptions);
         }
     }
 

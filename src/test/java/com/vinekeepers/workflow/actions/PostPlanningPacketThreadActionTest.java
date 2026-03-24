@@ -100,7 +100,7 @@ class PostPlanningPacketThreadActionTest {
         state.put("channelId", "th3");
         state.put("contextId", "ctx3");
         state.put("planningPacketDepthOk", "true");
-        state.put("planningCanonicalNextAction", "ASK_ONE_QUESTION");
+        state.put("planningCanonicalNextAction", "ASK_USER");
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) action.run(ev, state, Map.of());
         assertEquals("false", spread.get("planningPacketPosted"));
@@ -136,7 +136,7 @@ class PostPlanningPacketThreadActionTest {
         state.put("contextId", "ctx2");
         state.put("planningPacketDepthOk", "true");
         state.put("planningPacketPostingAllowed", "true");
-        state.put("planningCanonicalNextAction", "POST_PACKET");
+        state.put("planningCanonicalNextAction", "READY_FOR_PACKET");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> spread1 = (Map<String, Object>) action.run(ev, state, Map.of());
@@ -153,7 +153,7 @@ class PostPlanningPacketThreadActionTest {
         state.put("contextId", "ctx1");
         state.put("planningPacketDepthOk", "true");
         state.put("planningPacketPostingAllowed", "true");
-        state.put("planningCanonicalNextAction", "POST_PACKET");
+        state.put("planningCanonicalNextAction", "READY_FOR_PACKET");
         return state;
     }
 

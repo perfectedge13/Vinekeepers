@@ -26,6 +26,13 @@ import java.util.Map;
  */
 public final class SilentPlanningSynthesisService {
 
+    public record SilentPlanningSynthesisResult(
+            FeaturePlanState plan,
+            boolean depthOk,
+            String depthReason,
+            String lastRoleRoundSummary,
+            String lastSynthLlmLine) {}
+
     public record InnerRoundResult(
             FeaturePlanState plan,
             boolean depthOk,
@@ -48,7 +55,6 @@ public final class SilentPlanningSynthesisService {
 
     public void runExpansionPhase(
             Event event, Map<String, Object> work, Map<String, Object> spread, Map<String, Object> bind) {
-        spread.put("planningPhase", "REQUEST_EXPANSION");
         Object expansionObj =
                 new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry)
                         .run(event, work, bind);
@@ -60,6 +66,61 @@ public final class SilentPlanningSynthesisService {
         new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
     }
 
+    public SilentPlanningSynthesisResult runSilentSynthesisPhase(
+            Event event,
+            String contextId,
+            WorkProfileDefinition profile,
+            Map<String, Object> work,
+            Map<String, Object> spread,
+            Map<String, Object> bind,
+            FeaturePlanState plan,
+            boolean skipExpansion,
+            String previousSynthLine,
+            int maxInnerRounds) {
+        if (!skipExpansion) {
+            runExpansionPhase(event, work, spread, bind);
+        } else {
+            spread.put("planningSelectiveRerunActive", "true");
+            spread.put(
+                    "planningSelectiveRerunNote",
+                    "Thanks — I'm refreshing the draft from your last answer (skipping a full re-scan this pass).");
+        }
+        FeaturePlanState planPtr = plan;
+        boolean depthOk = false;
+        String depthReason = "";
+        String lastRoleRoundSummary = "";
+        String lastSynthLlmLine = previousSynthLine != null ? previousSynthLine : "";
+        int rounds = Math.max(1, maxInnerRounds);
+        for (int inner = 0; inner < rounds; inner++) {
+            InnerRoundResult round =
+                    runSingleInnerRound(
+                            event,
+                            contextId,
+                            profile,
+                            work,
+                            spread,
+                            bind,
+                            planPtr,
+                            lastSynthLlmLine);
+            planPtr = round.plan();
+            depthOk = round.depthOk();
+            depthReason = round.depthReason();
+            lastRoleRoundSummary = round.lastRoleRoundSummary();
+            lastSynthLlmLine = round.lastSynthLlmLine();
+            spread.put(
+                    "planningCycleProgressSummary",
+                    "Silent synthesis round "
+                            + (inner + 1)
+                            + "/"
+                            + rounds
+                            + (depthOk ? " — draft is packet-ready enough for evaluation." : " — continuing silent synthesis."));
+            if (depthOk) {
+                break;
+            }
+        }
+        return new SilentPlanningSynthesisResult(planPtr, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
+    }
+
     public InnerRoundResult runSingleInnerRound(
             Event event,
             String contextId,
@@ -69,7 +130,6 @@ public final class SilentPlanningSynthesisService {
             Map<String, Object> bind,
             FeaturePlanState plan,
             String previousSynthLine) {
-        spread.put("planningPhase", "DRAFTING");
         FeaturePlanState planPtr = planStateStore.getByContextId(contextId).orElse(plan);
         List<String> roleTags = new ArrayList<>();
         List<PlanningCoordinatorRole> passOrder = ConfigurablePassRunner.resolveOrder(work, bind);
@@ -155,11 +215,6 @@ public final class SilentPlanningSynthesisService {
         FeaturePlanState planForRecover = planStateStore.getByContextId(contextId).orElse(null);
         boolean recoverable = hasRecoverablePlanningDraft(planForRecover) && !structuredRoleFailed;
         spread.put("planningRecoverableDraftAfterSynthesis", recoverable ? "true" : "false");
-        if ("SYNTHESIS_JSON_INVALID".equals(cat)
-                || "SYNTHESIS_REPAIR_EXHAUSTED".equals(cat)
-                || "SYNTHESIS_TRANSPORT_ERROR".equals(cat)) {
-            spread.put("planningSuppressAutonomousRedraftNotice", "true");
-        }
         if (!cat.isBlank()) {
             spread.put("planningSynthesisFailureCategory", cat);
             String existing = getString(spread, "planningRoomCycleError");
@@ -185,7 +240,7 @@ public final class SilentPlanningSynthesisService {
         if (plan == null) {
             return false;
         }
-        if (PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan)) {
+        if (com.vinekeepers.workflow.planreview.PlanStructuredMaterialDiagnostics.hasStructuredMaterialPlanningGaps(plan)) {
             return true;
         }
         String ex = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
@@ -201,7 +256,6 @@ public final class SilentPlanningSynthesisService {
             Map<String, Object> state,
             Map<String, Object> spread,
             List<String> roleRoundTags) {
-        spread.put("planningPhase", "CRITIQUING");
         RolePassResult r =
                 PlanningRolePassRunner.run(
                         role, openAiChatClient, plan, profile, event, state, planStateStore, workProfileRegistry);

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MergePlanningClarificationChoiceActionTest {
@@ -51,7 +52,8 @@ class MergePlanningClarificationChoiceActionTest {
                 metaJson("g1", "Q?", CanonicalMergeTargetPaths.defaultMergeTargetPath("g1")));
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-a"));
         assertEquals("true", spread.get("planningClarificationMergeOk"));
-        assertEquals("false", spread.get("planningUserInputRequired"));
+        assertEquals("false", spread.get("planningCanonicalUserInputRequired"));
+        assertFalse(spread.containsKey("planningUserInputRequired"));
     }
 
     @Test
@@ -91,8 +93,39 @@ class MergePlanningClarificationChoiceActionTest {
                         CanonicalMergeTargetPaths.defaultMergeTargetPath("g_sticky")));
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-b"));
         assertEquals("true", spread.get("planningClarificationMergeOk"));
-        assertEquals("false", spread.get("planningUserInputRequired"));
         assertEquals("false", spread.get("planningCanonicalUserInputRequired"));
+        assertFalse(spread.containsKey("planningUserInputRequired"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void canonicalV1MergeRejectsGapIdWhenMergeTargetPathDoesNotMatchContract() {
+        WorkProfileRegistry reg = new WorkProfileRegistry();
+        reg.register(
+                new WorkProfileDefinition(
+                        "p_merge_mismatch",
+                        "",
+                        minimalArtifactsForDecisionLogMerge(),
+                        List.of(),
+                        false,
+                        false,
+                        List.of(),
+                        new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of())));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan("ctx-merge-mismatch", "p_merge_mismatch", "hello"));
+        var action = new MergePlanningClarificationChoiceAction(store, reg);
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("contextId", "ctx-merge-mismatch");
+        state.put("planningClarificationRaw", "yes");
+        state.put(
+                "planningClarificationMetaJson",
+                metaJson("g1", "Q?", "decision_log/decisions/wrong_field"));
+        Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-mismatch"));
+        assertEquals("false", spread.get("planningClarificationMergeOk"));
+        assertTrue(spread.get("planningClarificationMergeError").toString().contains("does not match"));
+        assertFalse(
+                store.getByContextId("ctx-merge-mismatch").orElseThrow().getIssues().stream()
+                        .anyMatch(i -> i.getTitle() != null && i.getTitle().contains("Coordinator gap resolution")));
     }
 
     @Test
@@ -134,12 +167,13 @@ class MergePlanningClarificationChoiceActionTest {
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-c"));
 
         assertEquals("true", spread.get("planningClarificationMergeOk"));
-        assertEquals("false", spread.get("planningUserInputRequired"));
+        assertEquals("false", spread.get("planningCanonicalUserInputRequired"));
+        assertFalse(spread.containsKey("planningUserInputRequired"));
         FeaturePlanState refreshed = store.getByContextId("ctx-merge-c").orElseThrow();
         String decisionBlob =
                 PlanningArtifactTexts.allRepeatableFieldLines(refreshed, "decision_log", "decisions", "decision_text");
         assertTrue(
-                decisionBlob.contains("Coordinator gap resolution (model_override_granularity): per step."),
+                decisionBlob.contains("Coordinator gap resolution (model_override_granularity): scope is for individual steps"),
                 decisionBlob);
     }
 

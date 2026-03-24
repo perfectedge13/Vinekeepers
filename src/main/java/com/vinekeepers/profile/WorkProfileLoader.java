@@ -107,58 +107,7 @@ public final class WorkProfileLoader {
                 }
             }
         }
-        CoordinatorClarificationEnginePolicy engine = parseCoordinatorClarificationEngine(m);
-        return new CoordinatorClarificationSettings(mode, gaps, engine);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static CoordinatorClarificationEnginePolicy parseCoordinatorClarificationEngine(Map<String, Object> coordinatorRoot) {
-        if (coordinatorRoot == null) {
-            return CoordinatorClarificationEnginePolicy.defaultPolicy();
-        }
-        Object engineNode = coordinatorRoot.get("engine");
-        Map<String, Object> em =
-                engineNode instanceof Map<?, ?> map ? (Map<String, Object>) map : coordinatorRoot;
-        Integer maxTurnsObj = intObject(em.get("maxClarificationTurns"));
-        int maxTurns =
-                maxTurnsObj != null
-                        ? maxTurnsObj
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxClarificationTurns();
-        Integer maxTurnsPerGapObj = intObject(em.get("maxClarificationTurnsPerGap"));
-        int maxTurnsPerGap =
-                maxTurnsPerGapObj != null
-                        ? maxTurnsPerGapObj
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxClarificationTurnsPerGap();
-        Integer maxRedraftsObj = intObject(em.get("maxAutonomousRedraftsBeforeAsk"));
-        int maxRedrafts =
-                maxRedraftsObj != null
-                        ? maxRedraftsObj
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getMaxAutonomousRedraftsBeforeAsk();
-        Double confidenceThresholdObj = doubleObject(em.get("clarificationConfidenceThreshold"));
-        double confidenceThreshold =
-                confidenceThresholdObj != null
-                        ? confidenceThresholdObj
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getClarificationConfidenceThreshold();
-        Double threshold = doubleObject(em.get("repoEvidenceAskThreshold"));
-        double thr =
-                threshold != null
-                        ? threshold
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getRepoEvidenceAskThreshold();
-        Double askPri = doubleObject(em.get("clarificationAskPriorityThreshold"));
-        double askP =
-                askPri != null
-                        ? askPri
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().getClarificationAskPriorityThreshold();
-        boolean allowAssume =
-                em.containsKey("allowAssumeAndContinue")
-                        ? booleanVal(em.get("allowAssumeAndContinue"))
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowAssumeAndContinue();
-        boolean allowCrit =
-                em.containsKey("allowClarificationAfterCritique")
-                        ? booleanVal(em.get("allowClarificationAfterCritique"))
-                        : CoordinatorClarificationEnginePolicy.defaultPolicy().isAllowClarificationAfterCritique();
-        return new CoordinatorClarificationEnginePolicy(
-                maxTurns, maxTurnsPerGap, maxRedrafts, confidenceThreshold, thr, askP, allowAssume, allowCrit);
+        return new CoordinatorClarificationSettings(mode, gaps);
     }
 
     private static CoordinatorClarificationGapRule parseCoordinatorGap(Map<String, Object> raw) {

@@ -7,10 +7,9 @@ import com.vinekeepers.state.workflow.UnresolvedItemStatus;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 
 import java.util.Map;
-import java.util.Objects;
 
 /**
- * Deterministic material / revision fingerprints for planning observability. No post-draft policy or ask routing.
+ * Deterministic material / revision fingerprints for planning observability.
  */
 public final class PlanningMaterialFingerprint {
 
@@ -108,56 +107,4 @@ public final class PlanningMaterialFingerprint {
         return v != null ? v.toString() : null;
     }
 
-    /** Material change vs persisted baselines (used by post-draft loop pacing). */
-    public static boolean detectMaterialChange(
-            Map<String, Object> baselineState,
-            Map<String, Object> signalState,
-            FeaturePlanState plan,
-            boolean activeCycle) {
-        if (!activeCycle) {
-            return false;
-        }
-        if ("true".equalsIgnoreCase(getString(signalState, "planningJustMergedClarification"))) {
-            return true;
-        }
-        String curRepo = shortHash(getString(signalState, "planningRepoEvidenceJson"));
-        String baseRepo = getString(baselineState, PlanningMaterialSpreadKeys.BASELINE_REPO_HASH_KEY);
-        if (baseRepo == null || baseRepo.isBlank()) {
-            return true;
-        }
-        if (!Objects.equals(baseRepo, curRepo != null ? curRepo : "")) {
-            return true;
-        }
-        int curAsm = plan != null ? plan.getAssumptions().size() : 0;
-        int baseAsm = parseInt(getString(baselineState, PlanningMaterialSpreadKeys.BASELINE_ASSUMPTION_COUNT_KEY), -1);
-        if (baseAsm < 0 || curAsm > baseAsm) {
-            return true;
-        }
-        int curCrit = critiqueBlockingCount(plan);
-        int baseCrit = parseInt(getString(baselineState, PlanningMaterialSpreadKeys.BASELINE_CRITIQUE_BLOCKING_KEY), -1);
-        if (baseCrit < 0 || curCrit != baseCrit) {
-            return true;
-        }
-        String curDraft = observabilityDraftFingerprint(plan);
-        String baseDraft = getString(baselineState, PlanningMaterialSpreadKeys.BASELINE_DRAFT_FP_KEY);
-        if (baseDraft != null
-                && !baseDraft.isBlank()
-                && curDraft != null
-                && !curDraft.isBlank()
-                && !baseDraft.equals(curDraft)) {
-            return true;
-        }
-        return false;
-    }
-
-    private static int parseInt(String s, int dflt) {
-        if (s == null || s.isBlank()) {
-            return dflt;
-        }
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (NumberFormatException e) {
-            return dflt;
-        }
-    }
 }

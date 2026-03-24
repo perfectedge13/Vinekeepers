@@ -16,9 +16,9 @@ class PlanningLlmPromptContractTest {
         String system = staticStringField(RunRequestExpansionLlmAction.class, "SYSTEM");
         assertTrue(system.contains("question_if_needed"));
         assertTrue(system.contains("recommended_action"));
-        assertTrue(system.contains("ASK_ONE_QUESTION"));
-        assertTrue(system.contains("AUTONOMOUS_REDRAFT"));
-        assertTrue(system.contains("POST_PACKET"));
+        assertTrue(system.contains("ASK_USER"));
+        assertTrue(system.contains("CONTINUE_SYNTHESIS"));
+        assertTrue(system.contains("READY_FOR_PACKET"));
         assertTrue(system.contains("BLOCK"));
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("explicit_assumptions"));
@@ -42,7 +42,7 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("repo_evidence_this_pass"));
         assertTrue(system.contains("recommended_action"));
         assertTrue(system.contains("top_unresolved_gap"));
-        assertTrue(system.contains("AUTONOMOUS_REDRAFT"));
+        assertTrue(system.contains("CONTINUE_SYNTHESIS"));
         assertTrue(system.contains("Return exactly one JSON object"));
         assertTrue(system.contains("Wrong: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\""));
         assertTrue(system.contains("Right: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\""));
@@ -72,7 +72,7 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("repo_evidence_this_pass"));
         assertTrue(system.contains("literal key \"fieldId\""));
-        assertTrue(system.contains("AUTONOMOUS_REDRAFT"));
+        assertTrue(system.contains("CONTINUE_SYNTHESIS"));
         assertFalse(system.contains("open_questions_block.backlog"));
         assertFalse(system.contains("\"fieldId\": \"value\""));
     }

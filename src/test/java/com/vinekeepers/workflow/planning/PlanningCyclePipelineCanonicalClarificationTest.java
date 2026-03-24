@@ -1,241 +1,75 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.connectors.openai.OpenAiChatClient;
 import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationMode;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
-import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.profile.TestWorkProfiles;
+import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileLoader;
+import com.vinekeepers.profile.WorkProfileRegistry;
+import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.state.workflow.UnresolvedItem;
+import com.vinekeepers.state.planning.FeatureRoomStateStore;
+import com.vinekeepers.workflow.actions.InitializeFeaturePlanStateAction;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
-import com.vinekeepers.state.workflow.UnresolvedItemStatus;
 import org.junit.jupiter.api.Test;
 
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import com.vinekeepers.profile.WorkProfileDefinition;
-import com.vinekeepers.state.planning.FeaturePlanState;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class PlanningCyclePipelineCanonicalClarificationTest {
 
     @Test
-    void canonicalModeIgnoresStrayOpenLedgerWhenGapsClosed() {
-        UnresolvedItem strayOpen =
-                new UnresolvedItem(
-                        "uq_stray",
-                        "fp",
-                        UnresolvedItemStatus.OPEN,
-                        "",
-                        "Stray open question",
-                        "normal",
-                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL, "gapId", "ghost"),
-                        List.of(),
-                        List.of(),
-                        0);
-        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(strayOpen);
-        assertFalse(
-                PlanningCyclePipeline.resolvePlanningUserInputRequired(
-                        true, false, ledger));
-    }
-
-    @Test
-    void orchestratorSummaryAvoidsMachinePhrases() {
-        var plan =
-                new com.vinekeepers.state.planning.FeaturePlanState(
-                        "c",
-                        "f",
-                        "s",
-                        "room",
-                        null,
-                        null,
-                        "t",
-                        "Short request",
-                        "PLANNING",
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        com.vinekeepers.state.planning.FeaturePlanState.initialSectionStatuses(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        "software_feature_planning",
-                        Map.of(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null);
-        ClarificationProjection ranked =
-                new ClarificationProjection(true, "", "[]", "{}", 1, List.of(), false, "Which API version?");
-        String summary =
-                PlanningCyclePipeline.buildOrchestratorSummary(plan, true, "", ranked, 2, false, false, "", true, false);
-        assertFalse(summary.contains("Planning update"));
-        assertFalse(summary.contains("Depth check passed"));
-        assertFalse(summary.contains("planning packet"));
-        assertFalse(summary.contains("Next I'll"));
-    }
-
-    @Test
-    void orchestratorSummaryUsesResolvedGateNotRawLlmUserInputFlag() {
-        FeaturePlanState plan =
-                new FeaturePlanState(
-                        "c",
-                        "f",
-                        "s",
-                        "room",
-                        null,
-                        null,
-                        "t",
-                        "Short request",
-                        "PLANNING",
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        FeaturePlanState.initialSectionStatuses(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        "software_feature_planning",
-                        Map.of(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null);
-        ClarificationProjection rankedNoAsk =
-                new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, "");
-        String waiting =
-                PlanningCyclePipeline.buildOrchestratorSummary(
-                        plan, true, "", rankedNoAsk, 1, false, false, "", true, false);
-        assertTrue(waiting.contains("Paused until the detail below is answered"));
-        assertFalse(waiting.contains("keep going"));
-
-        ClarificationProjection rankedAsk =
-                new ClarificationProjection(true, "", "[]", "{}", 1, List.of(), false, "Which version?");
-        String moving =
-                PlanningCyclePipeline.buildOrchestratorSummary(
-                        plan, true, "", rankedAsk, 1, false, false, "", false, false);
-        assertFalse(moving.contains("Paused until the detail below is answered"));
-    }
-
-    @Test
-    void semanticClarificationAllowed_trueWhenSplitPathSpreadMarksFirstPass() {
-        assertTrue(
-                PlanningCyclePipeline.semanticClarificationAllowed(
-                        null, Map.of("planningAutonomousFirstPassCompleted", "true"), false));
-    }
-
-    @Test
-    void semanticClarificationAllowed_trueWhenDraftingCompletesThisInvocation() {
-        assertTrue(PlanningCyclePipeline.semanticClarificationAllowed(null, Map.of(), true));
-    }
-
-    @Test
-    void semanticClarificationAllowed_trueWhenPlanRecordsCompletedAutonomousPass() {
-        FeaturePlanState plan = bareFeaturePlan().withAutonomousPlanningPassCompleted(true);
-        assertTrue(PlanningCyclePipeline.semanticClarificationAllowed(plan, Map.of(), false));
-    }
-
-    @Test
-    void semanticClarificationAllowed_falseWithoutPassSignals() {
-        FeaturePlanState plan = bareFeaturePlanWithRequest("Lets plug different models into different workflow steps.");
-        assertFalse(PlanningCyclePipeline.semanticClarificationAllowed(plan, Map.of(), false));
-    }
-
-    @Test
-    void canonicalProjectionDoesNotSurfaceTooShortOrWeakTemplate() {
-        CoordinatorClarificationGapRule rule =
-                new CoordinatorClarificationGapRule("g_low", false, "ok", List.of("x"), List.of(), List.of());
+    void canonicalProjectionUsesCanonicalGapMergePath() {
         CoordinatorClarificationSettings coord =
-                new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(rule));
+                new CoordinatorClarificationSettings(
+                        CoordinatorClarificationMode.CANONICAL_V1,
+                        List.of(new CoordinatorClarificationGapRule("missing_scope", true, "", List.of(), List.of(), List.of())));
         WorkProfileDefinition profile =
                 new WorkProfileDefinition(
-                        "p", "", List.of(), List.of(), false, false, List.of(), coord);
-        CoordinatorClarificationGapEvaluator.OpenGap top = new CoordinatorClarificationGapEvaluator.OpenGap("g_low", false, "ok");
-        ClarificationProjection projected =
-                CanonicalClarificationSpreadBuilder.projectCanonicalGap(
-                        UnresolvedItemLedger.empty(), profile, coord, top, "ok", List.of());
-        assertFalse(projected.userInputRequired());
-    }
-
-    @Test
-    void canonicalQuestionEscalatesWhenSameAsLastMerged() {
-        CoordinatorClarificationGapRule rule =
-                new CoordinatorClarificationGapRule(
-                        "g1",
-                        false,
-                        "Original?",
-                        List.of(),
-                        List.of(),
-                        List.of(),
-                        false,
-                        false,
-                        "Please add one concrete constraint.");
-        UnresolvedItem merged =
-                new UnresolvedItem(
-                        "m1",
-                        "fp",
-                        UnresolvedItemStatus.MERGED,
+                        "p",
                         "",
-                        "Original?",
-                        "normal",
-                        Map.of("channel", PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
                         List.of(),
                         List.of(),
-                        0);
-        UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(merged);
-        String q =
-                PlanningQuestionComposer.composeQuestionForAskCycle("Original?", "g1", rule, ledger, 0);
-        assertTrue(q.contains("concrete constraint"));
-    }
+                        true,
+                        true,
+                        List.of(),
+                        coord);
+        CanonicalPlanningGap gap = CanonicalPlanningGap.fromEvaluation(
+                "missing_scope",
+                "MISSING_IMPLEMENTATION_SCOPE",
+                "What implementation scope is in bounds for this feature?",
+                true,
+                true,
+                false,
+                "requirements_spec/narrative/scope_summary",
+                List.of());
 
-    @Test
-    void canonicalQuestionEscalatesToBoundedReplyAfterMultipleAsks() {
-        CoordinatorClarificationGapRule rule =
-                new CoordinatorClarificationGapRule(
-                        "g1",
-                        false,
-                        "Original?",
+        ClarificationProjection ranked =
+                CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
+                        UnresolvedItemLedger.empty(),
+                        profile,
+                        coord,
+                        gap,
+                        "What implementation scope is in bounds for this feature?",
                         List.of(),
-                        List.of(),
-                        List.of("config only", "runtime only", "both"));
-        String q =
-                PlanningQuestionComposer.composeQuestionForAskCycle(
-                        "Original?", "g1", rule, UnresolvedItemLedger.empty(), 2);
-        assertTrue(q.contains("exactly one option"));
-        assertTrue(q.contains("config only"));
+                        QuestionMode.OPEN);
+
+        assertTrue(ranked.userInputRequired());
+        assertEquals("missing_scope", ranked.canonicalGapId());
+        assertTrue(ranked.metaJson().contains("requirements_spec/narrative/scope_summary"));
     }
 
     @Test
@@ -251,8 +85,6 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                                         List.of("timeout"),
                                         List.of(),
                                         List.of())));
-        var top =
-                new CoordinatorClarificationGapEvaluator.OpenGap("g_or", false, "Use option A or option B for timeouts?");
         WorkProfileDefinition profile =
                 new WorkProfileDefinition(
                         "p",
@@ -263,27 +95,38 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         true,
                         List.of(),
                         coord);
+        CanonicalPlanningGap gap = CanonicalPlanningGap.fromEvaluation(
+                "g_or",
+                "BRANCHING_DECISION",
+                "Use option A or option B for timeouts?",
+                false,
+                true,
+                false,
+                "requirements_spec/narrative/scope_summary",
+                List.of());
+
         ClarificationProjection ranked =
-                CanonicalClarificationSpreadBuilder.projectCanonicalGap(
+                CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
                         UnresolvedItemLedger.empty(),
                         profile,
                         coord,
-                        top,
+                        gap,
                         "Use option A or option B for timeouts?",
-                        List.of());
+                        List.of(),
+                        QuestionMode.OPEN);
         assertFalse(ranked.useStructuredChoices());
         assertTrue(ranked.userInputRequired());
     }
 
     @Test
-    void splitExpansionSkipsFullRescanAfterMergedClarification() {
+    void silentSynthesisSkipsFullRescanAfterMergedClarification() {
         WorkProfileRegistry registry = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         FeaturePlanState plan = bareFeaturePlanV2();
         FeaturePlanStateStore store = new FeaturePlanStateStore();
         store.update(plan);
         PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, registry);
         Map<String, Object> spread =
-                pipeline.runExpansionPhaseOnly(
+                pipeline.runSilentSynthesisOnly(
                         null,
                         Map.of(
                                 "contextId", "c",
@@ -291,52 +134,86 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         Map.of());
         assertTrue("true".equals(spread.get("planningSelectiveRerunActive")));
         assertTrue(String.valueOf(spread.get("planningSelectiveRerunNote")).contains("skipping a full re-scan"));
-        assertFalse(spread.containsKey("planningPartialAggregatedFollowUpsJson"));
     }
 
-    private static FeaturePlanState bareFeaturePlan() {
-        return bareFeaturePlanWithRequest("Short request");
+    @Test
+    void evaluationOnlyProjectsSingleCanonicalAsk() throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> evaluationResponse = assistantResponse(
+                """
+                {
+                  "confidence": { "score": 41, "level": "medium", "summary": "One authority question remains." },
+                  "gaps": [
+                    { "id": "missing_authority", "kind": "MISSING_AUTHORITY", "description": "Need rollout approver.", "blocking": true, "askable": true, "assumable": false, "merge_target_path": "requirements_spec/narrative/scope_summary" }
+                  ],
+                  "ask_user_required": true,
+                  "best_question": { "text": "Who approves the rollout boundary for this feature?", "rationale": "This unlocks packet readiness." },
+                  "assumptions_to_add": [],
+                  "issues_to_add": [],
+                  "risks_to_add": [],
+                  "decisions_to_add": [],
+                  "ready_for_packet": false
+                }
+                """);
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(evaluationResponse);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+        TestContext ctx = createContext("ctx-eval-success", client);
+
+        Map<String, Object> spread =
+                ctx.pipeline().runEvaluationOnly(
+                        null,
+                        Map.of(
+                                "contextId", ctx.plan().getContextId(),
+                                PlanningCyclePipeline.PARTIAL_DEPTH_OK_KEY, "true",
+                                PlanningCyclePipeline.PARTIAL_DEPTH_REASON_KEY, "",
+                                PlanningCyclePipeline.PARTIAL_LAST_ROLE_SUMMARY_KEY, "silent synthesis complete",
+                                PlanningCyclePipeline.PARTIAL_LAST_SYNTH_KEY, "evaluation next"),
+                        Map.of());
+
+        assertEquals("ASK_USER", spread.get("planningCanonicalNextAction"));
+        assertEquals("true", spread.get("planningCanonicalUserInputRequired"));
+        assertEquals("Who approves the rollout boundary for this feature?", spread.get("planningClarificationQuestionText"));
+        assertTrue(String.valueOf(spread.get("planningClarificationMetaJson")).contains("missing_authority"));
+        assertFalse(spread.containsKey("planningUserInputRequired"));
     }
 
-    private static FeaturePlanState bareFeaturePlanWithRequest(String request) {
-        return new FeaturePlanState(
-                "c",
-                "f",
-                "s",
-                "room",
-                null,
-                null,
-                "t",
-                request,
-                "PLANNING",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                FeaturePlanState.initialSectionStatuses(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "software_feature_planning",
-                Map.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+    private static TestContext createContext(String contextId, OpenAiChatClient client) {
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        WorkProfileRegistry registry = TestWorkProfiles.loadFromRepoConfig();
+        InitializeFeaturePlanStateAction init =
+                new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId", contextId,
+                                "channelId", "room-" + contextId,
+                                "repoRef", "perfectedge13/Vinekeepers",
+                                "initialRequest", "Improve planning evaluation"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+        return new TestContext(
+                new PlanningCyclePipeline(client, planStore, registry),
+                planStore.getByContextId(contextId).orElseThrow());
     }
+
+    @SuppressWarnings("unchecked")
+    private static HttpResponse<String> assistantResponse(String body) {
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn("""
+                {"choices":[{"message":{"content":%s}}]}
+                """.formatted(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(body).toString()));
+        return response;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static HttpResponse.BodyHandler<String> anyBodyHandler() {
+        return (HttpResponse.BodyHandler) any(HttpResponse.BodyHandler.class);
+    }
+
+    private record TestContext(PlanningCyclePipeline pipeline, FeaturePlanState plan) {}
 
     private static FeaturePlanState bareFeaturePlanV2() {
         return new FeaturePlanState(

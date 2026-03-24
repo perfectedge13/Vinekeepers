@@ -1,7 +1,5 @@
 package com.vinekeepers.workflow.planning;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
@@ -28,8 +26,6 @@ public final class PlanningCanonicalDecisionSupport {
     public static final String CANONICAL_TOP_GAP_ID_KEY = "planningCanonicalTopGapId";
     public static final String CANONICAL_TOP_GAP_TEXT_KEY = "planningCanonicalTopGap";
     public static final String LAST_MATERIAL_CHANGE_FP_KEY = "planningLastMaterialStateChangeFingerprint";
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private PlanningCanonicalDecisionSupport() {}
 
@@ -81,7 +77,7 @@ public final class PlanningCanonicalDecisionSupport {
         spread.put(CANONICAL_TOP_GAP_TEXT_KEY, decision.topUnresolvedGap());
         spread.put(CANONICAL_TOP_GAP_ID_KEY, decision.topUnresolvedGapId());
         spread.put("planningCanonicalBlockingReason", decision.blockingReason());
-        if (decision.nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION) {
+        if (decision.nextAction() == PlanningCanonicalNextAction.ASK_USER) {
             spread.put("planningClarificationQuestionText", decision.questionText());
         } else {
             spread.put("planningClarificationQuestionText", "");
@@ -93,143 +89,10 @@ public final class PlanningCanonicalDecisionSupport {
         spread.put(LAST_MATERIAL_CHANGE_FP_KEY, decision.materialStateChangeFingerprint());
     }
 
-    public static String repoGroundingState(FeaturePlanState plan, String planningRepoEvidenceJson) {
-        if (plan == null) {
-            return "NOT_MATERIALIZED";
-        }
-        String workspace = plan.getRepoWorkspaceStatus() != null ? plan.getRepoWorkspaceStatus().trim() : "";
-        boolean materialized = "MATERIALIZED".equalsIgnoreCase(workspace) || "RESOLVED_LOCAL".equalsIgnoreCase(workspace);
-        if (!materialized) {
-            return "NOT_MATERIALIZED";
-        }
-        if (repoEvidenceScore(planningRepoEvidenceJson) >= 0.55d) {
-            return "INSPECTED";
-        }
-        return "MATERIALIZED_NOT_INSPECTED";
-    }
-
     /**
-     * Live {@code canonical_v1}: {@link PlanningCanonicalNextAction#ASK_ONE_QUESTION} is authorized only when the coordinator
-     * engine has an askable gap ({@code canonicalGapAuthorizesAsk}); otherwise {@link #normalizePostDraft} applies from
-     * {@link PlanningMaterialRoutingOutcome} (material pacing — not clarification policy). {@code BLOCK} from material
-     * pacing always wins over an ask.
+     * Post-critique canonical routing. Question text and gap id must come from validated evaluation-backed clarification
+     * projection, never from free-text plan fields.
      */
-    public static PlanningCanonicalDecision normalizePostDraftCanonicalV1(
-            FeaturePlanState plan,
-            PlanningMaterialRoutingOutcome material,
-            boolean canonicalGapAuthorizesAsk,
-            ClarificationProjection ranked,
-            String planningRepoEvidenceJson,
-            String topGapId,
-            String materialStateChangeFingerprint) {
-        if (material != null
-                && material.action() == PlanningPostDraftAction.BLOCK) {
-            return normalizePostDraft(
-                    plan, material, ranked, planningRepoEvidenceJson, topGapId, materialStateChangeFingerprint);
-        }
-        if (canonicalGapAuthorizesAsk) {
-            String questionText =
-                    ranked != null && ranked.questionText() != null ? ranked.questionText().trim() : "";
-            FeaturePlanState effectivePlan = plan;
-            return PlanningCanonicalDecision.create(
-                    "post_draft",
-                    PlanningIntakeStage.CLARIFYING,
-                    PlanningCanonicalNextAction.ASK_ONE_QUESTION,
-                    PlanningInteractionState.WAITING_FOR_TEXT_REPLY,
-                    repoGroundingState(effectivePlan, planningRepoEvidenceJson),
-                    confidenceSummary(effectivePlan),
-                    false,
-                    false,
-                    false,
-                    topGapText(ranked, effectivePlan),
-                    topGapId,
-                    questionText,
-                    "",
-                    effectivePlan != null
-                            ? effectivePlan.getAssumptions().stream()
-                                    .map(a -> a.getStatement())
-                                    .filter(s -> s != null && !s.isBlank())
-                                    .toList()
-                            : List.of(),
-                    materialStateChangeFingerprint);
-        }
-        return normalizePostDraft(
-                plan, material, ranked, planningRepoEvidenceJson, topGapId, materialStateChangeFingerprint);
-    }
-
-    public static PlanningCanonicalDecision normalizePostDraft(
-            FeaturePlanState plan,
-            PlanningMaterialRoutingOutcome material,
-            ClarificationProjection ranked,
-            String planningRepoEvidenceJson,
-            String topGapId,
-            String materialStateChangeFingerprint) {
-        FeaturePlanState effectivePlan = plan;
-        PlanningCanonicalNextAction nextAction = PlanningCanonicalNextAction.BLOCK;
-        PlanningIntakeStage stage = PlanningIntakeStage.FAILED;
-        PlanningInteractionState interaction = PlanningInteractionState.NONE;
-        boolean packetPostingAllowed = false;
-        boolean reviewAllowed = false;
-        boolean approvalAllowed = false;
-        String questionText = ranked != null && ranked.questionText() != null ? ranked.questionText().trim() : "";
-        String blockingReason = material != null ? blankToEmpty(material.noticeMarkdown()) : "";
-        if (material != null) {
-            switch (material.action()) {
-                case ASK_ONE_QUESTION -> {
-                    nextAction = PlanningCanonicalNextAction.ASK_ONE_QUESTION;
-                    stage = PlanningIntakeStage.CLARIFYING;
-                    interaction = PlanningInteractionState.WAITING_FOR_TEXT_REPLY;
-                    packetPostingAllowed = false;
-                }
-                case POST_PACKET -> {
-                    nextAction = PlanningCanonicalNextAction.POST_PACKET;
-                    stage = PlanningIntakeStage.DRAFTING;
-                    packetPostingAllowed = true;
-                }
-                case AUTONOMOUS_REDRAFT -> {
-                    nextAction = PlanningCanonicalNextAction.AUTONOMOUS_REDRAFT;
-                    stage = PlanningIntakeStage.DRAFTING;
-                }
-                case ASSUME_AND_CONTINUE -> {
-                    boolean canPost = material.readyToPostPacket();
-                    boolean changed = hasMaterialChange(plan, materialStateChangeFingerprint);
-                    if (canPost && changed) {
-                        nextAction = PlanningCanonicalNextAction.POST_PACKET;
-                        stage = PlanningIntakeStage.DRAFTING;
-                        packetPostingAllowed = true;
-                    } else if (changed) {
-                        nextAction = PlanningCanonicalNextAction.AUTONOMOUS_REDRAFT;
-                        stage = PlanningIntakeStage.DRAFTING;
-                    } else {
-                        nextAction = PlanningCanonicalNextAction.BLOCK;
-                        stage = PlanningIntakeStage.FAILED;
-                        blockingReason = "No legal canonical action remained after assumption-handling normalization.";
-                    }
-                }
-                case BLOCK -> {
-                    nextAction = PlanningCanonicalNextAction.BLOCK;
-                    stage = PlanningIntakeStage.FAILED;
-                }
-            }
-        }
-        return PlanningCanonicalDecision.create(
-                "post_draft",
-                stage,
-                nextAction,
-                interaction,
-                repoGroundingState(effectivePlan, planningRepoEvidenceJson),
-                confidenceSummary(effectivePlan),
-                packetPostingAllowed,
-                reviewAllowed,
-                approvalAllowed,
-                topGapText(ranked, effectivePlan),
-                topGapId,
-                questionText,
-                blockingReason,
-                effectivePlan != null ? effectivePlan.getAssumptions().stream().map(a -> a.getStatement()).filter(s -> s != null && !s.isBlank()).toList() : List.of(),
-                materialStateChangeFingerprint);
-    }
-
     public static PlanningCanonicalDecision normalizePostCritique(
             FeaturePlanState plan,
             String readinessStatus,
@@ -237,22 +100,44 @@ public final class PlanningCanonicalDecisionSupport {
             boolean autoRevisionCapped,
             String planningRepoEvidenceJson,
             String materialStateChangeFingerprint,
-            String blockingReason) {
+            String blockingReason,
+            String clarificationQuestionText,
+            String clarificationGapId) {
         String status = readinessStatus != null ? readinessStatus : "";
+        String q = clarificationQuestionText != null ? clarificationQuestionText.trim() : "";
+        String gid = clarificationGapId != null ? clarificationGapId.trim() : "";
         if (wantsClarification) {
+            if (q.isBlank()) {
+                return PlanningCanonicalDecision.create(
+                        "post_critique",
+                        PlanningIntakeStage.FAILED,
+                        PlanningCanonicalNextAction.BLOCK,
+                        PlanningInteractionState.NONE,
+                        notMaterializedFallback(plan, planningRepoEvidenceJson),
+                        confidenceSummary(plan),
+                        false,
+                        false,
+                        false,
+                        "",
+                        "",
+                        "",
+                        "Critique requested clarification but no evaluation-authorized question was available.",
+                        List.of(),
+                        materialStateChangeFingerprint);
+            }
             return PlanningCanonicalDecision.create(
                     "post_critique",
                     PlanningIntakeStage.CLARIFYING,
-                    PlanningCanonicalNextAction.ASK_ONE_QUESTION,
+                    PlanningCanonicalNextAction.ASK_USER,
                     PlanningInteractionState.WAITING_FOR_TEXT_REPLY,
-                    repoGroundingState(plan, planningRepoEvidenceJson),
+                    notMaterializedFallback(plan, planningRepoEvidenceJson),
                     confidenceSummary(plan),
                     false,
                     false,
                     false,
-                    firstUnresolvedQuestion(plan),
-                    "",
-                    firstUnresolvedQuestion(plan),
+                    q,
+                    gid,
+                    q,
                     "",
                     List.of(),
                     materialStateChangeFingerprint);
@@ -261,14 +146,14 @@ public final class PlanningCanonicalDecisionSupport {
             return PlanningCanonicalDecision.create(
                     "post_critique",
                     PlanningIntakeStage.DRAFTING,
-                    PlanningCanonicalNextAction.AUTONOMOUS_REDRAFT,
+                    PlanningCanonicalNextAction.CONTINUE_SYNTHESIS,
                     PlanningInteractionState.NONE,
-                    repoGroundingState(plan, planningRepoEvidenceJson),
+                    notMaterializedFallback(plan, planningRepoEvidenceJson),
                     confidenceSummary(plan),
                     false,
                     false,
                     false,
-                    firstUnresolvedQuestion(plan),
+                    "",
                     "",
                     "",
                     "",
@@ -281,12 +166,12 @@ public final class PlanningCanonicalDecisionSupport {
                     PlanningIntakeStage.FAILED,
                     PlanningCanonicalNextAction.BLOCK,
                     PlanningInteractionState.NONE,
-                    repoGroundingState(plan, planningRepoEvidenceJson),
+                    notMaterializedFallback(plan, planningRepoEvidenceJson),
                     confidenceSummary(plan),
                     false,
                     false,
                     false,
-                    firstUnresolvedQuestion(plan),
+                    "",
                     "",
                     "",
                     blankToEmpty(blockingReason),
@@ -304,33 +189,19 @@ public final class PlanningCanonicalDecisionSupport {
         return PlanningCanonicalDecision.create(
                 "post_critique",
                 stage,
-                PlanningCanonicalNextAction.POST_PACKET,
+                PlanningCanonicalNextAction.READY_FOR_PACKET,
                 approvalAllowed ? PlanningInteractionState.WAITING_FOR_APPROVAL_INTERACTION : PlanningInteractionState.NONE,
-                repoGroundingState(plan, planningRepoEvidenceJson),
+                notMaterializedFallback(plan, planningRepoEvidenceJson),
                 confidenceSummary(plan),
                 false,
                 reviewAllowed,
                 approvalAllowed,
-                firstUnresolvedQuestion(plan),
+                "",
                 "",
                 "",
                 "",
                 List.of(),
                 materialStateChangeFingerprint);
-    }
-
-    private static String firstUnresolvedQuestion(FeaturePlanState plan) {
-        if (plan == null || plan.getUnresolvedQuestions().isEmpty()) {
-            return "";
-        }
-        return plan.getUnresolvedQuestions().getFirst();
-    }
-
-    private static String topGapText(ClarificationProjection ranked, FeaturePlanState plan) {
-        if (ranked != null && ranked.questionText() != null && !ranked.questionText().isBlank()) {
-            return ranked.questionText().trim();
-        }
-        return firstUnresolvedQuestion(plan);
     }
 
     private static String confidenceSummary(FeaturePlanState plan) {
@@ -342,18 +213,6 @@ public final class PlanningCanonicalDecisionSupport {
             return "";
         }
         return c.getNotes() != null ? c.getNotes() : "";
-    }
-
-    private static double repoEvidenceScore(String planningRepoEvidenceJson) {
-        if (planningRepoEvidenceJson == null || planningRepoEvidenceJson.isBlank()) {
-            return -1.0d;
-        }
-        try {
-            JsonNode n = JSON.readTree(planningRepoEvidenceJson.trim());
-            return n.path("repoGroundingScore").asDouble(-1.0d);
-        } catch (Exception e) {
-            return -1.0d;
-        }
     }
 
     private static boolean hasMaterialChange(FeaturePlanState plan, String fingerprint) {
@@ -380,6 +239,19 @@ public final class PlanningCanonicalDecisionSupport {
 
     private static String blankToEmpty(String raw) {
         return raw == null ? "" : raw.trim();
+    }
+
+    private static String notMaterializedFallback(FeaturePlanState plan, String planningRepoEvidenceJson) {
+        if (plan == null) {
+            return "NOT_MATERIALIZED";
+        }
+        String workspace = plan.getRepoWorkspaceStatus() != null ? plan.getRepoWorkspaceStatus().trim() : "";
+        if ("MATERIALIZED".equalsIgnoreCase(workspace) || "RESOLVED_LOCAL".equalsIgnoreCase(workspace)) {
+            return planningRepoEvidenceJson != null && !planningRepoEvidenceJson.isBlank()
+                    ? "INSPECTED"
+                    : "MATERIALIZED_NOT_INSPECTED";
+        }
+        return "NOT_MATERIALIZED";
     }
 
     private static PlanningIntakeStage parseStage(String raw) {

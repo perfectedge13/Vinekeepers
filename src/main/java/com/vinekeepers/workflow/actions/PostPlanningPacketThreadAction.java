@@ -87,7 +87,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                         getString(state, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY),
                         plan.getPlanningCanonicalDecision().nextAction().name());
         boolean packetAllowed = PlanningReadinessSpread.packetPostingAllowed(state);
-        if (!PlanningCanonicalNextAction.POST_PACKET.name().equalsIgnoreCase(canonicalNextAction)) {
+        if (!PlanningCanonicalNextAction.READY_FOR_PACKET.name().equalsIgnoreCase(canonicalNextAction)) {
             spread.put(
                     "planningPacketPostError",
                     "The canonical planning decision does not allow packet posting for this cycle.");

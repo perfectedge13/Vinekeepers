@@ -12,55 +12,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class PlanningCanonicalDecisionSupportTest {
-
-    @Test
-    void canonicalNormalizeV1_authorizedAskOverridesAssumeGovernor() {
-        FeaturePlanState plan = minimalPlan();
-        PlanningMaterialRoutingOutcome material =
-                new PlanningMaterialRoutingOutcome(
-                        PlanningPostDraftAction.ASSUME_AND_CONTINUE,
-                        PlanningPostDraftGovernor.LoopOutcome.ASSUME,
-                        "",
-                        false,
-                        false,
-                        false,
-                        "READY_FOR_REVIEW",
-                        false);
-        ClarificationProjection ranked =
-                new ClarificationProjection(
-                        true, "", "[]", "{\"gapId\":\"g1\"}", 1, List.of(), false, "What is the rollout order?");
-        PlanningCanonicalDecision d =
-                PlanningCanonicalDecisionSupport.normalizePostDraftCanonicalV1(
-                        plan, material, true, ranked, "{}", "g1", "fp");
-        assertEquals(PlanningCanonicalNextAction.ASK_ONE_QUESTION, d.nextAction());
-        assertEquals(PlanningIntakeStage.CLARIFYING, d.stage());
-        assertEquals("What is the rollout order?", d.questionText());
-    }
-
-    @Test
-    void canonicalNormalizeV1_governorBlockWinsOverAuthorizedGap() {
-        FeaturePlanState plan = minimalPlan();
-        PlanningMaterialRoutingOutcome material =
-                new PlanningMaterialRoutingOutcome(
-                        PlanningPostDraftAction.BLOCK,
-                        PlanningPostDraftGovernor.LoopOutcome.BLOCK,
-                        "**Planning paused**",
-                        false,
-                        false,
-                        false,
-                        "FAILED",
-                        false);
-        ClarificationProjection ranked =
-                new ClarificationProjection(
-                        true, "", "[]", "{\"gapId\":\"g1\"}", 1, List.of(), false, "Ignored when blocked");
-        PlanningCanonicalDecision d =
-                PlanningCanonicalDecisionSupport.normalizePostDraftCanonicalV1(
-                        plan, material, true, ranked, "{}", "g1", "fp");
-        assertEquals(PlanningCanonicalNextAction.BLOCK, d.nextAction());
-        assertEquals(PlanningIntakeStage.FAILED, d.stage());
-    }
 
     @Test
     void projectToSpread_clearsClarificationCarrierWhenNotAsk() {
@@ -74,7 +28,7 @@ class PlanningCanonicalDecisionSupportTest {
                 PlanningCanonicalDecision.create(
                         "post_draft",
                         PlanningIntakeStage.DRAFTING,
-                        PlanningCanonicalNextAction.POST_PACKET,
+                        PlanningCanonicalNextAction.READY_FOR_PACKET,
                         PlanningInteractionState.NONE,
                         "MATERIALIZED",
                         "",
@@ -102,7 +56,7 @@ class PlanningCanonicalDecisionSupportTest {
                 PlanningCanonicalDecision.create(
                         "post_draft",
                         PlanningIntakeStage.CLARIFYING,
-                        PlanningCanonicalNextAction.ASK_ONE_QUESTION,
+                        PlanningCanonicalNextAction.ASK_USER,
                         PlanningInteractionState.WAITING_FOR_TEXT_REPLY,
                         "MATERIALIZED",
                         "",
@@ -119,43 +73,10 @@ class PlanningCanonicalDecisionSupportTest {
         assertEquals("Only when authorized", spread.get("planningClarificationQuestionText"));
     }
 
-    private static FeaturePlanState minimalPlan() {
-        return new FeaturePlanState(
-                "c",
-                "f",
-                "s",
-                "room",
-                null,
-                null,
-                "t",
-                "req",
-                "PLANNING",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                FeaturePlanState.initialSectionStatuses(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "software_feature_planning_v2",
-                Map.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+    @Test
+    void supportNoLongerDerivesCanonicalDecisionFromEvaluation() {
+        boolean present = java.util.Arrays.stream(PlanningCanonicalDecisionSupport.class.getDeclaredMethods())
+                .anyMatch(method -> "normalizeFromEvaluation".equals(method.getName()));
+        assertFalse(present);
     }
 }

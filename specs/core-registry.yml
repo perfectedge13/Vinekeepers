@@ -256,7 +256,7 @@ requirements:
         - For Discord message and interaction events, engine applies a ~180s TTL dedupe on (sourceId, kind, messageId or interactionId) so duplicate bus publications do not run workflows twice during slow planning handling
         - >-
           Workflow runner merges action storeSpread into per-session state between steps without the engine rewriting planning-specific
-          keys; clarification-only progress summaries for ASK_ONE_QUESTION beats are produced inside PlanningCyclePipeline and flow
+          keys; clarification-only progress summaries for ASK_USER beats are produced inside PlanningCyclePipeline and flow
           through session state like other spreads
         - No bot registered for id logs warning and does not fail
       examples: []

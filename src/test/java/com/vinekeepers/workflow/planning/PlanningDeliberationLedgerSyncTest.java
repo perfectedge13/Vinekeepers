@@ -28,7 +28,7 @@ class PlanningDeliberationLedgerSyncTest {
                         "",
                         original,
                         "blocking",
-                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL),
+                        Map.of("channel", UnresolvedItemLedger.PLANNING_CLARIFICATION_CHANNEL),
                         List.of(Map.of("raw", "yes", "normalized", "yes")),
                         List.of(),
                         0);
@@ -43,7 +43,8 @@ class PlanningDeliberationLedgerSyncTest {
                         1,
                         List.of(),
                         false,
-                        paraphrase);
+                        paraphrase,
+                        "");
 
         PlanningDeliberationLedgerSync.UpsertResult out =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, ranked);
@@ -60,7 +61,7 @@ class PlanningDeliberationLedgerSyncTest {
                         "",
                         "Still there?",
                         "normal",
-                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL, "gapId", "old_gap"),
+                        Map.of("channel", UnresolvedItemLedger.PLANNING_CLARIFICATION_CHANNEL, "gapId", "old_gap"),
                         List.of(),
                         List.of(),
                         0);
@@ -89,7 +90,8 @@ class PlanningDeliberationLedgerSyncTest {
                         0,
                         List.of(),
                         false,
-                        "Q?");
+                        "Q?",
+                        "my_gap");
         PlanningDeliberationLedgerSync.UpsertResult out =
                 PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
                         UnresolvedItemLedger.empty(), ranked, "my_gap", false, 2, "NARROW");
@@ -114,7 +116,7 @@ class PlanningDeliberationLedgerSyncTest {
                         "",
                         "First?",
                         "normal",
-                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        Map.of("channel", UnresolvedItemLedger.PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
                         List.of(),
                         List.of(),
                         0);
@@ -126,7 +128,7 @@ class PlanningDeliberationLedgerSyncTest {
                         "",
                         "Second?",
                         "normal",
-                        Map.of("channel", PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
+                        Map.of("channel", UnresolvedItemLedger.PLANNING_CLARIFICATION_CHANNEL, "gapId", "g1"),
                         List.of(),
                         List.of(),
                         0);

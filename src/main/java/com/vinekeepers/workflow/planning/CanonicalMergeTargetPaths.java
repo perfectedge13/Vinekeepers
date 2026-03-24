@@ -11,4 +11,12 @@ public final class CanonicalMergeTargetPaths {
     public static String defaultMergeTargetPath(@SuppressWarnings("unused") String gapId) {
         return "decision_log/decisions/decision_text";
     }
+
+    /** True when {@code mergeTargetPath} matches the canonical slice for this gap (no fuzzy recovery). */
+    public static boolean declaredMergeTargetMatchesGap(String mergeTargetPath, String gapId) {
+        if (mergeTargetPath == null || mergeTargetPath.isBlank() || gapId == null || gapId.isBlank()) {
+            return false;
+        }
+        return defaultMergeTargetPath(gapId.trim()).equals(mergeTargetPath.trim());
+    }
 }

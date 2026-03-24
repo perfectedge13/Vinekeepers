@@ -19,6 +19,9 @@ public final class UnresolvedItemLedger {
 
     public static final String STATE_JSON_KEY = "workflowUnresolvedItemsJson";
 
+    /** Ledger {@code source.channel} for coordinator planning clarification rows. */
+    public static final String PLANNING_CLARIFICATION_CHANNEL = "planning_clarification";
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final List<UnresolvedItem> items;
@@ -126,7 +129,7 @@ public final class UnresolvedItemLedger {
             if (it.getStatus() != UnresolvedItemStatus.OPEN) {
                 continue;
             }
-            if (!"planning_clarification".equals(it.getSource().get("channel"))) {
+            if (!PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"))) {
                 continue;
             }
             String g = it.getSource().get("gapId");
@@ -185,7 +188,7 @@ public final class UnresolvedItemLedger {
         if (keepId.equals(it.getId())) {
             return false;
         }
-        return "planning_clarification".equals(it.getSource().get("channel"));
+        return PLANNING_CLARIFICATION_CHANNEL.equals(it.getSource().get("channel"));
     }
 
     public Optional<UnresolvedItem> findByFingerprint(String fingerprint) {

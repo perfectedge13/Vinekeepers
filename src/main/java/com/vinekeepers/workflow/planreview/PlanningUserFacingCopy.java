@@ -4,7 +4,9 @@ import com.vinekeepers.profile.ArtifactDefinition;
 import com.vinekeepers.profile.FieldDefinition;
 import com.vinekeepers.profile.SectionDefinition;
 import com.vinekeepers.profile.WorkProfileDefinition;
+import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
+import com.vinekeepers.workflow.planning.ClarificationProjection;
 
 import java.util.Locale;
 import java.util.Optional;
@@ -149,8 +151,76 @@ public final class PlanningUserFacingCopy {
                     "A drafting step made no applicable updates this pass.";
             case "REPO_GROUNDING_UNAVAILABLE" ->
                     "Repo grounding was not available for this drafting pass; continuing with limited workspace context.";
+            case "WORKSPACE_BLOCKED" ->
+                    "Workspace setup is blocking planning; fix the workspace issue shown above before coordinator drafting continues.";
+            case "PLANNING_REQUIRES_CANONICAL_V1" ->
+                    "This room requires canonical coordinator clarification mode; check the work profile configuration.";
+            case "CLARIFICATION_COMPOSER_FAILED" ->
+                    "The coordinator could not produce a safe clarification question this cycle; try again or adjust profile prompts.";
             default -> "Planning hit an unexpected issue; try again or check configuration.";
         };
+    }
+
+    /**
+     * Coordinator cycle summary for Discord threads (presentation only; callers supply facts from spread / projection).
+     * Parameter shape matches the former {@code PlanningCyclePipeline.buildOrchestratorSummary} for stable tests.
+     */
+    public static String planningOrchestratorRoundSummary(
+            FeaturePlanState plan,
+            boolean depthOk,
+            String depthReason,
+            ClarificationProjection ranked,
+            int cycleIteration,
+            boolean readyToPostPacket,
+            boolean coordinatorLegacyBoolean,
+            String workspaceSummaryLine,
+            boolean surfaceWaitingForUserDetail,
+            boolean structuredParseFailed) {
+        if (structuredParseFailed) {
+            return "**Planning update**\n\n"
+                    + "The latest structured coordinator pass returned output that **could not be applied cleanly**. "
+                    + "Keeping your saved draft; we'll try another pass unless you reply with a constraint.";
+        }
+        if (readyToPostPacket) {
+            return "**Planning update**\n\nNext I'll post the packet and run readiness checks.";
+        }
+        if (ranked != null
+                && ranked.userInputRequired()
+                && ranked.questionText() != null
+                && !ranked.questionText().isBlank()) {
+            String q = ranked.questionText().trim();
+            String depthBit =
+                    depthOk ? "Depth check passed for this cycle." : "Still tightening structure before review.";
+            return "**Need from you**\n"
+                    + q
+                    + "\n\n**What I'm tracking**\n"
+                    + depthBit
+                    + " (cycle "
+                    + cycleIteration
+                    + ").\n\n"
+                    + (ranked.useStructuredChoices()
+                            ? "Use the action menu if shown, or reply with one clear answer."
+                            : "Reply in **plain text** with one concrete answer.");
+        }
+        String ws = workspaceSummaryLine != null ? workspaceSummaryLine.trim() : "";
+        if (!ws.isBlank()) {
+            return ws;
+        }
+        if (surfaceWaitingForUserDetail) {
+            return "**Planning update**\n\nPaused until the detail below is answered — reply when you can.";
+        }
+        String title = plan != null && plan.getTitle() != null ? plan.getTitle().trim() : "";
+        String head = title.isBlank() ? "Planning" : title;
+        String dr = depthReason != null ? depthReason.trim() : "";
+        boolean legacy = coordinatorLegacyBoolean;
+        return "**"
+                + head
+                + "**\n\n"
+                + (depthOk
+                        ? "In good shape — continuing."
+                        : "Working through drafting checks"
+                                + (dr.isBlank() ? "." : ": " + dr)
+                                + (legacy ? " (coordinator follow-up)." : ""));
     }
 
     /**
@@ -173,6 +243,12 @@ public final class PlanningUserFacingCopy {
                     "The merge target path is not valid for this profile; reply was not written into the plan.";
             case "AMBIGUOUS_REPLY" ->
                     "Your reply did not match a single clear option; try again with one concrete answer.";
+            case "MERGE_TARGET_MISMATCH" ->
+                    "The clarification metadata does not match this gap's merge contract; nothing was written.";
+            case "PARTIAL_MERGE" ->
+                    "Only part of your answer was recorded; you can clarify further on the next question if needed.";
+            case "CONTRADICTION_RECORDED" ->
+                    "Your answer conflicts with the current draft; we recorded it and lowered confidence until the next pass.";
             default -> "That reply could not be applied; try again.";
         };
     }
