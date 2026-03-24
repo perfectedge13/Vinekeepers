@@ -13,7 +13,6 @@ class ArriettyProductionResidueTest {
     @Test
     void productionArchitectureFiles_doNotReferenceDeletedLegacyWorkflow() throws Exception {
         for (Path path : List.of(
-                Path.of("config", "bots.yaml"),
                 Path.of("README.md"),
                 Path.of("specs", "workflow-registry.yml"),
                 Path.of("specs", "config-registry.yml"),

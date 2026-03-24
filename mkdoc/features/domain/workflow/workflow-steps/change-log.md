@@ -4,6 +4,7 @@
 
 ## 2026-03-24
 
+- **Planning cycle projection adapters:** **`PlanningCyclePipeline`** keeps orchestration only; workflow spread shaping for clarification (including pre-canonical evaluation merge), progress/fingerprint/user-copy lines, repeat/stuck hints (**`PlanningClarificationRepeatTracker`**), and post-canonical tail fields lives in **`PlanningClarificationProjectionAdapter`**, **`PlanningProgressProjection`**, **`PlanningPipelineProjectionAdapter`**, and **`PlanningMaterialSpreadDefaults`** (base spread seed). **`PlanningCanonicalDecisionSupport.projectCanonicalCoreToSpread`** plus **`applyFromCanonicalDecision`** preserve hydrate/critique **`projectToSpread`** behavior.
 - **Canonical planning spine cutover (mk sync):** Documented production path now matches the live architecture: **`PlanningWorkspacePreflightService`** → **`SilentPlanningSynthesisService`** → **`PlanningEvaluationService`** → deterministic canonical routing. Clarification remains a transport layer (`ClarificationProjection.fromSelection`, merge contract on `gapId` + `mergeTargetPath`), while gap analysis, confidence, one-question selection, and ready-for-packet all come from the single evaluation pass. Updated **Key assets**, **how-it-works**, **contracts**, **tests**, **README**, and registry copy to remove transition-state descriptions.
 
 ## 2026-03-23

@@ -58,7 +58,11 @@ public final class PlanningCanonicalDecisionSupport {
                 stringValue(state.get(LAST_MATERIAL_CHANGE_FP_KEY)));
     }
 
-    public static void projectToSpread(Map<String, Object> spread, PlanningCanonicalDecision decision) {
+    /**
+     * Canonical decision fields without clarification-shaped keys; use with {@link
+     * PlanningClarificationProjectionAdapter#applyFromCanonicalDecision} or evaluation overlays.
+     */
+    public static void projectCanonicalCoreToSpread(Map<String, Object> spread, PlanningCanonicalDecision decision) {
         if (spread == null || decision == null) {
             return;
         }
@@ -77,16 +81,12 @@ public final class PlanningCanonicalDecisionSupport {
         spread.put(CANONICAL_TOP_GAP_TEXT_KEY, decision.topUnresolvedGap());
         spread.put(CANONICAL_TOP_GAP_ID_KEY, decision.topUnresolvedGapId());
         spread.put("planningCanonicalBlockingReason", decision.blockingReason());
-        if (decision.nextAction() == PlanningCanonicalNextAction.ASK_USER) {
-            spread.put("planningClarificationQuestionText", decision.questionText());
-        } else {
-            spread.put("planningClarificationQuestionText", "");
-            spread.put("planningClarificationChoicesJson", "[]");
-            spread.put("planningClarificationMetaJson", "{}");
-            spread.put("planningClarificationOrchestratorPrompt", "");
-            spread.put("planningClarificationUseStructuredChoices", "false");
-        }
         spread.put(LAST_MATERIAL_CHANGE_FP_KEY, decision.materialStateChangeFingerprint());
+    }
+
+    public static void projectToSpread(Map<String, Object> spread, PlanningCanonicalDecision decision) {
+        projectCanonicalCoreToSpread(spread, decision);
+        PlanningClarificationProjectionAdapter.applyFromCanonicalDecision(spread, decision);
     }
 
     /**

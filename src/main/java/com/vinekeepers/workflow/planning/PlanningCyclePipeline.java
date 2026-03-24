@@ -9,7 +9,6 @@ import com.vinekeepers.state.planning.PlanningCanonicalDecision;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
-import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.LinkedHashMap;
@@ -37,11 +36,21 @@ public final class PlanningCyclePipeline {
     public static final String PARTIAL_LAST_SYNTH_KEY = "planningPartialLastSynthLlmLine";
     public static final String PARTIAL_DEPTH_OK_KEY = "planningPartialDepthOk";
     public static final String PARTIAL_DEPTH_REASON_KEY = "planningPartialDepthReason";
-    public static final String PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY = "planningClarificationConfidenceScore";
-    public static final String PLANNING_CLARIFICATION_CONFIDENCE_HIGH_KEY = "planningClarificationConfidenceHigh";
+
+    public static final String PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY =
+            PlanningClarificationProjectionAdapter.CLARIFICATION_CONFIDENCE_SCORE_KEY;
+    public static final String PLANNING_CLARIFICATION_CONFIDENCE_HIGH_KEY =
+            PlanningClarificationProjectionAdapter.CLARIFICATION_CONFIDENCE_HIGH_KEY;
 
     private record LoadedCycle(
             String contextId, FeaturePlanState plan, WorkProfileDefinition profile, Map<String, Object> work) {}
+
+    private record EvaluationLedgerPhase(
+            PlanningEvaluationDecision decision,
+            FeaturePlanState plan,
+            ClarificationProjection projection,
+            PlanningDeliberationLedgerSync.UpsertResult upsert,
+            boolean structuredParseFailed) {}
 
     private final FeaturePlanStateStore planStateStore;
     private final WorkProfileRegistry workProfileRegistry;
@@ -62,7 +71,7 @@ public final class PlanningCyclePipeline {
         Map<String, Object> spread = baseSpread();
         LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
         if (ctx == null) {
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
         String contextId = ctx.contextId();
@@ -76,13 +85,13 @@ public final class PlanningCyclePipeline {
             spread.put("planningWorkspaceUserInputRequired", "true");
             spread.put("planningWorkspaceBlockerPrompt", workspacePre.userPrompt());
             putPlanningRoomCycleError(spread, "WORKSPACE_BLOCKED");
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
 
         if (!profile.getCoordinatorClarification().isCanonicalV1()) {
             putPlanningRoomCycleError(spread, "PLANNING_REQUIRES_CANONICAL_V1");
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
 
@@ -127,7 +136,7 @@ public final class PlanningCyclePipeline {
         Map<String, Object> spread = baseSpread();
         LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
         if (ctx == null) {
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
         String contextId = ctx.contextId();
@@ -141,13 +150,13 @@ public final class PlanningCyclePipeline {
             spread.put("planningWorkspaceUserInputRequired", "true");
             spread.put("planningWorkspaceBlockerPrompt", workspacePre.userPrompt());
             putPlanningRoomCycleError(spread, "WORKSPACE_BLOCKED");
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
 
         if (!profile.getCoordinatorClarification().isCanonicalV1()) {
             putPlanningRoomCycleError(spread, "PLANNING_REQUIRES_CANONICAL_V1");
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
 
@@ -173,15 +182,9 @@ public final class PlanningCyclePipeline {
         spread.put(PARTIAL_LAST_SYNTH_KEY, synthesis.lastSynthLlmLine());
         spread.put(PARTIAL_DEPTH_OK_KEY, synthesis.depthOk() ? "true" : "false");
         spread.put(PARTIAL_DEPTH_REASON_KEY, synthesis.depthReason() != null ? synthesis.depthReason() : "");
-        spread.put(
-                "planningCycleProgressSummary",
-                firstNonBlank(
-                        getString(spread, "planningSelectiveRerunNote"),
-                        "Planning cycle " + cycleIteration + " — silent synthesis complete."));
-        spread.put("planningOrchestratorRoundSummary", getString(spread, "planningCycleProgressSummary"));
-        spread.put("userCopyCoordinatorProgress", getString(spread, "planningCycleProgressSummary"));
-        PlanningProgressSpreadSupport.enrichUserCopyAndProgressLog(state, spread);
-        PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+        PlanningProgressProjection.applyCycleProgressSummaryAfterSilentSynthesis(spread, cycleIteration);
+        PlanningProgressProjection.applyUserCopyAndProgressLog(state, spread);
+        PlanningProgressProjection.applyProgressFingerprint(state, spread);
         return spread;
     }
 
@@ -190,13 +193,13 @@ public final class PlanningCyclePipeline {
         Map<String, Object> spread = baseSpread();
         LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
         if (ctx == null) {
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
         WorkProfileDefinition profileFin0 = ctx.profile();
         if (!profileFin0.getCoordinatorClarification().isCanonicalV1()) {
             putPlanningRoomCycleError(spread, "PLANNING_REQUIRES_CANONICAL_V1");
-            PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
+            PlanningProgressProjection.applyProgressFingerprint(state, spread);
             return spread;
         }
         boolean depthOk = "true".equalsIgnoreCase(getString(state, PARTIAL_DEPTH_OK_KEY));
@@ -229,6 +232,69 @@ public final class PlanningCyclePipeline {
             String depthReason,
             String lastRoleRoundSummary,
             String lastSynthLlmLine) {
+        applySynthesisDepthFootersToSpread(
+                spread, state, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
+        EvaluationLedgerPhase phase =
+                evaluatePersistAndSyncLedger(
+                        event, state, spread, contextId, plan, profile, cycleIteration, depthOk, depthReason);
+        PlanningEvaluationDecision decision = phase.decision();
+        plan = phase.plan();
+        ClarificationProjection projection = phase.projection();
+        PlanningDeliberationLedgerSync.UpsertResult upsert = phase.upsert();
+
+        PlanningClarificationProjectionAdapter.applyPreCanonicalEvaluationClarification(
+                spread, upsert, projection, decision);
+
+        Map<String, Object> signal = new LinkedHashMap<>();
+        if (state != null) {
+            signal.putAll(state);
+        }
+        signal.putAll(spread);
+        String materialFingerprint = PlanningMaterialFingerprint.materialStateChangeFingerprint(signal, plan);
+        PlanningCanonicalDecision canonical =
+                decision.toCanonicalDecision(
+                        "planning_evaluation",
+                        plan != null
+                                ? plan.getAssumptions().stream()
+                                        .map(a -> a.getStatement())
+                                        .filter(s -> s != null && !s.isBlank())
+                                        .toList()
+                                : List.of(),
+                        materialFingerprint);
+        if (contextId != null && !contextId.isBlank() && plan != null) {
+            String askedDecisionId =
+                    canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER ? canonical.decisionId() : "";
+            FeaturePlanState updatedPlan =
+                    plan.withPlanningCanonicalDecision(canonical, materialFingerprint, askedDecisionId)
+                            .withPlanningIntakeStage(canonical.stage(), java.time.Instant.now());
+            planStateStore.update(updatedPlan);
+            plan = planStateStore.getByContextId(contextId).orElse(updatedPlan);
+        }
+
+        applyMaterialReadinessCanonicalAndPersistence(
+                spread,
+                signal,
+                plan,
+                canonical,
+                materialFingerprint,
+                depthOk,
+                depthReason,
+                phase.structuredParseFailed(),
+                upsert,
+                projection);
+
+        PlanningPipelineProjectionAdapter.applyPostCanonicalEvaluationTail(
+                spread, state, decision, canonical, planStateStore, contextId, cycleIteration);
+        return spread;
+    }
+
+    private void applySynthesisDepthFootersToSpread(
+            Map<String, Object> spread,
+            Map<String, Object> state,
+            boolean depthOk,
+            String depthReason,
+            String lastRoleRoundSummary,
+            String lastSynthLlmLine) {
         spread.put("planningCycleRolePassSummary", lastRoleRoundSummary != null ? lastRoleRoundSummary : "");
         spread.put("planningCycleSynthesisLlmNote", lastSynthLlmLine != null ? lastSynthLlmLine : "");
         spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
@@ -239,7 +305,21 @@ public final class PlanningCyclePipeline {
                 "true".equalsIgnoreCase(getString(state, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY))
                         || "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
         spread.put(PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY, structuredParseFailed ? "true" : "false");
+    }
 
+    private EvaluationLedgerPhase evaluatePersistAndSyncLedger(
+            Event event,
+            Map<String, Object> state,
+            Map<String, Object> spread,
+            String contextId,
+            FeaturePlanState plan,
+            WorkProfileDefinition profile,
+            int cycleIteration,
+            boolean depthOk,
+            String depthReason) {
+        boolean structuredParseFailed =
+                "true".equalsIgnoreCase(getString(state, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY))
+                        || "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
         PlanningEvaluationService.EvaluationContext evaluationContext =
                 new PlanningEvaluationService.EvaluationContext(
                         "planning_clarification",
@@ -292,53 +372,27 @@ public final class PlanningCyclePipeline {
             ledger = PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(ledger, java.util.Set.of());
             upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, projection);
         }
+        return new EvaluationLedgerPhase(decision, plan, projection, upsert, structuredParseFailed);
+    }
 
-        UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsert.ledger());
-        spread.put("planningClarificationLedgerItemId", upsert.activeItemId().orElse(""));
-        spread.put("planningCanonicalUserInputRequired", decision.askUserRequired() ? "true" : "false");
-        spread.put("planningClarificationChoicesJson", projection.choicesJson());
-        spread.put("planningClarificationMetaJson", projection.metaJson());
-        spread.put("planningClarificationUseStructuredChoices", projection.useStructuredChoices() ? "true" : "false");
-        spread.put("planningClarificationQuestionText", projection.questionText() != null ? projection.questionText() : "");
-        spread.put(
-                "planningClarificationOrchestratorPrompt",
-                projection.orchestratorPrompt() != null ? projection.orchestratorPrompt() : "");
-        spread.put(
-                PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY,
-                String.format(java.util.Locale.ROOT, "%.3f", decision.confidence().score() / 100.0));
-        spread.put(
-                PLANNING_CLARIFICATION_CONFIDENCE_HIGH_KEY,
-                decision.confidence().score() >= 67 ? "true" : "false");
-
-        Map<String, Object> signal = new LinkedHashMap<>();
-        if (state != null) {
-            signal.putAll(state);
-        }
-        signal.putAll(spread);
-        String materialFingerprint = PlanningMaterialFingerprint.materialStateChangeFingerprint(signal, plan);
-        PlanningCanonicalDecision canonical =
-                decision.toCanonicalDecision(
-                        "planning_evaluation",
-                        plan != null
-                                ? plan.getAssumptions().stream()
-                                        .map(a -> a.getStatement())
-                                        .filter(s -> s != null && !s.isBlank())
-                                        .toList()
-                                : List.of(),
-                        materialFingerprint);
-        if (contextId != null && !contextId.isBlank() && plan != null) {
-            String askedDecisionId =
-                    canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER ? canonical.decisionId() : "";
-            FeaturePlanState updatedPlan =
-                    plan.withPlanningCanonicalDecision(canonical, materialFingerprint, askedDecisionId)
-                            .withPlanningIntakeStage(canonical.stage(), java.time.Instant.now());
-            planStateStore.update(updatedPlan);
-            plan = planStateStore.getByContextId(contextId).orElse(updatedPlan);
-        }
-
+    private void applyMaterialReadinessCanonicalAndPersistence(
+            Map<String, Object> spread,
+            Map<String, Object> signal,
+            FeaturePlanState plan,
+            PlanningCanonicalDecision canonical,
+            String materialFingerprint,
+            boolean depthOk,
+            String depthReason,
+            boolean structuredParseFailed,
+            PlanningDeliberationLedgerSync.UpsertResult upsert,
+            ClarificationProjection projection) {
         PlanningMaterialCyclePacing.readinessResultAlignedWithCanonical(canonical, spread);
         PlanningReadinessSpread.applyCycleReadiness(spread);
-        PlanningCanonicalDecisionSupport.projectToSpread(spread, canonical);
+        PlanningCanonicalDecisionSupport.projectCanonicalCoreToSpread(spread, canonical);
+        PlanningClarificationProjectionAdapter.applyFromCanonicalDecision(spread, canonical);
+        if (canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER) {
+            PlanningClarificationProjectionAdapter.applyStructuredClarificationOverlayForAskUser(spread, projection);
+        }
         String situation =
                 PlanningMaterialFingerprint.revisionSituationFingerprint(
                         depthOk,
@@ -355,36 +409,6 @@ public final class PlanningCyclePipeline {
                         || canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER,
                 situation);
         spread.put(PlanningCanonicalDecisionSupport.LAST_MATERIAL_CHANGE_FP_KEY, materialFingerprint);
-
-        DeliberationEngine.applyDerivedDeliberationSpread(spread);
-        spread.put("planningAssumptionsUsed", String.valueOf(decision.assumptionsToAdd().size()));
-        spread.put(
-                "planningCycleProgressSummary",
-                firstNonBlank(
-                        getString(spread, "planningSelectiveRerunNote"),
-                        "Planning cycle " + cycleIteration + " — next: " + canonical.nextAction().name()));
-        spread.put("planningOrchestratorRoundSummary", getString(spread, "planningCycleProgressSummary"));
-        spread.put("userCopyCoordinatorProgress", getString(spread, "planningCycleProgressSummary"));
-        if (!decision.success()) {
-            spread.put(
-                    "planningCycleUserVisibleFailure",
-                    PlanningProgressSpreadSupport.truncateOneLine(
-                            PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(decision.machineError()),
-                            200));
-        }
-
-        PlanningProgressSpreadSupport.enrichUserCopyAndProgressLog(state, spread);
-        spread.put("planningJustMergedClarification", "false");
-        spread.put("planningSelectiveRerunActive", "false");
-        PlanningProgressSpreadSupport.finishProgressFingerprint(state, spread);
-        if (decision.success()) {
-            spread.put("planningAutonomousFirstPassCompleted", "true");
-            FeaturePlanState persisted = planStateStore.getByContextId(contextId).orElse(null);
-            if (persisted != null) {
-                planStateStore.update(persisted.withAutonomousPlanningPassCompleted(true));
-            }
-        }
-        return spread;
     }
 
     private static void putPlanningRoomCycleError(Map<String, Object> spread, String machine) {
@@ -426,72 +450,7 @@ public final class PlanningCyclePipeline {
     }
 
     private static Map<String, Object> baseSpread() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("planningRoomCycleError", "");
-        m.put("planningCanonicalUserInputRequired", "false");
-        m.put("planningClarificationChoicesJson", "[]");
-        m.put("planningClarificationMetaJson", "{}");
-        m.put("planningOrchestratorRoundSummary", "");
-        m.put("planningPacketDepthOk", "false");
-        m.put("planningPacketDepthReason", "");
-        m.put("planningPacketDepthRetryRecommended", "false");
-        m.put(PlanningReadinessSpread.PACKET_POSTING_ALLOWED_KEY, "false");
-        m.put(PlanningReadinessSpread.REVIEW_ALLOWED_KEY, "false");
-        m.put(PlanningReadinessSpread.APPROVAL_ALLOWED_KEY, "false");
-        m.put("planningAssumptionsUsed", "0");
-        m.put("planningRolePassLastError", "");
-        m.put(PLANNING_PASS_INTERRUPTED_KEY, "false");
-        m.put(PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY, "false");
-        m.put("planningClarificationUseStructuredChoices", "false");
-        m.put("planningClarificationQuestionText", "");
-        m.put("planningClarificationOrchestratorPrompt", "");
-        m.put("planningCycleProgressSummary", "");
-        m.put("planningProgressPostWorthy", "true");
-        m.put("planningProgressPostFingerprint", "");
-        m.put("planningClarificationStuck", "false");
-        m.put("planningClarificationStuckHint", "");
-        m.put("planningClarificationRepeatCount", "0");
-        m.put("planningClarificationLedgerItemId", "");
-        m.put("planningJustMergedClarification", "false");
-        m.put("planningHardClarificationBlockReason", "");
-        m.put("planningSelectiveRerunActive", "false");
-        m.put("planningSelectiveRerunNote", "");
-        m.put("workflowUnresolvedHasOpen", "false");
-        m.put("planningCycleRolePassSummary", "");
-        m.put("planningCycleSynthesisLlmNote", "");
-        m.put("planningCycleUserVisibleFailure", "");
-        m.put("planningLlmError", "");
-        m.put("planningLlmSkipReason", "");
-        m.put(PlanningReadinessSpread.HUMAN_READINESS_ACKNOWLEDGED_KEY, "false");
-        m.put("planningReviewReady", "false");
-        m.put("reviewReady", "false");
-        m.put("planningApprovalReady", "false");
-        m.put("approvalReady", "false");
-        m.put("planningReviewReadyReason", "");
-        m.put("reviewReadyReason", "");
-        m.put("planningApprovalReadyReason", "");
-        m.put("approvalReadyReason", "");
-        m.put("deliberationPhase", "");
-        m.put("planningRolePassOrderResolved", "");
-        m.put("planningDirtyPassesJson", "[]");
-        m.put("planningDirtyPassCount", "0");
-        m.put("userCopyProgressLine", "");
-        m.put("userCopyCoordinatorProgress", "");
-        m.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, PlanningCanonicalNextAction.BLOCK.name());
-        m.put(PlanningMaterialSpreadKeys.NOTICE_MARKDOWN_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.BASELINE_REPO_HASH_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.BASELINE_ASSUMPTION_COUNT_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.BASELINE_CRITIQUE_BLOCKING_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.BASELINE_DRAFT_FP_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.LAST_REVISION_SITUATION_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_ACTION_KEY, PlanningSynthesisAction.BLOCK.name());
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_NOTICE_MARKDOWN_KEY, "");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_FORCE_USER_INPUT_KEY, "false");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_USER_INPUT_REQUIRED_KEY, "false");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_READY_FOR_PACKET_KEY, "false");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_REVISION_NEEDED_KEY, "false");
-        m.put(PlanningMaterialSpreadKeys.MATERIAL_PACKET_POSTING_ALLOWED_KEY, "false");
-        return m;
+        return PlanningMaterialSpreadDefaults.newPlanningCycleBaseSpread();
     }
 
     private static int parseInt(String s, int dflt) {
@@ -537,5 +496,4 @@ public final class PlanningCyclePipeline {
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : (b != null && !b.isBlank() ? b : null);
     }
-
 }

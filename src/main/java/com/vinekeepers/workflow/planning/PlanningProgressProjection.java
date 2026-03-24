@@ -5,15 +5,46 @@ import com.vinekeepers.state.workflow.ProgressEventLog;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
+import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-final class PlanningProgressSpreadSupport {
+/**
+ * User-facing progress lines, blocker summaries, post-worthiness fingerprinting, and related spread keys for planning cycles.
+ * Projection-only: does not infer next actions or readiness policy.
+ */
+public final class PlanningProgressProjection {
 
-    private PlanningProgressSpreadSupport() {}
+    private PlanningProgressProjection() {}
 
-    static void enrichUserCopyAndProgressLog(Map<String, Object> state, Map<String, Object> spread) {
+    public static void applyCycleProgressSummaryAfterEvaluation(
+            Map<String, Object> spread, int cycleIteration, String nextActionName) {
+        String note = getString(spread, "planningSelectiveRerunNote");
+        String fallback = "Planning cycle " + cycleIteration + " — next: " + nextActionName;
+        String summary = firstNonBlank(note, fallback);
+        spread.put("planningCycleProgressSummary", summary != null ? summary : "");
+        spread.put("planningOrchestratorRoundSummary", getString(spread, "planningCycleProgressSummary"));
+        spread.put("userCopyCoordinatorProgress", getString(spread, "planningCycleProgressSummary"));
+    }
+
+    public static void applyCycleProgressSummaryAfterSilentSynthesis(Map<String, Object> spread, int cycleIteration) {
+        String note = getString(spread, "planningSelectiveRerunNote");
+        String fallback = "Planning cycle " + cycleIteration + " — silent synthesis complete.";
+        String summary = firstNonBlank(note, fallback);
+        spread.put("planningCycleProgressSummary", summary != null ? summary : "");
+        spread.put("planningOrchestratorRoundSummary", getString(spread, "planningCycleProgressSummary"));
+        spread.put("userCopyCoordinatorProgress", getString(spread, "planningCycleProgressSummary"));
+    }
+
+    public static void applyUserVisibleEvaluationFailure(Map<String, Object> spread, String machineError) {
+        String m = machineError != null ? machineError : "";
+        spread.put(
+                "planningCycleUserVisibleFailure",
+                truncateOneLine(PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(m), 200));
+    }
+
+    public static void applyUserCopyAndProgressLog(Map<String, Object> state, Map<String, Object> spread) {
         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(spread);
         StringBuilder blockers = new StringBuilder();
         for (UnresolvedItem it : ledger.items()) {
@@ -55,7 +86,7 @@ final class PlanningProgressSpreadSupport {
         spread.put("userCopyProgressLine", log.latestMessage());
     }
 
-    static void finishProgressFingerprint(Map<String, Object> state, Map<String, Object> spread) {
+    public static void applyProgressFingerprint(Map<String, Object> state, Map<String, Object> spread) {
         String summary =
                 spread.get("planningCycleProgressSummary") != null
                         ? spread.get("planningCycleProgressSummary").toString()
@@ -72,7 +103,7 @@ final class PlanningProgressSpreadSupport {
         spread.put("planningProgressPostWorthy", worthy ? "true" : "false");
     }
 
-    static String truncateOneLine(String value, int max) {
+    public static String truncateOneLine(String value, int max) {
         if (value == null) {
             return "";
         }
@@ -80,7 +111,7 @@ final class PlanningProgressSpreadSupport {
         return normalized.length() <= max ? normalized : normalized.substring(0, max - 1) + "…";
     }
 
-    static String getString(Map<String, ?> map, String key) {
+    public static String getString(Map<String, ?> map, String key) {
         if (map == null) {
             return null;
         }
@@ -88,7 +119,7 @@ final class PlanningProgressSpreadSupport {
         return value != null ? value.toString() : null;
     }
 
-    static String firstNonBlank(String primary, String fallback) {
+    public static String firstNonBlank(String primary, String fallback) {
         return primary != null && !primary.isBlank()
                 ? primary
                 : (fallback != null && !fallback.isBlank() ? fallback : null);
