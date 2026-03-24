@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T23:30:00Z"
+  updated_utc: "2026-03-24T22:30:00Z"
 
 project:
   id: vinekeepers
@@ -201,6 +201,10 @@ requirements:
           orchestrator templates interpolate planningRoomCycleErrorUserMessage
           alongside planning depth fields where relevant, and pre-launch review copy stays a short
           checklist when the full planning packet is already in-thread
+        - >-
+          When planningPostDraftAction is ASK_ONE_QUESTION, coordinator-facing planning progress keys (planningCycleProgressSummary,
+          userCopyCoordinatorProgress, planningOrchestratorRoundSummary) are authored as a single clarification-first line in the
+          workflow layer so YAML/templates do not rely on packet-post or review preamble mixing into that beat
         - >-
           arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace
           to enable Parquet-backed embedding cache and Qdrant retrieval (planningRag* workflow spreads) without blocking the graph when RAG is disabled or misconfigured

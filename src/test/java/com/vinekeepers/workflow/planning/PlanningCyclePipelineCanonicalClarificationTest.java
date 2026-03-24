@@ -13,10 +13,12 @@ import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedCla
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -356,6 +358,71 @@ class PlanningCyclePipelineCanonicalClarificationTest {
     }
 
     @Test
+    void applyAskOneQuestionUserVisibleCopy_forcesQuestionOnlyOrchestratorAndProgressLines() {
+        FeaturePlanState plan = bareFeaturePlan();
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan);
+        WorkProfileRegistry registry = new WorkProfileRegistry();
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, registry);
+        Map<String, Object> spread = new LinkedHashMap<>();
+        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.ASK_ONE_QUESTION.name());
+        spread.put("planningClarificationQuestionText", "Which concrete package should own the new type?");
+        spread.put("planningOrchestratorRoundSummary", "**What I'm tracking:** should be replaced");
+        spread.put("planningCycleProgressSummary", "old progress");
+        spread.put("userCopyCoordinatorProgress", "old user copy");
+        invokeApplyAskOneQuestionUserVisibleCopy(pipeline, "c", spread, plan);
+        String expected = "❓ Which concrete package should own the new type?";
+        assertEquals(expected, spread.get("planningOrchestratorRoundSummary"));
+        assertEquals(expected, spread.get("planningCycleProgressSummary"));
+        assertEquals(expected, spread.get("userCopyCoordinatorProgress"));
+    }
+
+    @Test
+    void applyAskOneQuestionUserVisibleCopy_prefixesStuckHintBeforeQuestion() {
+        FeaturePlanState plan = bareFeaturePlan();
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan);
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, new WorkProfileRegistry());
+        Map<String, Object> spread = new LinkedHashMap<>();
+        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.ASK_ONE_QUESTION.name());
+        spread.put("planningClarificationQuestionText", "Which API version?");
+        spread.put("planningClarificationStuck", "true");
+        spread.put("planningClarificationStuckHint", "This clarification thread has been waiting.");
+        invokeApplyAskOneQuestionUserVisibleCopy(pipeline, "c", spread, plan);
+        assertEquals(
+                "This clarification thread has been waiting.\n\n❓ Which API version?",
+                spread.get("planningOrchestratorRoundSummary"));
+    }
+
+    @Test
+    void applyAskOneQuestionUserVisibleCopy_noOpWhenGovernorActionIsNotAskOneQuestion() {
+        FeaturePlanState plan = bareFeaturePlan();
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan);
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, new WorkProfileRegistry());
+        Map<String, Object> spread = new LinkedHashMap<>();
+        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.POST_PACKET.name());
+        spread.put("planningOrchestratorRoundSummary", "keep me");
+        invokeApplyAskOneQuestionUserVisibleCopy(pipeline, "c", spread, plan);
+        assertEquals("keep me", spread.get("planningOrchestratorRoundSummary"));
+    }
+
+    @Test
+    void applyAskOneQuestionUserVisibleCopy_usesFallbackWhenQuestionTextMissing() {
+        FeaturePlanState plan = bareFeaturePlan();
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan);
+        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, new WorkProfileRegistry());
+        Map<String, Object> spread = new LinkedHashMap<>();
+        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.ASK_ONE_QUESTION.name());
+        spread.put("planningClarificationQuestionText", "");
+        invokeApplyAskOneQuestionUserVisibleCopy(pipeline, "c", spread, plan);
+        String summary = String.valueOf(spread.get("planningOrchestratorRoundSummary"));
+        assertTrue(summary.startsWith("❓ "));
+        assertTrue(summary.contains("single most important constraint"));
+    }
+
+    @Test
     void splitExpansionSkipsFullRescanAfterMergedClarification() {
         WorkProfileRegistry registry = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         FeaturePlanState plan = bareFeaturePlanV2();
@@ -375,6 +442,25 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         assertTrue(String.valueOf(spread.get("planningSelectiveRerunNote")).contains("skipping a full re-scan"));
         assertTrue(String.valueOf(spread.get(PlanningCyclePipeline.PARTIAL_AGGREGATED_FOLLOWUPS_KEY))
                 .contains("model override"));
+    }
+
+    private static void invokeApplyAskOneQuestionUserVisibleCopy(
+            PlanningCyclePipeline pipeline,
+            String contextId,
+            Map<String, Object> spread,
+            FeaturePlanState plan) {
+        try {
+            var m =
+                    PlanningCyclePipeline.class.getDeclaredMethod(
+                            "applyAskOneQuestionUserVisibleCopy",
+                            String.class,
+                            Map.class,
+                            FeaturePlanState.class);
+            m.setAccessible(true);
+            m.invoke(pipeline, contextId, spread, plan);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static RankedClarification invokeEnsureRankedForOpenCanonicalGap(

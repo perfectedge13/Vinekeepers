@@ -284,6 +284,8 @@ public final class PlanningCyclePipeline {
                 spread.get("planningCycleProgressSummary") != null
                         ? spread.get("planningCycleProgressSummary").toString()
                         : "");
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
+        applyAskOneQuestionUserVisibleCopy(contextId, spread, plan);
 
         enrichUserCopyAndProgressLog(state, spread);
         spread.put("planningJustMergedClarification", "false");
@@ -516,6 +518,8 @@ public final class PlanningCyclePipeline {
                 spread.get("planningCycleProgressSummary") != null
                         ? spread.get("planningCycleProgressSummary").toString()
                         : "");
+        plan = planStateStore.getByContextId(contextId).orElse(plan);
+        applyAskOneQuestionUserVisibleCopy(contextId, spread, plan);
 
         enrichUserCopyAndProgressLog(state, spread);
         spread.put("planningJustMergedClarification", "false");
@@ -751,22 +755,22 @@ public final class PlanningCyclePipeline {
                         profile.getCoordinatorClarification().getEnginePolicy());
         spread.put("planningHardClarificationBlockReason", clr.hardClarificationBlockReason());
         boolean effectiveUser = gov.userInputRequired();
-        if (gov.forceUserInputRequired()) {
-            spread.put("planningUserInputRequired", "true");
-            if (profile.getCoordinatorClarification().isCanonicalV1()) {
-                spread.put("planningCanonicalUserInputRequired", "true");
-            }
-            String qt = getString(spread, "planningClarificationQuestionText");
-            if (qt == null || qt.isBlank()) {
-                String clar =
-                        PlanningPostDraftGovernor.firstUserFacingClarificationTextOrEmpty(
-                                clr.upsert().ledger(), plan);
-                if (!clar.isBlank()) {
-                    spread.put("planningClarificationQuestionText", clar);
+        if (gov.action() != PlanningPostDraftAction.BLOCK) {
+            spread.put("planningUserInputRequired", effectiveUser ? "true" : "false");
+            if (gov.action() == PlanningPostDraftAction.ASK_ONE_QUESTION) {
+                if (profile.getCoordinatorClarification().isCanonicalV1()) {
+                    spread.put("planningCanonicalUserInputRequired", "true");
+                }
+                String qt = getString(spread, "planningClarificationQuestionText");
+                if (qt == null || qt.isBlank()) {
+                    String clar =
+                            PlanningPostDraftGovernor.firstUserFacingClarificationTextOrEmpty(
+                                    clr.upsert().ledger(), plan);
+                    if (!clar.isBlank()) {
+                        spread.put("planningClarificationQuestionText", clar);
+                    }
                 }
             }
-        } else {
-            spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
         }
         if (gov.action() == PlanningPostDraftAction.ASK_ONE_QUESTION
                 && contextId != null
@@ -817,6 +821,49 @@ public final class PlanningCyclePipeline {
                         clr.upsert().ledger());
         PlanningPostDraftGovernor.writePersistenceKeys(
                 spread, signal, plan, gov, wantsRevision, situation);
+    }
+
+    /**
+     * When {@link PlanningPostDraftAction#ASK_ONE_QUESTION} is authoritative, progress posts and orchestrator templates
+     * must not mix packet/review preamble with the single clarification beat.
+     */
+    private void applyAskOneQuestionUserVisibleCopy(String contextId, Map<String, Object> spread, FeaturePlanState plan) {
+        if (spread == null) {
+            return;
+        }
+        if (!PlanningPostDraftAction.ASK_ONE_QUESTION.name().equalsIgnoreCase(
+                getString(spread, PlanningPostDraftGovernor.SPREAD_KEY))) {
+            return;
+        }
+        FeaturePlanState p = plan;
+        if (p == null && contextId != null && !contextId.isBlank()) {
+            p = planStateStore.getByContextId(contextId).orElse(null);
+        }
+        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(spread);
+        String qt = getString(spread, "planningClarificationQuestionText");
+        if (qt == null || qt.isBlank()) {
+            String clar = PlanningPostDraftGovernor.firstUserFacingClarificationTextOrEmpty(ledger, p);
+            if (!clar.isBlank()) {
+                spread.put("planningClarificationQuestionText", clar);
+                qt = clar;
+            }
+        }
+        if (qt == null || qt.isBlank()) {
+            qt = "What is the single most important constraint or example I should treat as authoritative before I continue?";
+            spread.put("planningClarificationQuestionText", qt);
+        }
+        StringBuilder body = new StringBuilder();
+        if ("true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"))) {
+            String hint = getString(spread, "planningClarificationStuckHint");
+            if (hint != null && !hint.isBlank()) {
+                body.append(truncateOneLine(hint, 240)).append("\n\n");
+            }
+        }
+        body.append("❓ ").append(truncateOneLine(qt.trim(), 400));
+        String line = body.toString().trim();
+        spread.put("planningCycleProgressSummary", line);
+        spread.put("userCopyCoordinatorProgress", line);
+        spread.put("planningOrchestratorRoundSummary", line);
     }
 
     static boolean resolvePlanningUserInputRequired(

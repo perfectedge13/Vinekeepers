@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T18:00:00Z"
+  updated_utc: "2026-03-24T22:30:00Z"
 
 project:
   id: vinekeepers
@@ -79,7 +79,9 @@ assets:
       autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back post-draft clarification engine and discovery gap gating on the plan record;
       durable coordinatorConfiguredBotId for routing when FeatureRoomState is evicted; withPlannerRecoveryFields persists
       planningFailureCategory, planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint for typed
-      synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads
+      synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads;
+      planning room cycle may persist PlanningIntakeStage.CLARIFYING when the post-draft governor selects ASK_ONE_QUESTION and intake
+      was not already clarifying
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-CLARIFICATION-RESOLUTION-DECISION
@@ -346,6 +348,9 @@ requirements:
           FeaturePlanState carries PlanningIntakeStage, intake kickoff post version/fingerprint, and optional
           planningOrchestrationFailureReason for terminal intake failures; withPlanningIntakeStage / withIntakeKickoffPosted /
           withPlanningOrchestrationFailure update the canonical intake spine
+        - >-
+          PlanningCyclePipeline may advance FeaturePlanState to PlanningIntakeStage.CLARIFYING when PlanningPostDraftGovernor
+          resolves to ASK_ONE_QUESTION and the plan was not already in CLARIFYING
         - >-
           Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, DiscoveryFinding, and PlanningProposal models
           for structured discovery and proposal-driven planning (JSON-serializable; workflow state for proposals until confirm or auto-apply)

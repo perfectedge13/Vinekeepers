@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T18:00:00Z"
+  updated_utc: "2026-03-24T22:30:00Z"
 
 project:
   id: vinekeepers
@@ -254,6 +254,10 @@ requirements:
         - Engine delivers replies via sink registry and lifecycle methods (respondImmediately, sendFollowUp, updateMessage, openModal); sink exposes getCapabilities; no defer in engine
         - Engine uses ReplyTargetResolver registered by connector id to obtain ReplyTarget; when no resolver is registered for the source prefix or resolver returns empty, engine does not deliver reply (fail closed)
         - For Discord message and interaction events, engine applies a ~180s TTL dedupe on (sourceId, kind, messageId or interactionId) so duplicate bus publications do not run workflows twice during slow planning handling
+        - >-
+          Workflow runner merges action storeSpread into per-session state between steps without the engine rewriting planning-specific
+          keys; clarification-only progress summaries for ASK_ONE_QUESTION beats are produced inside PlanningCyclePipeline and flow
+          through session state like other spreads
         - No bot registered for id logs warning and does not fail
       examples: []
     traceability:

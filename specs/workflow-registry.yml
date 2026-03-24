@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T23:30:00Z"
+  updated_utc: "2026-03-24T01:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -426,7 +426,13 @@ assets:
       applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
       SYNTHESIS_JSON_INVALID / SYNTHESIS_REPAIR_EXHAUSTED when no upserts applied; applyPostDraftGovernor persists planner recovery
       fields on FeaturePlanState when synthesis failure forces BLOCK; spread also carries planningHardClarificationBlockReason for
-      debug visibility when clarification budget exhaustion is the remaining true blocker
+      debug visibility when clarification budget exhaustion is the remaining true blocker;
+      when PlanningPostDraftGovernor resolves to ASK_ONE_QUESTION, backfills blank planningClarificationQuestionText from
+      firstUserFacingClarificationTextOrEmpty(ledger, plan), sets planningCanonicalUserInputRequired for canonical_v1 profiles,
+      persists PlanningIntakeStage.CLARIFYING when the plan was not already clarifying, and applyAskOneQuestionUserVisibleCopy
+      forces planningCycleProgressSummary, userCopyCoordinatorProgress, and planningOrchestratorRoundSummary to a single
+      clarification-first line (optional planningClarificationStuckHint prefix, ❓ + truncated question, conservative fallback when
+      still empty) so packet/review preamble does not mix into that beat
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -1919,7 +1925,10 @@ assets:
       and caps follow-ups to one (optional follow_up_decisions only when bounded UI); forbids naming repo touchpoints not observed
       in supplied evidence; prompt examples use real software_feature_planning_v2 section ids and field ids rather than generic fieldId
       placeholders; uses PlanningContentGenerator with OpenAiPlanningContentGenerator as the default OpenAI-backed implementation;
-      user payload may include planningRepoEvidenceJson and optional RAG snippets when present in workflow state; parse/repair now reuses PlanningLlmJsonSupport and extra
+      user payload may include planningRepoEvidenceJson and optional RAG snippets when present in workflow state; when a materialized
+      repoLocalPath exists on the plan or planningRepoEvidenceJson is non-trivial (non-blank and not merely {}), the user JSON adds
+      planner_instruction steering toward repo_evidence_this_pass=observed and concrete impacted_components grounded in that snapshot;
+      parse/repair now reuses PlanningLlmJsonSupport and extra
       upserts use the same detailed profile validation path as synthesis; storeSpread planningExpansionSource,
       planningExpansionFallbackUsed, planningExpansionFromLlm, etc.; invoked inside execute_planning_room_cycle before
       deterministic build_request_exploration
@@ -2320,6 +2329,12 @@ requirements:
         - >-
           Planning cycle operator-visible summaries and failure lines (including planningCycleUserVisibleFailure and planningRoomCycleErrorUserMessage)
           are humanized via PlanningUserFacingCopy so raw internal error codes and pipeline mechanics are not primary Discord copy
+        - >-
+          When the post-draft governor spreads planningPostDraftAction ASK_ONE_QUESTION, PlanningCyclePipeline aligns operator copy:
+          backfills blank planningClarificationQuestionText from ledger/plan when possible, may persist PlanningIntakeStage.CLARIFYING,
+          and overwrites planningCycleProgressSummary, userCopyCoordinatorProgress, and planningOrchestratorRoundSummary with a single
+          clarification-first line (optional stuck hint, ❓ question, conservative fallback) so templates do not interleave
+          packet/review preamble with that clarification beat
         - >-
           ExecutePlanningRoomCycleAction requires a non-null PlanningCyclePipeline at construction; Bootstrap wiring must supply
           the pipeline (no silent null fallback)
@@ -2832,8 +2847,9 @@ requirements:
         - id: UNIT-RUN-REQUEST-EXPANSION-LLM-JSON
           title: RunRequestExpansionLlmActionJsonTest
           intent: >-
-            Verify run_request_expansion_llm repairs malformed JSON, validates extra upserts against the active profile, and
-            falls back cleanly when structured expansion output is unusable
+            Verify run_request_expansion_llm repairs malformed JSON, validates extra upserts against the active profile,
+            falls back cleanly when structured expansion output is unusable, and includes workspace/evidence planner_instruction
+            in the user payload when repo path or planningRepoEvidenceJson snapshot is present
           testClass: com.vinekeepers.workflow.actions.RunRequestExpansionLlmActionJsonTest
           preconditions: []
         - id: MANUAL-WORKFLOW
@@ -2927,6 +2943,10 @@ requirements:
           at most one question_if_needed, forbid generic multi-question open-question brainstorming, and require real
           software_feature_planning_v2 artifact/section/field ids instead of generic fieldId placeholders; touchpoints must not be
           asserted as observed unless present in supplied repo evidence for that pass
+        - >-
+          run_request_expansion_llm user JSON carries planner_instruction when a workspace checkout path or non-trivial
+          planningRepoEvidenceJson snapshot is present, nudging the model to treat repo evidence as observed when it uses that
+          snapshot and to name concrete paths/packages in impacted_components only when supported by the evidence
         - >-
           For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
           ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
@@ -3137,7 +3157,8 @@ requirements:
           title: PlanningCyclePipelineCanonicalClarificationTest
           intent: >-
             Verify PlanningCyclePipeline canonical_v1 clarification gating, planningPostDraftAction spread, split-path autonomous pass
-            completion parity, material redraft gates, ledger stray handling, and strict blocking-question contract helpers
+            completion parity, material redraft gates, ledger stray handling, strict blocking-question contract helpers, ASK_ONE_QUESTION
+            question-text backfill, clarification-only progress/orchestrator summaries, and optional CLARIFYING intake transition
           testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineCanonicalClarificationTest
           preconditions: []
         - id: UNIT-PLANNING-POST-DRAFT-GOVERNOR

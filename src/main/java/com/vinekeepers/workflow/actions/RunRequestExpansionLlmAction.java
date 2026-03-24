@@ -400,9 +400,11 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         snap.put("repoRef", plan.getRepoRef());
         snap.put("repoLocalPath", plan.getRepoLocalPath());
         snap.put("existingExploration", PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body"));
+        String evidenceJson = "";
         if (state != null) {
             String ev = getString(state, "planningRepoEvidenceJson");
             if (ev != null && !ev.isBlank()) {
+                evidenceJson = ev;
                 snap.put("repo_evidence_snapshot", ev);
             }
             if ("true".equalsIgnoreCase(String.valueOf(state.get("planningRagAvailable")))) {
@@ -412,6 +414,18 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
                     snap.put("repo_grounding_snippets", rag);
                 }
             }
+        }
+        boolean tangibleWorkspace =
+                (plan.getRepoLocalPath() != null && !plan.getRepoLocalPath().isBlank())
+                        || (evidenceJson != null
+                                && !evidenceJson.isBlank()
+                                && !evidenceJson.trim().equals("{}"));
+        if (tangibleWorkspace) {
+            snap.put(
+                    "planner_instruction",
+                    "Workspace or repo snapshot is present in this context: prefer repo_evidence_this_pass=observed when you "
+                            + "actually use paths/snippets from the snapshot; put concrete paths/packages in impacted_components "
+                            + "when the evidence supports them. Avoid generic repo-agnostic planning while real workspace signals exist.");
         }
         try {
             return "Planning expansion context (JSON):\n" + JSON.writerWithDefaultPrettyPrinter().writeValueAsString(snap);

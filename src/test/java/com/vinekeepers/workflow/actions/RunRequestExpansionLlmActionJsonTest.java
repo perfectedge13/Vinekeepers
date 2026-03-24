@@ -13,8 +13,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -113,6 +116,141 @@ class RunRequestExpansionLlmActionJsonTest {
         assertEquals("1", spread.get("planningExpansionUpsertsAttempted"));
         assertEquals("1", spread.get("planningExpansionUpsertsRejected"));
         assertTrue(String.valueOf(spread.get("planningLlmError")).contains("fieldId"));
+    }
+
+    @Test
+    void run_userPayloadIncludesPlannerInstructionWhenRepoEvidenceSnapshotPresent() throws Exception {
+        AtomicReference<String> capturedUser = new AtomicReference<>();
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> llmOk =
+                assistantResponse("{\"current_state\":\"seen\",\"upserts\":[],\"question_if_needed\":\"\"}");
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(llmOk);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        var registry = TestWorkProfiles.loadFromRepoConfig();
+        var init = new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId",
+                                "ctx-expansion-evidence",
+                                "channelId",
+                                "room-expansion-evidence",
+                                "repoRef",
+                                "perfectedge13/Vinekeepers",
+                                "initialRequest",
+                                "Improve planner"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+
+        PlanningContentGenerator generator =
+                (c, system, user, model, timeout, callCtx) -> {
+                    capturedUser.set(user);
+                    return "{\"current_state\":\"seen\",\"upserts\":[],\"question_if_needed\":\"\"}";
+                };
+        var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
+        Map<String, Object> state =
+                Map.of(
+                        "contextId",
+                        "ctx-expansion-evidence",
+                        "planningRepoEvidenceJson",
+                        "{\"paths\":[\"src/Main.java\"]}");
+        action.run(null, state, Map.of());
+
+        String user = capturedUser.get();
+        assertNotNull(user);
+        assertTrue(user.contains("planner_instruction"));
+        assertTrue(user.contains("Workspace or repo snapshot is present"));
+        assertTrue(user.contains("repo_evidence_snapshot"));
+    }
+
+    @Test
+    void run_userPayloadOmitsPlannerInstructionWhenEvidenceIsEmptyObjectOnly() throws Exception {
+        AtomicReference<String> capturedUser = new AtomicReference<>();
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> llmOk =
+                assistantResponse("{\"current_state\":\"x\",\"upserts\":[],\"question_if_needed\":\"\"}");
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(llmOk);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        var registry = TestWorkProfiles.loadFromRepoConfig();
+        var init = new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId",
+                                "ctx-expansion-no-nudge",
+                                "channelId",
+                                "room-expansion-no-nudge",
+                                "repoRef",
+                                "perfectedge13/Vinekeepers",
+                                "initialRequest",
+                                "Improve planner"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+
+        PlanningContentGenerator generator =
+                (c, system, user, model, timeout, callCtx) -> {
+                    capturedUser.set(user);
+                    return "{\"current_state\":\"x\",\"upserts\":[],\"question_if_needed\":\"\"}";
+                };
+        var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
+        Map<String, Object> state = Map.of("contextId", "ctx-expansion-no-nudge", "planningRepoEvidenceJson", "{}");
+        action.run(null, state, Map.of());
+
+        assertFalse(capturedUser.get().contains("planner_instruction"));
+    }
+
+    @Test
+    void run_userPayloadIncludesPlannerInstructionWhenRepoLocalPathPresent() throws Exception {
+        AtomicReference<String> capturedUser = new AtomicReference<>();
+        HttpClient http = mock(HttpClient.class);
+        HttpResponse<String> llmOk =
+                assistantResponse("{\"current_state\":\"local\",\"upserts\":[],\"question_if_needed\":\"\"}");
+        when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(llmOk);
+        OpenAiChatClient client =
+                new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
+
+        FeaturePlanStateStore planStore = new FeaturePlanStateStore();
+        var registry = TestWorkProfiles.loadFromRepoConfig();
+        var init = new InitializeFeaturePlanStateAction(planStore, new FeatureRoomStateStore(), registry);
+        assertEquals(
+                "OK",
+                init.run(
+                        null,
+                        Map.of(
+                                "contextId",
+                                "ctx-expansion-localpath",
+                                "channelId",
+                                "room-expansion-localpath",
+                                "repoRef",
+                                "perfectedge13/Vinekeepers",
+                                "initialRequest",
+                                "Improve planner"),
+                        Map.of("profileId", "software_feature_planning_v2")));
+        var plan =
+                planStore
+                        .getByContextId("ctx-expansion-localpath")
+                        .orElseThrow()
+                        .withWorkspaceLinkage(null, null, "/work/checkout", null);
+        planStore.update(plan);
+
+        PlanningContentGenerator generator =
+                (c, system, user, model, timeout, callCtx) -> {
+                    capturedUser.set(user);
+                    return "{\"current_state\":\"local\",\"upserts\":[],\"question_if_needed\":\"\"}";
+                };
+        var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
+        action.run(null, Map.of("contextId", "ctx-expansion-localpath"), Map.of());
+
+        assertTrue(capturedUser.get().contains("planner_instruction"));
+        assertTrue(capturedUser.get().contains("Workspace or repo snapshot is present"));
     }
 
     private static HttpResponse<String> assistantResponse(String content) throws Exception {
