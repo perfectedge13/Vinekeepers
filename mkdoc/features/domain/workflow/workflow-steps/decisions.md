@@ -2,11 +2,11 @@
 
 # Entries
 
-## 2026-03-23 — ASK_ONE_QUESTION beats stay clarification-first in thread copy
+## 2026-03-23 — Canonical ask beats stay direct
 
-- **Context:** When the post-draft governor selects **`ASK_ONE_QUESTION`**, generic planning progress lines could still read like packet/review preamble, and blank clarification text could leave operators without a concrete ask; request expansion could under-use repo checkout evidence in the LLM payload.
-- **Decision:** **`PlanningCyclePipeline.applyAskOneQuestionUserVisibleCopy`** aligns coordinator and orchestrator summaries to a single clarification-first line; backfill clarification question text from ledger/plan when missing; persist **`CLARIFYING`** when appropriate. **`RunRequestExpansionLlmAction`** injects **`planner_instruction`** when workspace path or non-trivial evidence JSON is present so expansion JSON stays grounded in observed repo state.
-- **Consequence:** Discord-visible beats during clarification are unambiguous; specs and **`PlanningCyclePipelineCanonicalClarificationTest`** / **`RunRequestExpansionLlmActionJsonTest`** lock the behavior.
+- **Context:** The live planning flow needed a single canonical question source and should not rely on a late copy-rewrite pass to repair ASK_ONE_QUESTION output after decisioning.
+- **Decision:** Prompt directly from **`planningClarificationQuestionText`** in YAML, keep canonical question backfill in **`PlanningCyclePipeline`**, and remove the late **`applyAskOneQuestionUserVisibleCopy`** rewrite path. **`RunRequestExpansionLlmAction`** still injects **`planner_instruction`** when workspace path or non-trivial evidence JSON is present so expansion JSON stays grounded in observed repo state.
+- **Consequence:** Clarification beats stay direct, canonical, and single-question without a post-decision copy repair layer; specs and **`PlanningCyclePipelineCanonicalClarificationTest`** / **`RunRequestExpansionLlmActionJsonTest`** lock the behavior.
 
 ## 2026-03-22 — Optional Qdrant planning RAG (degrade, do not block)
 

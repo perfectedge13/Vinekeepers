@@ -73,6 +73,10 @@ public final class FeaturePlanState {
     private final String planningLastPostedPacketDecisionId;
     private final String planningLastAskedQuestionDecisionId;
     private final String planningLastMaterialStateChangeFingerprint;
+    /** JSON map: gapId → surfaced ask count (canonical clarification). */
+    private final String planningGapAskCountsJson;
+    /** JSON snapshot of {@link com.vinekeepers.workflow.planning.PlanningConfidenceBreakdown} factors. */
+    private final String planningConfidenceBreakdownJson;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -167,6 +171,8 @@ public final class FeaturePlanState {
                 null,
                 null,
                 Boolean.FALSE,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -278,6 +284,8 @@ public final class FeaturePlanState {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -335,7 +343,9 @@ public final class FeaturePlanState {
             String planningCanonicalDecisionJson,
             String planningLastPostedPacketDecisionId,
             String planningLastAskedQuestionDecisionId,
-            String planningLastMaterialStateChangeFingerprint) {
+            String planningLastMaterialStateChangeFingerprint,
+            String planningGapAskCountsJson,
+            String planningConfidenceBreakdownJson) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
         this.featureId = featureId;
         this.featureSlug = featureSlug;
@@ -418,8 +428,17 @@ public final class FeaturePlanState {
                 planningLastMaterialStateChangeFingerprint != null
                         ? planningLastMaterialStateChangeFingerprint.trim()
                         : "";
+        this.planningGapAskCountsJson = normalizeJsonObject(planningGapAskCountsJson);
+        this.planningConfidenceBreakdownJson = normalizeJsonObject(planningConfidenceBreakdownJson);
         this.createdAt = effectiveCreated;
         this.updatedAt = updatedAt != null ? updatedAt : this.createdAt;
+    }
+
+    private static String normalizeJsonObject(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "{}";
+        }
+        return raw.trim();
     }
 
     private static Map<String, ArtifactState> copyArtifacts(Map<String, ArtifactState> in) {
@@ -553,7 +572,9 @@ public final class FeaturePlanState {
                 planningCanonicalDecisionJson,
                 planningLastPostedPacketDecisionId,
                 planningLastAskedQuestionDecisionId,
-                planningLastMaterialStateChangeFingerprint);
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     /**
@@ -890,7 +911,9 @@ public final class FeaturePlanState {
                 planningCanonicalDecisionJson,
                 planningLastPostedPacketDecisionId,
                 planningLastAskedQuestionDecisionId,
-                planningLastMaterialStateChangeFingerprint);
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     /**
@@ -1234,6 +1257,142 @@ public final class FeaturePlanState {
 
     public String getPlanningLastMaterialStateChangeFingerprint() {
         return planningLastMaterialStateChangeFingerprint;
+    }
+
+    public String getPlanningGapAskCountsJson() {
+        return planningGapAskCountsJson;
+    }
+
+    public String getPlanningConfidenceBreakdownJson() {
+        return planningConfidenceBreakdownJson;
+    }
+
+    public FeaturePlanState withPlanningGapAskCountsJson(String json) {
+        String j = normalizeJsonObject(json);
+        if (j.equals(planningGapAskCountsJson)) {
+            return this;
+        }
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                j,
+                planningConfidenceBreakdownJson);
+    }
+
+    public FeaturePlanState withPlanningConfidenceBreakdownJson(String json) {
+        String j = normalizeJsonObject(json);
+        if (j.equals(planningConfidenceBreakdownJson)) {
+            return this;
+        }
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                j);
     }
 
     public FeaturePlanState withCoordinatorConfiguredBotId(String configuredBotId) {
@@ -1659,7 +1818,9 @@ public final class FeaturePlanState {
                 nextJson,
                 planningLastPostedPacketDecisionId,
                 nextAsked,
-                nextFingerprint);
+                nextFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     public FeaturePlanState withLastPostedPacketDecisionId(String decisionId) {
@@ -1721,7 +1882,9 @@ public final class FeaturePlanState {
                 planningCanonicalDecisionJson,
                 next,
                 planningLastAskedQuestionDecisionId,
-                planningLastMaterialStateChangeFingerprint);
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     private static List<String> appendHistory(List<String> prior, String line) {
@@ -1794,7 +1957,9 @@ public final class FeaturePlanState {
                 planningCanonicalDecisionJson,
                 planningLastPostedPacketDecisionId,
                 planningLastAskedQuestionDecisionId,
-                planningLastMaterialStateChangeFingerprint);
+                planningLastMaterialStateChangeFingerprint,
+                planningGapAskCountsJson,
+                planningConfidenceBreakdownJson);
     }
 
     public FeaturePlanState withIntakeKickoffPosted(int version, String fingerprint) {

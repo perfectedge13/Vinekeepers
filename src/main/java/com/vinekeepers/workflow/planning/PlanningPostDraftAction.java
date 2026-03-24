@@ -2,7 +2,7 @@ package com.vinekeepers.workflow.planning;
 
 /**
  * Single post-assess routing signal for Arrietty v2 {@code planning_assess_clarification} rulesets.
- * {@link PlanningPostDraftGovernor} derives this from canonical clarification, packet depth, parse health, and
+ * {@link PlanningMaterialCyclePacing} derives this from canonical clarification, packet depth, parse health, and
  * material-change / non-improving-pass guards (no legacy boolean-first routing).
  */
 public enum PlanningPostDraftAction {

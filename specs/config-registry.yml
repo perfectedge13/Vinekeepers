@@ -189,22 +189,21 @@ requirements:
         - >-
           Work profile coordinatorClarification (canonical_v1 gap rules and mode) is the config contract for which missing facts
           block Arrietty planning; optional coordinatorClarification.engine supplies clarification turn budget, repo-evidence ask threshold,
-          per-gap clarification cap, autonomous-redraft-before-ask pacing, assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with ClarificationEngineAssessor, ledger reconciliation,
+          per-gap clarification cap, autonomous-redraft-before-ask pacing, assume-and-continue, and critique re-entry flags; runtime behavior pairs gaps with CanonicalPlanningGapEngine, PlanningConfidenceService, CanonicalGapResolutionPolicy, and PlanningQuestionComposer, ledger reconciliation,
           and strict single-question, non-meta clarification UX with escalation from open to narrow to bounded prompts; gap questionTemplate values that read as generic meta or completeness prompts
           are ignored at evaluation time, resolveAnySubstring aliases may cover real operator phrasings (for example config/schema only,
           runtime too, named workflow steps, or individual steps), and profile gaps may require explicit model-routing choices such as
           per-step vs step-type overrides
         - >-
-          bots.yaml arrietty_room_v2 rs_post_draft branches only on planningPostDraftAction (fail-closed default planning_blocked);
+          bots.yaml arrietty_room_v2 rs_post_draft branches only on planningCanonicalNextAction (fail-closed default planning_blocked);
           cap_post_draft_blocked posts planningPostDraftNoticeMarkdown for AUTONOMOUS_REDRAFT; blocked-thread templates interpolate
           planningCycleUserVisibleFailure for planning-room failures, and that key must be present in the safe-template allowedKeys list;
           orchestrator templates interpolate planningRoomCycleErrorUserMessage
           alongside planning depth fields where relevant, and pre-launch review copy stays a short
           checklist when the full planning packet is already in-thread
         - >-
-          When planningPostDraftAction is ASK_ONE_QUESTION, coordinator-facing planning progress keys (planningCycleProgressSummary,
-          userCopyCoordinatorProgress, planningOrchestratorRoundSummary) are authored as a single clarification-first line in the
-          workflow layer so YAML/templates do not rely on packet-post or review preamble mixing into that beat
+          When planningCanonicalNextAction is ASK_ONE_QUESTION, YAML prompts read directly from planningClarificationQuestionText
+          so the live flow does not rely on a late question-only copy rewrite to keep packet or review preamble out of the ask
         - >-
           arrietty_room_v2 planning ingress YAML may declare legacy_action prep_planning_repo_grounding after ensure_repo_workspace
           to enable Parquet-backed embedding cache and Qdrant retrieval (planningRag* workflow spreads) without blocking the graph when RAG is disabled or misconfigured
@@ -259,7 +258,7 @@ requirements:
         - id: UNIT-ARRIETTY-V2-WORKFLOW-YAML
           title: ArriettyV2WorkflowYamlTest
           intent: >-
-            Verify arrietty_room_v2 YAML shape, planningPostDraftAction-only post-assess branching, coordinator template contracts, and the ❓ prompt alert marker on Arrietty question steps
+            Verify arrietty_room_v2 YAML shape, planningCanonicalNextAction-only post-assess branching, coordinator template contracts, and the ❓ prompt alert marker on Arrietty question steps
           testClass: com.vinekeepers.config.ArriettyV2WorkflowYamlTest
           preconditions: []
         - id: UNIT-WORK-PROFILE-LOADER

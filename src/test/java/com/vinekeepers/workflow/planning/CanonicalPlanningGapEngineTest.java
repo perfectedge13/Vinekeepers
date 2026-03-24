@@ -15,14 +15,14 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ClarificationEngineAssessorTest {
+class CanonicalPlanningGapEngineTest {
 
     @Test
     void assessReturnsEmptyWhenSemanticGapsDisallowed() {
         CoordinatorClarificationSettings settings = canonicalSettings(simpleGap(false));
         FeaturePlanState plan = basePlan("ctx", "config versus runtime tradeoff");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, false, null, false);
         assertTrue(out.isEmpty());
     }
@@ -34,8 +34,8 @@ class ClarificationEngineAssessorTest {
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan = basePlan("ctx", "config versus runtime tradeoff");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASK_USER, out.get(0).decision());
@@ -50,8 +50,8 @@ class ClarificationEngineAssessorTest {
         FeaturePlanState plan =
                 basePlan("ctx", "config versus runtime tradeoff")
                         .withWorkspaceLinkage("ws1", "MATERIALIZED", "/repo/worktree", "");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
@@ -68,8 +68,8 @@ class ClarificationEngineAssessorTest {
                 basePlan("ctx", "config versus runtime tradeoff")
                         .withClarificationQuestionSurfaced("q1")
                         .withClarificationQuestionSurfaced("q2");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
@@ -83,8 +83,8 @@ class ClarificationEngineAssessorTest {
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan =
                 basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("q1");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.LOW_PRIORITY_DEFER, out.get(0).decision());
@@ -99,8 +99,8 @@ class ClarificationEngineAssessorTest {
                         CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(true)), pol);
         FeaturePlanState plan =
                 basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("q1");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE, out.get(0).decision());
@@ -114,9 +114,9 @@ class ClarificationEngineAssessorTest {
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(simpleGap(false)), pol);
         FeaturePlanState plan =
-                basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("ask:g_nb:1");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+                basePlan("ctx", "config versus runtime tradeoff").withPlanningGapAskCountsJson("{\"g_nb\":2}");
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
@@ -133,11 +133,11 @@ class ClarificationEngineAssessorTest {
         FeaturePlanState plan =
                 basePlan("ctx", "config versus runtime tradeoff")
                         .withWorkspaceLinkage("ws1", null, "/tmp/plan-repo", "");
-        List<ClarificationEngineAssessor.AssessedGap> withoutCritique =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> withoutCritique =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, json, false);
-        List<ClarificationEngineAssessor.AssessedGap> withCritique =
-                ClarificationEngineAssessor.assessCanonicalGaps(
+        List<CanonicalPlanningGapEngine.AssessedGap> withCritique =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(
                         plan, settings, true, json, true);
         assertEquals(ClarificationResolutionDecision.ASK_USER, withoutCritique.get(0).decision());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, withCritique.get(0).decision());
@@ -146,10 +146,10 @@ class ClarificationEngineAssessorTest {
     @Test
     void repoEvidenceGroundingScoreIncludesJsonBonus() {
         FeaturePlanState plan = basePlan("ctx", "x");
-        double bare = ClarificationEngineAssessor.repoEvidenceGroundingScore(plan, null);
+        double bare = PlanningConfidenceService.repoEvidenceGroundingScore(plan, null);
         String json =
                 "{\"localPathPresent\":true,\"workspaceStatus\":\"MATERIALIZED\",\"blockingIssues\":0}";
-        double withJson = ClarificationEngineAssessor.repoEvidenceGroundingScore(plan, json);
+        double withJson = PlanningConfidenceService.repoEvidenceGroundingScore(plan, json);
         assertTrue(withJson > bare);
     }
 
@@ -170,8 +170,8 @@ class ClarificationEngineAssessorTest {
         FeaturePlanState plan =
                 basePlan("ctx", "Lets plug different models into different workflow steps.")
                         .withWorkspaceLinkage("ws1", "MATERIALIZED", "/repo/worktree", "");
-        List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(plan, settings, true, null, false);
+        List<CanonicalPlanningGapEngine.AssessedGap> out =
+                CanonicalPlanningGapEngine.assessCanonicalGaps(plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASK_USER, out.get(0).decision());
     }

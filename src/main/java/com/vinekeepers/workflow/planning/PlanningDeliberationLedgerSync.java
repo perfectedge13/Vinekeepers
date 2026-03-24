@@ -27,7 +27,7 @@ public final class PlanningDeliberationLedgerSync {
      * When a clarification is required, upsert an OPEN item (single active planning question) and expose its id for
      * merge correlation.
      */
-    public static UpsertResult upsertOpenQuestion(UnresolvedItemLedger ledger, PlanningQuestionRankingPolicy.RankedClarification ranked) {
+    public static UpsertResult upsertOpenQuestion(UnresolvedItemLedger ledger, ClarificationProjection ranked) {
         UnresolvedItemLedger base = ledger != null ? ledger : UnresolvedItemLedger.empty();
         if (!ranked.userInputRequired()) {
             return new UpsertResult(base, Optional.empty());
@@ -84,7 +84,7 @@ public final class PlanningDeliberationLedgerSync {
      */
     public static UpsertResult upsertOpenQuestionForCanonicalGap(
             UnresolvedItemLedger ledger,
-            PlanningQuestionRankingPolicy.RankedClarification ranked,
+            ClarificationProjection ranked,
             String canonicalGapId,
             boolean gapRuleBlocking,
             int askCount,
@@ -271,7 +271,7 @@ public final class PlanningDeliberationLedgerSync {
             if (prev == null || prev.isBlank()) {
                 continue;
             }
-            if (PlanningQuestionRankingPolicy.clarificationSimilarity(prev, questionText) >= 0.82) {
+            if (ClarificationTextSimilarity.clarificationSimilarity(prev, questionText) >= 0.82) {
                 return true;
             }
         }

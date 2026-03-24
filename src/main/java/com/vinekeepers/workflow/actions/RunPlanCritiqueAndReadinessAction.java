@@ -24,7 +24,7 @@ import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
-import com.vinekeepers.workflow.planning.PlanningPostDraftGovernor;
+import com.vinekeepers.workflow.planning.PlanningMaterialFingerprint;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
 import java.time.Instant;
@@ -148,7 +148,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                             .withPlanConfidence(confidenceForStore)
                             .withPlanningIntakeStage(PlanningIntakeStage.READINESS_GATE, null);
             String materialFingerprint =
-                    PlanningPostDraftGovernor.materialStateChangeFingerprint(
+                    PlanningMaterialFingerprint.materialStateChangeFingerprint(
                             state != null ? new LinkedHashMap<>(state) : Map.of(),
                             next);
             boolean critiqueWantsClarification = wantsClarificationSweep(next, state, findings);
@@ -355,15 +355,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             FeaturePlanState plan,
             Map<String, Object> state,
             List<PlanCritiqueFinding> findings) {
-        if (PlanningReadinessSpread.hasPendingClarification(state)
-                || PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan)) {
-            return true;
-        }
-        return findings.stream()
-                .anyMatch(
-                        f -> f.isBlocksApproval()
-                                && "MUST_FIX".equalsIgnoreCase(f.getSeverity())
-                                && !"INTAKE_DISCOVERY_INCOMPLETE".equalsIgnoreCase(f.getCode()));
+        return PlanningReadinessSpread.hasPendingClarification(state);
     }
 
     private static String canonicalActionLabel(PlanningCanonicalDecision canonical) {

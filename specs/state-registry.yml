@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T03:48:06Z"
+  updated_utc: "2026-03-24T12:00:00Z"
 
 project:
   id: vinekeepers
@@ -80,8 +80,10 @@ assets:
       durable coordinatorConfiguredBotId for routing when FeatureRoomState is evicted; withPlannerRecoveryFields persists
       planningFailureCategory, planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint for typed
       synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads; also persists
-      planningCanonicalDecisionJson plus lastPosted/lastAsked canonical decision ids and a material-state-change fingerprint
+      planningCanonicalDecisionJson plus lastPosted/lastAsked canonical decision ids and a       material-state-change fingerprint
       so post-draft and post-critique routing can be verified against one durable canonical decision model;
+      planningGapAskCountsJson (gap id → surfaced ask counts) and planningConfidenceBreakdownJson (structured confidence factors)
+      persist canonical clarification telemetry for pacing and audit;
       planning room cycle may persist PlanningIntakeStage.CLARIFYING when the post-draft governor selects ASK_ONE_QUESTION and intake
       was not already clarifying
     requires: [REQ-STATE-001]
@@ -163,14 +165,6 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/state/planning/DiscoveryFinding.java
     role: Captured answer metadata for discovery logs (optional future persistence)
-    requires: [REQ-STATE-001]
-    feature_ids: [FEAT-STATE]
-  - id: ASSET-PLANNING-PROPOSAL
-    kind: source
-    path: src/main/java/com/vinekeepers/state/planning/PlanningProposal.java
-    role: >-
-      JSON-serializable draft for an artifact field (proposalId, target ids, proposedValue, confidence, interaction AUTO_APPLY|CONFIRM,
-      sources, reasoningSummary); carried in workflow state until confirm or auto-apply
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-PLAN-CRITIQUE-FINDING
@@ -372,13 +366,15 @@ requirements:
           withPlanningOrchestrationFailure update the canonical intake spine
         - >-
           FeaturePlanState also persists planningCanonicalDecisionJson plus lastPosted/lastAsked decision ids and a
-          material-state-change fingerprint so post-draft and post-critique routing can be verified against one durable canonical decision
+          material-state-change fingerprint so post-draft and post-critique routing can be verified against one durable canonical decision;
+          optional planningGapAskCountsJson and planningConfidenceBreakdownJson record per-gap ask tallies and structured confidence breakdown
+          from the canonical clarification pipeline
         - >-
-          PlanningCyclePipeline may advance FeaturePlanState to PlanningIntakeStage.CLARIFYING when PlanningPostDraftGovernor
-          resolves to ASK_ONE_QUESTION and the plan was not already in CLARIFYING
+          PlanningCyclePipeline may advance FeaturePlanState to PlanningIntakeStage.CLARIFYING when the persisted
+          PlanningCanonicalNextAction is ASK_ONE_QUESTION (canonical_v1: gap-authorized ask via normalizePostDraftCanonicalV1) and the plan was not already in CLARIFYING
         - >-
-          Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, DiscoveryFinding, and PlanningProposal models
-          for structured discovery and proposal-driven planning (JSON-serializable; workflow state for proposals until confirm or auto-apply)
+          Planning domain includes DiscoveryGap, DiscoveryQuestion, DiscoveryAgenda, and DiscoveryFinding models for
+          structured discovery and internal completeness tracking
         - >-
           Structured discovery over repeatable sections consolidates required-field gaps to one DiscoveryGap per missing field id
           across rows; workflow session flag planningAutonomousFirstPassCompleted (set after a successful planning room cycle) gates
@@ -392,7 +388,7 @@ requirements:
           state.workflow package holds generic UnresolvedItem / UnresolvedItemStatus models for config-driven clarification ledgers
           (used by workflow engine features; JSON-serializable)
         - >-
-          Workflow session may persist PlanningPostDraftGovernor material baselines and revision fingerprint keys
+          Workflow session may persist PlanningMaterialSpreadKeys material baselines and revision fingerprint keys
           (planningMaterialBaselineRepoEvidenceHash, planningMaterialBaselineAssumptionCount, planningMaterialBaselineCritiqueBlockingCount,
           planningMaterialBaselineDraftFingerprint, planningLastNonPostingRevisionSituation) so autonomous redrafts are gated on real input change
         - >-
@@ -405,7 +401,7 @@ requirements:
           primary/ORCHESTRATOR resolution then plan coordinatorConfiguredBotId
       examples: []
     traceability:
-      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-INTAKE-STAGE, ASSET-PLANNING-FAILURE-CATEGORY, ASSET-PLANNING-INTAKE-BINDING-RESOLVER, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLANNING-PROPOSAL, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+      assets: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-INTAKE-STAGE, ASSET-PLANNING-FAILURE-CATEGORY, ASSET-PLANNING-INTAKE-BINDING-RESOLVER, ASSET-DISCOVERY-GAP, ASSET-DISCOVERY-QUESTION, ASSET-DISCOVERY-AGENDA, ASSET-DISCOVERY-FINDING, ASSET-PLAN-CRITIQUE-FINDING, ASSET-PLAN-CRITIQUE-SNAPSHOT, ASSET-PLAN-READINESS-STATUS, ASSET-PLAN-APPROVAL-STATUS, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
       symbols: []
     validation:
       tests:

@@ -1,12 +1,19 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.profile.ArtifactDefinition;
+import com.vinekeepers.profile.ArtifactState;
 import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.CoordinatorClarificationMode;
 import com.vinekeepers.profile.CoordinatorClarificationSettings;
+import com.vinekeepers.profile.FieldDefinition;
+import com.vinekeepers.profile.SectionDefinition;
+import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.workflow.planning.CanonicalMergeTargetPaths;
+import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -27,7 +34,7 @@ class MergePlanningClarificationChoiceActionTest {
                 new WorkProfileDefinition(
                         "p_merge_canon",
                         "",
-                        List.of(),
+                        minimalArtifactsForDecisionLogMerge(),
                         List.of(),
                         false,
                         false,
@@ -39,7 +46,9 @@ class MergePlanningClarificationChoiceActionTest {
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("contextId", "ctx-merge-a");
         state.put("planningClarificationRaw", "config only");
-        state.put("planningClarificationMetaJson", "{\"gapId\":\"g1\",\"questionText\":\"Q?\"}");
+        state.put(
+                "planningClarificationMetaJson",
+                metaJson("g1", "Q?", CanonicalMergeTargetPaths.defaultMergeTargetPath("g1")));
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-a"));
         assertEquals("true", spread.get("planningClarificationMergeOk"));
         assertEquals("false", spread.get("planningUserInputRequired"));
@@ -47,7 +56,7 @@ class MergePlanningClarificationChoiceActionTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void canonicalV1MergeSetsUserInputTrueWhenGapStillOpen() {
+    void canonicalV1MergeClearsUserInputFlagsForNextPlanningCycle() {
         CoordinatorClarificationGapRule alwaysOpen =
                 new CoordinatorClarificationGapRule(
                         "g_sticky",
@@ -61,7 +70,7 @@ class MergePlanningClarificationChoiceActionTest {
                 new WorkProfileDefinition(
                         "p_merge_sticky",
                         "",
-                        List.of(),
+                        minimalArtifactsForDecisionLogMerge(),
                         List.of(),
                         false,
                         false,
@@ -74,10 +83,16 @@ class MergePlanningClarificationChoiceActionTest {
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("contextId", "ctx-merge-b");
         state.put("planningClarificationRaw", "yes");
-        state.put("planningClarificationMetaJson", "{\"gapId\":\"g_sticky\",\"questionText\":\"More detail?\"}");
+        state.put(
+                "planningClarificationMetaJson",
+                metaJson(
+                        "g_sticky",
+                        "More detail?",
+                        CanonicalMergeTargetPaths.defaultMergeTargetPath("g_sticky")));
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-b"));
         assertEquals("true", spread.get("planningClarificationMergeOk"));
-        assertEquals("true", spread.get("planningUserInputRequired"));
+        assertEquals("false", spread.get("planningUserInputRequired"));
+        assertEquals("false", spread.get("planningCanonicalUserInputRequired"));
     }
 
     @Test
@@ -96,7 +111,7 @@ class MergePlanningClarificationChoiceActionTest {
                 new WorkProfileDefinition(
                         "p_merge_resolution",
                         "",
-                        List.of(),
+                        minimalArtifactsForDecisionLogMerge(),
                         List.of(),
                         false,
                         false,
@@ -111,17 +126,21 @@ class MergePlanningClarificationChoiceActionTest {
         state.put("planningClarificationRaw", "scope is for individual steps");
         state.put(
                 "planningClarificationMetaJson",
-                "{\"gapId\":\"model_override_granularity\",\"questionText\":\"Per step or step type?\"}");
+                metaJson(
+                        "model_override_granularity",
+                        "Per step or step type?",
+                        CanonicalMergeTargetPaths.defaultMergeTargetPath("model_override_granularity")));
 
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-c"));
 
         assertEquals("true", spread.get("planningClarificationMergeOk"));
         assertEquals("false", spread.get("planningUserInputRequired"));
         FeaturePlanState refreshed = store.getByContextId("ctx-merge-c").orElseThrow();
+        String decisionBlob =
+                PlanningArtifactTexts.allRepeatableFieldLines(refreshed, "decision_log", "decisions", "decision_text");
         assertTrue(
-                refreshed.getAssumptions().stream()
-                        .map(assumption -> assumption.getStatement() != null ? assumption.getStatement() : "")
-                        .anyMatch(text -> text.contains("Coordinator gap resolution (model_override_granularity): per step.")));
+                decisionBlob.contains("Coordinator gap resolution (model_override_granularity): per step."),
+                decisionBlob);
     }
 
     private static FeaturePlanState plan(String contextId, String profileId, String request) {
@@ -151,7 +170,7 @@ class MergePlanningClarificationChoiceActionTest {
                 null,
                 null,
                 profileId,
-                Map.of(),
+                minimalPlanArtifacts(),
                 null,
                 null,
                 null,
@@ -162,5 +181,43 @@ class MergePlanningClarificationChoiceActionTest {
                 null,
                 Instant.now(),
                 Instant.now());
+    }
+
+    private static String metaJson(String gapId, String questionText, String mergeTargetPath) {
+        return "{\"gapId\":\""
+                + gapId
+                + "\",\"questionText\":\""
+                + questionText.replace("\"", "\\\"")
+                + "\",\"mergeTargetPath\":\""
+                + mergeTargetPath
+                + "\"}";
+    }
+
+    private static List<ArtifactDefinition> minimalArtifactsForDecisionLogMerge() {
+        return List.of(
+                new ArtifactDefinition(
+                        "decision_log",
+                        "Decision log",
+                        List.of(),
+                        false,
+                        List.of(
+                                new SectionDefinition(
+                                        "decisions",
+                                        "Decisions",
+                                        true,
+                                        false,
+                                        List.of(
+                                                new FieldDefinition(
+                                                        "decision_text", "Decision", "text", false, ""))))));
+    }
+
+    private static Map<String, ArtifactState> minimalPlanArtifacts() {
+        return Map.of(
+                "decision_log",
+                new ArtifactState(
+                        "decision_log",
+                        Map.of(
+                                "decisions",
+                                new SectionState("decisions", SectionState.STATUS_EMPTY, Map.of(), List.of()))));
     }
 }

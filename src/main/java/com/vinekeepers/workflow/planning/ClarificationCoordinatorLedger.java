@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.workflow.planning.ClarificationEngineAssessor.AssessedGap;
 
 import java.util.List;
 
@@ -18,15 +17,12 @@ public final class ClarificationCoordinatorLedger {
 
     private ClarificationCoordinatorLedger() {}
 
-    /**
-     * Persists a ledger JSON blob on the plan from the latest assessed gaps and optional top ask.
-     */
     public static FeaturePlanState persist(
             FeaturePlanStateStore store,
             String contextId,
             FeaturePlanState plan,
-            List<AssessedGap> assessed,
-            CoordinatorClarificationGapEvaluator.OpenGap topAsk) {
+            List<CanonicalPlanningGapEngine.AssessedGap> assessed,
+            CanonicalPlanningGap topAsk) {
         if (store == null || contextId == null || contextId.isBlank() || plan == null) {
             return plan;
         }
@@ -36,21 +32,21 @@ public final class ClarificationCoordinatorLedger {
         return store.getByContextId(contextId).orElse(next);
     }
 
-    public static String toJson(List<AssessedGap> assessed, CoordinatorClarificationGapEvaluator.OpenGap topAsk) {
+    public static String toJson(List<CanonicalPlanningGapEngine.AssessedGap> assessed, CanonicalPlanningGap topAsk) {
         ObjectNode root = JSON.createObjectNode();
         root.put("version", 1);
         ArrayNode needs = root.putArray("needs");
         if (assessed != null) {
-            for (AssessedGap ag : assessed) {
+            for (CanonicalPlanningGapEngine.AssessedGap ag : assessed) {
                 ObjectNode n = needs.addObject();
-                CoordinatorClarificationGapEvaluator.OpenGap g = ag.gap();
+                CanonicalPlanningGap g = ag.gap();
                 n.put("gapId", g.gapId());
                 n.put("blocking", g.blocking());
                 n.put("decision", ag.decision().name());
-                n.put("rankScore", ag.rankScore());
+                n.put("kind", g.kind().name());
                 n.put(
                         "questionPreview",
-                        g.questionText() != null ? truncate(g.questionText(), 400) : "");
+                        g.questionSeed() != null ? truncate(g.questionSeed(), 400) : "");
             }
         }
         if (topAsk != null) {
@@ -59,7 +55,7 @@ public final class ClarificationCoordinatorLedger {
             top.put("blocking", topAsk.blocking());
             top.put(
                     "questionPreview",
-                    topAsk.questionText() != null ? truncate(topAsk.questionText(), 400) : "");
+                    topAsk.questionSeed() != null ? truncate(topAsk.questionSeed(), 400) : "");
         } else {
             root.putNull("nextAsk");
         }

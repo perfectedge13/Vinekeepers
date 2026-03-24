@@ -93,7 +93,7 @@ public final class CoordinatorClarificationEnginePolicy {
     }
 
     /**
-     * Non-blocking gaps with {@code rankScore} below this threshold are assumed instead of prompting.
+     * Legacy profile knob; canonical_v1 resolution no longer ranks gaps by score. Retained for YAML compatibility.
      */
     public double getClarificationAskPriorityThreshold() {
         return clarificationAskPriorityThreshold;

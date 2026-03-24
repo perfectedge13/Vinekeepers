@@ -1,5 +1,8 @@
 # Work profiles: config-driven information shapes (artifact / section / field).
 # Not Discord- or Git-specific; code loads this generically via WorkProfileLoader.
+#
+# Required-field / minWords style rules under readiness and coordinator sections are completeness targets for
+# synthesis, readiness, and engine evaluation — not obligations to interrupt the user with generic field prompts.
 
 profiles:
   software_feature_planning:

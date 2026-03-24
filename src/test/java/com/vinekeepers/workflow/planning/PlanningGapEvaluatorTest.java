@@ -6,7 +6,7 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
-import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
+import com.vinekeepers.workflow.planning.ClarificationProjection;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -32,8 +32,8 @@ class PlanningGapEvaluatorTest {
                         List.of(),
                         0);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(staleOpen);
-        RankedClarification rankedFromLlm =
-                new RankedClarification(false, "", "[]", "{}", 0, List.of(), false, "");
+        ClarificationProjection rankedFromLlm =
+                new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, "");
         WorkProfileDefinition profile =
                 new WorkProfileDefinition(
                         "p",
@@ -44,8 +44,8 @@ class PlanningGapEvaluatorTest {
                         false,
                         List.of(),
                         new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of()));
-        RankedClarification out =
-                PlanningGapEvaluator.effectiveRanked(null, ledger, rankedFromLlm, profile);
+        ClarificationProjection out =
+                LegacyPlanningGapSupport.effectiveRanked(null, ledger, rankedFromLlm, profile, profile.getCoordinatorClarification());
         assertFalse(out.userInputRequired());
     }
 }

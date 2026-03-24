@@ -5,7 +5,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.repo.RepoWorkspaceStatus;
-import com.vinekeepers.workflow.planning.ClarificationEngineAssessor;
+import com.vinekeepers.workflow.planning.PlanningConfidenceService;
 import com.vinekeepers.workflow.planning.PlanningDraftSupport;
 
 import java.util.LinkedHashMap;
@@ -83,7 +83,7 @@ public final class SpreadPlanWorkspaceSignalsAction implements com.vinekeepers.w
             }
             evidence.put(
                     "repoGroundingScore",
-                    ClarificationEngineAssessor.repoEvidenceGroundingScore(plan, null));
+                    PlanningConfidenceService.repoEvidenceGroundingScore(plan, null));
             mergePlanningRagEvidence(evidence, state);
             out.put("planningRepoEvidenceJson", JSON.writeValueAsString(evidence));
         } catch (Exception e) {

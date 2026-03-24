@@ -167,6 +167,12 @@ public final class PlanningUserFacingCopy {
             case "NO_CONTEXT" -> "No planning context is linked to this thread.";
             case "NO_CHOICE" -> "Pick an option or send a text reply first.";
             case "NO_PLAN" -> "No planning draft is loaded for this session yet.";
+            case "MERGE_TARGET_MISSING" ->
+                    "This clarification is missing a merge target in metadata; the coordinator cannot apply your reply safely.";
+            case "MERGE_TARGET_INVALID" ->
+                    "The merge target path is not valid for this profile; reply was not written into the plan.";
+            case "AMBIGUOUS_REPLY" ->
+                    "Your reply did not match a single clear option; try again with one concrete answer.";
             default -> "That reply could not be applied; try again.";
         };
     }

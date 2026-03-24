@@ -19,7 +19,7 @@ import java.util.Map;
 /**
  * Deterministic draft fill for common planning artifacts when a local workspace path is available.
  * Does not call external LLMs; reduces discovery prompts by pre-populating empty required fields.
- * Prefer {@code generate_planning_proposals} + {@code apply_auto_planning_proposals} in new workflows.
+ * Legacy helper for non-production workflows; live Arrietty planning now advances directly into canonical clarification.
  */
 public final class SynthesizePlanDraftsAction implements com.vinekeepers.workflow.WorkflowAction {
 

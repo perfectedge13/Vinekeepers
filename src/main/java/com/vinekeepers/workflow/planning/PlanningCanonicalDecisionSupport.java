@@ -9,7 +9,6 @@ import com.vinekeepers.state.planning.PlanningCanonicalDecision;
 import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningInteractionState;
-import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
 
 import java.util.List;
 import java.util.Map;
@@ -82,7 +81,15 @@ public final class PlanningCanonicalDecisionSupport {
         spread.put(CANONICAL_TOP_GAP_TEXT_KEY, decision.topUnresolvedGap());
         spread.put(CANONICAL_TOP_GAP_ID_KEY, decision.topUnresolvedGapId());
         spread.put("planningCanonicalBlockingReason", decision.blockingReason());
-        spread.put("planningClarificationQuestionText", decision.questionText());
+        if (decision.nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION) {
+            spread.put("planningClarificationQuestionText", decision.questionText());
+        } else {
+            spread.put("planningClarificationQuestionText", "");
+            spread.put("planningClarificationChoicesJson", "[]");
+            spread.put("planningClarificationMetaJson", "{}");
+            spread.put("planningClarificationOrchestratorPrompt", "");
+            spread.put("planningClarificationUseStructuredChoices", "false");
+        }
         spread.put(LAST_MATERIAL_CHANGE_FP_KEY, decision.materialStateChangeFingerprint());
     }
 
@@ -101,10 +108,59 @@ public final class PlanningCanonicalDecisionSupport {
         return "MATERIALIZED_NOT_INSPECTED";
     }
 
+    /**
+     * Live {@code canonical_v1}: {@link PlanningCanonicalNextAction#ASK_ONE_QUESTION} is authorized only when the coordinator
+     * engine has an askable gap ({@code canonicalGapAuthorizesAsk}); otherwise {@link #normalizePostDraft} applies from
+     * {@link PlanningMaterialRoutingOutcome} (material pacing — not clarification policy). {@code BLOCK} from material
+     * pacing always wins over an ask.
+     */
+    public static PlanningCanonicalDecision normalizePostDraftCanonicalV1(
+            FeaturePlanState plan,
+            PlanningMaterialRoutingOutcome material,
+            boolean canonicalGapAuthorizesAsk,
+            ClarificationProjection ranked,
+            String planningRepoEvidenceJson,
+            String topGapId,
+            String materialStateChangeFingerprint) {
+        if (material != null
+                && material.action() == PlanningPostDraftAction.BLOCK) {
+            return normalizePostDraft(
+                    plan, material, ranked, planningRepoEvidenceJson, topGapId, materialStateChangeFingerprint);
+        }
+        if (canonicalGapAuthorizesAsk) {
+            String questionText =
+                    ranked != null && ranked.questionText() != null ? ranked.questionText().trim() : "";
+            FeaturePlanState effectivePlan = plan;
+            return PlanningCanonicalDecision.create(
+                    "post_draft",
+                    PlanningIntakeStage.CLARIFYING,
+                    PlanningCanonicalNextAction.ASK_ONE_QUESTION,
+                    PlanningInteractionState.WAITING_FOR_TEXT_REPLY,
+                    repoGroundingState(effectivePlan, planningRepoEvidenceJson),
+                    confidenceSummary(effectivePlan),
+                    false,
+                    false,
+                    false,
+                    topGapText(ranked, effectivePlan),
+                    topGapId,
+                    questionText,
+                    "",
+                    effectivePlan != null
+                            ? effectivePlan.getAssumptions().stream()
+                                    .map(a -> a.getStatement())
+                                    .filter(s -> s != null && !s.isBlank())
+                                    .toList()
+                            : List.of(),
+                    materialStateChangeFingerprint);
+        }
+        return normalizePostDraft(
+                plan, material, ranked, planningRepoEvidenceJson, topGapId, materialStateChangeFingerprint);
+    }
+
     public static PlanningCanonicalDecision normalizePostDraft(
             FeaturePlanState plan,
-            PlanningPostDraftGovernor.Result governor,
-            RankedClarification ranked,
+            PlanningMaterialRoutingOutcome material,
+            ClarificationProjection ranked,
             String planningRepoEvidenceJson,
             String topGapId,
             String materialStateChangeFingerprint) {
@@ -116,9 +172,9 @@ public final class PlanningCanonicalDecisionSupport {
         boolean reviewAllowed = false;
         boolean approvalAllowed = false;
         String questionText = ranked != null && ranked.questionText() != null ? ranked.questionText().trim() : "";
-        String blockingReason = governor != null ? blankToEmpty(governor.noticeMarkdown()) : "";
-        if (governor != null) {
-            switch (governor.action()) {
+        String blockingReason = material != null ? blankToEmpty(material.noticeMarkdown()) : "";
+        if (material != null) {
+            switch (material.action()) {
                 case ASK_ONE_QUESTION -> {
                     nextAction = PlanningCanonicalNextAction.ASK_ONE_QUESTION;
                     stage = PlanningIntakeStage.CLARIFYING;
@@ -135,7 +191,7 @@ public final class PlanningCanonicalDecisionSupport {
                     stage = PlanningIntakeStage.DRAFTING;
                 }
                 case ASSUME_AND_CONTINUE -> {
-                    boolean canPost = governor.readyToPostPacket();
+                    boolean canPost = material.readyToPostPacket();
                     boolean changed = hasMaterialChange(plan, materialStateChangeFingerprint);
                     if (canPost && changed) {
                         nextAction = PlanningCanonicalNextAction.POST_PACKET;
@@ -270,7 +326,7 @@ public final class PlanningCanonicalDecisionSupport {
         return plan.getUnresolvedQuestions().getFirst();
     }
 
-    private static String topGapText(RankedClarification ranked, FeaturePlanState plan) {
+    private static String topGapText(ClarificationProjection ranked, FeaturePlanState plan) {
         if (ranked != null && ranked.questionText() != null && !ranked.questionText().isBlank()) {
             return ranked.questionText().trim();
         }

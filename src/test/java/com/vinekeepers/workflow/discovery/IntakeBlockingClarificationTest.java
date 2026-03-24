@@ -11,7 +11,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IntakeBlockingClarificationTest {
@@ -59,27 +58,15 @@ class IntakeBlockingClarificationTest {
     }
 
     @Test
-    void buildIntakeBlockingClarification_oneQuestionFromFirstHighGap() throws JsonProcessingException {
-        String rowDetail =
-                "**Decision** (item %d in this list) — reply in **one message** with: What was decided and why.";
+    void buildIntakeBlockingClarification_ignoresRequiredFieldGaps() throws JsonProcessingException {
         String json =
-                "[{\"gapId\":\"gap-a\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 0\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
-                        + String.format(rowDetail, 1)
-                        + "\"},{\"gapId\":\"gap-b\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 1\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
-                        + String.format(rowDetail, 2)
-                        + "\"},{\"gapId\":\"gap-c\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
-                        + String.format(rowDetail, 3)
-                        + "\"}]";
+                "[{\"gapId\":\"gap-a\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"missing row 0\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"Need decision text.\"}]";
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
-        String prompt = (String) spread.get("discoveryCurrentQuestionPrompt");
-        assertNotNull(prompt);
-        assertFalse(prompt.contains("Planning check-in"));
-        assertTrue(prompt.contains("item 1"));
-        assertFalse(prompt.contains("item 2"));
+        assertEquals("", spread.get("discoveryCurrentQuestionPrompt"));
         assertEquals("[]", spread.get("discoveryBundledApplyJson"));
-        assertEquals("REQUIRED_FIELD", spread.get("discoveryApplyKind"));
+        assertEquals("NONE", spread.get("discoveryApplyKind"));
     }
 
     @Test
@@ -105,47 +92,39 @@ class IntakeBlockingClarificationTest {
     }
 
     @Test
-    void buildInsightDiscoveryAgendaAction_matchesIntakeBlockingPath() throws Exception {
+    void buildInsightDiscoveryAgendaAction_onlySurfacesWorkspaceBlockers() throws Exception {
         var reg = TestWorkProfiles.loadFromRepoConfig();
         var action = new BuildInsightDiscoveryAgendaAction(new FeaturePlanStateStore(), reg);
         String json =
-                "[{\"gapId\":\"g1\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"**Decision** (item 1 in this list) — reply in **one message** with: What was decided and why.\"}]";
+                "[{\"gapId\":\"g1\",\"kind\":\"WORKSPACE\",\"artifactId\":\"\",\"sectionId\":\"\",\"fieldId\":\"\",\"reason\":\"workspace unavailable\",\"severity\":\"BLOCKER\",\"status\":\"OPEN\",\"source\":\"repo.workspace\",\"userFacingDetail\":\"Workspace checkout is unavailable. Reply with a local checkout path or access notes.\"}]";
         Object raw = action.run(new Event("e", "k", Map.of()), Map.of("discoveryGapsJson", json), Map.of());
         assertTrue(raw instanceof Map<?, ?>);
         Map<?, ?> out = (Map<?, ?>) raw;
         String prompt = (String) out.get("discoveryCurrentQuestionPrompt");
-        assertTrue(prompt.contains("one message"));
-        assertFalse(prompt.contains("Planning check-in"));
+        assertTrue(prompt.contains("local checkout path"));
+        assertEquals("WORKSPACE", out.get("discoveryApplyKind"));
     }
 
     @Test
-    void duplicateSemanticLines_notEmittedAsBundledBatch() throws JsonProcessingException {
-        String identical =
-                "Help us flesh out **Decision** with concrete detail.";
+    void duplicateRequiredFieldLines_notEmittedAsBundledBatch() throws JsonProcessingException {
         String json =
-                "[{\"gapId\":\"a\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r1\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
-                        + identical
-                        + "\"},{\"gapId\":\"b\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\""
-                        + identical
-                        + "\"}]";
+                "[{\"gapId\":\"a\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r1\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"Need decision text.\"},{\"gapId\":\"b\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"decision_log\",\"sectionId\":\"decisions\",\"fieldId\":\"decision_text\",\"reason\":\"r2\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"Need decision text.\"}]";
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
-        String prompt = (String) spread.get("discoveryCurrentQuestionPrompt");
-        assertFalse(prompt.contains("Help us flesh out"));
-        assertTrue(prompt.startsWith("Before we can finalize the plan"));
+        assertEquals("", spread.get("discoveryCurrentQuestionPrompt"));
+        assertEquals("NONE", spread.get("discoveryApplyKind"));
     }
 
     @Test
-    void requiredFieldPromptDoesNotExposeInternalFieldPath() throws JsonProcessingException {
+    void requiredFieldPromptDoesNotSurfaceInternalFieldPathBecauseItDoesNotSurface() throws JsonProcessingException {
         String json =
                 "[{\"gapId\":\"req\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"fieldId\":\"feature_summary\",\"reason\":\"Missing required field requirements_spec.narrative.feature_summary\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"\"}]";
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
         String prompt = (String) spread.get("discoveryCurrentQuestionPrompt");
-        assertTrue(prompt.contains("Before we can finalize the plan"));
-        assertTrue(prompt.contains("Reply in plain text in this thread."));
+        assertEquals("", prompt);
         assertFalse(prompt.contains("Missing required field"));
         assertFalse(prompt.contains("requirements_spec.narrative.feature_summary"));
     }

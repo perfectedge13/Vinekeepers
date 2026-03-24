@@ -2,10 +2,14 @@
 
 # Entries
 
+## 2026-03-24
+
+- **Canonical clarification persistence:** Documented optional **planningGapAskCountsJson** and **planningConfidenceBreakdownJson** on **FeaturePlanState** for per-gap ask tallies and structured confidence factors (REQ-STATE-001 acceptance). Specs: **state-registry**, **workflow-registry**; cross-link **workflow-steps**.
+
 ## 2026-03-23
 
-- **CLARIFYING intake with ASK_ONE_QUESTION:** Documented that **FeaturePlanState** / planning room cycle may persist **PlanningIntakeStage.CLARIFYING** when **PlanningPostDraftGovernor** resolves **ASK_ONE_QUESTION** and intake was not already clarifying. Specs: **state-registry**, **workflow-registry**; tests: **PlanningCyclePipelineCanonicalClarificationTest**.
-- **Planner stabilization (failure + intake binding):** **`PlanningFailureCategory`**, **`PlanningIntakeBindingResolver`**, and **`FeaturePlanState.withPlannerRecoveryFields`** document typed synthesis/orchestration failures and coordinator-exclusive intake routing data used by **`hydrate_planning_session`**, **`RunLlmPlanningSynthesisAction`**, **`PlanningPostDraftGovernor`**, Router, engine, and Discord ingress. Specs: **state-registry**, **workflow-registry**, **bot-registry**, **connectors-registry**; tests: **PlanningFailureCategoryTest**, **PlanningIntakeBindingResolverTest**, and related workflow tests.
+- **CLARIFYING intake with ASK_ONE_QUESTION:** Documented that **FeaturePlanState** / planning room cycle may persist **PlanningIntakeStage.CLARIFYING** when **PlanningCanonicalDecisionSupport** / **PlanningMaterialCyclePacing** material pacing resolves **ASK_ONE_QUESTION** and intake was not already clarifying. Specs: **state-registry**, **workflow-registry**; tests: **PlanningCyclePipelineCanonicalClarificationTest**.
+- **Planner stabilization (failure + intake binding):** **`PlanningFailureCategory`**, **`PlanningIntakeBindingResolver`**, and **`FeaturePlanState.withPlannerRecoveryFields`** document typed synthesis/orchestration failures and coordinator-exclusive intake routing data used by **`hydrate_planning_session`**, **`RunLlmPlanningSynthesisAction`**, **`PlanningCyclePipeline`**, Router, engine, and Discord ingress. Specs: **state-registry**, **workflow-registry**, **bot-registry**, **connectors-registry**; tests: **PlanningFailureCategoryTest**, **PlanningIntakeBindingResolverTest**, and related workflow tests.
 - **Plan confidence (known vs unknown):** **`PlanConfidence`** documents and persists **structuredKnownFactCount**, **materialUnknownCount**, and **materialUnknownLabels** so critique/readiness and approval gating can reflect how much of the plan is grounded vs still unknown. **`FeaturePlanState`** / **`REQ-STATE-001`** wording aligned in **state-registry** with workflow **PlanReadinessCalculator** / **PlanningApprovalGateSupport** (launch bar **0.85**). Docs: summary, how-it-works, contracts.
 
 ## 2026-03-22

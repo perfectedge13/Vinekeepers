@@ -32,6 +32,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Collects structured discovery gaps, builds agendas, and projects plan section status from profile artifacts.
  * Intake blocking clarification uses {@link ClarificationPromptQualityGate#sanitizeBlockingQuestion} so only one concrete
  * question reaches Discord.
+ *
+ * <p>Required-field gap text (when {@code workspaceBlockersOnly} is false) is for legacy discovery and readiness tooling
+ * only — it is not the canonical coordinator question path for {@code planning_clarification} on {@code arrietty_room_v2}.
  */
 public final class StructuredDiscoverySupport {
 
@@ -47,6 +50,7 @@ public final class StructuredDiscoverySupport {
     /**
      * When {@code workspaceBlockersOnly} is true, emit only repo workspace BLOCKER gaps (no required-field gaps).
      * Used before the first successful autonomous planning pass so drafting can fill profile fields first.
+     * When false, required-field gaps are included for legacy discovery/readiness — not as canonical coordinator asks.
      */
     public static List<DiscoveryGap> collectGaps(
             FeaturePlanState plan, WorkProfileDefinition profile, boolean workspaceBlockersOnly) {
@@ -64,6 +68,10 @@ public final class StructuredDiscoverySupport {
         return gaps;
     }
 
+    /**
+     * Emits REQUIRED_FIELD gaps with user-facing detail from {@link PlanningPromptFormatter}; for discovery/readiness
+     * consumers, not live canonical clarification routing.
+     */
     private static void collectRequiredFieldGaps(
             FeaturePlanState plan,
             WorkProfileDefinition profile,
@@ -298,8 +306,8 @@ public final class StructuredDiscoverySupport {
     }
 
     /**
-     * Intake planning clarification: at most one question, only {@code BLOCKER}/{@code HIGH} profile/workspace gaps,
-     * never bundled menus. Prompts are canonical {@link DiscoveryGap#getUserFacingDetail()} (or gated synthesis).
+     * Intake planning clarification: at most one question and only for true workspace blockers. Required-field gaps stay
+     * internal and must not be surfaced as user prompts.
      */
     public static Map<String, Object> buildIntakeBlockingClarificationSpread(String gapsJson) throws JsonProcessingException {
         List<DiscoveryGap> gaps = parseGapsJson(gapsJson);
@@ -309,7 +317,7 @@ public final class StructuredDiscoverySupport {
                 continue;
             }
             String k = g.getKind() != null ? g.getKind() : "";
-            if (!"REQUIRED_FIELD".equalsIgnoreCase(k) && !"WORKSPACE".equalsIgnoreCase(k)) {
+            if (!"WORKSPACE".equalsIgnoreCase(k)) {
                 continue;
             }
             blocking.add(g);
@@ -322,11 +330,7 @@ public final class StructuredDiscoverySupport {
         String raw = discoveryPromptBody(chosen);
         String prompt = ClarificationPromptQualityGate.sanitizeBlockingQuestion(raw, chosen);
         if (prompt.isBlank()) {
-            Map<String, Object> empty = emptyDiscoveryPromptSpread();
-            empty.put(
-                    "discoveryCurrentQuestionPrompt",
-                    "Reply in plain text in this thread with the one missing detail we still need.");
-            return empty;
+            return emptyDiscoveryPromptSpread();
         }
         DiscoveryQuestion first = toQuestionWithPrompt(chosen, prompt, 1);
         List<DiscoveryQuestion> questions = List.of(first);

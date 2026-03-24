@@ -66,6 +66,10 @@ routing:
     discordChannels:
     - '1484800775342391378'
 workflows:
+  # arrietty_room_v2 planning spine (canonical_v1): workspace preflight → silent synthesis inner rounds →
+  # CanonicalPlanningGapEngine → PlanningConfidenceService → CanonicalGapResolutionPolicy → PlanningQuestionComposer
+  # (when asking) → ledger/spread adapter → PlanningMaterialCyclePacing + PlanningCanonicalDecisionSupport.
+  # Workspace-only prompt_for_field belongs in the workspace blocker loop (e.g. planning_prepare), not as generic profile gaps.
   arrietty_room_v2:
     workflowSchema: v2
     llm:
@@ -101,8 +105,6 @@ workflows:
       - planningRepoEvidenceJson
       - repoWorkspaceStatusSummary
       - project
-      - proposalConfirmPrompt
-      - discoveryCurrentQuestionPrompt
       - planningClarificationQuestionText
       - planningClarificationOrchestratorPrompt
       - planningClarificationStuckHint
@@ -278,18 +280,6 @@ workflows:
         kind: configurable_steps
         steps:
         - type: call_action
-          action: get_profile_missing_fields
-          storeIn: profileMissingSummary
-        - type: call_action
-          action: generate_planning_proposals
-          storeSpread: true
-        - type: call_action
-          action: apply_auto_planning_proposals
-          storeSpread: true
-        - type: call_action
-          action: accept_pending_planning_confirmations
-          storeSpread: true
-        - type: call_action
           action: spread_planning_workspace_blocker
           storeSpread: true
         - type: branch
@@ -297,9 +287,9 @@ workflows:
           - when:
               key: planningWorkspaceUserInputRequired
               value: 'true'
-            next: 6
+            next: 2
           - when: else
-            next: 13
+            next: 9
         - type: prompt_for_field
           prompt: '❓ {{planningWorkspaceBlockerPrompt}}'
           storeIn: discoveryAnswerRaw
@@ -320,11 +310,11 @@ workflows:
           - when:
               key: planningWorkspaceUserInputRequired
               value: 'true'
-            next: 6
+            next: 2
             clear:
             - discoveryAnswerRaw
           - when: else
-            next: 13
+            next: 9
         - type: call_action
           action: recompute_plan_progress
           storeSpread: true
@@ -370,7 +360,7 @@ workflows:
             asRole: orchestrator
             target: thread
         - type: prompt_for_field
-          prompt: '❓ {{planningOrchestratorRoundSummary}}'
+          prompt: '❓ {{planningClarificationQuestionText}}'
           storeIn: planningClarificationRaw
         - type: capture_field
           storeIn: planningClarificationRaw
@@ -534,15 +524,6 @@ workflows:
             clear:
             - discoveryAnswerRaw
             - planApprovalDecision
-            - planningProposalsJson
-            - planningConfirmQueueJson
-            - proposalConfirmPrompt
-            - proposalConfirmProposalId
-            - proposalConfirmArtifactId
-            - proposalConfirmSectionId
-            - proposalConfirmFieldId
-            - proposalConfirmProposedValue
-            - planningHasConfirmPending
             - readinessProceedRaw
             - planningHumanReadinessAcknowledged
             - discoveryBundledApplyJson

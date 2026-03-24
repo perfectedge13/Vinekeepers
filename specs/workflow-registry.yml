@@ -1,14 +1,14 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T03:48:06Z"
+  updated_utc: "2026-03-24T20:00:00Z"
 project:
   id: vinekeepers
   name: Vinekeepers
   description: Vinekeepers project with spec-driven workflow
   stack:
     language: Java
-    runtime: '21'
+    runtime: "21"
 enums:
   status:
     - draft
@@ -111,14 +111,12 @@ assets:
       Wire engine, config, connectors, shared tools, and configured workflow runners; pass LifecycleContextStore and
       handlesOwnedSpaces map from loaded bots to Router; construct FeaturePlanStateStore, RepoWorkspaceStateStore,
       RepoWorkspaceService; load WorkProfileRegistry from config/work-profiles.yaml; register initialize_feature_plan_state,
-      hydrate_planning_session, start_coordinator_planning, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
-      resolve_proposal_confirmation, accept_pending_planning_confirmations, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
+      hydrate_planning_session, start_coordinator_planning, synthesize_plan_drafts, ensure_repo_workspace, prep_planning_repo_grounding, spread_plan_workspace_signals,
       derive_plan_governance, evaluate_planning_packet_depth, evaluate_planning_approval_gate, execute_planning_room_cycle,
       planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
       post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
       run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
-      get_profile_missing_fields, structured discovery and plan actions, coordinator_intake_bootstrap,
-      mark_intake_discovery_complete, classify_planning_ingress, set_planning_intake_stage,
+      structured discovery and plan actions, coordinator_intake_bootstrap, mark_intake_discovery_complete, classify_planning_ingress, set_planning_intake_stage,
       acknowledge_readiness_human_decision, build_role_planning_thread_messages, run_plan_critique_and_readiness,
       build_planning_thread_review_body, post_planning_packet_thread, build_request_exploration, expand_planning_drafts, persist_plan_approval,
       append/set plan actions; register resolve_deploy_branch, start_ansible_deploy, and run_deploy_compose;
@@ -383,58 +381,153 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningCyclePipeline.java
     role: >-
-      Composable planning-room cycle logic invoked by execute_planning_room_cycle; exposes partial phases
-      runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
-      split-cycle execution no longer persists intermediate follow-up question arrays between actions
-      filtering; optional selective rerun after merge (skips expansion, one inner round); ConfigurablePassRunner resolves
-      the Arrietty planning pass from planningRolePassOrder bind (legacy architect/auditor/scribe tokens collapse to the same pass); derives a
-      single pre-packet semantic outcome through PlanningPostDraftGovernor, then normalizes it into one persisted canonical decision
-      on FeaturePlanState (stage / nextAction / interactionState / routing booleans / gap metadata) so YAML and packet posting route only from canonical decision projections; planningPhase,
-      planningReadyToPostPacket, and planningRevisionNeeded remain derived diagnostics only; DeliberationEngine
-      derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
-      mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
-      and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); merge/reconciliation can add an explicit
-      Coordinator gap resolution (...) marker so the asked gap closes deterministically even when the raw reply wording differs from
-      the profile phrase list; Arrietty-style coordinator clarification
-      is strict: at most one concrete blocking user question per round when a required fact cannot be inferred; PlanningQuestionRankingPolicy
-      and ClarificationPromptQualityGate drop generic/meta/completeness/catch-all open-question prompts; ranked open-question substance
-      aligns with unresolved plan state (governance + artifact text), not free-form LLM filler; canonical coordinator questions use
-      plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
-      post_planning_progress_if_changed; PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;
-      PlanningQuestionRankingPolicy.rank uses
-      maxQuestions budget 1 for coordinator LLM follow-up ranking and canonical repair paths; ClarificationEngineAssessor runs after
-      draft/gap evaluation for canonical_v1, using repo-grounding evidence strength, CoordinatorClarificationEnginePolicy thresholds,
-      clarification-turn budget, per-gap ask budget, and post-critique canonical ask state to choose ClarificationResolutionDecision before surfacing a question;
-      planningCycleUserVisibleFailure maps
-      planningRoomCycleError through PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine and LLM error/skip lines through
-      humanizePlanningCycleFailureFragment; planningOrchestratorRoundSummary and
-      planningCycleProgressSummary branch on the same resolved planningUserInputRequired gate as workflow YAML (not ranked
-      userInputRequired alone); when canonical gaps remain open but the question ranker drops the template, ensureRankedForOpenCanonicalGap
-      synthesizes a non-empty RankedClarification before upsert so ledger and prompts stay consistent; spread keys
-      planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
-      planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true;
-      finalizePlanningCycleSpread reassesses canonical clarification with post-draft semantics after the inner round and routes from the
-      persisted canonical decision only;
-      alongside machine planningRoomCycleError codes, spreads planningRoomCycleErrorUserMessage (PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine)
-      for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens;
-      PlanningPostDraftGovernor still derives planningPostDraftAction (including transient ASSUME_AND_CONTINUE), but PlanningCyclePipeline now
-      collapses that into canonical nextAction values (ASK_ONE_QUESTION, AUTONOMOUS_REDRAFT, POST_PACKET, BLOCK) plus planningPostDraftNoticeMarkdown,
-      planningAutonomousRedraftCount, planningClarificationConfidenceScore/high, and material/revision baselines so Arrietty v2 post-assess YAML
-      routes only on canonical decision projections (no truthy planningUserInputRequired/planningReadyToPostPacket convergence and no ASSUME_AND_CONTINUE router); finalizePlanningCycleSpread
-      persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute),
-      mirrors selective rerun after a merged clarification, and re-derives plan governance before the governor runs;
-      applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
-      SYNTHESIS_JSON_INVALID / SYNTHESIS_REPAIR_EXHAUSTED when no upserts applied; applyPostDraftGovernor persists planner recovery
-      fields on FeaturePlanState when synthesis failure forces BLOCK; spread also carries planningHardClarificationBlockReason for
-      debug visibility when clarification budget exhaustion is the remaining true blocker;
-      when PlanningPostDraftGovernor resolves to ASK_ONE_QUESTION, backfills blank planningClarificationQuestionText from
-      firstUserFacingClarificationTextOrEmpty(ledger, plan), sets planningCanonicalUserInputRequired for canonical_v1 profiles,
-      persists PlanningIntakeStage.CLARIFYING when the plan was not already clarifying, and applyAskOneQuestionUserVisibleCopy
-      forces planningCycleProgressSummary, userCopyCoordinatorProgress, and planningOrchestratorRoundSummary to a single
-      clarification-first line (optional planningClarificationStuckHint prefix, ❓ + truncated question, conservative fallback when
-      still empty) so packet/review preamble does not mix into that beat
+      Thin coordinator for execute_planning_room_cycle plus partial phases runExpansionPhaseOnly, runInnerRoundOnce,
+      finalizePlanningCycleSpread; workspace preflight first; canonical_v1 only; sequence is SilentPlanningSynthesisService inner
+      rounds, then CanonicalPlanningGapEngine.deriveCanonicalGapsAndApplySweeps, then PlanningQuestionComposer +
+      CanonicalClarificationSpreadBuilder + PlanningDeliberationLedgerSync in this class, then PlanningConfidenceService scoring,
+      then PlanningMaterialCyclePacing + PlanningCanonicalDecisionSupport (applyMaterialRoutingAndCanonicalDecision); merge_planning_clarification_choice
+      does not re-run gap evaluation or set planningUserInputRequired from stale open-gap lists; CoordinatorClarificationGapEvaluator is
+      internal to the gap engine; planningGapAskCountsJson is sole ask-count authority; ClarificationProjection is adapter-only from
+      CanonicalClarificationSelection; production must not call PlanningPostDraftGovernor.derive (removed), ClarificationEngineAssessor,
+      or PlanningQuestionRankingPolicy.rank; PlanningMaterialSpreadKeys holds material baseline spread constants
     requires:
       - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CANONICAL-CLARIFICATION-SPREAD-BUILDER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/CanonicalClarificationSpreadBuilder.java
+    role: >-
+      canonical_v1 only: builds ClarificationProjection spread/ledger carrier from the top ASK_USER gap without PlanningQuestionRankingPolicy scoring
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-SILENT-PLANNING-SYNTHESIS-SERVICE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/SilentPlanningSynthesisService.java
+    role: >-
+      Silent (non-interactive) drafting — expansion, role passes, synthesis, pre-critique artifacts, depth — before coordinator
+      clarification selection each planning cycle
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-WORKSPACE-PREFLIGHT-SERVICE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningWorkspacePreflightService.java
+    role: >-
+      Workspace-only preflight before silent synthesis; repo materialization failures are not planning gaps and do not use clarification merge
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-CLARIFICATION-PROJECTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/ClarificationProjection.java
+    role: >-
+      Immutable carrier for one canonical clarification ask (question text, gap id, optional bounded UI metadata) projected to spreads and ledger
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-CANONICAL-CLARIFICATION-SELECTION
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/CanonicalClarificationSelection.java
+    role: >-
+      Records which coordinator gap (if any) was selected for ASK_USER in canonical_v1, including merge-target paths for ledger reconciliation
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-CONFIDENCE-BREAKDOWN
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningConfidenceBreakdown.java
+    role: Structured factors for planning clarification confidence scoring (JSON-friendly snapshot on FeaturePlanState)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-GAP-ASK-COUNTS
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningGapAskCounts.java
+    role: Per-gap surfaced-ask tallies persisted as planningGapAskCountsJson on FeaturePlanState
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-CANONICAL-MERGE-TARGET-PATHS
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/CanonicalMergeTargetPaths.java
+    role: >-
+      Derives UnresolvedItem paths used when merging operator replies to close the active canonical coordinator gap
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-MATERIAL-ROUTING-OUTCOME
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningMaterialRoutingOutcome.java
+    role: >-
+      Outcome record for canonical material/synthesis loop pacing (redraft, post, block, ask) separate from gap-resolution policy
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-MATERIAL-FINGERPRINT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningMaterialFingerprint.java
+    role: Fingerprint helpers for draft/exploration material-change detection in planning cycles
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-QUESTION-COMPOSER
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningQuestionComposer.java
+    role: >-
+      Builds user-facing question copy when canonical resolution selects exactly one ASK_USER gap
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-CLARIFICATION-TEXT-SIMILARITY
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/ClarificationTextSimilarity.java
+    role: >-
+      Paraphrase-style similarity for duplicate clarification detection and ledger continuity (production path; test ranker is separate)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-CONFIDENCE-SERVICE
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningConfidenceService.java
+    role: >-
+      Numeric planning confidence inputs (repo grounding, clarification score factors, breakdown material unknown tallies); does not select gaps
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-CANONICAL-GAP-RESOLUTION-POLICY
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/CanonicalGapResolutionPolicy.java
+    role: >-
+      Maps each CanonicalPlanningGap plus engine policy and evidence to ASK_USER / ASSUME_AND_CONTINUE / LOW_PRIORITY_DEFER / BLOCK_AS_UNIMPLEMENTABLE (no ranker)
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-MATERIAL-CYCLE-PACING
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningMaterialCyclePacing.java
+    role: >-
+      Production material/synthesis/depth loop pacing for canonical_v1 (canonicalPlanningCycleOutcome); separates material routing from gap resolution
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW-STEPS
   - id: ASSET-PLANNING-CANONICAL-DECISION-SUPPORT
@@ -442,7 +535,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningCanonicalDecisionSupport.java
     role: >-
       Canonical decision normalizer/projection helper for planning; builds the persisted PlanningCanonicalDecision after draft
-      and critique passes, derives canonical stage and interaction state, and projects canonical-only spread keys for YAML routing
+      and critique passes; normalizePostDraftCanonicalV1 authorizes ASK_ONE_QUESTION only from canonical gap state (governor BLOCK wins);
+      derives canonical stage and interaction state, and projects canonical-only spread keys for YAML routing
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -455,10 +549,11 @@ assets:
       Post-draft routing governor: derives PlanningPostDraftAction plus a canonical loop outcome from clarification, depth, parse health, ledger repeat,
       material-change signals (merged user answer, repo evidence hash, assumption count, critique blocking count, draft
       fingerprint when canonical exploration/summary text changed), and non-blank planningSynthesisFailureCategory; when category is
-      recoverable (planningRecoverableDraftAfterSynthesis) prefers ASK_ONE_QUESTION from ledger/plan, else ASSUME_AND_CONTINUE with a
-      plain continuing notice instead of AUTONOMOUS_REDRAFT spam; when a stale hard-clarification signal coexists with an open question
-      or a just-merged clarification, it asks/continues instead of falsely BLOCKing; a single synthesized clarification question may
-      also force ASK_ONE_QUESTION when canonical finalize reassessment produced no open gap but no real failure exists; otherwise BLOCK with
+      recoverable (planningRecoverableDraftAfterSynthesis) prefers ASK_ONE_QUESTION from ledger/plan in legacy mode, else ASSUME_AND_CONTINUE with a
+      plain continuing notice instead of AUTONOMOUS_REDRAFT spam; for canonical_v1 without an authorized canonical ask, recoverable paths and
+      hard-clarification budget exhaustion do not promote ledger text into ASK_ONE_QUESTION; when a stale hard-clarification signal coexists with an open question
+      or a just-merged clarification, it asks/continues instead of falsely BLOCKing (legacy); a single synthesized clarification question may
+      also force ASK_ONE_QUESTION when canonical finalize reassessment produced no open gap but no real failure exists (legacy); otherwise BLOCK with
       PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode;
       revision situation fingerprint stops unchanged non-posting loops; explicit planningAutonomousRedraftCount and
       maxAutonomousRedraftsBeforeAsk now act as a hard autonomous loop cap; planningClarificationConfidenceScore compared with
@@ -474,7 +569,7 @@ assets:
   - id: ASSET-PLANNING-POST-DRAFT-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPostDraftAction.java
-    role: Enum spread values for v2 planning_assess_clarification rulesets (explicit redraft arm included)
+    role: Material routing signal enum; live arrietty_room_v2 YAML routes on planningCanonicalNextAction only
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -484,11 +579,9 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningGapEvaluator.java
     role: >-
-      Clarification gating: requiresUserInputForPlanningClarification reflects OPEN planning_clarification items for legacy
-      profiles; PlanningCyclePipeline sets planningUserInputRequired from canonical gap pending when mode is CANONICAL_V1;
-      effectiveRanked rehydrates from the ledger in legacy mode only (PlanningQuestionRankingPolicy.rank with maxQuestions 1);
-      CANONICAL_V1 profiles skip rehydration so stale OPEN rows
-      cannot resurrect questions after CoordinatorClarificationGapEvaluator reconcile
+      Clarification gating: requiresUserInputForPlanningClarification reflects OPEN planning_clarification items for diagnostics;
+      live arrietty_room_v2 uses CanonicalPlanningGapEngine + canonical ledger reconciliation only (canonical_v1 required);
+      PlanningCyclePipeline sets planningUserInputRequired from canonical gap state; stale OPEN rows cannot resurrect questions after reconcile
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -507,14 +600,30 @@ assets:
       - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW
-  - id: ASSET-CLARIFICATION-ENGINE-ASSESSOR
+  - id: ASSET-CANONICAL-PLANNING-GAP-ENGINE
     kind: source
-    path: src/main/java/com/vinekeepers/workflow/planning/ClarificationEngineAssessor.java
+    path: src/main/java/com/vinekeepers/workflow/planning/CanonicalPlanningGapEngine.java
     role: >-
-      Post-draft coordinator clarification assessor for canonical_v1 gaps: combines repo-grounding signals, engine-policy
-      thresholds (repoEvidenceAskThreshold, clarificationAskPriorityThreshold), clarification-turn budget, per-gap ask cap, and critique-follow-up
-      state to choose ASK_USER vs ASSUME_AND_CONTINUE /
-      LOW_PRIORITY_DEFER / BLOCK_AS_UNIMPLEMENTABLE before a single question is surfaced
+      deriveCanonicalGapsAndApplySweeps for canonical_v1: internal CoordinatorClarificationGapEvaluator converts immediately to CanonicalPlanningGap;
+      CanonicalGapResolutionPolicy chooses decisions; planningGapAskCountsJson only for per-gap ask counts; does not compose user-facing question text
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-CANONICAL-PLANNING-GAP-MODEL
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/CanonicalPlanningGap.java
+    role: >-
+      Canonical uncertainty record (gapId, kind, paths, flags, questionSeed) produced by the gap engine; stable gapId from rule id + sibling index
+    requires:
+      - REQ-WORKFLOW-002
+    feature_ids:
+      - FEAT-WORKFLOW
+  - id: ASSET-PLANNING-MATERIAL-SPREAD-KEYS
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningMaterialSpreadKeys.java
+    role: >-
+      Shared FeaturePlanState spread key constants for material fingerprinting and pacing (replaces PlanningPostDraftGovernor spread literals)
     requires:
       - REQ-WORKFLOW-002
     feature_ids:
@@ -1256,27 +1365,13 @@ assets:
     feature_ids:
       - FEAT-CURSOR-GATHERING
       - FEAT-WORKFLOW-STEPS
-  - id: ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/GetProfileMissingFieldsAction.java
-    role: >-
-      Workflow action get_profile_missing_fields — compares plan artifacts to profile required fields; writes summary
-      string to storeIn state key (e.g. profileMissingSummary)
-    requires:
-      - REQ-WORKFLOW-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
   - id: ASSET-PLANNING-PROMPT-FORMATTER
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningPromptFormatter.java
     role: >-
-      Maps work profile labels and optional field promptHint to plain-English missing-field and discovery copy (avoids raw artifact paths in user text);
-      requiredFieldPrompt weaves label + repeatable-entry wording + hint (or a generic concrete-detail fallback when hint absent),
-      with clarification-safe wording for open_questions_block so the intake ask survives the quality gate;
-      coordinator clarification orchestration lines stay actionable (what to answer next) and avoid meta completeness prompts when
-      the contract calls for a single blocking fact; frames structured-input asks as explicit questions and complements PlanningUserFacingCopy for coordinator-facing
-      critique/readiness labels and decision prompts
+      Maps work profile labels and optional field promptHint to plain-English missing-field summaries for internal completeness and
+      readiness diagnostics; live Arrietty planning no longer uses these helpers to trigger user questions, while structured-input
+      labels still complement PlanningUserFacingCopy for coordinator-facing critique/readiness text
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1391,7 +1486,7 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/SynthesizePlanDraftsAction.java
     role: >-
       Workflow action synthesize_plan_drafts — deterministic draft upserts for empty overall_plan, validation_plan, and
-      project_context sections when plan workspace path is MATERIALIZED or RESOLVED_LOCAL; legacy path when proposal actions are not used
+      project_context sections when plan workspace path is MATERIALIZED or RESOLVED_LOCAL; retained as a legacy helper outside the live Arrietty path
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1403,80 +1498,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningDraftSupport.java
     role: >-
-      Shared deterministic draft builders (README, sample paths, plan body, validation, context) for synthesis and proposal
-      actions; project context drafts use plain-language repo workspace status (humanizeRepoWorkspaceStatus)
-    requires:
-      - REQ-WORKFLOW-001
-      - REQ-STATE-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
-  - id: ASSET-PLANNING-PROPOSAL-JSON
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/planning/PlanningProposalJson.java
-    role: JSON serialize/parse helpers for PlanningProposal lists and confirm-queue id lists in workflow state
-    requires:
-      - REQ-WORKFLOW-001
-      - REQ-STATE-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
-  - id: ASSET-GENERATE-PLANNING-PROPOSALS-ACTION
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/GeneratePlanningProposalsAction.java
-    role: >-
-      Workflow action generate_planning_proposals — builds PlanningProposal list from plan + workspace readiness; AUTO_APPLY when
-      workspace ready, else CONFIRM queue for request-only drafts; open questions stay out of the confirm queue because
-      coordinator clarification handles them one at a time; storeSpread planningProposalsJson, planningConfirmQueueJson, flags
-    requires:
-      - REQ-WORKFLOW-001
-      - REQ-STATE-001
-      - REQ-LUNA-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
-  - id: ASSET-APPLY-AUTO-PLANNING-PROPOSALS-ACTION
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/ApplyAutoPlanningProposalsAction.java
-    role: >-
-      Workflow action apply_auto_planning_proposals — upserts AUTO_APPLY proposals via upsert_artifact_section_data; rewrites
-      planningProposalsJson to drop applied entries
-    requires:
-      - REQ-WORKFLOW-001
-      - REQ-STATE-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
-  - id: ASSET-BUILD-PROPOSAL-CONFIRM-PROMPT-ACTION
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/BuildProposalConfirmPromptAction.java
-    role: >-
-      Workflow action build_proposal_confirm_prompt — head of planningConfirmQueueJson; plain-English prompt with fenced draft;
-      storeSpread proposalConfirm* keys and planningHasConfirmPending; drops stale queue ids missing from proposals json
-    requires:
-      - REQ-WORKFLOW-001
-      - REQ-STATE-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
-  - id: ASSET-RESOLVE-PROPOSAL-CONFIRMATION-ACTION
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/ResolveProposalConfirmationAction.java
-    role: >-
-      Workflow action resolve_proposal_confirmation — OK/yes/accept uses proposed value; else user text; pops queue and removes
-      proposal from planningProposalsJson; upserts canonical artifact field
-    requires:
-      - REQ-WORKFLOW-001
-      - REQ-STATE-001
-    feature_ids:
-      - FEAT-CURSOR-GATHERING
-      - FEAT-WORKFLOW-STEPS
-  - id: ASSET-ACCEPT-PENDING-PLANNING-CONFIRMATIONS-ACTION
-    kind: source
-    path: src/main/java/com/vinekeepers/workflow/actions/AcceptPendingPlanningConfirmationsAction.java
-    role: >-
-      Workflow action accept_pending_planning_confirmations — draft-first intake: applies every CONFIRM proposal in
-      planningConfirmQueueJson using its proposedValue, clears the queue, and rewrites planningProposalsJson without user prompts
+      Shared deterministic draft builders (README, sample paths, plan body, validation, context) for synthesis helpers;
+      project context drafts use plain-language repo workspace status (humanizeRepoWorkspaceStatus)
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1501,8 +1524,9 @@ assets:
     role: >-
       Collects structured DiscoveryGap list from FeaturePlanState and work profile (optional workspaceBlockersOnly mode omits
       REQUIRED_FIELD gaps so repo BLOCKER workspace gaps still surface before the first autonomous planning pass); for repeatable
-      sections consolidates missing required fields to one gap per field id across rows; builds DiscoveryAgenda/questions,
-      serializes branch flags for workflow state, projects PlanSectionKey statuses from artifact completeness
+      sections consolidates missing required fields to one gap per field id across rows; intake blocking clarification now
+      surfaces workspace blockers only, while required-field gaps remain internal completeness/readiness signals; projects PlanSectionKey
+      statuses from artifact completeness
     requires:
       - REQ-WORKFLOW-001
       - REQ-STATE-001
@@ -1967,8 +1991,8 @@ assets:
       Thin workflow-action facade; constructor requires non-null PlanningCyclePipeline (fail-fast); delegates run to
       pipeline.execute. execute_planning_room_cycle — iterative planning room: run_request_expansion_llm (optional) then
       build_request_exploration, a single Arrietty LLM planning pass (OpenAI-compatible), expand_planning_drafts +
-      run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; PlanningQuestionRankingPolicy for defaults
-      vs at most one clarification round;       storeSpread planningPhase (READY_FOR_REVIEW when review-ready, not launch approval),
+      run_llm_planning_synthesis + synthesize_pre_critique with inner depth retries; canonical_v1 uses CanonicalPlanningGapEngine
+      and at most one clarification round;       storeSpread planningPhase (READY_FOR_REVIEW when review-ready, not launch approval),
       planningReviewReady/reviewReady, deliberationPhase, planningPacketDepthRetryRecommended, planningUserInputRequired,
       planningClarificationChoicesJson/MetaJson, planningClarificationUseStructuredChoices, planningClarificationQuestionText,
       planningClarificationOrchestratorPrompt, planningOrchestratorRoundSummary, planningCycleProgressSummary, planningReadyToPostPacket,
@@ -2089,11 +2113,10 @@ assets:
       - FEAT-WORKFLOW-STEPS
   - id: ASSET-PLANNING-QUESTION-RANKING-POLICY
     kind: source
-    path: src/main/java/com/vinekeepers/workflow/planning/PlanningQuestionRankingPolicy.java
+    path: src/test/java/com/vinekeepers/workflow/planning/PlanningQuestionRankingPolicy.java
     role: >-
-      Ranks LLM follow-ups, records safe defaults as assumptions, prepares at most one user clarification round; filters out
-      generic/meta/completeness and non-concrete open-question lines so only blocking, factual coordinator asks surface; structured
-      present_choices only for short explicit A-or-B pairs (rejects comma-heavy clauses and multi-clause or splits)
+      Test-only legacy ranker (removed from production). Live path uses CanonicalPlanningGapEngine + CanonicalClarificationSpreadBuilder;
+      ClarificationTextSimilarity covers duplicate detection for ledger continuity in main
     requires:
       - REQ-WORKFLOW-001
       - REQ-LUNA-001
@@ -2282,8 +2305,7 @@ requirements:
           planning_cycle_run_expansion, planning_cycle_run_inner_round, planning_cycle_finalize,
           post_planning_progress_if_changed, merge_planning_clarification_choice, run_arrietty_planning_pass, run_planning_pass, run_architect_planning_pass, run_auditor_planning_pass, run_scribe_planning_pass,
           run_llm_planning_synthesis, run_request_expansion_llm, upsert_artifact_section_data,
-          get_profile_missing_fields, generate_planning_proposals, apply_auto_planning_proposals, build_proposal_confirm_prompt,
-          resolve_proposal_confirmation, synthesize_plan_drafts,           get_structured_discovery_gaps, build_discovery_agenda,
+          synthesize_plan_drafts, get_structured_discovery_gaps, build_discovery_agenda,
           build_insight_discovery_agenda,
           capture_and_apply_discovery_answer,
           classify_assumption_or_issue, recompute_plan_progress, coordinator_intake_bootstrap, run_plan_critique_and_readiness,
@@ -2291,11 +2313,6 @@ requirements:
           append_plan_requirement,
           append_plan_assumption, append_plan_issue, append_plan_validation_note, set_plan_section_status,
           set_solution_outline on WorkflowActionRegistry
-        - >-
-          generate_planning_proposals spreads planningProposalsJson and planningConfirmQueueJson; apply_auto_planning_proposals
-          applies AUTO_APPLY targets and shrinks planningProposalsJson; build_proposal_confirm_prompt / resolve_proposal_confirmation
-          drive confirm-before-record for CONFIRM proposals using discoveryAnswerRaw, excluding open_questions so those are
-          gathered through the clarification loop one question at a time
         - >-
           get_structured_discovery_gaps spreads discoveryHasOpenGaps false and discoveryScanError when contextId is missing;
           until planningAutonomousFirstPassCompleted is true, discoveryGapsJson omits non-workspace REQUIRED_FIELD gaps while
@@ -2332,18 +2349,16 @@ requirements:
           completes without planningRoomCycleError
         - >-
           Arrietty-style coordinator clarification presents at most one concrete blocking question per round when a required fact
-          cannot be inferred; ClarificationPromptQualityGate and PlanningQuestionRankingPolicy suppress generic, meta, completeness-only,
+          cannot be inferred; ClarificationPromptQualityGate and canonical gap/composer paths suppress generic, meta, completeness-only,
           and vague catch-all open-question prompts; clarification substance aligns with unresolved plan state after governance/artifact
           merges (not free-form LLM filler)
         - >-
           Planning cycle operator-visible summaries and failure lines (including planningCycleUserVisibleFailure and planningRoomCycleErrorUserMessage)
           are humanized via PlanningUserFacingCopy so raw internal error codes and pipeline mechanics are not primary Discord copy
         - >-
-          When the post-draft governor spreads planningPostDraftAction ASK_ONE_QUESTION, PlanningCyclePipeline aligns operator copy:
-          backfills blank planningClarificationQuestionText from ledger/plan when possible, may persist PlanningIntakeStage.CLARIFYING,
-          and overwrites planningCycleProgressSummary, userCopyCoordinatorProgress, and planningOrchestratorRoundSummary with a single
-          clarification-first line (optional stuck hint, ❓ question, conservative fallback) so templates do not interleave
-          packet/review preamble with that clarification beat
+          When canonical resolution selects ASK_USER, PlanningCyclePipeline keeps planningClarificationQuestionText
+          aligned to the ledger-backed canonical gap and may persist PlanningIntakeStage.CLARIFYING, but live templates prompt
+          directly from planningClarificationQuestionText instead of relying on a late question-only copy rewrite
         - >-
           ExecutePlanningRoomCycleAction requires a non-null PlanningCyclePipeline at construction; Bootstrap wiring must supply
           the pipeline (no silent null fallback)
@@ -2375,7 +2390,7 @@ requirements:
           (e.g. SYNTHESIS_TRANSPORT_ERROR, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED, SYNTHESIS_UPSERT_REJECTED,
           SYNTHESIS_EMPTY_NOOP) and planningSynthesisRepairExhausted when repair/apply still fails; PlanningCyclePipeline then sets
           planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for recoverable transport/parse paths so
-          PlanningPostDraftGovernor advances with a deterministic ASSUME_AND_CONTINUE notice (or ASK_ONE_QUESTION when clarification text exists) instead of repeated AUTONOMOUS_REDRAFT;
+          PlanningMaterialCyclePacing.canonicalPlanningCycleOutcome advances with a deterministic ASSUME_AND_CONTINUE notice (or ASK_ONE_QUESTION when clarification text exists) instead of repeated AUTONOMOUS_REDRAFT;
           when planningRagAvailable is true in workflow state, includes planningRagRetrievalText in the synthesis prompt context
         - >-
           hydrate_planning_session spreads planningFailureCategory and planningFailurePhase from FeaturePlanState when set so Arrietty kickoff
@@ -2466,7 +2481,6 @@ requirements:
         - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
         - ASSET-PLANNING-RAG-GROUNDING
         - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
-        - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-PLANNING-USER-FACING-COPY
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
@@ -2475,11 +2489,6 @@ requirements:
         - ASSET-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
-        - ASSET-PLANNING-PROPOSAL-JSON
-        - ASSET-GENERATE-PLANNING-PROPOSALS-ACTION
-        - ASSET-APPLY-AUTO-PLANNING-PROPOSALS-ACTION
-        - ASSET-BUILD-PROPOSAL-CONFIRM-PROMPT-ACTION
-        - ASSET-RESOLVE-PROPOSAL-CONFIRMATION-ACTION
         - ASSET-STRUCTURED-DISCOVERY-SUPPORT
         - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
         - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
@@ -2500,6 +2509,11 @@ requirements:
         - ASSET-PLANNING-PACKET-DEPTH-EVALUATOR
         - ASSET-PLANNING-POST-DRAFT-ACTION
         - ASSET-PLANNING-POST-DRAFT-GOVERNOR
+        - ASSET-CANONICAL-CLARIFICATION-SPREAD-BUILDER
+        - ASSET-PLANNING-CANONICAL-DECISION-SUPPORT
+        - ASSET-SILENT-PLANNING-SYNTHESIS-SERVICE
+        - ASSET-PLANNING-WORKSPACE-PREFLIGHT-SERVICE
+        - ASSET-PLANNING-MATERIAL-CYCLE-PACING
         - ASSET-EVALUATE-PLANNING-PACKET-DEPTH-ACTION
         - ASSET-DERIVE-PLAN-GOVERNANCE-ACTION
         - ASSET-PLAN-GOVERNANCE-DERIVER
@@ -2622,13 +2636,6 @@ requirements:
             capture_and_apply skip vs REQUIRED_FIELD upsert, recompute errors and persisted section status projection
           testClass: com.vinekeepers.workflow.actions.DiscoveryWorkflowActionsTest
           preconditions: []
-        - id: UNIT-PLANNING-PROPOSAL-ACTIONS
-          title: PlanningProposalActionsTest
-          intent: >-
-            Verify proposal-driven planning: generate spreads CONFIRM when workspace not ready, apply_auto upserts AUTO_APPLY and
-            strips json, resolve accepts OK and persists plan_body
-          testClass: com.vinekeepers.workflow.actions.PlanningProposalActionsTest
-          preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
           intent: Verify DoneStep completes with message and template
@@ -2688,11 +2695,6 @@ requirements:
           title: UpsertArtifactSectionDataActionTest
           intent: Verify upsert_artifact_section_data merges section field data into plan artifacts with placeholder resolution
           testClass: com.vinekeepers.workflow.actions.UpsertArtifactSectionDataActionTest
-          preconditions: []
-        - id: UNIT-GET-PROFILE-MISSING-FIELDS-ACTION
-          title: GetProfileMissingFieldsActionTest
-          intent: Verify get_profile_missing_fields writes missing-required summary to storeIn
-          testClass: com.vinekeepers.workflow.actions.GetProfileMissingFieldsActionTest
           preconditions: []
         - id: UNIT-CREATE-THREAD-ACTION
           title: CreateThreadActionTest
@@ -2885,15 +2887,15 @@ requirements:
       configurable_steps only and does not use linear_workflow_ref. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
-      allowlists template keys. Planning cycle logic lives in PlanningCyclePipeline; canonical_v1 profiles reconcile OPEN items from
-      profile coordinatorClarification gaps before upsert and use PlanningPostDraftGovernor as the single source of truth for the
-      pre-packet loop outcome (ASK / REDRAFT / POST / ASSUME / BLOCK);
-      post-draft ClarificationEngineAssessor applies engine policy (ask vs assume-and-continue vs defer vs block) using repo evidence,
-      total/per-gap turn budget, and critique context; when allowClarificationAfterCritique is enabled, critique can trigger another clarification
+      allowlists template keys.       Planning cycle logic lives in PlanningCyclePipeline; canonical_v1 profiles reconcile OPEN items from
+      profile coordinatorClarification gaps before upsert; silent synthesis runs before clarification selection; CanonicalPlanningGapEngine
+      derives unresolved gaps, PlanningConfidenceService scores them, CanonicalGapResolutionPolicy chooses ask/assume/defer/block, and
+      PlanningQuestionComposer supplies user-facing copy for a single ASK; PlanningMaterialCyclePacing.canonicalPlanningCycleOutcome paces
+      redraft/post/material baselines with canonicalGapAuthorizesAsk gating (production does not use ClarificationEngineAssessor).
+      Engine policy uses repo evidence, total/per-gap turn budget, and critique context; when allowClarificationAfterCritique is enabled, critique can trigger another clarification
       sweep without abandoning single-question specificity; coordinator clarification follows a strict contract (one concrete blocking
       question when a required fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved
-      plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. PlanningPostDraftGovernor derives
-      planningPostDraftAction for v2 post-assess rulesets (no legacy boolean-first routing); autonomous redraft is allowed only after
+      plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. Legacy derive() lives in test-only LegacyPlanningPostDraftGovernorSupport; v2 post-assess rulesets route on planningCanonicalNextAction (no legacy boolean-first routing); autonomous redraft is allowed only after
       listed material changes or a new revision situation; packet depth defers generic open-question filler blocking to clarification
       state when canonical user input is not required and the unresolved ledger has no OPEN blocking row.
     status: active
@@ -2933,16 +2935,13 @@ requirements:
           from FeaturePlanState (governance merge + artifacts), not ad-hoc LLM churn for the clarification slot; when no unresolved questions
           remain, packet depth and critique accept the ready-to-implement sentinel instead of requiring an editable draft list
         - >-
-          PlanningPostDraftGovernor spreads planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
-          AUTONOMOUS_REDRAFT), planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount, planningClarificationConfidenceScore,
-          and durable material/revision baselines in workflow session state so an
-          unchanged non-posting revision situation cannot re-enter autonomous drafting without a merged user answer, new repo evidence,
-          new assumptions, new critique blocking findings, or materially different canonical draft/exploration text; when that
-          deny-redraft path would otherwise ASSUME_AND_CONTINUE, or when the autonomous redraft count reaches the configured loop cap,
-          an OPEN planning clarification question or structured material gaps on
-          FeaturePlanState (e.g. unresolved questions, open blocking issues, open HIGH assumptions) forces ASK_ONE_QUESTION with
-          forceUserInputRequired instead of silently assuming through; otherwise the governor exits deterministically via
-          ASSUME_AND_CONTINUE or BLOCK instead of emitting another AUTONOMOUS_REDRAFT
+          PlanningMaterialCyclePacing.canonicalPlanningCycleOutcome computes material routing (ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
+          AUTONOMOUS_REDRAFT, ASK_ONE_QUESTION) alongside planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount,
+          planningClarificationConfidenceScore, and durable material/revision baselines in workflow session state so an unchanged
+          non-posting revision situation cannot re-enter autonomous drafting without a merged user answer, new repo evidence,
+          new assumptions, new critique blocking findings, or materially different canonical draft/exploration text; deny-redraft
+          and loop-cap paths no longer reopen questioning from stale ledger or structured-gap fallbacks on canonical_v1, and instead continue or block
+          unless canonical clarification has already selected an askable gap
         - >-
           evaluate_planning_packet_depth invokes PlanningPacketDepthEvaluator with relaxOpenQuestionSupplementalChecks derived from
           workflow state so thin artifact open_questions text alone does not fail depth when planningCanonicalUserInputRequired is false
@@ -2957,12 +2956,12 @@ requirements:
           planningRepoEvidenceJson snapshot is present, nudging the model to treat repo evidence as observed when it uses that
           snapshot and to name concrete paths/packages in impacted_components only when supported by the evidence
         - >-
-          For canonical_v1 coordinator profiles, ClarificationEngineAssessor evaluates open gaps after drafting: outcomes map to
-          ClarificationResolutionDecision (ASK_USER, ASSUME_AND_CONTINUE, LOW_PRIORITY_DEFER, BLOCK_AS_UNIMPLEMENTABLE) using
-          CoordinatorClarificationEnginePolicy (maxClarificationTurns, maxClarificationTurnsPerGap, maxAutonomousRedraftsBeforeAsk,
-          clarificationConfidenceThreshold, repoEvidenceAskThreshold, allowAssumeAndContinue, allowClarificationAfterCritique) plus
-          repo-grounding signals on FeaturePlanState; each cycle may rank fresh LLM follow-up candidates for a new question, while surfaced
-          questions still respect the maxQuestions=1 coordinator ranking contract and escalate from open to narrow to bounded prompts as repeated asks accumulate
+          For canonical_v1 coordinator profiles, CanonicalGapResolutionPolicy evaluates CanonicalPlanningGapEngine output after drafting;
+          outcomes map to ask/assume/defer/block per CoordinatorClarificationEnginePolicy (maxClarificationTurns, maxClarificationTurnsPerGap,
+          maxAutonomousRedraftsBeforeAsk, clarificationConfidenceThreshold, repoEvidenceAskThreshold, allowAssumeAndContinue,
+          allowClarificationAfterCritique) plus PlanningConfidenceService signals on FeaturePlanState; surfaced questions respect the
+          maxQuestions=1 contract and escalate from open to narrow to bounded prompts as repeated asks accumulate, with no fallback
+          to generic or ranked questioning when the canonical gap set is closed
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           informs clarification assessment and ranking so strong on-repo support can reduce unnecessary user asks per policy thresholds
@@ -2984,15 +2983,15 @@ requirements:
         - >-
           Production Arrietty uses arrietty_room_v2 (workflowSchema v2) whose explicit lifecycle phases own hydrate_planning_session,
           ensure_repo_workspace, optional prep_planning_repo_grounding (Qdrant + Parquet RAG when configured in ingress YAML),
-          spread_plan_workspace_signals, spread_planning_workspace_blocker, structured discovery, clarification, critique, approval, and launch
+          spread_plan_workspace_signals, spread_planning_workspace_blocker, clarification, critique, approval, and launch
           inside the v2 graph; v2 templates allowlist includes planningIngressMode, planningAutonomousFirstPassCompleted,
           planningRepoEvidenceJson, canonicalPlanningIntakeStage, and user-facing review / launch copy keys
         - >-
           arrietty_room_v2 uses named phases plus embedded configurable_steps segments; configurable_steps persist isolated segment
           cursors; kickoff routes through planning_ingress/planning_kickoff; after planning_assess_clarification, rs_post_draft rulesets
-          branch only on planningPostDraftAction (fail-closed default planning_blocked); cap_post_draft_blocked reaches planning_redraft_notice
-          only for AUTONOMOUS_REDRAFT after material change per governor; synthesis JSON repair exhaustion and similar failure categories route
-          through PlanningPostDraftGovernor recoverable paths (ASSUME_AND_CONTINUE with suppress-redraft notice) instead of cycling AUTONOMOUS_REDRAFT;
+          branch only on planningCanonicalNextAction (fail-closed default planning_blocked); cap_post_draft_blocked reaches planning_redraft_notice
+          only for AUTONOMOUS_REDRAFT after material change per PlanningMaterialCyclePacing; synthesis JSON repair exhaustion and similar failure categories route
+          through PlanningMaterialCyclePacing recoverable paths (ASSUME_AND_CONTINUE with suppress-redraft notice) instead of cycling AUTONOMOUS_REDRAFT;
           when post-draft handling blocks on synthesis failure, FeaturePlanState planner recovery fields persist category, phase, recoverable flag,
           and humanized last recovery hint; clarification uses the explicit planning_clarification phase when
           the coordinator must ask the operator; ArriettyV2WorkflowYamlTest guards phase ownership, post-assess branching, and bans
@@ -3043,9 +3042,23 @@ requirements:
         - ASSET-PLANNING-CYCLE-PIPELINE
         - ASSET-PLANNING-GAP-EVALUATOR
         - ASSET-COORDINATOR-CLARIFICATION-GAP-EVALUATOR
-        - ASSET-CLARIFICATION-ENGINE-ASSESSOR
+        - ASSET-CANONICAL-PLANNING-GAP-ENGINE
+        - ASSET-SILENT-PLANNING-SYNTHESIS-SERVICE
+        - ASSET-PLANNING-WORKSPACE-PREFLIGHT-SERVICE
+        - ASSET-CLARIFICATION-PROJECTION
+        - ASSET-CANONICAL-CLARIFICATION-SELECTION
+        - ASSET-PLANNING-CONFIDENCE-BREAKDOWN
+        - ASSET-PLANNING-GAP-ASK-COUNTS
+        - ASSET-CANONICAL-MERGE-TARGET-PATHS
+        - ASSET-PLANNING-MATERIAL-ROUTING-OUTCOME
+        - ASSET-PLANNING-MATERIAL-FINGERPRINT
+        - ASSET-PLANNING-QUESTION-COMPOSER
+        - ASSET-CLARIFICATION-TEXT-SIMILARITY
+        - ASSET-PLANNING-CONFIDENCE-SERVICE
+        - ASSET-CANONICAL-GAP-RESOLUTION-POLICY
+        - ASSET-PLANNING-MATERIAL-CYCLE-PACING
+        - ASSET-PLANNING-CANONICAL-DECISION-SUPPORT
         - ASSET-CLARIFICATION-COORDINATOR-LEDGER
-        - ASSET-ACCEPT-PENDING-PLANNING-CONFIRMATIONS-ACTION
         - ASSET-SPREAD-PLANNING-WORKSPACE-BLOCKER-ACTION
         - ASSET-CLASSIFY-PLANNING-INGRESS-ACTION
         - ASSET-SET-PLANNING-INTAKE-STAGE-ACTION
@@ -3165,7 +3178,7 @@ requirements:
         - id: UNIT-PLANNING-CYCLE-PIPELINE-CANONICAL-CLARIFICATION
           title: PlanningCyclePipelineCanonicalClarificationTest
           intent: >-
-            Verify PlanningCyclePipeline canonical_v1 clarification gating, planningPostDraftAction spread, split-path autonomous pass
+            Verify PlanningCyclePipeline canonical_v1 clarification gating, canonical next-action projection, split-path autonomous pass
             completion parity, material redraft gates, ledger stray handling, strict blocking-question contract helpers, ASK_ONE_QUESTION
             question-text backfill, clarification-only progress/orchestrator summaries, and optional CLARIFYING intake transition
           testClass: com.vinekeepers.workflow.planning.PlanningCyclePipelineCanonicalClarificationTest
@@ -3208,12 +3221,37 @@ requirements:
             Verify expansion and synthesis planning prompts enforce repo-grounding tiers, single recommended_action, and one-question contract
           testClass: com.vinekeepers.workflow.actions.PlanningLlmPromptContractTest
           preconditions: []
-        - id: UNIT-CLARIFICATION-ENGINE-ASSESSOR
-          title: ClarificationEngineAssessorTest
+        - id: UNIT-CANONICAL-PLANNING-GAP-ENGINE
+          title: CanonicalPlanningGapEngineTest
           intent: >-
-            Verify post-draft clarification assessment: policy thresholds, repo-evidence bias, turn budget, critique re-entry, and
+            Verify canonical gap assessment: policy thresholds, repo-evidence bias, turn budget, critique re-entry, and
             ClarificationResolutionDecision outcomes
-          testClass: com.vinekeepers.workflow.planning.ClarificationEngineAssessorTest
+          testClass: com.vinekeepers.workflow.planning.CanonicalPlanningGapEngineTest
+          preconditions: []
+        - id: UNIT-PLANNING-GAP-ASK-COUNTS
+          title: PlanningGapAskCountsTest
+          intent: Verify per-gap surfaced-ask tally JSON round-trip and increment semantics for canonical clarification pacing
+          testClass: com.vinekeepers.workflow.planning.PlanningGapAskCountsTest
+          preconditions: []
+        - id: UNIT-PLANNING-CONFIDENCE-BREAKDOWN
+          title: PlanningConfidenceBreakdownTest
+          intent: Verify structured confidence breakdown factors serialize for FeaturePlanState planningConfidenceBreakdownJson
+          testClass: com.vinekeepers.workflow.planning.PlanningConfidenceBreakdownTest
+          preconditions: []
+        - id: UNIT-PLANNING-MATERIAL-ROUTING-OUTCOME
+          title: PlanningMaterialRoutingOutcomeTest
+          intent: Verify material routing outcome record semantics for canonical cycle pacing
+          testClass: com.vinekeepers.workflow.planning.PlanningMaterialRoutingOutcomeTest
+          preconditions: []
+        - id: UNIT-PLANNING-CONFIDENCE-SERVICE
+          title: PlanningConfidenceServiceTest
+          intent: Verify gap and plan-signal scoring used by CanonicalGapResolutionPolicy and state persistence hooks
+          testClass: com.vinekeepers.workflow.planning.PlanningConfidenceServiceTest
+          preconditions: []
+        - id: UNIT-CLARIFICATION-TEXT-SIMILARITY
+          title: ClarificationTextSimilarityTest
+          intent: Verify paraphrase-style similarity for duplicate clarification detection and ledger continuity
+          testClass: com.vinekeepers.workflow.planning.ClarificationTextSimilarityTest
           preconditions: []
         - id: UNIT-COORDINATOR-CLARIFICATION-GAP-EVALUATOR
           title: CoordinatorClarificationGapEvaluatorTest
@@ -3327,16 +3365,15 @@ requirements:
           luna_cursor provisions the feature room and intake/spec thread, initializes plan state, ensures repo workspace,
           seeds requirements narrative, posts a handoff line to the thread, invokes start_coordinator_planning so the
           coordinator workflow runs once in the thread without a user wake-up message, and completes in the main channel; Phase B/C
-          (generate_planning_proposals, apply_auto_planning_proposals, confirm loop via build_proposal_confirm_prompt and
-          resolve_proposal_confirmation, guided discovery, critique/readiness, approval choices, role posts,
+          (workspace-only prepare, canonical clarification, critique/readiness, approval choices, role posts,
           launch_cursor_run; synthesize_plan_drafts remains as a legacy helper) run in arrietty_room_v2 from that kickoff and when the user messages the intake thread: hydrate_planning_session
           (storeSpread) branches on planningIntakeThread; thread path uses session key bot:arrietty:conv:threadId with
           conversationMode conversational so the workflow does not reset after terminal launch; room channel path keeps
           the legacy capture_field room command branch
         - >-
           Discovery and approval prompts use plain-English copy from profile labels/hints and gap userFacingDetail; structured
-          planning-input asks are framed as explicit questions; get_profile_missing_fields summary uses human-readable lines
-          (Still needed: …) rather than raw artifact paths
+          planning-input asks are framed as explicit questions, while missing-field summaries stay internal and use human-readable
+          labels rather than raw artifact paths
         - >-
           launch_cursor_run when contextId is set requires canonical PlanApproval APPROVE or APPROVE_WITH_RISKS unless
           CURSOR_LAUNCH_SKIP_APPROVAL_GATE=true; confirm cancel branches to cancelled done step; channel create failure
@@ -3393,7 +3430,6 @@ requirements:
         - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
         - ASSET-PLANNING-RAG-GROUNDING
         - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
-        - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
         - ASSET-PLANNING-PROMPT-FORMATTER
         - ASSET-HYDRATE-PLANNING-SESSION-ACTION
         - ASSET-COORDINATOR-INTAKE-BOOTSTRAP-ACTION
@@ -3401,11 +3437,6 @@ requirements:
         - ASSET-BUILD-ROLE-PLANNING-THREAD-MESSAGES-ACTION
         - ASSET-SYNTHESIZE-PLAN-DRAFTS-ACTION
         - ASSET-PLANNING-DRAFT-SUPPORT
-        - ASSET-PLANNING-PROPOSAL-JSON
-        - ASSET-GENERATE-PLANNING-PROPOSALS-ACTION
-        - ASSET-APPLY-AUTO-PLANNING-PROPOSALS-ACTION
-        - ASSET-BUILD-PROPOSAL-CONFIRM-PROMPT-ACTION
-        - ASSET-RESOLVE-PROPOSAL-CONFIRMATION-ACTION
         - ASSET-STRUCTURED-DISCOVERY-SUPPORT
         - ASSET-GET-STRUCTURED-DISCOVERY-GAPS-ACTION
         - ASSET-BUILD-DISCOVERY-AGENDA-ACTION
@@ -4026,7 +4057,6 @@ features:
       - ASSET-PREP-PLANNING-REPO-GROUNDING-ACTION
       - ASSET-PLANNING-RAG-GROUNDING
       - ASSET-UPSERT-ARTIFACT-SECTION-DATA-ACTION
-      - ASSET-GET-PROFILE-MISSING-FIELDS-ACTION
       - ASSET-PLANNING-USER-FACING-COPY
       - ASSET-PROVISION-BOT-INSTANCE-ACTION
       - ASSET-CREATE-LIFECYCLE-CONTEXT-ACTION

@@ -34,8 +34,8 @@ class PlanningDeliberationLedgerSyncTest {
                         0);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.empty().withAdded(merged);
 
-        PlanningQuestionRankingPolicy.RankedClarification ranked =
-                new PlanningQuestionRankingPolicy.RankedClarification(
+        ClarificationProjection ranked =
+                new ClarificationProjection(
                         true,
                         "",
                         "[]",
@@ -80,8 +80,8 @@ class PlanningDeliberationLedgerSyncTest {
 
     @Test
     void upsertCanonicalGapUsesGapIdInSource() {
-        PlanningQuestionRankingPolicy.RankedClarification ranked =
-                new PlanningQuestionRankingPolicy.RankedClarification(
+        ClarificationProjection ranked =
+                new ClarificationProjection(
                         true,
                         "",
                         "[]",

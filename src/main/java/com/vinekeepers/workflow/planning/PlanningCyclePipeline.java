@@ -11,7 +11,6 @@ import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.PlanAssumptionStatus;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanGovernanceSeverity;
@@ -22,22 +21,12 @@ import com.vinekeepers.state.workflow.ProgressEventLog;
 import com.vinekeepers.state.workflow.UnresolvedItem;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.state.workflow.UnresolvedItemStatus;
-import com.vinekeepers.workflow.actions.BuildRequestExplorationAction;
-import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
-import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
-import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
-import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
-import com.vinekeepers.state.planning.ClarificationResolutionDecision;
 import com.vinekeepers.state.planning.PlanningCanonicalDecision;
 import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
-import com.vinekeepers.workflow.planning.ClarificationEngineAssessor.AssessedGap;
-import com.vinekeepers.workflow.planning.PlanningQuestionRankingPolicy.RankedClarification;
-import com.vinekeepers.workflow.planning.PlanningRolePassRunner.RolePassResult;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
-import com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluator;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
@@ -46,7 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
+import java.util.Set;
 
 /**
  * Composable planning-room cycle: expansion, role passes, synthesis, depth, clarification spread keys.
@@ -76,23 +65,13 @@ public final class PlanningCyclePipeline {
     private record LoadedCycle(
             String contextId, FeaturePlanState plan, WorkProfileDefinition profile, Map<String, Object> work) {}
 
-    private record InnerRoundResult(
-            FeaturePlanState plan,
-            boolean depthOk,
-            String depthReason,
-            String lastRoleRoundSummary,
-            String lastSynthLlmLine) {}
-
     private record ClarificationRoundOutcome(
             FeaturePlanState plan,
-            RankedClarification rankedLlm,
+            ClarificationProjection rankedLlm,
             PlanningDeliberationLedgerSync.UpsertResult upsert,
             /** When true, canonical_v1 still has at least one open gap (authoritative for {@code planningUserInputRequired}). */
             boolean canonicalClarificationPending,
-            /**
-             * Raw ranker signal before canonical repair ({@link #ensureRankedForOpenCanonicalGap}); spread as {@code
-             * planningLlmUserInputSuggested}.
-             */
+            /** True when canonical_v1 will surface one askable question this cycle (canonical gap only, not legacy ranker). */
             boolean llmUserInputSuggested,
             /** Budget exhausted on a blocking coordinator gap with no remaining askable path. */
             boolean hardClarificationBlock,
@@ -102,6 +81,7 @@ public final class PlanningCyclePipeline {
     private final OpenAiChatClient openAiChatClient;
     private final FeaturePlanStateStore planStateStore;
     private final WorkProfileRegistry workProfileRegistry;
+    private final SilentPlanningSynthesisService silentSynthesis;
 
     public PlanningCyclePipeline(
             OpenAiChatClient openAiChatClient,
@@ -110,6 +90,7 @@ public final class PlanningCyclePipeline {
         this.openAiChatClient = openAiChatClient;
         this.planStateStore = planStateStore;
         this.workProfileRegistry = workProfileRegistry;
+        this.silentSynthesis = new SilentPlanningSynthesisService(openAiChatClient, planStateStore, workProfileRegistry);
     }
 
     public Map<String, Object> execute(Event event, Map<String, Object> state, Map<String, Object> bind) {
@@ -123,6 +104,22 @@ public final class PlanningCyclePipeline {
         WorkProfileDefinition profile = ctx.profile();
         Map<String, Object> work = ctx.work();
         FeaturePlanState plan = ctx.plan();
+
+        PlanningWorkspacePreflightService.PreflightResult workspacePre = PlanningWorkspacePreflightService.evaluate(plan);
+        spread.put("planningWorkspacePreflightStatus", workspacePre.status().name());
+        if (workspacePre.blocked()) {
+            spread.put("planningWorkspaceUserInputRequired", "true");
+            spread.put("planningWorkspaceBlockerPrompt", workspacePre.userPrompt());
+            putPlanningRoomCycleError(spread, "WORKSPACE_BLOCKED");
+            finishProgressFingerprint(state, spread);
+            return spread;
+        }
+
+        if (!profile.getCoordinatorClarification().isCanonicalV1()) {
+            putPlanningRoomCycleError(spread, "PLANNING_REQUIRES_CANONICAL_V1");
+            finishProgressFingerprint(state, spread);
+            return spread;
+        }
 
         int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0);
         cycleIteration++;
@@ -148,8 +145,8 @@ public final class PlanningCyclePipeline {
 
         int innerRounds = (selective && justMerged) ? 1 : MAX_BOT_INNER_ROUNDS;
         for (int inner = 0; inner < innerRounds; inner++) {
-            InnerRoundResult round =
-                    runSingleInnerRound(
+            SilentPlanningSynthesisService.InnerRoundResult round =
+                    silentSynthesis.runSingleInnerRound(
                             event, contextId, profile, work, spread, bind, planPtr, lastSynthLlmLine);
             planPtr = round.plan();
             depthOk = round.depthOk();
@@ -171,25 +168,20 @@ public final class PlanningCyclePipeline {
 
         plan = planStateStore.getByContextId(contextId).orElse(planPtr);
         ClarificationRoundOutcome clr =
-                resolveClarificationRound(contextId, plan, state, profile, true);
+                resolveClarificationRound(contextId, plan, state, profile, true, cycleIteration);
         plan = clr.plan();
-        RankedClarification rankedLlm = clr.rankedLlm();
+        ClarificationProjection rankedLlm = clr.rankedLlm();
         PlanningDeliberationLedgerSync.UpsertResult upsert = clr.upsert();
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsert.ledger());
         spread.put("planningClarificationLedgerItemId", upsert.activeItemId().orElse(""));
 
-        CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
-        RankedClarification ranked =
-                PlanningGapEvaluator.effectiveRanked(plan, upsert.ledger(), rankedLlm, profile, coord);
-        boolean userInputRequired =
-                resolvePlanningUserInputRequired(coord.isCanonicalV1(), clr.canonicalClarificationPending(), upsert.ledger());
+        ClarificationProjection ranked = rankedLlm;
+        boolean userInputRequired = clr.canonicalClarificationPending();
 
         PlanGovernanceDeriver.deriveAndPersist(planStateStore, contextId, profile);
         plan = planStateStore.getByContextId(contextId).orElse(plan);
 
         spread.put("planningCanonicalUserInputRequired", clr.canonicalClarificationPending() ? "true" : "false");
-        spread.put("planningLlmUserInputSuggested", clr.llmUserInputSuggested() ? "true" : "false");
-        spread.put("planningQuestionsAskedThisRound", rankedLlm.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
         spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
         spread.put("planningClarificationChoicesJson", ranked.choicesJson());
@@ -208,7 +200,7 @@ public final class PlanningCyclePipeline {
         applyClarificationConfidence(spread, state, plan, upsert.ledger(), ranked, profile, userInputRequired, depthOk, structuredParseFailed);
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
-        applyPostDraftGovernor(
+        applyMaterialRoutingAndCanonicalDecision(
                 contextId,
                 state,
                 spread,
@@ -281,8 +273,6 @@ public final class PlanningCyclePipeline {
                 spread.get("planningCycleProgressSummary") != null
                         ? spread.get("planningCycleProgressSummary").toString()
                         : "");
-        plan = planStateStore.getByContextId(contextId).orElse(plan);
-        applyAskOneQuestionUserVisibleCopy(contextId, spread, plan);
 
         enrichUserCopyAndProgressLog(state, spread);
         spread.put("planningJustMergedClarification", "false");
@@ -337,8 +327,8 @@ public final class PlanningCyclePipeline {
         String contextId = ctx.contextId();
         String prevSynth = getString(state, PARTIAL_LAST_SYNTH_KEY);
         FeaturePlanState plan = ctx.plan();
-        InnerRoundResult round =
-                runSingleInnerRound(
+        SilentPlanningSynthesisService.InnerRoundResult round =
+                silentSynthesis.runSingleInnerRound(
                         event,
                         contextId,
                         ctx.profile(),
@@ -361,6 +351,12 @@ public final class PlanningCyclePipeline {
         Map<String, Object> spread = baseSpread();
         LoadedCycle ctx = loadCycleOrAbort(event, state, bind, spread);
         if (ctx == null) {
+            finishProgressFingerprint(state, spread);
+            return spread;
+        }
+        WorkProfileDefinition profileFin0 = ctx.profile();
+        if (!profileFin0.getCoordinatorClarification().isCanonicalV1()) {
+            putPlanningRoomCycleError(spread, "PLANNING_REQUIRES_CANONICAL_V1");
             finishProgressFingerprint(state, spread);
             return spread;
         }
@@ -389,26 +385,20 @@ public final class PlanningCyclePipeline {
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
         WorkProfileDefinition profileFin = ctx.profile();
         ClarificationRoundOutcome clrFin =
-                resolveClarificationRound(contextId, plan, state, profileFin, true);
+                resolveClarificationRound(contextId, plan, state, profileFin, true, cycleIteration);
         plan = clrFin.plan();
-        RankedClarification rankedLlmFin = clrFin.rankedLlm();
+        ClarificationProjection rankedLlmFin = clrFin.rankedLlm();
         PlanningDeliberationLedgerSync.UpsertResult upsertFin = clrFin.upsert();
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsertFin.ledger());
         spread.put("planningClarificationLedgerItemId", upsertFin.activeItemId().orElse(""));
 
-        CoordinatorClarificationSettings coordFin = profileFin.getCoordinatorClarification();
-        RankedClarification ranked =
-                PlanningGapEvaluator.effectiveRanked(plan, upsertFin.ledger(), rankedLlmFin, profileFin, coordFin);
-        boolean userInputRequired =
-                resolvePlanningUserInputRequired(
-                        coordFin.isCanonicalV1(), clrFin.canonicalClarificationPending(), upsertFin.ledger());
+        ClarificationProjection ranked = rankedLlmFin;
+        boolean userInputRequired = clrFin.canonicalClarificationPending();
 
         PlanGovernanceDeriver.deriveAndPersist(planStateStore, contextId, profileFin);
         plan = planStateStore.getByContextId(contextId).orElse(plan);
 
         spread.put("planningCanonicalUserInputRequired", clrFin.canonicalClarificationPending() ? "true" : "false");
-        spread.put("planningLlmUserInputSuggested", clrFin.llmUserInputSuggested() ? "true" : "false");
-        spread.put("planningQuestionsAskedThisRound", rankedLlmFin.userInputRequired() ? "1" : "0");
         spread.put("planningBlockingQuestionCount", String.valueOf(ranked.blockingQuestionCount()));
         spread.put("planningUserInputRequired", userInputRequired ? "true" : "false");
         spread.put("planningClarificationChoicesJson", ranked.choicesJson());
@@ -431,7 +421,7 @@ public final class PlanningCyclePipeline {
                 spread, state, plan, upsertFin.ledger(), ranked, profileFin, userInputRequired, depthOk, structuredParseFailedFinalize);
         applyClarificationStuck(state, spread, ranked, userInputRequired);
 
-        applyPostDraftGovernor(
+        applyMaterialRoutingAndCanonicalDecision(
                 contextId,
                 state,
                 spread,
@@ -504,8 +494,6 @@ public final class PlanningCyclePipeline {
                 spread.get("planningCycleProgressSummary") != null
                         ? spread.get("planningCycleProgressSummary").toString()
                         : "");
-        plan = planStateStore.getByContextId(contextId).orElse(plan);
-        applyAskOneQuestionUserVisibleCopy(contextId, spread, plan);
 
         enrichUserCopyAndProgressLog(state, spread);
         spread.put("planningJustMergedClarification", "false");
@@ -527,183 +515,116 @@ public final class PlanningCyclePipeline {
             FeaturePlanState plan,
             Map<String, Object> state,
             WorkProfileDefinition profile,
-            boolean draftingCompletedThisInvocation) {
+            boolean draftingCompletedThisInvocation,
+            int cycleIteration) {
         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
         CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
-        RankedClarification rankedLlm;
-        if (coord.isCanonicalV1()) {
-            boolean semanticAllowed = semanticClarificationAllowed(plan, state, draftingCompletedThisInvocation);
-            boolean critiqueSweep =
-                    plan != null
-                            && plan.getPlanningCanonicalDecision() != null
-                            && "post_critique".equalsIgnoreCase(plan.getPlanningCanonicalDecision().source())
-                            && plan.getPlanningCanonicalDecision().nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION;
-            for (int sweep = 0; sweep < 3; sweep++) {
-                List<AssessedGap> assessedSweep =
-                        ClarificationEngineAssessor.assessCanonicalGaps(
-                                plan,
-                                coord,
-                                semanticAllowed,
-                                getString(state, "planningRepoEvidenceJson"),
-                                critiqueSweep);
-                boolean progressed = false;
-                for (AssessedGap ag : assessedSweep) {
-                    if (ag.decision() == ClarificationResolutionDecision.ASSUME_AND_CONTINUE
-                            && ag.assumptionToRecord() != null
-                            && !ag.assumptionToRecord().isBlank()) {
-                        plan = appendAssumption(plan, ag.assumptionToRecord());
-                        progressed = true;
-                    } else if (ag.decision() == ClarificationResolutionDecision.LOW_PRIORITY_DEFER) {
-                        plan =
-                                plan.withClarificationEngineNote(
-                                        "Deferred coordinator gap `" + ag.gap().gapId() + "` (low priority / budget policy).");
-                    } else if (ag.decision() == ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE) {
-                        plan =
-                                plan.withClarificationEngineNote(
-                                        "Clarification budget exhausted on blocking gap `" + ag.gap().gapId() + "`.");
-                    }
-                }
-                if (progressed) {
-                    planStateStore.update(plan);
-                    plan = planStateStore.getByContextId(contextId).orElse(plan);
-                } else {
-                    break;
-                }
+        if (!coord.isCanonicalV1()) {
+            PlanningDeliberationLedgerSync.UpsertResult upsert =
+                    PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, emptyClarificationProjection());
+            return new ClarificationRoundOutcome(
+                    plan, emptyClarificationProjection(), upsert, false, false, false, "");
+        }
+        CanonicalPlanningGapEngine.CanonicalGapDerivationOutcome derived =
+                CanonicalPlanningGapEngine.deriveCanonicalGapsAndApplySweeps(
+                        contextId, plan, state, profile, draftingCompletedThisInvocation, planStateStore);
+        plan = derived.plan();
+        ClarificationProjection rankedLlm = emptyClarificationProjection();
+        boolean willAsk = false;
+        Optional<CanonicalPlanningGap> askOpt = derived.candidateAskGap();
+        if (askOpt.isPresent() && !derived.hardClarificationBlock()) {
+            CanonicalPlanningGap g = askOpt.get();
+            CoordinatorClarificationGapRule rule = coord.findGapRule(g.gapId()).orElse(null);
+            int priorAskCount = PlanningGapAskCounts.countForGap(plan.getPlanningGapAskCountsJson(), g.gapId());
+            QuestionMode qMode = PlanningQuestionComposer.questionModeForPriorAskCount(priorAskCount);
+            String q =
+                    PlanningQuestionComposer.composeQuestionForAskCycle(
+                            g.questionSeed(), g.gapId(), rule, ledger, priorAskCount);
+            if (q.isBlank()) {
+                q = g.questionSeed().trim();
             }
-            List<AssessedGap> assessedFinal =
-                    ClarificationEngineAssessor.assessCanonicalGaps(
-                            plan,
-                            coord,
-                            semanticAllowed,
-                            getString(state, "planningRepoEvidenceJson"),
-                            critiqueSweep);
-            for (AssessedGap ag : assessedFinal) {
-                if (ag.decision() == ClarificationResolutionDecision.ASSUME_AND_CONTINUE
-                        && ag.assumptionToRecord() != null
-                        && !ag.assumptionToRecord().isBlank()) {
-                    plan = appendAssumption(plan, ag.assumptionToRecord());
-                } else if (ag.decision() == ClarificationResolutionDecision.LOW_PRIORITY_DEFER) {
-                    plan =
-                            plan.withClarificationEngineNote(
-                                    "Deferred coordinator gap `" + ag.gap().gapId() + "` (low priority / budget policy).");
-                } else if (ag.decision() == ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE) {
-                    plan =
-                            plan.withClarificationEngineNote(
-                                    "Clarification budget exhausted on blocking gap `" + ag.gap().gapId() + "`.");
-                }
+            if (q.isBlank()) {
+                q =
+                        PlanningDeliberationLedgerSync.lastMergedQuestionTextForPlanningGap(ledger, g.gapId())
+                                .orElse("")
+                                .trim();
             }
+            rankedLlm =
+                    CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
+                            ledger, profile, coord, g, q, List.of(), qMode);
+            willAsk =
+                    rankedLlm.userInputRequired()
+                            && rankedLlm.questionText() != null
+                            && !rankedLlm.questionText().isBlank();
+        }
+        Set<String> allowedOpen;
+        List<CoordinatorClarificationGapEvaluator.OpenGap> openRawFinal = derived.rawOpenGaps();
+        if (askOpt.isEmpty()) {
+            allowedOpen = CoordinatorClarificationGapEvaluator.openGapIds(openRawFinal);
+        } else if (willAsk) {
+            allowedOpen = Set.of(askOpt.get().gapId());
+        } else {
+            allowedOpen = Set.of();
+        }
+        ledger = PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(ledger, allowedOpen);
+        PlanningDeliberationLedgerSync.UpsertResult upsert;
+        if (askOpt.isEmpty()) {
+            upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
+        } else {
+            CanonicalPlanningGap cg = askOpt.get();
+            int nextAskCount = PlanningGapAskCounts.countForGap(plan.getPlanningGapAskCountsJson(), cg.gapId()) + 1;
+            upsert =
+                    PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
+                            ledger,
+                            rankedLlm,
+                            cg.gapId(),
+                            cg.blocking(),
+                            nextAskCount,
+                            escalationLevelForAsk(nextAskCount - 1));
+        }
+        if (askOpt.isPresent() && willAsk) {
+            CanonicalPlanningGap cg = askOpt.get();
+            plan =
+                    plan.withClarificationQuestionSurfaced("ask:" + cg.gapId() + ":" + cycleIteration)
+                            .withPlanningGapAskCountsJson(
+                                    PlanningGapAskCounts.incrementAsk(
+                                            plan.getPlanningGapAskCountsJson(), cg.gapId()))
+                            .withPlanningIntakeStage(PlanningIntakeStage.CLARIFYING, java.time.Instant.now());
             planStateStore.update(plan);
             plan = planStateStore.getByContextId(contextId).orElse(plan);
-            assessedFinal =
-                    ClarificationEngineAssessor.assessCanonicalGaps(
-                            plan,
-                            coord,
-                            semanticAllowed,
-                            getString(state, "planningRepoEvidenceJson"),
-                            critiqueSweep);
-            List<CoordinatorClarificationGapEvaluator.OpenGap> openRawFinal =
-                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, semanticAllowed);
-            CoordinatorClarificationGapEvaluator.OpenGap topAskFinal = null;
-            for (AssessedGap ag : assessedFinal) {
-                if (ag.decision() == ClarificationResolutionDecision.ASK_USER) {
-                    topAskFinal = ag.gap();
-                    break;
-                }
-            }
-            String hardClarificationBlockReason =
-                    assessedFinal.stream()
-                            .filter(
-                                    ag ->
-                                            ag.decision()
-                                                    == ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE)
-                            .map(AssessedGap::assumptionToRecord)
-                            .filter(note -> note != null && !note.isBlank())
-                            .findFirst()
-                            .orElse("");
-            boolean hardClarificationBlock = !hardClarificationBlockReason.isBlank() && topAskFinal == null;
-            ledger =
-                    PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
-                            ledger,
-                            topAskFinal != null
-                                    ? java.util.Set.of(topAskFinal.gapId())
-                                    : CoordinatorClarificationGapEvaluator.openGapIds(openRawFinal));
-            RankedClarification rankedBeforeEnsure =
-                    topAskFinal == null
-                            ? emptyRankedClarification()
-                            : rankCanonicalOpenTopGap(
-                                    plan,
-                                    ledger,
-                                    profile,
-                                    coord,
-                                    topAskFinal,
-                                    planGapAskCount(plan, topAskFinal.gapId()));
-            boolean llmUserInputSuggested = rankedBeforeEnsure.userInputRequired();
-            rankedLlm = rankedBeforeEnsure;
-            if (topAskFinal != null) {
-                int priorAskCount = planGapAskCount(plan, topAskFinal.gapId());
-                rankedLlm =
-                        ensureRankedForOpenCanonicalGap(
-                                plan, ledger, profile, coord, topAskFinal, rankedBeforeEnsure, priorAskCount);
-            }
-            PlanningDeliberationLedgerSync.UpsertResult upsert;
-            if (topAskFinal == null) {
-                upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
-            } else {
-                int nextAskCount = planGapAskCount(plan, topAskFinal.gapId()) + 1;
-                upsert =
-                        PlanningDeliberationLedgerSync.upsertOpenQuestionForCanonicalGap(
-                                ledger,
-                                rankedLlm,
-                                topAskFinal.gapId(),
-                                topAskFinal.blocking(),
-                                nextAskCount,
-                                clarificationEscalationLevel(nextAskCount - 1).name());
-            }
-            if (topAskFinal != null && rankedLlm.userInputRequired()) {
-                plan =
-                        plan.withClarificationQuestionSurfaced(
-                                        "ask:" + topAskFinal.gapId() + ":" + java.time.Instant.now())
-                                .withPlanningIntakeStage(PlanningIntakeStage.CLARIFYING, java.time.Instant.now());
-                planStateStore.update(plan);
-                plan = planStateStore.getByContextId(contextId).orElse(plan);
-            }
-            boolean canonicalPending = topAskFinal != null;
-            return new ClarificationRoundOutcome(
-                    plan,
-                    rankedLlm,
-                    upsert,
-                    canonicalPending,
-                    llmUserInputSuggested,
-                    hardClarificationBlock,
-                    hardClarificationBlockReason);
         }
-        rankedLlm =
-                PlanningQuestionRankingPolicy.rank(
-                        plan,
-                        List.of(),
-                        1,
-                        ledger,
-                        profile.isBoundedClarificationChoicesEnabled(),
-                        profile.isInferBoundedChoiceFromOrInTextEnabled());
-        for (String assumption : rankedLlm.assumptionsToRecord()) {
-            plan = appendAssumption(plan, assumption);
-        }
-        planStateStore.update(plan);
-        plan = planStateStore.getByContextId(contextId).orElse(plan);
-        PlanningDeliberationLedgerSync.UpsertResult upsert =
-                PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, rankedLlm);
-        plan = ClarificationCoordinatorLedger.persist(planStateStore, contextId, plan, List.of(), null);
+        boolean canonicalPending = willAsk;
         return new ClarificationRoundOutcome(
-                plan, rankedLlm, upsert, false, rankedLlm.userInputRequired(), false, "");
+                plan,
+                rankedLlm,
+                upsert,
+                canonicalPending,
+                willAsk,
+                derived.hardClarificationBlock(),
+                derived.hardClarificationBlockReason());
     }
 
-    private void applyPostDraftGovernor(
+    private static String escalationLevelForAsk(int priorAsksBeforeThisCycle) {
+        if (priorAsksBeforeThisCycle >= 2) {
+            return "BOUNDED";
+        }
+        if (priorAsksBeforeThisCycle >= 1) {
+            return "NARROW";
+        }
+        return "OPEN";
+    }
+
+    private static ClarificationProjection emptyClarificationProjection() {
+        return new ClarificationProjection(false, "", "[]", "{}", 0, List.of(), false, "");
+    }
+
+    private void applyMaterialRoutingAndCanonicalDecision(
             String contextId,
             Map<String, Object> persistedSessionState,
             Map<String, Object> spread,
             FeaturePlanState plan,
             ClarificationRoundOutcome clr,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             WorkProfileDefinition profile,
             boolean userInputRequired,
             boolean readyToPost,
@@ -721,8 +642,8 @@ public final class PlanningCyclePipeline {
         if (cycleErr == null) {
             cycleErr = "";
         }
-        PlanningPostDraftGovernor.Result gov =
-                PlanningPostDraftGovernor.derive(
+        PlanningMaterialRoutingOutcome gov =
+                PlanningMaterialCyclePacing.canonicalPlanningCycleOutcome(
                         persistedSessionState != null ? persistedSessionState : Map.of(),
                         signal,
                         plan,
@@ -737,31 +658,12 @@ public final class PlanningCyclePipeline {
                         "true".equalsIgnoreCase(getString(spread, "planningRecoverableDraftAfterSynthesis")),
                         "true".equalsIgnoreCase(getString(spread, "planningSuppressAutonomousRedraftNotice")),
                         clr.hardClarificationBlock(),
-                        profile.getCoordinatorClarification().getEnginePolicy());
+                        profile.getCoordinatorClarification().getEnginePolicy(),
+                        clr.canonicalClarificationPending());
         spread.put("planningHardClarificationBlockReason", clr.hardClarificationBlockReason());
-        boolean effectiveUser = gov.userInputRequired();
-        if (gov.action() != PlanningPostDraftAction.BLOCK) {
-            spread.put("planningUserInputRequired", effectiveUser ? "true" : "false");
-            if (gov.action() == PlanningPostDraftAction.ASK_ONE_QUESTION) {
-                if (profile.getCoordinatorClarification().isCanonicalV1()) {
-                    spread.put("planningCanonicalUserInputRequired", "true");
-                }
-                String qt = getString(spread, "planningClarificationQuestionText");
-                if (qt == null || qt.isBlank()) {
-                    String clar =
-                            PlanningPostDraftGovernor.firstUserFacingClarificationTextOrEmpty(
-                                    clr.upsert().ledger(), plan);
-                    if (!clar.isBlank()) {
-                        spread.put("planningClarificationQuestionText", clar);
-                    }
-                }
-            }
-        }
-        boolean effectiveReady = gov.readyToPostPacket();
         if (gov.action() == PlanningPostDraftAction.BLOCK) {
             spread.put("planningUserInputRequired", "false");
             spread.put("planningCanonicalUserInputRequired", "false");
-            effectiveReady = false;
             String synthCat = blankToEmpty(getString(spread, "planningSynthesisFailureCategory"));
             if (!synthCat.isBlank()
                     && contextId != null
@@ -778,20 +680,12 @@ public final class PlanningCyclePipeline {
                 plan = planStateStore.getByContextId(contextId).orElse(updated);
             }
         }
-        String situation =
-                PlanningPostDraftGovernor.revisionSituationFingerprint(
-                        depthOk,
-                        structuredParseFailed,
-                        depthReason != null ? depthReason : "",
-                        effectiveUser,
-                        effectiveReady,
-                        clr.upsert().ledger());
-        String materialFingerprint =
-                PlanningPostDraftGovernor.materialStateChangeFingerprint(signal, plan);
+        String materialFingerprint = PlanningMaterialFingerprint.materialStateChangeFingerprint(signal, plan);
         PlanningCanonicalDecision canonical =
-                PlanningCanonicalDecisionSupport.normalizePostDraft(
+                PlanningCanonicalDecisionSupport.normalizePostDraftCanonicalV1(
                         plan,
                         gov,
+                        clr.canonicalClarificationPending(),
                         ranked,
                         getString(signal, "planningRepoEvidenceJson"),
                         clarificationGapId(ranked),
@@ -817,77 +711,81 @@ public final class PlanningCyclePipeline {
             planStateStore.update(updatedPlan);
             plan = planStateStore.getByContextId(contextId).orElse(updatedPlan);
         }
-        effectiveUser = canonical.nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION;
-        effectiveReady = canonical.nextAction() == PlanningCanonicalNextAction.POST_PACKET;
-        spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
-        spread.put("planningPhase", gov.planningPhase());
-        spread.put("planningRevisionNeeded", gov.revisionNeeded() ? "true" : "false");
-        PlanningReadinessSpread.applyCycleReadiness(
-                spread,
-                new PlanningPostDraftGovernor.Result(
-                        gov.action(),
-                        gov.outcome(),
-                        gov.noticeMarkdown(),
-                        gov.forceUserInputRequired(),
+        PlanningMaterialRoutingOutcome aligned =
+                PlanningMaterialCyclePacing.readinessResultAlignedWithCanonical(canonical, gov);
+        boolean effectiveUser = canonical.nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION;
+        boolean effectiveReady = canonical.nextAction() == PlanningCanonicalNextAction.POST_PACKET;
+        String situation =
+                PlanningMaterialFingerprint.revisionSituationFingerprint(
+                        depthOk,
+                        structuredParseFailed,
+                        depthReason != null ? depthReason : "",
                         effectiveUser,
                         effectiveReady,
-                        gov.planningPhase(),
-                        gov.revisionNeeded()));
+                        clr.upsert().ledger());
+        spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
+        spread.put("planningPhase", aligned.planningPhase());
+        spread.put("planningRevisionNeeded", aligned.revisionNeeded() ? "true" : "false");
+        PlanningReadinessSpread.applyCycleReadiness(spread, aligned);
         PlanningCanonicalDecisionSupport.projectToSpread(spread, canonical);
-        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, gov.action().name());
         spread.put(
-                PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY,
+                PlanningMaterialSpreadKeys.NOTICE_MARKDOWN_KEY,
                 gov.noticeMarkdown() != null ? gov.noticeMarkdown() : "");
-        boolean wantsRevision = !effectiveReady && !effectiveUser;
-        PlanningPostDraftGovernor.writePersistenceKeys(
-                spread, signal, plan, gov, wantsRevision, situation);
+        PlanningMaterialCyclePacing.writePersistenceKeys(
+                spread, signal, plan, aligned, aligned.revisionNeeded(), situation);
         spread.put(PlanningCanonicalDecisionSupport.LAST_MATERIAL_CHANGE_FP_KEY, materialFingerprint);
+        persistConfidenceBreakdown(
+                contextId,
+                plan,
+                spread,
+                persistedSessionState,
+                clr.upsert().ledger(),
+                ranked,
+                userInputRequired,
+                depthOk,
+                structuredParseFailed);
     }
 
-    /**
-     * When {@link PlanningPostDraftAction#ASK_ONE_QUESTION} is authoritative, progress posts and orchestrator templates
-     * must not mix packet/review preamble with the single clarification beat.
-     */
-    private void applyAskOneQuestionUserVisibleCopy(String contextId, Map<String, Object> spread, FeaturePlanState plan) {
-        if (spread == null) {
+    private void persistConfidenceBreakdown(
+            String contextId,
+            FeaturePlanState plan,
+            Map<String, Object> spread,
+            Map<String, Object> persistedSessionState,
+            UnresolvedItemLedger ledger,
+            ClarificationProjection ranked,
+            boolean userInputRequired,
+            boolean depthOk,
+            boolean structuredParseFailed) {
+        if (planStateStore == null || contextId == null || contextId.isBlank()) {
             return;
         }
-        if (!PlanningCanonicalNextAction.ASK_ONE_QUESTION.name().equalsIgnoreCase(
-                getString(spread, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY))) {
+        double clar = 0.0;
+        try {
+            String s = getString(spread, PLANNING_CLARIFICATION_CONFIDENCE_SCORE_KEY);
+            if (s != null && !s.isBlank()) {
+                clar = Double.parseDouble(s.trim());
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        FeaturePlanState latest = planStateStore.getByContextId(contextId).orElse(plan);
+        if (latest == null) {
             return;
         }
-        FeaturePlanState p = plan;
-        if (p == null && contextId != null && !contextId.isBlank()) {
-            p = planStateStore.getByContextId(contextId).orElse(null);
-        }
-        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(spread);
-        String qt = getString(spread, "planningClarificationQuestionText");
-        if (qt == null || qt.isBlank()) {
-            String clar = PlanningPostDraftGovernor.firstUserFacingClarificationTextOrEmpty(ledger, p);
-            if (!clar.isBlank()) {
-                spread.put("planningClarificationQuestionText", clar);
-                qt = clar;
-            }
-        }
-        if (qt == null || qt.isBlank()) {
-            qt = "What is the single most important constraint or example I should treat as authoritative before I continue?";
-            spread.put("planningClarificationQuestionText", qt);
-        }
-        StringBuilder body = new StringBuilder();
-        if ("true".equalsIgnoreCase(getString(spread, "planningClarificationStuck"))) {
-            String hint = getString(spread, "planningClarificationStuckHint");
-            if (hint != null && !hint.isBlank()) {
-                body.append(truncateOneLine(hint, 240)).append("\n\n");
-            }
-        }
-        body.append("❓ ").append(truncateOneLine(qt.trim(), 400));
-        String line = body.toString().trim();
-        spread.put("planningCycleProgressSummary", line);
-        spread.put("userCopyCoordinatorProgress", line);
-        spread.put("planningOrchestratorRoundSummary", line);
+        String repoJson = getString(persistedSessionState, "planningRepoEvidenceJson");
+        PlanningConfidenceBreakdown bd =
+                PlanningConfidenceService.cycleBreakdown(
+                        latest,
+                        clar,
+                        depthOk,
+                        structuredParseFailed,
+                        ledger,
+                        ranked,
+                        userInputRequired,
+                        repoJson != null ? repoJson : "");
+        planStateStore.update(latest.withPlanningConfidenceBreakdownJson(bd.toJson()));
     }
 
-    private static String clarificationGapId(RankedClarification ranked) {
+    private static String clarificationGapId(ClarificationProjection ranked) {
         if (ranked == null || ranked.metaJson() == null || ranked.metaJson().isBlank()) {
             return "";
         }
@@ -910,224 +808,7 @@ public final class PlanningCyclePipeline {
 
     static boolean semanticClarificationAllowed(
             FeaturePlanState plan, Map<String, Object> state, boolean draftingCompletedThisInvocation) {
-        if (draftingCompletedThisInvocation) {
-            return true;
-        }
-        if (plan != null && plan.isAutonomousPlanningPassCompleted()) {
-            return true;
-        }
-        return "true".equalsIgnoreCase(getString(state, "planningAutonomousFirstPassCompleted"));
-    }
-
-    static String effectiveCanonicalQuestionText(
-            String templateQuestion,
-            String gapId,
-            CoordinatorClarificationGapRule rule,
-            UnresolvedItemLedger ledger,
-            int priorAskCount) {
-        String template = templateQuestion != null ? templateQuestion.trim() : "";
-        if (template.isBlank() || gapId == null || gapId.isBlank()) {
-            return template;
-        }
-        ClarificationEscalationLevel escalation = clarificationEscalationLevel(priorAskCount);
-        if (escalation == ClarificationEscalationLevel.BOUNDED) {
-            return boundedEscalationQuestion(template, rule);
-        }
-        if (escalation == ClarificationEscalationLevel.NARROW) {
-            return narrowEscalationQuestion(rule);
-        }
-        Optional<String> last =
-                PlanningDeliberationLedgerSync.lastMergedQuestionTextForPlanningGap(ledger, gapId);
-        if (last.isEmpty()) {
-            return template;
-        }
-        if (!normalizeClarificationQuestion(template).equals(normalizeClarificationQuestion(last.get()))) {
-            return template;
-        }
-        return narrowEscalationQuestion(rule);
-    }
-
-    private enum ClarificationEscalationLevel {
-        OPEN,
-        NARROW,
-        BOUNDED
-    }
-
-    private static ClarificationEscalationLevel clarificationEscalationLevel(int priorAskCount) {
-        if (priorAskCount >= 2) {
-            return ClarificationEscalationLevel.BOUNDED;
-        }
-        if (priorAskCount >= 1) {
-            return ClarificationEscalationLevel.NARROW;
-        }
-        return ClarificationEscalationLevel.OPEN;
-    }
-
-    private static String narrowEscalationQuestion(CoordinatorClarificationGapRule rule) {
-        if (rule != null && rule.getNarrowEscalationTemplate() != null && !rule.getNarrowEscalationTemplate().isBlank()) {
-            return rule.getNarrowEscalationTemplate().trim();
-        }
-        return "You already answered part of this. To finish narrowing scope, can you spell out one concrete constraint "
-                + "(where it should live, who changes it, or an example edge case)?";
-    }
-
-    private static String boundedEscalationQuestion(String template, CoordinatorClarificationGapRule rule) {
-        List<String> options =
-                rule != null && rule.getResolveAnySubstring() != null
-                        ? rule.getResolveAnySubstring().stream()
-                                .filter(text -> text != null && !text.isBlank())
-                                .map(String::trim)
-                                .distinct()
-                                .limit(4)
-                                .toList()
-                        : List.of();
-        if (!options.isEmpty()) {
-            return "To unblock this, reply with exactly one option: " + joinOptions(options) + ".";
-        }
-        return narrowEscalationQuestion(rule) + " Keep it to one concrete answer.";
-    }
-
-    private static String joinOptions(List<String> options) {
-        if (options == null || options.isEmpty()) {
-            return "";
-        }
-        if (options.size() == 1) {
-            return options.get(0);
-        }
-        if (options.size() == 2) {
-            return options.get(0) + " or " + options.get(1);
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < options.size(); i++) {
-            if (i > 0) {
-                sb.append(i == options.size() - 1 ? ", or " : ", ");
-            }
-            sb.append(options.get(i));
-        }
-        return sb.toString();
-    }
-
-    private static int planGapAskCount(FeaturePlanState plan, String gapId) {
-        if (plan == null || gapId == null || gapId.isBlank() || plan.getClarificationOutcomeHistory() == null) {
-            return 0;
-        }
-        String prefix = "ask:" + gapId.trim() + ":";
-        int count = 0;
-        for (String entry : plan.getClarificationOutcomeHistory()) {
-            if (entry != null && entry.startsWith(prefix)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static final String CANONICAL_CLARIFICATION_FALLBACK_QUESTION =
-            "I need one clarification before I continue: what exact behavior should be configurable versus fixed at runtime"
-                    + " for this feature?";
-
-    /**
-     * When canonical gaps are open but {@link PlanningQuestionRankingPolicy#rank} dropped the template (score threshold,
-     * defaults, fingerprints), rebuild a ranker-backed or synthetic clarification so upsert and user-facing copy stay
-     * aligned with {@code planningUserInputRequired}.
-     */
-    private static RankedClarification ensureRankedForOpenCanonicalGap(
-            FeaturePlanState plan,
-            UnresolvedItemLedger ledger,
-            WorkProfileDefinition profile,
-            CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top,
-            RankedClarification ranked,
-            int priorAskCount) {
-        String qt = ranked.questionText() != null ? ranked.questionText().trim() : "";
-        if (ranked.userInputRequired() && !qt.isBlank()) {
-            return ranked;
-        }
-        CoordinatorClarificationGapRule rule = coord.findGapRule(top.gapId()).orElse(null);
-        String synth = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger, priorAskCount);
-        if (synth.isBlank()) {
-            synth = top.questionText() != null ? top.questionText().trim() : "";
-        }
-        if (synth.isBlank()) {
-            synth =
-                    PlanningDeliberationLedgerSync.lastMergedQuestionTextForPlanningGap(ledger, top.gapId())
-                            .orElse("")
-                            .trim();
-        }
-        if (synth.isBlank()) {
-            synth = CANONICAL_CLARIFICATION_FALLBACK_QUESTION;
-        }
-        boolean bounded =
-                rule != null
-                        && rule.isUseBoundedChoiceUi()
-                        && profile != null
-                        && profile.isBoundedClarificationChoicesEnabled();
-        boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
-        RankedClarification reranked =
-                PlanningQuestionRankingPolicy.rank(plan, List.of(synth), 1, ledger, bounded, inferOr);
-        reranked = mergeRankedAssumptions(ranked, reranked);
-        String rqt = reranked.questionText() != null ? reranked.questionText().trim() : "";
-        if (reranked.userInputRequired() && !rqt.isBlank()) {
-            return withCoordinatorGapMeta(reranked, top.gapId(), top.blocking());
-        }
-        return withCoordinatorGapMeta(
-                syntheticPlainTextClarificationForGap(top, synth, ranked.assumptionsToRecord()), top.gapId(), top.blocking());
-    }
-
-    private static RankedClarification mergeRankedAssumptions(RankedClarification prior, RankedClarification next) {
-        List<String> merged = new ArrayList<>(prior.assumptionsToRecord());
-        merged.addAll(next.assumptionsToRecord());
-        return new RankedClarification(
-                next.userInputRequired(),
-                next.orchestratorPrompt(),
-                next.choicesJson(),
-                next.metaJson(),
-                next.blockingQuestionCount(),
-                merged,
-                next.useStructuredChoices(),
-                next.questionText());
-    }
-
-    private static RankedClarification syntheticPlainTextClarificationForGap(
-            CoordinatorClarificationGapEvaluator.OpenGap top, String questionText, List<String> assumptions) {
-        String q = questionText != null ? questionText.trim() : "";
-        if (q.isBlank()) {
-            q = CANONICAL_CLARIFICATION_FALLBACK_QUESTION;
-        }
-        try {
-            Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("questionText", q);
-            meta.put("defaultAssumption", "");
-            meta.put("optA", "");
-            meta.put("optB", "");
-            meta.put("optC", "");
-            String metaJson = JSON.writeValueAsString(meta);
-            int blocking = top.blocking() ? 1 : 0;
-            return new RankedClarification(
-                    true, "", "[]", metaJson, blocking, new ArrayList<>(assumptions), false, q);
-        } catch (JsonProcessingException e) {
-            int blocking = top.blocking() ? 1 : 0;
-            return new RankedClarification(true, "", "[]", "{}", blocking, new ArrayList<>(assumptions), false, q);
-        }
-    }
-
-    private static RankedClarification rankCanonicalOpenTopGap(
-            FeaturePlanState plan,
-            UnresolvedItemLedger ledger,
-            WorkProfileDefinition profile,
-            CoordinatorClarificationSettings coord,
-            CoordinatorClarificationGapEvaluator.OpenGap top,
-            int priorAskCount) {
-        CoordinatorClarificationGapRule rule = coord.findGapRule(top.gapId()).orElse(null);
-        String q = effectiveCanonicalQuestionText(top.questionText(), top.gapId(), rule, ledger, priorAskCount);
-        boolean bounded =
-                rule != null
-                        && rule.isUseBoundedChoiceUi()
-                        && profile != null
-                        && profile.isBoundedClarificationChoicesEnabled();
-        boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
-        RankedClarification ranked =
-                PlanningQuestionRankingPolicy.rank(plan, List.of(q), 1, ledger, bounded, inferOr);
-        return withCoordinatorGapMeta(ranked, top.gapId(), top.blocking());
+        return CanonicalPlanningGapEngine.semanticClarificationAllowed(plan, state, draftingCompletedThisInvocation);
     }
 
     private static void applyClarificationConfidence(
@@ -1135,7 +816,7 @@ public final class PlanningCyclePipeline {
             Map<String, Object> state,
             FeaturePlanState plan,
             UnresolvedItemLedger ledger,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             WorkProfileDefinition profile,
             boolean userInputRequired,
             boolean depthOk,
@@ -1154,7 +835,7 @@ public final class PlanningCyclePipeline {
     private static double clarificationConfidenceScore(
             FeaturePlanState plan,
             UnresolvedItemLedger ledger,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             Map<String, Object> state,
             boolean userInputRequired,
             boolean depthOk,
@@ -1170,7 +851,7 @@ public final class PlanningCyclePipeline {
         if (!structuredParseFailed) {
             score += 0.08;
         }
-        score += 0.28 * ClarificationEngineAssessor.repoEvidenceGroundingScore(plan, getString(state, "planningRepoEvidenceJson"));
+        score += 0.28 * PlanningConfidenceService.repoEvidenceGroundingScore(plan, getString(state, "planningRepoEvidenceJson"));
         score += Math.min(0.22, clarificationKnownFactCount(plan) * 0.012);
         score -= Math.min(
                 0.55,
@@ -1201,7 +882,7 @@ public final class PlanningCyclePipeline {
     private static int clarificationMaterialUnknownCount(
             FeaturePlanState plan,
             UnresolvedItemLedger ledger,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             boolean userInputRequired,
             boolean structuredParseFailed) {
         int unknowns = 0;
@@ -1235,7 +916,7 @@ public final class PlanningCyclePipeline {
                 unknowns++;
             }
         }
-        for (PlanAssumption assumption : plan.getAssumptions()) {
+        for (var assumption : plan.getAssumptions()) {
             if (PlanAssumptionStatus.OPEN.equalsIgnoreCase(assumption.getStatus())
                     && PlanGovernanceSeverity.HIGH.equalsIgnoreCase(assumption.getSeverity())) {
                 unknowns++;
@@ -1250,54 +931,6 @@ public final class PlanningCyclePipeline {
 
     private static String formatDouble(double value) {
         return String.format(java.util.Locale.ROOT, "%.3f", value);
-    }
-
-    private static RankedClarification emptyRankedClarification() {
-        return new RankedClarification(false, "", "[]", "{}", 0, List.of(), false, "");
-    }
-
-    private static RankedClarification withCoordinatorGapMeta(
-            RankedClarification ranked, String gapId, boolean gapRuleBlocking) {
-        if (ranked == null) {
-            return emptyRankedClarification();
-        }
-        int blocking =
-                gapRuleBlocking
-                        ? Math.max(1, ranked.blockingQuestionCount())
-                        : ranked.blockingQuestionCount();
-        if (gapId == null || gapId.isBlank()) {
-            if (blocking != ranked.blockingQuestionCount()) {
-                return new RankedClarification(
-                        ranked.userInputRequired(),
-                        ranked.orchestratorPrompt(),
-                        ranked.choicesJson(),
-                        ranked.metaJson(),
-                        blocking,
-                        ranked.assumptionsToRecord(),
-                        ranked.useStructuredChoices(),
-                        ranked.questionText());
-            }
-            return ranked;
-        }
-        try {
-            Map<String, Object> meta =
-                    ranked.metaJson() == null || ranked.metaJson().isBlank()
-                            ? new LinkedHashMap<>()
-                            : JSON.readValue(ranked.metaJson(), new TypeReference<>() {});
-            meta.put("gapId", gapId.trim());
-            String metaJson = JSON.writeValueAsString(meta);
-            return new RankedClarification(
-                    ranked.userInputRequired(),
-                    ranked.orchestratorPrompt(),
-                    ranked.choicesJson(),
-                    metaJson,
-                    blocking,
-                    ranked.assumptionsToRecord(),
-                    ranked.useStructuredChoices(),
-                    ranked.questionText());
-        } catch (JsonProcessingException e) {
-            return ranked;
-        }
     }
 
     private static void putPlanningRoomCycleError(Map<String, Object> spread, String machine) {
@@ -1343,75 +976,7 @@ public final class PlanningCyclePipeline {
             Map<String, Object> work,
             Map<String, Object> spread,
             Map<String, Object> bind) {
-        spread.put("planningPhase", "REQUEST_EXPANSION");
-        Object expansionObj =
-                new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry).run(event, work, bind);
-        if (expansionObj instanceof Map<?, ?> expMap) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> exp = (Map<String, Object>) expMap;
-            mergeSpreadIntoWorkAndOuter(exp, work, spread);
-        }
-        new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
-    }
-
-    private InnerRoundResult runSingleInnerRound(
-            Event event,
-            String contextId,
-            WorkProfileDefinition profile,
-            Map<String, Object> work,
-            Map<String, Object> spread,
-            Map<String, Object> bind,
-            FeaturePlanState plan,
-            String previousSynthLine) {
-        spread.put("planningPhase", "DRAFTING");
-        FeaturePlanState planPtr = planStateStore.getByContextId(contextId).orElse(plan);
-        List<String> roleTags = new ArrayList<>();
-        List<PlanningCoordinatorRole> passOrder = ConfigurablePassRunner.resolveOrder(work, bind);
-        spread.put("planningRolePassOrderResolved", passOrder.toString());
-        for (PlanningCoordinatorRole passRole : passOrder) {
-            runRole(passRole, planPtr, profile, event, work, spread, roleTags);
-            planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
-        }
-        String lastRoleRoundSummary = summarizeRoleRound(passOrder, roleTags);
-
-        new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
-
-        Object synthObj =
-                new RunLlmPlanningSynthesisAction(openAiChatClient, planStateStore, workProfileRegistry)
-                        .run(event, work, bind);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> synthSpread = synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-        mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
-        applyImmediateSynthesisFailure(contextId, spread, synthSpread);
-        String lastSynthLlmLine = pickSynthLlmLine(synthSpread, previousSynthLine);
-
-        new SynthesizePreCritiqueArtifactsAction(planStateStore, workProfileRegistry).run(event, work, bind);
-
-        planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
-        boolean relaxOpenQ = PlanningPacketDepthEvaluator.relaxOpenQuestionSupplementalChecks(work);
-        PlanningPacketDepthEvaluator.DepthResult dr =
-                PlanningPacketDepthEvaluator.evaluate(planPtr, profile, relaxOpenQ);
-        boolean depthOk = dr.ok();
-        String depthReason = dr.reason() != null ? dr.reason() : "";
-        spread.put("planningPacketDepthOk", depthOk ? "true" : "false");
-        spread.put("planningPacketDepthReason", depthReason);
-        spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
-        return new InnerRoundResult(planPtr, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
-    }
-
-    private static void mergeSpreadIntoWorkAndOuter(
-            Map<String, Object> from, Map<String, Object> work, Map<String, Object> spread) {
-        if (from == null) {
-            return;
-        }
-        for (Map.Entry<String, Object> e : from.entrySet()) {
-            if (e.getKey() == null) {
-                continue;
-            }
-            String k = e.getKey().toString();
-            work.put(k, e.getValue());
-            spread.put(k, e.getValue());
-        }
+        silentSynthesis.runExpansionPhase(event, work, spread, bind);
     }
 
     private static void enrichUserCopyAndProgressLog(Map<String, Object> state, Map<String, Object> spread) {
@@ -1495,7 +1060,7 @@ public final class PlanningCyclePipeline {
     private static void applyClarificationStuck(
             Map<String, Object> state,
             Map<String, Object> spread,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             boolean userInputRequired) {
         String prevQ = normalizeClarificationQuestion(getString(state, "planningPreviousClarificationQuestionText"));
         String currQ = normalizeClarificationQuestion(ranked.questionText());
@@ -1510,160 +1075,6 @@ public final class PlanningCyclePipeline {
                 stuck
                         ? "Same question as before — reply with a concrete example, who decides, or one edge case you care about."
                         : "");
-    }
-
-    private static String pickSynthLlmLine(Map<String, Object> synthSpread, String previous) {
-        if (synthSpread == null) {
-            return previous;
-        }
-        String err = getString(synthSpread, "planningLlmError");
-        if (err != null && !err.isBlank()) {
-            return truncateOneLine(PlanningUserFacingCopy.humanizePlanningCycleFailureFragment(err), 140);
-        }
-        String skip = getString(synthSpread, "planningLlmSkipReason");
-        if (skip != null && !skip.isBlank() && !"OK".equalsIgnoreCase(skip)) {
-            return truncateOneLine(
-                    PlanningUserFacingCopy.humanizePlanningCycleFailureFragment("Synthesis skipped: " + skip), 140);
-        }
-        return previous;
-    }
-
-    private void applyImmediateSynthesisFailure(
-            String contextId, Map<String, Object> spread, Map<String, Object> synthSpread) {
-        if (synthSpread == null || spread == null) {
-            return;
-        }
-        String llmErr = getString(synthSpread, "planningLlmError");
-        if (llmErr == null || llmErr.isBlank()) {
-            return;
-        }
-        int applied = parseInt(getString(synthSpread, "planningLlmUpsertCount"), 0);
-        if (applied > 0) {
-            return;
-        }
-        String cat = blankToEmpty(getString(synthSpread, "planningSynthesisFailureCategory"));
-        boolean structuredRoleFailed =
-                "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
-        FeaturePlanState planForRecover = planStateStore.getByContextId(contextId).orElse(null);
-        boolean recoverable = hasRecoverablePlanningDraft(planForRecover) && !structuredRoleFailed;
-        spread.put("planningRecoverableDraftAfterSynthesis", recoverable ? "true" : "false");
-        if ("SYNTHESIS_JSON_INVALID".equals(cat)
-                || "SYNTHESIS_REPAIR_EXHAUSTED".equals(cat)
-                || "SYNTHESIS_TRANSPORT_ERROR".equals(cat)) {
-            spread.put("planningSuppressAutonomousRedraftNotice", "true");
-        }
-        if (!cat.isBlank()) {
-            spread.put("planningSynthesisFailureCategory", cat);
-            String existing = getString(spread, "planningRoomCycleError");
-            if (existing == null || existing.isBlank()) {
-                putPlanningRoomCycleError(spread, cat);
-            }
-            return;
-        }
-        String existing = getString(spread, "planningRoomCycleError");
-        if (existing != null && !existing.isBlank()) {
-            return;
-        }
-        putPlanningRoomCycleError(spread, "SYNTHESIS_UPSERTS_NOT_APPLIED");
-    }
-
-    private static boolean hasRecoverablePlanningDraft(FeaturePlanState plan) {
-        if (plan == null) {
-            return false;
-        }
-        if (PlanningPostDraftGovernor.hasStructuredMaterialPlanningGaps(plan)) {
-            return true;
-        }
-        String ex = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
-        String fs = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
-        return (ex != null && !ex.isBlank()) || (fs != null && !fs.isBlank());
-    }
-
-    private void runRole(
-            PlanningCoordinatorRole role,
-            FeaturePlanState plan,
-            WorkProfileDefinition profile,
-            Event event,
-            Map<String, Object> state,
-            Map<String, Object> spread,
-            List<String> roleRoundTags) {
-        spread.put("planningPhase", "CRITIQUING");
-        RolePassResult r =
-                PlanningRolePassRunner.run(
-                        role, openAiChatClient, plan, profile, event, state, planStateStore, workProfileRegistry);
-        String label = roleUserLabel(role);
-        if (r.skipped() && "NO_API_KEY".equals(r.error())) {
-            roleRoundTags.add("SKIP_NO_KEY");
-            spread.put("planningRolePassLastError", label + ": skipped (no API key)");
-        } else if (r.skipped()) {
-            String reason = r.error() != null ? r.error() : "skipped";
-            roleRoundTags.add("SKIP_OTHER:" + label + ": " + truncateOneLine(reason, 80));
-            spread.put("planningRolePassLastError", label + ": skipped (" + truncateOneLine(reason, 100) + ")");
-        } else if (r.error() != null && looksLikeInterruptedLlmError(r.error())) {
-            roleRoundTags.add("INTERRUPTED:" + label);
-            spread.put(PLANNING_PASS_INTERRUPTED_KEY, "true");
-            spread.put("planningRolePassLastError", label + ": interrupted");
-        } else if (r.error() != null
-                && r.error().startsWith(StructuredLlmArtifactUpsertPass.STRUCTURED_JSON_PARSE_PREFIX)) {
-            roleRoundTags.add("PARSE_ERR:" + label);
-            spread.put(PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY, "true");
-            String detail =
-                    r.error()
-                            .substring(StructuredLlmArtifactUpsertPass.STRUCTURED_JSON_PARSE_PREFIX.length())
-                            .trim();
-            spread.put(
-                    "planningRolePassLastError",
-                    label + ": invalid structured JSON — " + truncateOneLine(detail, 120));
-        } else if (r.error() != null && !r.error().isBlank()) {
-            spread.put("planningRolePassLastError", role.name() + ": " + r.error());
-            roleRoundTags.add("ERR:" + label + ": " + truncateOneLine(r.error(), 100));
-        } else {
-            roleRoundTags.add("OK:" + label);
-        }
-    }
-
-    private static String summarizeRoleRound(List<PlanningCoordinatorRole> order, List<String> tags) {
-        if (tags == null || tags.isEmpty()) {
-            return "Role passes not run.";
-        }
-        if (tags.size() >= 3 && tags.stream().allMatch("SKIP_NO_KEY"::equals)) {
-            return "Coordinator passes skipped (OpenAI API key not configured).";
-        }
-        List<String> parts = new ArrayList<>();
-        for (int i = 0; i < tags.size(); i++) {
-            String t = tags.get(i);
-            String who = i < order.size() ? roleUserLabel(order.get(i)) : "Role";
-            if ("SKIP_NO_KEY".equals(t)) {
-                parts.add(who + " skipped (no API key)");
-            } else if (t != null && t.startsWith("SKIP_OTHER:")) {
-                parts.add(t.substring("SKIP_OTHER:".length()).trim());
-            } else if (t != null && t.startsWith("INTERRUPTED:")) {
-                parts.add(t.substring("INTERRUPTED:".length()).trim() + " interrupted");
-            } else if (t != null && t.startsWith("PARSE_ERR:")) {
-                parts.add(t.substring("PARSE_ERR:".length()).trim() + " invalid JSON");
-            } else if (t != null && t.startsWith("ERR:")) {
-                parts.add(t.substring(4).trim());
-            } else if (t != null && t.startsWith("OK:")) {
-                parts.add(who + " ok");
-            } else {
-                parts.add(t != null ? t : who);
-            }
-        }
-        return String.join("; ", parts);
-    }
-
-    private static String roleUserLabel(PlanningCoordinatorRole role) {
-        return switch (role) {
-            case COORDINATOR -> "Coordinator";
-        };
-    }
-
-    private static FeaturePlanState appendAssumption(FeaturePlanState plan, String text) {
-        if (text == null || text.isBlank()) {
-            return plan;
-        }
-        String id = "asm-auto-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
-        return plan.withAppendedAssumption(PlanAssumption.fromLegacyText(id, text.trim(), null));
     }
 
     private static String buildInnerRoundProgressSummary(
@@ -1683,7 +1094,7 @@ public final class PlanningCyclePipeline {
             int cycleIteration,
             boolean depthOk,
             String depthReason,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             boolean userInputRequired,
             String cycleError,
             String rolePassError,
@@ -1747,18 +1158,6 @@ public final class PlanningCyclePipeline {
         return sb.toString().trim();
     }
 
-    private static boolean looksLikeInterruptedLlmError(String error) {
-        if (error == null || error.isBlank()) {
-            return false;
-        }
-        String t = error.trim();
-        if ("ERROR: interrupted".equalsIgnoreCase(t)) {
-            return true;
-        }
-        String lower = t.toLowerCase();
-        return lower.contains("interruptedexception") || lower.contains("thread was interrupted");
-    }
-
     private static String truncateOneLine(String s, int max) {
         if (s == null) {
             return "";
@@ -1771,7 +1170,7 @@ public final class PlanningCyclePipeline {
             FeaturePlanState plan,
             boolean depthOk,
             String depthReason,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             int cycleIteration,
             boolean readyToPostPacket,
             boolean clarificationStuck,
@@ -1796,7 +1195,7 @@ public final class PlanningCyclePipeline {
             FeaturePlanState plan,
             boolean depthOk,
             String depthReason,
-            RankedClarification ranked,
+            ClarificationProjection ranked,
             int cycleIteration,
             boolean readyToPostPacket,
             boolean clarificationStuck,
@@ -1890,11 +1289,7 @@ public final class PlanningCyclePipeline {
     }
 
     public static String normalizeClarificationQuestion(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        String t = raw.toLowerCase().replaceAll("\\s+", " ").trim();
-        return t.replaceAll("[^a-z0-9?\\s]", "");
+        return PlanningQuestionComposer.normalizeClarificationQuestion(raw);
     }
 
     private static Map<String, Object> baseSpread() {
@@ -1903,7 +1298,6 @@ public final class PlanningCyclePipeline {
         m.put("planningPhase", "");
         m.put("planningUserInputRequired", "false");
         m.put("planningCanonicalUserInputRequired", "false");
-        m.put("planningLlmUserInputSuggested", "false");
         m.put("planningClarificationChoicesJson", "[]");
         m.put("planningClarificationMetaJson", "{}");
         m.put("planningOrchestratorRoundSummary", "");
@@ -1915,7 +1309,6 @@ public final class PlanningCyclePipeline {
         m.put(PlanningReadinessSpread.REVIEW_ALLOWED_KEY, "false");
         m.put(PlanningReadinessSpread.APPROVAL_ALLOWED_KEY, "false");
         m.put("planningRevisionNeeded", "false");
-        m.put("planningQuestionsAskedThisRound", "0");
         m.put("planningBlockingQuestionCount", "0");
         m.put("planningAssumptionsUsed", "0");
         m.put("planningRolePassLastError", "");
@@ -1956,13 +1349,13 @@ public final class PlanningCyclePipeline {
         m.put("planningDirtyPassCount", "0");
         m.put("userCopyProgressLine", "");
         m.put("userCopyCoordinatorProgress", "");
-        m.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.BLOCK.name());
-        m.put(PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY, "");
-        m.put(PlanningPostDraftGovernor.BASELINE_REPO_HASH_KEY, "");
-        m.put(PlanningPostDraftGovernor.BASELINE_ASSUMPTION_COUNT_KEY, "");
-        m.put(PlanningPostDraftGovernor.BASELINE_CRITIQUE_BLOCKING_KEY, "");
-        m.put(PlanningPostDraftGovernor.BASELINE_DRAFT_FP_KEY, "");
-        m.put(PlanningPostDraftGovernor.LAST_REVISION_SITUATION_KEY, "");
+        m.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, PlanningCanonicalNextAction.BLOCK.name());
+        m.put(PlanningMaterialSpreadKeys.NOTICE_MARKDOWN_KEY, "");
+        m.put(PlanningMaterialSpreadKeys.BASELINE_REPO_HASH_KEY, "");
+        m.put(PlanningMaterialSpreadKeys.BASELINE_ASSUMPTION_COUNT_KEY, "");
+        m.put(PlanningMaterialSpreadKeys.BASELINE_CRITIQUE_BLOCKING_KEY, "");
+        m.put(PlanningMaterialSpreadKeys.BASELINE_DRAFT_FP_KEY, "");
+        m.put(PlanningMaterialSpreadKeys.LAST_REVISION_SITUATION_KEY, "");
         return m;
     }
 

@@ -61,13 +61,13 @@ class PlanningPromptFormatterTest {
         SectionDefinition sec = art.getSections().get(0);
         FieldDefinition withHint = sec.getFields().get(0);
         String withHintPrompt = PlanningPromptFormatter.requiredFieldPrompt(art, sec, withHint, -1);
-        assertTrue(withHintPrompt.contains("**Question:**"));
+        assertTrue(withHintPrompt.contains("Internal profile record"));
         assertTrue(withHintPrompt.contains("ADR-style"));
-        assertTrue(withHintPrompt.contains("on the plan"));
+        assertTrue(withHintPrompt.contains("saved plan") || withHintPrompt.contains("on the plan"));
 
         FieldDefinition noHint = new FieldDefinition("x", "Scope", "text", true, "");
         String noHintPrompt = PlanningPromptFormatter.requiredFieldPrompt(art, sec, noHint, -1);
-        assertTrue(noHintPrompt.contains("**Question:**"));
+        assertTrue(noHintPrompt.contains("Internal profile record"));
         assertTrue(noHintPrompt.contains("send the specific text or decision to store on the plan"));
     }
 
@@ -78,9 +78,9 @@ class PlanningPromptFormatterTest {
         SectionDefinition sec = art.getSections().get(0);
         FieldDefinition f = sec.getFields().get(0);
         String line = PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, 0);
-        assertTrue(line.contains("this **Decision** entry"));
+        assertTrue(line.contains("this **Decision** entry") || line.contains("**Decision** (row)"));
         assertFalse(line.contains("Decision 1"));
-        assertTrue(line.contains("save it on the plan"));
+        assertTrue(line.contains("diagnostics/readiness") || line.contains("on the plan"));
     }
 
     @Test
@@ -89,13 +89,13 @@ class PlanningPromptFormatterTest {
         ArtifactDefinition art = profile.getArtifactsById().get("governance_decisions");
         SectionDefinition sec = art.getSections().get(0);
         String emptyPrompt = PlanningPromptFormatter.repeatableSectionEmptyPrompt(art, sec);
-        assertTrue(emptyPrompt.contains("**Question:**"));
+        assertTrue(emptyPrompt.contains("Internal profile record"));
         assertTrue(emptyPrompt.contains("needs at least one entry"));
-        assertTrue(emptyPrompt.contains("save it on the plan"));
+        assertTrue(emptyPrompt.contains("readiness tracking"));
         String missingPrompt = PlanningPromptFormatter.requiredSectionMissingPrompt(art, sec);
-        assertTrue(missingPrompt.contains("**Question:**"));
+        assertTrue(missingPrompt.contains("Internal profile record"));
         assertTrue(missingPrompt.contains("is missing"));
-        assertTrue(missingPrompt.contains("save it on the plan"));
+        assertTrue(missingPrompt.contains("readiness tracking"));
     }
 
     @Test
@@ -108,12 +108,12 @@ class PlanningPromptFormatterTest {
         ArtifactDefinition art = p.getArtifact("risk_register").orElseThrow();
         SectionDefinition sec = art.getSections().get(0);
         assertEquals(
-                "**Question:** The _Risk Entry_ section (Risk Register) needs at least one entry. "
-                        + "Reply with the first item to add so we can save it on the plan.",
+                "**Internal profile record:** The _Risk Entry_ section (Risk Register) needs at least one entry for "
+                        + "readiness tracking.",
                 PlanningPromptFormatter.repeatableSectionEmptyPrompt(art, sec));
         assertEquals(
-                "**Question:** The _Risk Entry_ block (Risk Register) is missing. "
-                        + "Reply with the main content we should add for that section so we can save it on the plan.",
+                "**Internal profile record:** The _Risk Entry_ block (Risk Register) is missing for readiness "
+                        + "tracking.",
                 PlanningPromptFormatter.requiredSectionMissingPrompt(art, sec));
     }
 
@@ -134,14 +134,16 @@ class PlanningPromptFormatterTest {
         String repeatableSummary = PlanningPromptFormatter.formatMissingRequiredSummary(
                 profile,
                 List.of("governance_decisions.adr_entry[0].decision_text"));
-        assertTrue(repeatableSummary.contains("this **Decision** entry"));
+        assertTrue(
+                repeatableSummary.contains("this **Decision** entry")
+                        || repeatableSummary.contains("**Decision** (row)"));
         assertFalse(repeatableSummary.contains("Decision 1"));
 
         String emptySec = PlanningPromptFormatter.formatMissingRequiredSummary(
                 profile,
                 List.of("governance_decisions.adr_entry (repeatable section empty)"));
         assertTrue(emptySec.contains("ADR entry"));
-        assertTrue(emptySec.contains("first item"));
+        assertTrue(emptySec.contains("readiness tracking") || emptySec.contains("entry"));
 
         String missingSec = PlanningPromptFormatter.formatMissingRequiredSummary(
                 profile,

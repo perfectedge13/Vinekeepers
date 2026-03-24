@@ -6,7 +6,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.CoordinatorClarificationGapRule;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.profile.WorkProfileRegistry;
-import com.vinekeepers.state.planning.PlanAssumption;
+import com.vinekeepers.state.planning.PlanIssue;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.workflow.UnresolvedItemLedger;
@@ -14,16 +14,19 @@ import com.vinekeepers.workflow.deliberation.DeliberationDirtyPassIndex;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planning.CoordinatorClarificationGapEvaluator;
 import com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSync;
+import com.vinekeepers.workflow.planning.PlanningGapAskCounts;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Applies the user's clarification choice (from {@code planningClarificationChoiceProvider}) into assumptions
- * and decision log, then clears ephemeral clarification JSON for the next cycle.
+ * Applies the user's clarification choice into the declared artifact slice only, updates ledger merge state, and clears
+ * ephemeral clarification fields. The next planning cycle runs synthesis and canonical gap derivation (no post-merge gap
+ * evaluation here).
  */
 public final class MergePlanningClarificationChoiceAction implements com.vinekeepers.workflow.WorkflowAction {
 
@@ -74,11 +77,56 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
         }
         try {
             JsonNode meta = JSON.readTree(metaRaw);
+            String mergeTargetPath = text(meta, "mergeTargetPath");
+            if (mergeTargetPath.isBlank()) {
+                spread.put(
+                        "planningClarificationMergeError",
+                        PlanningUserFacingCopy.humanizePlanningClarificationMergeError("MERGE_TARGET_MISSING"));
+                return spread;
+            }
+            String[] mergeParts = mergeTargetPath.split("/");
+            if (mergeParts.length != 3
+                    || mergeParts[0].isBlank()
+                    || mergeParts[1].isBlank()
+                    || mergeParts[2].isBlank()) {
+                spread.put(
+                        "planningClarificationMergeError",
+                        PlanningUserFacingCopy.humanizePlanningClarificationMergeError("MERGE_TARGET_INVALID"));
+                return spread;
+            }
             String defaultText = text(meta, "defaultAssumption");
             String optA = text(meta, "optA");
             String optB = text(meta, "optB");
             String q = text(meta, "questionText");
             String coordinatorGapId = text(meta, "gapId");
+            String choicesRaw = firstNonBlank(getString(state, "planningClarificationChoicesJson"), "[]");
+            boolean structuredUi = choicesRaw != null && !choicesRaw.isBlank() && !"[]".equals(choicesRaw.trim());
+            String trimmedChoice = choice.trim();
+            if (structuredUi
+                    && !"planning_clarify_default".equals(trimmedChoice)
+                    && !"planning_clarify_opt_a".equals(trimmedChoice)
+                    && !"planning_clarify_opt_b".equals(trimmedChoice)
+                    && !"planning_clarify_opt_c".equals(trimmedChoice)) {
+                plan =
+                        plan.withAppendedIssue(
+                                        PlanIssue.fromLegacyText(
+                                                "iss-clar-amb-"
+                                                        + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
+                                                "Ambiguous clarification reply for gap `"
+                                                        + coordinatorGapId
+                                                        + "` (expected a structured choice id).",
+                                                Instant.now()))
+                                .withPlanningGapAskCountsJson(
+                                        PlanningGapAskCounts.incrementFailedMerge(
+                                                plan.getPlanningGapAskCountsJson(), coordinatorGapId))
+                                .withClarificationEngineNote(
+                                        "ambiguous:" + coordinatorGapId + ":" + Instant.now());
+                planStateStore.update(plan);
+                spread.put(
+                        "planningClarificationMergeError",
+                        PlanningUserFacingCopy.humanizePlanningClarificationMergeError("AMBIGUOUS_REPLY"));
+                return spread;
+            }
             WorkProfileDefinition profileDef =
                     plan.getProfileId() != null && !plan.getProfileId().isBlank()
                             ? workProfileRegistry.get(plan.getProfileId()).orElse(null)
@@ -92,53 +140,26 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             if ("planning_clarify_default".equals(choice)) {
                 answerSummary = defaultText.isBlank() ? "Use recommended baseline." : defaultText;
                 decisionLine = "Decision (user selected default): " + answerSummary;
-                if (!defaultText.isBlank()) {
-                    plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
-                            "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                            defaultText,
-                            null));
-                }
             } else if ("planning_clarify_opt_a".equals(choice)) {
                 answerSummary = optA.isBlank() ? "Option A" : optA;
                 decisionLine = "Decision (user choice A): " + answerSummary;
-                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
-                        "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                        decisionLine,
-                        null));
             } else if ("planning_clarify_opt_b".equals(choice)) {
                 answerSummary = optB.isBlank() ? "Option B" : optB;
                 decisionLine = "Decision (user choice B): " + answerSummary;
-                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
-                        "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                        decisionLine,
-                        null));
             } else if ("planning_clarify_opt_c".equals(choice)) {
                 String optC = text(meta, "optC");
                 answerSummary = optC.isBlank() ? "Option C" : optC;
                 decisionLine = "Decision (user choice C): " + answerSummary;
-                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
-                        "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                        decisionLine,
-                        null));
             } else {
                 answerSummary = choice.trim();
                 decisionLine = "Decision (user selection): " + choice + (q.isBlank() ? "" : " regarding: " + q);
-                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
-                        "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                        decisionLine,
-                        null));
             }
             String explicitResolutionLine =
                     CoordinatorClarificationGapEvaluator.buildExplicitResolutionLine(
                             coordinatorGapId, coordinatorGapRule, answerSummary);
             if (!explicitResolutionLine.isBlank()) {
-                plan = plan.withAppendedAssumption(PlanAssumption.fromUserClarification(
-                        "asm-clar-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                        explicitResolutionLine,
-                        null));
+                decisionLine = decisionLine + "\n" + explicitResolutionLine;
             }
-
-            planStateStore.update(plan);
 
             UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
             String ledgerItemId = firstNonBlank(getString(state, "planningClarificationLedgerItemId"), "");
@@ -154,37 +175,43 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                 base.putAll(state);
             }
             base.put("contextId", contextId);
-            upsert.run(
-                    event,
-                    base,
-                    Map.of(
-                            "artifactId",
-                            "decision_log",
-                            "sectionId",
-                            "decisions",
-                            "mode",
-                            "append",
-                            "data",
-                            Map.of("decision_text", decisionLine)));
+            String fieldKey = mergeParts[2].trim();
+            Object mergeUpsert =
+                    upsert.run(
+                            event,
+                            base,
+                            Map.of(
+                                    "artifactId",
+                                    mergeParts[0].trim(),
+                                    "sectionId",
+                                    mergeParts[1].trim(),
+                                    "mode",
+                                    "append",
+                                    "data",
+                                    Map.of(fieldKey, decisionLine)));
+            if (!"OK".equals(String.valueOf(mergeUpsert))) {
+                spread.put(
+                        "planningClarificationMergeError",
+                        PlanningUserFacingCopy.humanizePlanningClarificationMergeError("MERGE_TARGET_INVALID"));
+                return spread;
+            }
 
-            appendCoordinatorClarificationToExploration(event, base, upsert, q, answerSummary);
+            FeaturePlanState merged = planStateStore.getByContextId(contextId).orElse(plan);
+            String outcomeLine =
+                    "merge:outcome:resolved:gapId="
+                            + coordinatorGapId
+                            + ":path="
+                            + mergeTargetPath.replace('\n', ' ')
+                            + ":"
+                            + Instant.now();
+            planStateStore.update(merged.withClarificationEngineNote(outcomeLine));
+
             spread.put("planningClarificationMerged", "true");
             spread.put("planningJustMergedClarification", "true");
             spread.put("planningClarificationChoicesJson", "[]");
             spread.put("planningClarificationMetaJson", "{}");
-            FeaturePlanState refreshed = planStateStore.getByContextId(contextId).orElse(plan);
-            if (profileDef != null && profileDef.getCoordinatorClarification().isCanonicalV1()) {
-                var open =
-                        CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                                refreshed, profileDef.getCoordinatorClarification());
-                ledger =
-                        PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
-                                ledger, CoordinatorClarificationGapEvaluator.openGapIds(open));
-                UnresolvedItemLedger.mergeLedgerIntoSpread(spread, ledger);
-                spread.put("planningUserInputRequired", open.isEmpty() ? "false" : "true");
-            } else {
-                spread.put("planningUserInputRequired", "false");
-            }
+            spread.put("planningUserInputRequired", "false");
+            spread.put("planningCanonicalUserInputRequired", "false");
             spread.put("planningPhase", "REVISING");
             DeliberationEngine.applyDerivedDeliberationSpread(spread);
             DeliberationDirtyPassIndex.writeDirtyPassesSpread(spread, state, bind, List.of("clarification_merge"));
@@ -207,41 +234,6 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
                     PlanningUserFacingCopy.humanizePlanningClarificationMergeError(
                             e.getMessage() != null ? e.getMessage() : "merge failed"));
             return spread;
-        }
-    }
-
-    private static void appendCoordinatorClarificationToExploration(
-            Event event,
-            Map<String, Object> base,
-            UpsertArtifactSectionDataAction upsert,
-            String questionText,
-            String userAnswer) {
-        String q = questionText != null ? questionText.trim() : "";
-        String a = userAnswer != null ? userAnswer.trim() : "";
-        if (a.length() > 4000) {
-            a = a.substring(0, 3999) + "…";
-        }
-        StringBuilder block = new StringBuilder();
-        block.append("\n\n### Coordinator clarification (user)\n\n");
-        if (!q.isBlank()) {
-            block.append("**Question:** ").append(q).append("\n\n");
-        }
-        block.append("**Your answer:** ").append(a.isBlank() ? "(empty)" : a).append("\n");
-        Object r =
-                upsert.run(
-                        event,
-                        base,
-                        Map.of(
-                                "artifactId",
-                                "request_exploration",
-                                "sectionId",
-                                "analysis",
-                                "mode",
-                                "append",
-                                "data",
-                                Map.of("exploration_body", block.toString())));
-        if (!"OK".equals(String.valueOf(r))) {
-            // Profile may omit request_exploration; drafting still has assumptions + decision_log.
         }
     }
 

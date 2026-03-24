@@ -19,7 +19,7 @@ public final class PlanningReadinessSpread {
      * After a planning cycle: packet posting may be allowed, but final review/approval readiness is decided only after
      * packet post + critique gates run.
      */
-    public static void applyCycleReadiness(Map<String, Object> spread, PlanningPostDraftGovernor.Result result) {
+    public static void applyCycleReadiness(Map<String, Object> spread, PlanningMaterialRoutingOutcome result) {
         boolean packetAllowed = result != null && result.packetPostingAllowed();
         boolean readyToPost = result != null && result.readyToPostPacket();
         boolean userInputRequired = result != null && result.userInputRequired();

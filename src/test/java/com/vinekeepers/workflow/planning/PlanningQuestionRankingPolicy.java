@@ -9,56 +9,29 @@ import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Ranks LLM/critique clarification candidates, applies safe defaults as assumptions instead of asking,
- * and prepares at most one clarification round per cycle ({@code maxQuestions} is typically {@code 1} so only the first
- * qualifying concrete ask is considered). Open questions default to plain-text capture;
- * structured buttons are used only when the work profile enables bounded UI and the question has an explicit
- * {@code or}-separated alternative pair.
+ * Test-only legacy ranker (removed from production). Canonical planning uses {@link CanonicalPlanningGapEngine}.
  */
 public final class PlanningQuestionRankingPolicy {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern OR_SPLIT = Pattern.compile("\\s+or\\s+", Pattern.CASE_INSENSITIVE);
-    /** Minimum cleaned length for each side of an {@code or} split to treat as bounded choices. */
     private static final int MIN_BOUNDED_OPTION_LEN = 5;
     private static final int MAX_BOUNDED_OPTION_LEN = 90;
 
     private PlanningQuestionRankingPolicy() {}
 
-    public record RankedClarification(
-            boolean userInputRequired,
-            /** Prompt body when using structured choices (buttons); empty for open-text mode. */
-            String orchestratorPrompt,
-            String choicesJson,
-            String metaJson,
-            int blockingQuestionCount,
-            List<String> assumptionsToRecord,
-            /** When true, YAML should use {@code present_choices} + {@code planningClarification}. */
-            boolean useStructuredChoices,
-            /** Canonical question text for meta merge and summaries. */
-            String questionText) {}
-
-    /**
-     * Same as {@link #rank(FeaturePlanState, List, int, UnresolvedItemLedger, boolean)} with an empty ledger and
-     * bounded choice UI disabled (plain text by default).
-     */
-    public static RankedClarification rank(
+    public static ClarificationProjection rank(
             FeaturePlanState plan,
             List<String> candidates,
             int maxQuestions) {
         return rank(plan, candidates, maxQuestions, UnresolvedItemLedger.empty(), false, false);
     }
 
-    /**
-     * Same as {@link #rank(FeaturePlanState, List, int, UnresolvedItemLedger, boolean, boolean)} with
-     * {@code applyOrTextHeuristic == allowBoundedChoiceUi} (legacy tests / callers).
-     */
-    public static RankedClarification rank(
+    public static ClarificationProjection rank(
             FeaturePlanState plan,
             List<String> candidates,
             int maxQuestions,
@@ -67,16 +40,7 @@ public final class PlanningQuestionRankingPolicy {
         return rank(plan, candidates, maxQuestions, ledger, allowBoundedChoiceUi, allowBoundedChoiceUi);
     }
 
-    /**
-     * @param candidates   raw questions from LLM passes (deduped)
-     * @param maxQuestions budget for how many ranked candidates to collect before taking the first (use {@code 1} for strict
-     *     single-question coordinator contract)
-     * @param ledger       items with merge-closed fingerprints are skipped so resolved questions are not re-asked
-     * @param allowBoundedChoiceUi when false, never emit button/dropdown clarification from the OR heuristic path
-     * @param applyOrTextHeuristic when false, never infer A/B buttons from {@code or} in free text (even if bounded UI is
-     *     enabled for other paths)
-     */
-    public static RankedClarification rank(
+    public static ClarificationProjection rank(
             FeaturePlanState plan,
             List<String> candidates,
             int maxQuestions,
@@ -119,7 +83,7 @@ public final class PlanningQuestionRankingPolicy {
             }
         }
         if (pending.isEmpty()) {
-            return new RankedClarification(false, "", "[]", "{}", 0, assumptions, false, "");
+            return new ClarificationProjection(false, "", "[]", "{}", 0, assumptions, false, "");
         }
         String top = pending.get(0);
         ClarificationOptions bounded =
@@ -134,29 +98,31 @@ public final class PlanningQuestionRankingPolicy {
                 meta.put("optC", bounded.optC());
                 String metaJson = JSON.writeValueAsString(meta);
                 List<Map<String, String>> choiceMaps = new ArrayList<>();
-                choiceMaps.add(Map.of(
-                        "id",
-                        "planning_clarify_default",
-                        "label",
-                        "Use recommended default",
-                        "description",
-                        "Record the default below and continue."));
+                choiceMaps.add(
+                        Map.of(
+                                "id",
+                                "planning_clarify_default",
+                                "label",
+                                "Use recommended default",
+                                "description",
+                                "Record the default below and continue."));
                 for (int i = 0; i < bounded.labels().size(); i++) {
-                    String id = i == 0 ? "planning_clarify_opt_a" : (i == 1 ? "planning_clarify_opt_b" : "planning_clarify_opt_c");
+                    String id =
+                            i == 0 ? "planning_clarify_opt_a" : (i == 1 ? "planning_clarify_opt_b" : "planning_clarify_opt_c");
                     choiceMaps.add(Map.of("id", id, "label", truncate(bounded.labels().get(i), 72), "description", ""));
                 }
                 String choicesJson = JSON.writeValueAsString(choiceMaps);
                 String prompt = "**" + top + "**\n\nPick an option below, or **Use recommended default** if that fits.";
-                return new RankedClarification(true, prompt, choicesJson, metaJson, blocking, assumptions, true, top);
+                return new ClarificationProjection(true, prompt, choicesJson, metaJson, blocking, assumptions, true, top);
             }
             meta.put("defaultAssumption", "");
             meta.put("optA", "");
             meta.put("optB", "");
             meta.put("optC", "");
             String metaJson = JSON.writeValueAsString(meta);
-            return new RankedClarification(true, "", "[]", metaJson, blocking, assumptions, false, top);
+            return new ClarificationProjection(true, "", "[]", metaJson, blocking, assumptions, false, top);
         } catch (JsonProcessingException e) {
-            return new RankedClarification(false, "", "[]", "{}", 0, assumptions, false, "");
+            return new ClarificationProjection(false, "", "[]", "{}", 0, assumptions, false, "");
         }
     }
 
@@ -176,7 +142,7 @@ public final class PlanningQuestionRankingPolicy {
             String t = s.trim();
             boolean dup = false;
             for (String e : out) {
-                if (similarity(e, t) > 0.72) {
+                if (ClarificationTextSimilarity.clarificationSimilarity(e, t) > 0.72) {
                     dup = true;
                     break;
                 }
@@ -188,26 +154,8 @@ public final class PlanningQuestionRankingPolicy {
         return out;
     }
 
-    /** Similarity in [0,1] for paraphrase / duplicate detection (ledger gap evaluation). */
-    public static double clarificationSimilarity(String a, String b) {
-        return similarity(a, b);
-    }
-
-    private static double similarity(String a, String b) {
-        if (a == null || b == null) {
-            return 0;
-        }
-        String x = a.toLowerCase(Locale.ROOT);
-        String y = b.toLowerCase(Locale.ROOT);
-        if (x.equals(y)) {
-            return 1;
-        }
-        long common = x.chars().filter(ch -> y.indexOf(ch) >= 0).count();
-        return (2.0 * common) / (x.length() + y.length() + 1);
-    }
-
     private static boolean isBlocking(String q) {
-        String s = q.toLowerCase(Locale.ROOT);
+        String s = q.toLowerCase();
         return s.contains("breaking")
                 || s.contains("compat")
                 || s.contains("migration")
@@ -217,7 +165,7 @@ public final class PlanningQuestionRankingPolicy {
     }
 
     private static int scoreQuestion(String q) {
-        String s = q.toLowerCase(Locale.ROOT);
+        String s = q.toLowerCase();
         int score = 0;
         if (s.contains("implement") || s.contains("runtime") || s.contains("config")) {
             score += 3;
@@ -240,7 +188,7 @@ public final class PlanningQuestionRankingPolicy {
     private record DefaultResolution(String assumptionText) {}
 
     private static DefaultResolution tryResolveWithDefault(String q) {
-        String s = q.toLowerCase(Locale.ROOT);
+        String s = q.toLowerCase();
         if (s.contains("override") && (s.contains("provider") || s.contains("model"))) {
             return new DefaultResolution(
                     "Default: workflow YAML exposes a global LLM default (provider/model); each LLM-capable step may override model and/or provider; non-LLM steps do not declare LLM fields.");
@@ -262,10 +210,6 @@ public final class PlanningQuestionRankingPolicy {
     private record ClarificationOptions(
             List<String> labels, String defaultAssumption, String optA, String optB, String optC) {}
 
-    /**
-     * @return bounded options only for explicit {@code A or B} style questions with two substantive clauses; otherwise null (open text).
-     *     Rhetorical clarifications often contain {@code , or } or a third clause after a second {@code or}; those stay open-text.
-     */
     private static ClarificationOptions inferBoundedOrOptions(String question) {
         String[] parts = OR_SPLIT.split(question, 3);
         if (parts.length < 2) {

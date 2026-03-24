@@ -126,7 +126,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyPostAssessRoutesOnPlanningPostDraftActionOnly() throws Exception {
+    void arriettyPostAssessRoutesOnPlanningCanonicalNextActionOnly() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -158,6 +158,25 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
+    void arriettyAllowedKeys_excludesLegacyPostDraftSpreadKey() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> templates = (Map<String, Object>) room.get("templates");
+        @SuppressWarnings("unchecked")
+        List<String> allowedKeys = (List<String>) templates.get("allowedKeys");
+        assertFalse(
+                allowedKeys.contains("planningPostDraftAction"),
+                "live room must not expose legacy planningPostDraftAction in template allow-list");
+        assertFalse(
+                allowedKeys.contains("discoveryCurrentQuestionPrompt"),
+                "live room must not expose discovery field prompts as coordinator template keys");
+    }
+
+    @Test
     void arriettyPlanningAssessFailsClosedToBlockedWithoutImplicitRedraft() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
@@ -169,6 +188,58 @@ class ArriettyV2WorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> assess = (Map<String, Object>) phases.get("planning_assess_clarification");
         assertEquals("planning_blocked", String.valueOf(assess.get("defaultNextPhase")));
+    }
+
+    @Test
+    void arriettyPlanningPrepare_removesProposalAndMissingFieldNoiseFromLivePath() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_planning_prepare");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) cap.get("steps");
+        List<String> actions = steps.stream()
+                .filter(step -> "call_action".equals(String.valueOf(step.get("type"))))
+                .map(step -> String.valueOf(step.get("action")))
+                .toList();
+        assertFalse(actions.contains("get_profile_missing_fields"));
+        assertFalse(actions.contains("generate_planning_proposals"));
+        assertFalse(actions.contains("apply_auto_planning_proposals"));
+        assertFalse(actions.contains("accept_pending_planning_confirmations"));
+        long promptCount = steps.stream()
+                .filter(step -> "prompt_for_field".equals(String.valueOf(step.get("type"))))
+                .count();
+        assertEquals(1L, promptCount, "planning_prepare should prompt only for workspace blockers");
+        Map<String, Object> promptStep = steps.stream()
+                .filter(step -> "prompt_for_field".equals(String.valueOf(step.get("type"))))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("❓ {{planningWorkspaceBlockerPrompt}}", String.valueOf(promptStep.get("prompt")));
+    }
+
+    @Test
+    void arriettyClarification_promptsCanonicalQuestionTextDirectly() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> cap = (Map<String, Object>) capabilities.get("cap_planning_clarification");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) cap.get("steps");
+        Map<String, Object> promptStep = steps.stream()
+                .filter(step -> "prompt_for_field".equals(String.valueOf(step.get("type"))))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("❓ {{planningClarificationQuestionText}}", String.valueOf(promptStep.get("prompt")));
     }
 
     @Test

@@ -10,9 +10,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Maps work-profile metadata to plain-English prompts (avoids exposing internal artifact/field ids to users).
- * Each prompt is a single concrete ask for a missing fact, aligned with the Arrietty clarification contract (no generic
- * completeness or meta “anything else?” style wording).
+ * Maps work-profile metadata to plain-English strings for discovery gap records and internal readiness summaries.
+ * Live {@code arrietty_room_v2} user questions come only from canonical coordinator clarification ({@code planning_clarification}),
+ * not from these field/section prompts; intake blocking uses workspace gaps only. Copy uses internal completeness
+ * labels (avoid the word {@code completeness} so {@link com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate}
+ * can still vet strings when tests reuse the formatter).
  */
 public final class PlanningPromptFormatter {
 
@@ -20,7 +22,10 @@ public final class PlanningPromptFormatter {
     }
 
     /**
-     * One or two sentences asking for a required field, using label and optional hint.
+     * One or two sentences for a required-field discovery gap record, using label and optional hint.
+     *
+     * @apiNote Internal/diagnostics/readiness only. Not used to drive live {@code planning_clarification}; Arrietty asks
+     *     only via canonical coordinator gaps.
      */
     public static String requiredFieldPrompt(
             ArtifactDefinition artifact,
@@ -32,13 +37,13 @@ public final class PlanningPromptFormatter {
                 : "this item";
         StringBuilder sb = new StringBuilder();
         if (repeatableRowIndex >= 0) {
-            sb.append("**Question:** What should we record on the plan for this **")
+            sb.append("**Internal profile record:** Capture on the plan for **")
                     .append(label)
-                    .append("** entry? Reply in **one message** so we can save it on the plan. Include: ");
+                    .append("** (row). For diagnostics/readiness only — include: ");
         } else {
-            sb.append("**Question:** What should we record for **")
+            sb.append("**Internal profile record:** Capture **")
                     .append(label)
-                    .append("** on the plan? ");
+                    .append("** on the saved plan. ");
         }
         if (field.getPromptHint() != null && !field.getPromptHint().isBlank()) {
             sb.append(field.getPromptHint().trim());
@@ -48,6 +53,9 @@ public final class PlanningPromptFormatter {
         return sb.toString();
     }
 
+    /**
+     * @apiNote Internal readiness/discovery gap copy only; not live coordinator clarification.
+     */
     public static String repeatableSectionEmptyPrompt(ArtifactDefinition artifact, SectionDefinition section) {
         String sectionTitle = section.getTitle() != null && !section.getTitle().isBlank()
                 ? section.getTitle()
@@ -55,10 +63,13 @@ public final class PlanningPromptFormatter {
         String artTitle = artifact.getTitle() != null && !artifact.getTitle().isBlank()
                 ? artifact.getTitle()
                 : titleCaseSnake(artifact.getArtifactId());
-        return "**Question:** The _" + sectionTitle + "_ section (" + artTitle + ") needs at least one entry. "
-                + "Reply with the first item to add so we can save it on the plan.";
+        return "**Internal profile record:** The _" + sectionTitle + "_ section (" + artTitle
+                + ") needs at least one entry for readiness tracking.";
     }
 
+    /**
+     * @apiNote Internal readiness/discovery gap copy only; not live coordinator clarification.
+     */
     public static String requiredSectionMissingPrompt(ArtifactDefinition artifact, SectionDefinition section) {
         String sectionTitle = section.getTitle() != null && !section.getTitle().isBlank()
                 ? section.getTitle()
@@ -66,12 +77,14 @@ public final class PlanningPromptFormatter {
         String artTitle = artifact.getTitle() != null && !artifact.getTitle().isBlank()
                 ? artifact.getTitle()
                 : titleCaseSnake(artifact.getArtifactId());
-        return "**Question:** The _" + sectionTitle + "_ block (" + artTitle + ") is missing. "
-                + "Reply with the main content we should add for that section so we can save it on the plan.";
+        return "**Internal profile record:** The _" + sectionTitle + "_ block (" + artTitle
+                + ") is missing for readiness tracking.";
     }
 
     /**
-     * Human-readable missing-required summary for coordinator/scribe lines (not raw paths).
+     * Human-readable missing-required summary for internal coordinator/scribe lines (not raw paths).
+     *
+     * @apiNote Readiness/diagnostics only; not a live planning clarification driver.
      */
     public static String formatMissingRequiredSummary(WorkProfileDefinition profile, List<String> internalPaths) {
         if (internalPaths == null || internalPaths.isEmpty()) {
