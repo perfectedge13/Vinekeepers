@@ -213,8 +213,8 @@ public final class PlanningPromptFormatter {
         requireAction(snapshot, PlanningNextAction.BLOCKED);
         String reason = snapshot.blockingReason();
         return reason.isBlank()
-                ? "Planning is blocked right now. The packet is not being posted yet."
-                : "Planning is blocked right now. The packet is not being posted yet. " + reason;
+                ? "Planning cannot proceed on this pass. The packet is not being posted yet."
+                : "Planning cannot proceed on this pass. The packet is not being posted yet. " + reason;
     }
 
     public static String formatPacketIntro(PlanningDecisionSnapshot snapshot) {

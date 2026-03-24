@@ -20,8 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Optional OpenAI-backed pass: merges structured upserts into plan artifacts and records at most one clarification
- * question for discovery. Safe no-op when API is unavailable; failures are visible via spread keys (never a silent hang).
+ * Optional OpenAI-backed pass: merges structured upserts into plan artifacts from draft-only JSON. Safe no-op when API
+ * is unavailable; failures are visible via spread keys (never a silent hang). Routing is decided only by the evaluation
+ * pass, not by synthesis output.
  */
 public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.workflow.WorkflowAction {
 
@@ -32,6 +33,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             You are a planning assistant for software feature intake. Reply with a single JSON object only, no markdown fences.
             Contract rules: use real artifactId/sectionId pairs from the profile, use real field ids inside data,
             never use the literal key "fieldId", and never put a field id in sectionId.
+            This pass produces draft content only; do not emit fields that choose the next workflow step or route.
             Schema:
             {
               "repo_evidence_this_pass": "observed | inferred_unverified | not_inspected",
@@ -44,23 +46,21 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                 }
               ],
               "top_unresolved_gap": "string or empty",
-              "recommended_action": "ASK_USER | CONTINUE_SYNTHESIS | READY_FOR_PACKET | BLOCK",
-              "question_if_needed": "single string — empty unless recommended_action is ASK_USER",
-              "explicit_assumptions": ["short strings"]
+              "implementation_scope_notes": "string or empty — draft scope notes only",
+              "explicit_assumptions": ["short strings"],
+              "draft_question_candidate": "optional string — at most one draft clarification phrasing; empty if none; does not control routing"
             }
-            Always put any single clarification in question_if_needed only.
             Use only artifact/section ids that exist in the profile snapshot. Prefer enriching current_state_summary,
             feature_summary, scope_summary, user_stories, and acceptance_criteria. Keep values concise.
             Return exactly one JSON object as the full response body. Do not add prefatory text, explanations, or trailing notes.
-            If you are unsure, prefer {"upserts":[],"explicit_assumptions":[],"question_if_needed":"",
-            "top_unresolved_gap":"","recommended_action":"CONTINUE_SYNTHESIS","repo_evidence_this_pass":"not_inspected"}
+            If you are unsure, prefer {"upserts":[],"explicit_assumptions":[],"implementation_scope_notes":"",
+            "top_unresolved_gap":"","draft_question_candidate":"","repo_evidence_this_pass":"not_inspected"}
             over malformed JSON or placeholder keys.
             Wrong: {"artifactId":"requirements_spec","sectionId":"feature_summary","data":{"current_state_summary":"x"}}
             Right: {"artifactId":"requirements_spec","sectionId":"narrative","data":{"feature_summary":"x","current_state_summary":"y"}}
             Separate observed repo facts this pass from inference and unknowns; do not name paths/packages unless observed.
-            At most one clarification question per response, only in question_if_needed.
-            If nothing should change, return {"upserts":[],"explicit_assumptions":[],
-            "question_if_needed":"","top_unresolved_gap":"","recommended_action":"CONTINUE_SYNTHESIS","repo_evidence_this_pass":"not_inspected"}.
+            If nothing should change, return {"upserts":[],"explicit_assumptions":[],"implementation_scope_notes":"",
+            "top_unresolved_gap":"","draft_question_candidate":"","repo_evidence_this_pass":"not_inspected"}.
             """;
 
     private final OpenAiChatClient openAiChatClient;
@@ -128,7 +128,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                     OpenAiCallContext.planning(
                             event,
                             state,
-                            "Synthesizing the draft plan and single clarification beat (asking ChatGPT).");
+                            "Updating the plan draft.");
             raw = openAiChatClient.complete(SYSTEM, userPayload, model, timeoutMs, callCtx);
         } catch (Exception e) {
             spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name());

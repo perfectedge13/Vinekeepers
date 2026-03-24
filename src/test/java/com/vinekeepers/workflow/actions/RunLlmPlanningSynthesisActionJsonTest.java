@@ -34,7 +34,8 @@ class RunLlmPlanningSynthesisActionJsonTest {
 
     @Test
     void extractJsonObject_stripsFence() {
-        String raw = "```json\n{\"upserts\":[],\"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}\n```";
+        String raw =
+                "```json\n{\"upserts\":[],\"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}\n```";
         String out = RunLlmPlanningSynthesisAction.extractJsonObject(raw);
         assertTrue(out.contains("\"upserts\""));
         assertTrue(out.startsWith("{"));
@@ -58,9 +59,9 @@ class RunLlmPlanningSynthesisActionJsonTest {
     void run_repairsMalformedJsonBeforeApplyingUpserts() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> malformed = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Existing planning uses one shared model\"}} \"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Existing planning uses one shared model\"}} \"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         HttpResponse<String> repaired = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Existing planning uses one shared model\"}}],\"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Existing planning uses one shared model\"}}],\"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(malformed).thenReturn(repaired);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -104,7 +105,7 @@ class RunLlmPlanningSynthesisActionJsonTest {
     void run_failsWhenUpsertsUsePlaceholderFieldKeys() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> invalid = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"fieldId\":\"Wrong placeholder\"}}],\"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"fieldId\":\"Wrong placeholder\"}}],\"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(invalid);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -140,7 +141,7 @@ class RunLlmPlanningSynthesisActionJsonTest {
     void run_failsWhenUpsertsUseFieldIdAsSectionId() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> invalid = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Wrong section\"}}],\"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\",\"mode\":\"replace\",\"data\":{\"current_state_summary\":\"Wrong section\"}}],\"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(invalid);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");

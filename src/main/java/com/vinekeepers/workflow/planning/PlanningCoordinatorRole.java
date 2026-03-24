@@ -13,7 +13,9 @@ public enum PlanningCoordinatorRole {
                 Contract rules: sectionId must be a real profile section id like narrative, impact, backlog, outline,
                 checks, context, analysis, or decisions. data keys must be real field ids for that section. Never use
                 the literal key "fieldId" and never use a field id such as scope_summary or open_questions as sectionId.
-                If you are unsure, return {"upserts":[],"question_if_needed":"","recommended_action":"CONTINUE_SYNTHESIS"} instead of prose, placeholders, or malformed JSON.
+                Output is draft-only; do not emit routing or next-step action fields.
+                If you are unsure, return {"upserts":[],"explicit_assumptions":[],"implementation_scope_notes":"",
+                "top_unresolved_gap":"","draft_question_candidate":"","repo_evidence_this_pass":"not_inspected"} instead of prose, placeholders, or malformed JSON.
                 Schema:
                 {
                   "repo_evidence_this_pass": "observed | inferred_unverified | not_inspected",
@@ -21,16 +23,17 @@ public enum PlanningCoordinatorRole {
                     { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "feature_summary": "value", "current_state_summary": "value", "scope_summary": "value" } }
                   ],
                   "top_unresolved_gap": "string or empty",
-                  "recommended_action": "ASK_USER | CONTINUE_SYNTHESIS | READY_FOR_PACKET | BLOCK",
-                  "question_if_needed": "single string or empty",
-                  "explicit_assumptions": ["short assumption"]
+                  "implementation_scope_notes": "string or empty",
+                  "explicit_assumptions": ["short assumption"],
+                  "draft_question_candidate": "optional string — draft only; empty if none; does not control routing"
                 }
                 Use only artifact/section ids that exist in the software_feature_planning_v2 profile.
-                If nothing should change, return {"upserts":[],"explicit_assumptions":[],"question_if_needed":"","top_unresolved_gap":"","recommended_action":"CONTINUE_SYNTHESIS","repo_evidence_this_pass":"not_inspected"}.
+                If nothing should change, return {"upserts":[],"explicit_assumptions":[],"implementation_scope_notes":"",
+                "top_unresolved_gap":"","draft_question_candidate":"","repo_evidence_this_pass":"not_inspected"}.
                 """;
         return switch (this) {
             case COORDINATOR -> "You are the sole planning coordinator for this feature room. "
-                    + "Ground every change in repo evidence, explicit assumptions, and the top unresolved gap. "
+                    + "Ground every change in available repo evidence, explicit assumptions, and the top unresolved gap. "
                     + "Improve the planning draft only where the snapshot supports a more concrete, internally consistent, "
                     + "implementation-ready result across requirements, architecture, risks, decisions, validation, context, "
                     + "and exploration.\n"
@@ -40,7 +43,8 @@ public enum PlanningCoordinatorRole {
 
     String userTaskHint() {
         return switch (this) {
-            case COORDINATOR -> "Tighten the draft using repo-grounded facts, explicit assumptions, and the top unresolved gap; ask at most one question only when the canonical next action is ASK_USER.";
+            case COORDINATOR -> "Tighten the draft using available context, explicit assumptions, and the top unresolved gap; "
+                    + "optional draft_question_candidate is draft text only and does not decide routing.";
         };
     }
 }

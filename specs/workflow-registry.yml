@@ -1858,8 +1858,9 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/RunLlmPlanningSynthesisAction.java
     role: >-
       Workflow action run_llm_planning_synthesis — optional LLM JSON upserts into plan artifacts via UpsertArtifactSectionDataAction;
-      ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), a single recommended_action aligned with
-      deterministic planning routing, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
+      ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), draft-only fields (top_unresolved_gap,
+      implementation_scope_notes, explicit_assumptions, optional draft_question_candidate that does not control routing), and forbid
+      synthesis-era routing vocabulary; storeSpread
       planningLlmOk, planningLlmError, planningLlmSkipReason; no-op when API key absent;
       parse uses shared PlanningLlmJsonSupport extraction and attempts one bounded JSON repair pass; spreads planningSynthesisFailureCategory
       (PlanningFailureCategory: SYNTHESIS_TRANSPORT_ERROR, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED,
@@ -1878,8 +1879,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/RunRequestExpansionLlmAction.java
     role: >-
       Workflow action run_request_expansion_llm — structured JSON expansion into exploration_body and narrative/architecture
-      fields; ChatGPT system prompt requires repo_evidence_this_pass tiers, recommended_action enum, single question_if_needed,
-      and forbids multi-question follow-up structures or naming repo touchpoints not observed
+      fields; ChatGPT system prompt requires repo_evidence_this_pass tiers, draft-only fields (implementation_scope_notes,
+      optional draft_question_candidate), and forbids multi-question follow-up structures or naming repo touchpoints not observed
       in supplied evidence; prompt examples use real software_feature_planning_v2 section ids and field ids rather than generic fieldId
       placeholders; uses PlanningContentGenerator with OpenAiPlanningContentGenerator as the default OpenAI-backed implementation;
       user payload may include planningRepoEvidenceJson and optional RAG snippets when present in workflow state; when a materialized
@@ -2839,10 +2840,10 @@ requirements:
           workflow state so thin artifact open_questions text alone does not fail depth when planningCanonicalUserInputRequired is false
           and the unresolved ledger has no OPEN blocking item
         - >-
-          run_request_expansion_llm and run_llm_planning_synthesis system prompts require repo evidence tiers, a single recommended_action,
-          at most one question_if_needed, forbid generic multi-question open-question brainstorming, and require real
-          software_feature_planning_v2 artifact/section/field ids instead of generic fieldId placeholders; touchpoints must not be
-          asserted as observed unless present in supplied repo evidence for that pass
+          run_request_expansion_llm and run_llm_planning_synthesis system prompts require repo evidence tiers, draft-only JSON
+          (no recommended_action or synthesis routing enums), optional draft_question_candidate for draft text only, forbid generic
+          multi-question open-question brainstorming, and require real software_feature_planning_v2 artifact/section/field ids instead of
+          generic fieldId placeholders; touchpoints must not be asserted as observed unless present in supplied repo evidence for that pass
         - >-
           run_request_expansion_llm user JSON carries planner_instruction when a workspace checkout path or non-trivial
           planningRepoEvidenceJson snapshot is present, nudging the model to treat repo evidence as observed when it uses that
@@ -2850,7 +2851,9 @@ requirements:
         - >-
           For canonical_v1 coordinator transport, PlanningEvaluationService evaluates canonical plan state after drafting;
           code validates that only blocking or branching gaps can surface ASK_USER, enforces maxQuestions=1, persists
-          confidence from evaluation output, and routes only through the normalized planningNextAction snapshot without fallback to generic or ranked questioning when the canonical gap set is closed
+          confidence from evaluation output, and routes only through the normalized planningNextAction snapshot without fallback to generic or ranked questioning when the canonical gap set is closed;
+          missing repo inspection alone does not force BLOCKED when no gap is blocking: evaluation may coerce READY_FOR_PACKET when depth
+          and structured parse are acceptable and the model withheld ready_for_packet without asserting blocking gaps
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           is part of the canonical evaluation context so strong on-repo support can reduce unnecessary user asks without a second ranking path
@@ -3100,7 +3103,7 @@ requirements:
         - id: UNIT-PLANNING-LLM-PROMPT-CONTRACT
           title: PlanningLlmPromptContractTest
           intent: >-
-            Verify expansion and synthesis planning prompts enforce repo-grounding tiers, single recommended_action, and one-question contract
+            Verify expansion and synthesis planning prompts enforce repo-grounding tiers, draft-only schema without routing vocabulary, and coordinator role alignment
           testClass: com.vinekeepers.workflow.actions.PlanningLlmPromptContractTest
           preconditions: []
         - id: UNIT-PLANNING-GAP-ASK-COUNTS

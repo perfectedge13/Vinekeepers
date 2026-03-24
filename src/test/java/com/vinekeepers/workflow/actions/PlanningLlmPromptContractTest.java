@@ -12,14 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PlanningLlmPromptContractTest {
 
     @Test
-    void expansionPrompt_bansMultiQuestionBrainstorming() throws Exception {
+    void expansionPrompt_isDraftOnlyWithRepoTiers() throws Exception {
         String system = staticStringField(RunRequestExpansionLlmAction.class, "SYSTEM");
-        assertTrue(system.contains("question_if_needed"));
-        assertTrue(system.contains("recommended_action"));
-        assertTrue(system.contains("ASK_USER"));
-        assertTrue(system.contains("CONTINUE_SYNTHESIS"));
-        assertTrue(system.contains("READY_FOR_PACKET"));
-        assertTrue(system.contains("BLOCK"));
+        assertTrue(system.contains("draft_question_candidate"));
+        assertTrue(system.contains("implementation_scope_notes"));
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("explicit_assumptions"));
         assertTrue(system.contains("repo_evidence_this_pass"));
@@ -28,6 +24,10 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("Return exactly one JSON object"));
         assertTrue(system.contains("current_state_summary"));
         assertTrue(system.contains("never use the literal key \"fieldId\""));
+        assertTrue(system.contains("does not control routing"));
+        assertFalse(system.contains("recommended_action"));
+        assertFalse(system.contains("question_if_needed"));
+        assertFalse(system.contains("CONTINUE_SYNTHESIS"));
         assertFalse(system.contains("candidate_open_questions"));
         assertFalse(system.contains("follow_up_decisions"));
         assertFalse(system.contains("follow_up_questions"));
@@ -35,20 +35,22 @@ class PlanningLlmPromptContractTest {
     }
 
     @Test
-    void synthesisPrompt_enforcesSingleClarificationField() throws Exception {
+    void synthesisPrompt_isDraftOnlyWithoutRoutingVocabulary() throws Exception {
         String system = staticStringField(RunLlmPlanningSynthesisAction.class, "SYSTEM");
-        assertTrue(system.contains("question_if_needed"));
-        assertTrue(system.contains("At most one clarification question"));
+        assertTrue(system.contains("draft_question_candidate"));
+        assertTrue(system.contains("implementation_scope_notes"));
         assertTrue(system.contains("repo_evidence_this_pass"));
-        assertTrue(system.contains("recommended_action"));
         assertTrue(system.contains("top_unresolved_gap"));
-        assertTrue(system.contains("CONTINUE_SYNTHESIS"));
         assertTrue(system.contains("Return exactly one JSON object"));
         assertTrue(system.contains("Wrong: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\""));
         assertTrue(system.contains("Right: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\""));
         assertTrue(system.contains("do not name paths/packages unless observed"));
         assertTrue(system.contains("current_state_summary"));
         assertTrue(system.contains("never use the literal key \"fieldId\""));
+        assertTrue(system.contains("draft content only"));
+        assertFalse(system.contains("recommended_action"));
+        assertFalse(system.contains("question_if_needed"));
+        assertFalse(system.contains("CONTINUE_SYNTHESIS"));
         assertFalse(system.contains("open_questions_block"));
         assertFalse(system.contains("None — ready to implement"));
         assertFalse(system.contains("follow_up_questions"));
@@ -68,11 +70,13 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("requirements_spec"));
         assertTrue(system.contains("sectionId\": \"narrative\""));
         assertTrue(system.contains("feature_summary"));
-        assertTrue(system.contains("question_if_needed"));
+        assertTrue(system.contains("draft_question_candidate"));
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("repo_evidence_this_pass"));
         assertTrue(system.contains("literal key \"fieldId\""));
-        assertTrue(system.contains("CONTINUE_SYNTHESIS"));
+        assertTrue(system.contains("draft-only"));
+        assertFalse(system.contains("recommended_action"));
+        assertFalse(system.contains("CONTINUE_SYNTHESIS"));
         assertFalse(system.contains("open_questions_block.backlog"));
         assertFalse(system.contains("\"fieldId\": \"value\""));
     }

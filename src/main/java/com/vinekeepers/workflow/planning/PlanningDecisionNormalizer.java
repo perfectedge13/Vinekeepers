@@ -18,14 +18,7 @@ public final class PlanningDecisionNormalizer {
                     "");
         }
         String question = decision.canonicalQuestionText();
-        PlanningNextAction nextAction;
-        if (decision.success() && decision.askUserRequired() && !question.isBlank()) {
-            nextAction = PlanningNextAction.ASK_USER;
-        } else if (decision.success() && decision.readyForPacket()) {
-            nextAction = PlanningNextAction.READY_FOR_PACKET;
-        } else {
-            nextAction = PlanningNextAction.BLOCKED;
-        }
+        PlanningNextAction nextAction = mapNextAction(decision, question);
         return new PlanningDecisionSnapshot(
                 nextAction,
                 decision.confidence() != null ? decision.confidence().score() : null,
@@ -33,6 +26,20 @@ public final class PlanningDecisionNormalizer {
                 nextAction == PlanningNextAction.BLOCKED ? blockingReason(decision) : "",
                 decision.repoGroundingState(),
                 decision.summary());
+    }
+
+    private static PlanningNextAction mapNextAction(PlanningEvaluationDecision decision, String question) {
+        if (!decision.success()) {
+            return PlanningNextAction.BLOCKED;
+        }
+        if (decision.askUserRequired()) {
+            return question.isBlank() ? PlanningNextAction.BLOCKED : PlanningNextAction.ASK_USER;
+        }
+        return switch (decision.nextAction()) {
+            case READY_FOR_PACKET -> PlanningNextAction.READY_FOR_PACKET;
+            case ASK_USER -> !question.isBlank() ? PlanningNextAction.ASK_USER : PlanningNextAction.BLOCKED;
+            case CONTINUE_SYNTHESIS, BLOCK -> PlanningNextAction.BLOCKED;
+        };
     }
 
     private static String blockingReason(PlanningEvaluationDecision decision) {

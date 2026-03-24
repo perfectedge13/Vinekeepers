@@ -37,7 +37,7 @@ public final class PlanningLlmJsonSupport {
     private static final String DEFAULT_REPAIR_SHAPE_HINT =
             "Return the same intended single-object shape. Preserve only the original keys when possible. "
                     + "For planning synthesis, expected keys usually include repo_evidence_this_pass string, upserts array, "
-                    + "top_unresolved_gap string, question_if_needed string, recommended_action string, explicit_assumptions array.";
+                    + "top_unresolved_gap string, implementation_scope_notes string, draft_question_candidate string, explicit_assumptions array.";
 
     public record UpsertApplyResult(int attempted, int applied, List<String> rejected) {}
     public record ParsedJsonObjectResult(
@@ -268,11 +268,12 @@ public final class PlanningLlmJsonSupport {
         return new UpsertApplyResult(attempted, applied, List.copyOf(rejected));
     }
 
-    public static String readSingleQuestionIfNeeded(JsonNode root) {
+    /** Draft-only optional question text from synthesis JSON; not used for routing. */
+    public static String readDraftQuestionCandidate(JsonNode root) {
         if (root == null) {
             return "";
         }
-        JsonNode q = root.path("question_if_needed");
+        JsonNode q = root.path("draft_question_candidate");
         return q.isTextual() ? q.asText("").trim() : "";
     }
 
@@ -284,10 +285,13 @@ public final class PlanningLlmJsonSupport {
         if (upserts.isArray() && upserts.size() > 0) {
             return true;
         }
-        if (!readSingleQuestionIfNeeded(root).isBlank()) {
+        if (!readDraftQuestionCandidate(root).isBlank()) {
             return true;
         }
         if (!textField(root, "top_unresolved_gap").isBlank()) {
+            return true;
+        }
+        if (!textField(root, "implementation_scope_notes").isBlank()) {
             return true;
         }
         JsonNode assumptions = root.path("explicit_assumptions");

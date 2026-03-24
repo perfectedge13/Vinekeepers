@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-23T12:00:00Z"
+  updated_utc: "2026-03-24T20:42:19Z"
 
 project:
   id: vinekeepers
@@ -45,6 +45,18 @@ assets:
     role: Read config from system properties
     requires: [REQ-ENV-001]
     feature_ids: [FEAT-ENV]
+  - id: ASSET-HEALTH-SERVER
+    kind: source
+    path: src/main/java/com/vinekeepers/env/HealthServer.java
+    role: Minimal HTTP server for GET / and GET /health uptime probes
+    requires: [REQ-ENV-001]
+    feature_ids: [FEAT-ENV]
+  - id: ASSET-BOOTSTRAP
+    kind: source
+    path: src/main/java/com/vinekeepers/core/Bootstrap.java
+    role: Bootstraps optional health server from HEALTH_PORT env configuration
+    requires: [REQ-ENV-001]
+    feature_ids: [FEAT-ENV]
   - id: ASSET-APP
     kind: source
     path: src/main/java/com/vinekeepers/VinekeepersApp.java
@@ -54,8 +66,8 @@ assets:
 
 requirements:
   - id: REQ-ENV-001
-    title: Load .env at startup
-    statement: The application loads a .env file from the project root into system properties at startup and provides Env.get(key, default) for configuration access.
+    title: Load environment config and optional health checks
+    statement: The application loads a .env file from the project root into system properties at startup, provides Env.get(key, default) for configuration access, and may expose a minimal health HTTP server configured from HEALTH_PORT.
     status: active
     priority: medium
     type: functional
@@ -69,6 +81,12 @@ requirements:
       criteria:
         - EnvLoader.load(".env") is called before bootstrap
         - Env.get(key, default) returns value from system properties or default
+        - >-
+          Bootstrap.withHealthServer reads HEALTH_PORT via Env, defaults to 8080, skips startup when the parsed port is
+          less than or equal to zero, and logs a warning instead of failing bootstrap when the health server cannot bind
+        - >-
+          HealthServer serves GET / and GET /health with 200 OK text responses for uptime probes and returns 405 for
+          unsupported methods
         - >-
           Optional repo workspace keys (VINEKEEPERS_REPO_WORKSPACE_ROOT, VINEKEEPERS_ALLOW_GIT_CLONE, GIT_EXECUTABLE) are
           read via Env when RepoWorkspaceService is constructed
@@ -92,7 +110,7 @@ requirements:
           missing or invalid Qdrant/OpenAI pairing leaves planning non-RAG without failing the workflow
       examples: []
     traceability:
-      assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]
+      assets: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-HEALTH-SERVER, ASSET-BOOTSTRAP, ASSET-APP]
       symbols: []
     validation:
       tests:
@@ -101,14 +119,23 @@ requirements:
           intent: Verify .env loading and Env.get behavior
           testClass: com.vinekeepers.env.EnvLoaderTest
           preconditions: []
+        - id: MANUAL-ENV-HEALTH-SERVER
+          title: Health server responds on configured port
+          intent: Verify HEALTH_PORT starts the listener and GET /health returns OK
+          preconditions: []
+          steps:
+            - run: Set HEALTH_PORT=8081 and start VinekeepersApp
+              expect: ["Health server listening on port 8081"]
+            - run: Invoke GET http://127.0.0.1:8081/health
+              expect: ["OK"]
 
 features:
   - id: FEAT-ENV
     slug: env
-    title: Environment and .env loading
+    title: Environment configuration and health checks
     domain_slug: env
     doc_path: features/domain/env/env.md
-    summary: Load .env at startup and provide Env.get(key, default) for configuration access.
+    summary: Load .env-backed configuration, expose Env.get defaults, and optionally run the HEALTH_PORT health endpoint.
     requirement_ids: [REQ-ENV-001]
-    asset_ids: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-APP]
+    asset_ids: [ASSET-ENV-LOADER, ASSET-ENV, ASSET-HEALTH-SERVER, ASSET-BOOTSTRAP, ASSET-APP]
     status: active

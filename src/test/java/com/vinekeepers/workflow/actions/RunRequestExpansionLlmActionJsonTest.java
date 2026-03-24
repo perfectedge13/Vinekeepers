@@ -39,7 +39,7 @@ class RunRequestExpansionLlmActionJsonTest {
     void run_repairsMalformedJsonBeforeApplyingExpansionFields() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> repaired = assistantResponse(
-                "{\"current_state\":\"Existing planning uses one shared model\",\"upserts\":[],\"question_if_needed\":\"\"}");
+                "{\"current_state\":\"Existing planning uses one shared model\",\"upserts\":[],\"draft_question_candidate\":\"\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(repaired);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -64,7 +64,7 @@ class RunRequestExpansionLlmActionJsonTest {
 
         PlanningContentGenerator generator =
                 (c, system, user, model, timeout, callCtx) ->
-                        "{\"current_state\":\"Existing planning uses one shared model\",\"upserts\":[] \"question_if_needed\":\"\"}";
+                        "{\"current_state\":\"Existing planning uses one shared model\",\"upserts\":[] \"draft_question_candidate\":\"\"}";
         var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) action.run(null, Map.of("contextId", "ctx-expansion-repair"), Map.of());
@@ -106,7 +106,7 @@ class RunRequestExpansionLlmActionJsonTest {
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
         PlanningContentGenerator generator =
                 (c, system, user, model, timeout, callCtx) ->
-                        "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"fieldId\":\"Wrong placeholder\"}}],\"question_if_needed\":\"\"}";
+                        "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"fieldId\":\"Wrong placeholder\"}}],\"draft_question_candidate\":\"\"}";
         var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
         @SuppressWarnings("unchecked")
         Map<String, Object> spread = (Map<String, Object>) action.run(null, Map.of("contextId", "ctx-expansion-invalid"), Map.of());
@@ -123,7 +123,7 @@ class RunRequestExpansionLlmActionJsonTest {
         AtomicReference<String> capturedUser = new AtomicReference<>();
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> llmOk =
-                assistantResponse("{\"current_state\":\"seen\",\"upserts\":[],\"question_if_needed\":\"\"}");
+                assistantResponse("{\"current_state\":\"seen\",\"upserts\":[],\"draft_question_candidate\":\"\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(llmOk);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -149,7 +149,7 @@ class RunRequestExpansionLlmActionJsonTest {
         PlanningContentGenerator generator =
                 (c, system, user, model, timeout, callCtx) -> {
                     capturedUser.set(user);
-                    return "{\"current_state\":\"seen\",\"upserts\":[],\"question_if_needed\":\"\"}";
+                    return "{\"current_state\":\"seen\",\"upserts\":[],\"draft_question_candidate\":\"\"}";
                 };
         var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
         Map<String, Object> state =
@@ -172,7 +172,7 @@ class RunRequestExpansionLlmActionJsonTest {
         AtomicReference<String> capturedUser = new AtomicReference<>();
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> llmOk =
-                assistantResponse("{\"current_state\":\"x\",\"upserts\":[],\"question_if_needed\":\"\"}");
+                assistantResponse("{\"current_state\":\"x\",\"upserts\":[],\"draft_question_candidate\":\"\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(llmOk);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -198,7 +198,7 @@ class RunRequestExpansionLlmActionJsonTest {
         PlanningContentGenerator generator =
                 (c, system, user, model, timeout, callCtx) -> {
                     capturedUser.set(user);
-                    return "{\"current_state\":\"x\",\"upserts\":[],\"question_if_needed\":\"\"}";
+                    return "{\"current_state\":\"x\",\"upserts\":[],\"draft_question_candidate\":\"\"}";
                 };
         var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
         Map<String, Object> state = Map.of("contextId", "ctx-expansion-no-nudge", "planningRepoEvidenceJson", "{}");
@@ -212,7 +212,7 @@ class RunRequestExpansionLlmActionJsonTest {
         AtomicReference<String> capturedUser = new AtomicReference<>();
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> llmOk =
-                assistantResponse("{\"current_state\":\"local\",\"upserts\":[],\"question_if_needed\":\"\"}");
+                assistantResponse("{\"current_state\":\"local\",\"upserts\":[],\"draft_question_candidate\":\"\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(llmOk);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -244,7 +244,7 @@ class RunRequestExpansionLlmActionJsonTest {
         PlanningContentGenerator generator =
                 (c, system, user, model, timeout, callCtx) -> {
                     capturedUser.set(user);
-                    return "{\"current_state\":\"local\",\"upserts\":[],\"question_if_needed\":\"\"}";
+                    return "{\"current_state\":\"local\",\"upserts\":[],\"draft_question_candidate\":\"\"}";
                 };
         var action = new RunRequestExpansionLlmAction(generator, client, planStore, registry);
         action.run(null, Map.of("contextId", "ctx-expansion-localpath"), Map.of());

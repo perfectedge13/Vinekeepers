@@ -73,6 +73,11 @@ public final class PlanningEvaluationService {
             - best_question.text must be empty when ask_user_required is false.
             - ready_for_packet must be false when blocking gaps remain.
             - Base all reasoning on the canonical state snapshot provided.
+            - Missing repo inspection or thin repo-specific grounding is only less context: do not, by itself, set
+              blocking=true, ask_user_required=true, or withhold ready_for_packet when the plan is otherwise coherent.
+            - If repo-specific facts are unavailable, still judge confidence, gaps, and readiness from the request,
+              structured planning state, and any evidence present; do not treat "implementation not observed in repo"
+              as a blocker unless it truly prevents a coherent plan or requires a blocking/branching decision.
 
             JSON schema:
             {
@@ -152,7 +157,7 @@ public final class PlanningEvaluationService {
                     OpenAiCallContext.planning(
                             event,
                             state,
-                            "Evaluating planning gaps, confidence, and one clarification question (single semantic pass).");
+                            "Evaluating confidence and whether clarification is needed (single semantic pass).");
             raw = openAiChatClient.complete(SYSTEM, userPayload, null, null, callCtx);
         } catch (Exception e) {
             return failure("EVALUATION_TRANSPORT_ERROR");
@@ -403,7 +408,13 @@ public final class PlanningEvaluationService {
             return failure("EVALUATION_INVALID_BLOCKING_READY", repairAttempted, repairExhausted);
         }
         CanonicalPlanningGap topGap = selectTopGap(gaps);
-        PlanningCanonicalNextAction nextAction = determineNextAction(askUserRequired, readyForPacket, gaps);
+        boolean synthesisDraftAcceptableForPacket =
+                context == null || (context.depthOk() && !context.structuredParseFailed());
+        PlanningCanonicalNextAction nextAction =
+                determineNextAction(askUserRequired, readyForPacket, gaps, synthesisDraftAcceptableForPacket);
+        if (nextAction == PlanningCanonicalNextAction.READY_FOR_PACKET) {
+            readyForPacket = true;
+        }
         String blockReason = determineBlockReason(nextAction, topGap);
         if (nextAction == PlanningCanonicalNextAction.BLOCK && blockReason.isBlank()) {
             return failure("EVALUATION_INVALID_BLOCK_WITHOUT_REASON", repairAttempted, repairExhausted);
@@ -773,7 +784,10 @@ public final class PlanningEvaluationService {
     }
 
     private static PlanningCanonicalNextAction determineNextAction(
-            boolean askUserRequired, boolean readyForPacket, List<CanonicalPlanningGap> gaps) {
+            boolean askUserRequired,
+            boolean readyForPacket,
+            List<CanonicalPlanningGap> gaps,
+            boolean synthesisDraftAcceptableForPacket) {
         if (askUserRequired) {
             return PlanningCanonicalNextAction.ASK_USER;
         }
@@ -783,7 +797,10 @@ public final class PlanningEvaluationService {
         if (containsBlockingGap(gaps)) {
             return PlanningCanonicalNextAction.BLOCK;
         }
-        return PlanningCanonicalNextAction.BLOCK;
+        if (!synthesisDraftAcceptableForPacket) {
+            return PlanningCanonicalNextAction.BLOCK;
+        }
+        return PlanningCanonicalNextAction.READY_FOR_PACKET;
     }
 
     private static PlanningIntakeStage stageFor(PlanningCanonicalNextAction nextAction) {

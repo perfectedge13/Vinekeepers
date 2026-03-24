@@ -36,9 +36,9 @@ class StructuredLlmArtifactUpsertPassTest {
     void execute_repairsMalformedJsonBeforeApplyingUpserts() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> malformed = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"feature_summary\":\"Recovered after repair\"}} \"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"feature_summary\":\"Recovered after repair\"}} \"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         HttpResponse<String> repaired = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"feature_summary\":\"Recovered after repair\"}}],\"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"feature_summary\":\"Recovered after repair\"}}],\"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(malformed).thenReturn(repaired);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
@@ -75,7 +75,7 @@ class StructuredLlmArtifactUpsertPassTest {
     void execute_returnsSchemaErrorWhenStructuredUpsertsUsePlaceholderFieldId() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> invalid = assistantResponse(
-                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"fieldId\":\"Wrong placeholder\"}}],\"question_if_needed\":\"\",\"top_unresolved_gap\":\"\",\"recommended_action\":\"CONTINUE_SYNTHESIS\",\"explicit_assumptions\":[]}");
+                "{\"upserts\":[{\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"mode\":\"replace\",\"data\":{\"fieldId\":\"Wrong placeholder\"}}],\"implementation_scope_notes\":\"\",\"top_unresolved_gap\":\"\",\"draft_question_candidate\":\"\",\"explicit_assumptions\":[],\"repo_evidence_this_pass\":\"not_inspected\"}");
         when(http.send(any(HttpRequest.class), anyBodyHandler())).thenReturn(invalid);
         OpenAiChatClient client =
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");

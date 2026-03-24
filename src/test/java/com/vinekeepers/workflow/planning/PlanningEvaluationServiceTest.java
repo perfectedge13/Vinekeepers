@@ -278,6 +278,61 @@ class PlanningEvaluationServiceTest {
     }
 
     @Test
+    void parseAndValidate_packetRouteWhenNoBlockingGapsEvenIfModelWithholdsReady() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 65, "level": "medium", "summary": "Coherent without repo depth." },
+                          "gaps": [
+                            { "id": "weak_val", "kind": "WEAK_VALIDATION", "description": "Could add tests later.", "blocking": false, "askable": false, "assumable": true }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """);
+
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
+        assertTrue(result.readyForPacket());
+    }
+
+    @Test
+    void parseAndValidate_depthFailureBlocksWithoutBlockingGaps() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 50, "level": "medium", "summary": "Draft thin." },
+                          "gaps": [],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        new PlanningEvaluationService.EvaluationContext("", "", "", false, "too thin", false, 0));
+
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.BLOCK, result.nextAction());
+        assertFalse(result.readyForPacket());
+    }
+
+    @Test
     void parseAndValidate_blocksWhenBlockingGapIsNotAskable() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
@@ -307,6 +362,16 @@ class PlanningEvaluationServiceTest {
 
     private static PlanningEvaluationDecision parseAndValidate(
             PlanningEvaluationService service, String json) throws Exception {
+        return parseAndValidate(
+                service,
+                json,
+                new PlanningEvaluationService.EvaluationContext("", "", "", true, "", false, 0));
+    }
+
+    private static PlanningEvaluationDecision parseAndValidate(
+            PlanningEvaluationService service,
+            String json,
+            PlanningEvaluationService.EvaluationContext ctx) throws Exception {
         Method parse = PlanningEvaluationService.class.getDeclaredMethod(
                 "parseAndValidate",
                 com.fasterxml.jackson.databind.JsonNode.class,
@@ -317,8 +382,7 @@ class PlanningEvaluationServiceTest {
         parse.setAccessible(true);
         com.fasterxml.jackson.databind.JsonNode root =
                 new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-        return (PlanningEvaluationDecision)
-                parse.invoke(service, root, minimalPlan(), null, false, false);
+        return (PlanningEvaluationDecision) parse.invoke(service, root, minimalPlan(), ctx, false, false);
     }
 
     private static FeaturePlanState minimalPlan() {

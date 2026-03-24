@@ -40,8 +40,17 @@ class PlanningCyclePipelineRoutingContractTest {
         HttpResponse<String> evaluationResponse = assistantResponse(
                 """
                 {
-                  "confidence": { "score": 41, "level": "medium", "summary": "Still not grounded enough." },
-                  "gaps": [],
+                  "confidence": { "score": 41, "level": "medium", "summary": "Blocked on a real gap." },
+                  "gaps": [
+                    {
+                      "id": "missing_authority",
+                      "kind": "MISSING_AUTHORITY",
+                      "description": "Need an explicit approver for this rollout.",
+                      "blocking": true,
+                      "askable": false,
+                      "assumable": false
+                    }
+                  ],
                   "ask_user_required": false,
                   "best_question": { "text": "", "rationale": "" },
                   "assumptions_to_add": [],

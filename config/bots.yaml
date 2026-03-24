@@ -617,7 +617,7 @@ workflows:
         - type: call_action
           action: post_channel_message
           bind:
-            content: 'Planning is blocked right now — {{planningCycleUserVisibleFailure}}
+            content: 'Planning cannot proceed on this pass — {{planningCycleUserVisibleFailure}}
 
               {{planReadinessSummary}}'
             asRole: orchestrator
@@ -642,7 +642,7 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: 'Planning is blocked right now. The packet is not being posted yet.
+          content: 'Planning cannot proceed on this pass. The packet is not being posted yet.
 
             {{planningBlockingReason}}
 

@@ -43,16 +43,16 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
               "compatibility_fallback": "string",
               "impacted_components": "string — only concrete paths/packages if repo_evidence_this_pass is observed; otherwise say unknown or name assumptions explicitly",
               "top_unresolved_gap": "string or empty if none",
-              "recommended_action": "ASK_USER | CONTINUE_SYNTHESIS | READY_FOR_PACKET | BLOCK",
-              "question_if_needed": "single string — at most one clarification question; empty unless recommended_action is ASK_USER",
+              "implementation_scope_notes": "string — draft notes on scope/implementation boundaries (does not control routing)",
               "explicit_assumptions": ["short assumption strings when inferring"],
+              "draft_question_candidate": "optional string — at most one possible clarification phrased as draft text only; empty if none; does not control routing",
               "validation_concerns": "string",
               "design_options": "optional string",
               "upserts": [ { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "current_state_summary": "value", "feature_summary": "value", "scope_summary": "value" } } ]
             }
             Ground every factual claim: separate what you observed in the repo snapshot this pass vs what you inferred vs unknown.
             Do not fabricate file paths or packages when repo_evidence_this_pass is not observed.
-            Prefer question_if_needed for any clarification; never emit multiple candidate questions.
+            Do not emit routing or next-step action fields; the evaluation pass alone decides clarification vs packet readiness.
             Populate fields from the user's feature request and repo snapshot. Avoid echoing the request verbatim as the only content.
             Return exactly one JSON object as the entire response body. Do not add commentary before or after it.
             If you are unsure, prefer an empty or conservative JSON object over malformed JSON, prose, or placeholder keys.
@@ -127,7 +127,7 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
                     OpenAiCallContext.planning(
                             event,
                             state,
-                            "Expanding your request into structured planning notes (asking ChatGPT).");
+                            "Expanding your request into structured planning notes.");
             raw = generator.complete(openAiChatClient, SYSTEM, userPayload, model, timeout, callCtx);
         } catch (Exception e) {
             spread.put("planningLlmError", e.getMessage() != null ? e.getMessage() : "expansion failed");
@@ -318,6 +318,8 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         appendBul(sb, "**Impacted components**", text(root, "impacted_components"));
         appendBul(sb, "**Validation concerns**", text(root, "validation_concerns"));
         appendBul(sb, "**Design options**", text(root, "design_options"));
+        appendBul(sb, "**Implementation scope notes**", text(root, "implementation_scope_notes"));
+        appendBul(sb, "**Draft question candidate**", text(root, "draft_question_candidate"));
         JsonNode asm = root.path("explicit_assumptions");
         if (asm.isArray() && asm.size() > 0) {
             sb.append("**Explicit assumptions**\n");

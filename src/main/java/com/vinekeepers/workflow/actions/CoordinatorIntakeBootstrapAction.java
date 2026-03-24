@@ -93,9 +93,9 @@ public final class CoordinatorIntakeBootstrapAction implements com.vinekeepers.w
                 + escapeTicks(project)
                 + "`\n\n\n\n**Request:** "
                 + codeChange
-                + "\n\n\n\nI am continuing to draft in this thread from your request and repo context, and I will post "
-                + "the planning packet when it is ready. I only pause with a **single plain-text question** if something "
-                + "**blocks** a solid plan.";
+                + "\n\n\n\nI'll continue drafting from your request and available project context. If I need a decisive "
+                + "clarification, I'll ask one plain-text question. Otherwise I'll keep moving and post the planning packet "
+                + "when it's ready.";
     }
 
     private static String escapeTicks(String s) {
