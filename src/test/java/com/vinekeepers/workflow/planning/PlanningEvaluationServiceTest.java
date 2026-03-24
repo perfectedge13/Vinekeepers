@@ -400,6 +400,79 @@ class PlanningEvaluationServiceTest {
     }
 
     @Test
+    void parseAndValidate_promotesDraftQuestionCandidateWhenModelStalls() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+        PlanningEvaluationService.EvaluationContext ctx =
+                new PlanningEvaluationService.EvaluationContext(
+                        "planning_startup_evaluation",
+                        "",
+                        "",
+                        true,
+                        "",
+                        false,
+                        0,
+                        "Should step-level model selection live in workflow YAML or runtime settings?",
+                        "");
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 55, "level": "medium", "summary": "Ambiguous routing." },
+                          "gaps": [
+                            { "id": "w1", "kind": "WEAK_VALIDATION", "description": "Validation depth is light.", "blocking": false, "askable": false, "assumable": true }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        ctx,
+                        minimalCoherentPlan());
+
+        assertTrue(result.success());
+        assertTrue(result.askUserRequired());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.ASK_USER, result.nextAction());
+        assertTrue(result.canonicalQuestionText().toLowerCase().contains("workflow"));
+    }
+
+    @Test
+    void parseAndValidate_coherentStalemateWithoutRecoveryPacketizes() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+        PlanningEvaluationService.EvaluationContext ctx =
+                new PlanningEvaluationService.EvaluationContext(
+                        "planning_startup_evaluation", "", "", true, "", false, 0, "", "");
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 60, "level": "medium", "summary": "Proceed with assumptions." },
+                          "gaps": [
+                            { "id": "w1", "kind": "WEAK_VALIDATION", "description": "Minor unknowns remain.", "blocking": false, "askable": false, "assumable": true }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        ctx,
+                        minimalCoherentPlan());
+
+        assertTrue(result.success());
+        assertEquals(
+                com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
+    }
+
+    @Test
     void parseAndValidate_blockingContradictionStillBlocks() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
@@ -502,7 +575,8 @@ class PlanningEvaluationServiceTest {
                 null);
     }
 
-    private static FeaturePlanState minimalCoherentPlan() {
+    /** Shared coherent fixture for planning routing tests in this package. */
+    static FeaturePlanState minimalCoherentPlan() {
         Map<String, ArtifactState> artifacts = new LinkedHashMap<>();
         artifacts.put(
                 "requirements_spec",

@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.actions;
 
+import com.vinekeepers.workflow.planning.PlanningEvaluationService;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -55,6 +56,15 @@ class PlanningLlmPromptContractTest {
         assertFalse(system.contains("None — ready to implement"));
         assertFalse(system.contains("follow_up_questions"));
         assertFalse(system.contains("\"fieldId\": \"value string\""));
+    }
+
+    @Test
+    void evaluationPrompt_includesStartupPhaseAndForbidsBlockingTrueShapeExample() throws Exception {
+        String system = staticStringField(PlanningEvaluationService.class, "SYSTEM");
+        assertTrue(system.contains("planning_startup_evaluation"));
+        assertTrue(system.contains("Pattern A"));
+        assertFalse(system.contains("\"blocking\": true"));
+        assertFalse(system.contains("CONTINUE_SYNTHESIS"));
     }
 
     @Test

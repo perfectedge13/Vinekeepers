@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanningCanonicalDecision;
 import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
@@ -111,6 +112,29 @@ public final class PlanningRoutingBridge {
         spread.put(BLOCKING_REASON_KEY, snapshot.nextAction() == PlanningNextAction.BLOCKED ? snapshot.blockingReason() : "");
         spread.put(REPO_EVIDENCE_STATUS_KEY, snapshot.repoEvidenceStatus());
         spread.put(DECISION_SUMMARY_KEY, snapshot.decisionSummary());
+    }
+
+    /**
+     * Startup evaluation safety net: never surface {@link PlanningNextAction#BLOCKED} when the evaluator succeeded and
+     * returned a non-{@link PlanningCanonicalNextAction#BLOCK} action for a coherent draft.
+     */
+    public static PlanningDecisionSnapshot clampBenignBlockedSnapshot(
+            PlanningDecisionSnapshot snapshot,
+            PlanningEvaluationDecision decision,
+            FeaturePlanState plan) {
+        if (snapshot == null || snapshot.nextAction() != PlanningNextAction.BLOCKED) {
+            return snapshot;
+        }
+        if (decision == null || !decision.success()) {
+            return snapshot;
+        }
+        if (decision.nextAction() == PlanningCanonicalNextAction.BLOCK) {
+            return snapshot;
+        }
+        if (plan == null || !PlanningEvaluationService.isCoherentPlanDraft(plan)) {
+            return snapshot;
+        }
+        return PlanningDecisionNormalizer.fromEvaluation(decision, plan);
     }
 
     public static PlanningDecisionSnapshot snapshotFromCanonical(PlanningCanonicalDecision decision) {

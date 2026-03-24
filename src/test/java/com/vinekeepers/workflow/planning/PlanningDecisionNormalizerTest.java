@@ -1,5 +1,6 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningInteractionState;
@@ -29,7 +30,7 @@ class PlanningDecisionNormalizerTest {
     }
 
     @Test
-    void blocksWhenAskUserHasBlankQuestion() {
+    void blocksWhenAskUserHasBlankQuestionWithoutCoherentPlanSafetyNet() {
         PlanningDecisionSnapshot snapshot =
                 PlanningDecisionNormalizer.fromEvaluation(
                         decision(
@@ -39,10 +40,29 @@ class PlanningDecisionNormalizerTest {
                                 false,
                                 "",
                                 "Need one concrete authority answer.",
-                                "MATERIALIZED_OBSERVED"));
+                                "MATERIALIZED_OBSERVED"),
+                        null);
 
         assertEquals(PlanningNextAction.BLOCKED, snapshot.nextAction());
         assertEquals("Need one concrete authority answer.", snapshot.blockingReason());
+    }
+
+    @Test
+    void askRequiredWithBlankQuestionPacketizesWhenCoherentDraftPresent() {
+        FeaturePlanState plan = PlanningEvaluationServiceTest.minimalCoherentPlan();
+        PlanningDecisionSnapshot snapshot =
+                PlanningDecisionNormalizer.fromEvaluation(
+                        decision(
+                                true,
+                                PlanningCanonicalNextAction.ASK_USER,
+                                true,
+                                false,
+                                "",
+                                "",
+                                "MATERIALIZED_OBSERVED"),
+                        plan);
+
+        assertEquals(PlanningNextAction.READY_FOR_PACKET, snapshot.nextAction());
     }
 
     @Test

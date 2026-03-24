@@ -328,7 +328,7 @@ public final class PlanningCyclePipeline {
                         || "true".equalsIgnoreCase(getString(spread, PLANNING_STRUCTURED_PASS_PARSE_FAILED_KEY));
         PlanningEvaluationService.EvaluationContext evaluationContext =
                 new PlanningEvaluationService.EvaluationContext(
-                        "planning_clarification",
+                        resolvePlanningEvaluationPhaseContext(plan, state),
                         repoGroundingSummary(plan, state),
                         getString(state, "planningRepoEvidenceJson"),
                         depthOk,
@@ -352,7 +352,8 @@ public final class PlanningCyclePipeline {
         }
 
         ClarificationProjection projection = ClarificationProjection.fromSelection(CanonicalClarificationSelection.none());
-        PlanningDecisionSnapshot snapshot = PlanningDecisionNormalizer.fromEvaluation(decision);
+        PlanningDecisionSnapshot snapshot = PlanningDecisionNormalizer.fromEvaluation(decision, plan);
+        snapshot = PlanningRoutingBridge.clampBenignBlockedSnapshot(snapshot, decision, plan);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, projection);
@@ -464,6 +465,20 @@ public final class PlanningCyclePipeline {
     private static void derivePlanningNextPhaseFromEvaluation(
             Map<String, Object> spread, PlanningDecisionSnapshot snapshot) {
         PlanningRoutingBridge.projectSnapshotToSpread(spread, snapshot);
+    }
+
+    /**
+     * First evaluation after silent synthesis must not use {@code planning_clarification} as the evaluator payload label;
+     * that string is reserved for passes after a user clarification was merged.
+     */
+    static String resolvePlanningEvaluationPhaseContext(FeaturePlanState plan, Map<String, Object> state) {
+        boolean merged =
+                state != null && "true".equalsIgnoreCase(String.valueOf(state.get("planningJustMergedClarification")).trim());
+        int turns = plan != null ? plan.getClarificationTurnsCompleted() : 0;
+        if (merged || turns > 0) {
+            return "planning_clarification";
+        }
+        return "planning_startup_evaluation";
     }
 
     private static Map<String, Object> baseSpread() {

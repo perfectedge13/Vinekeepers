@@ -70,6 +70,12 @@ public final class PlanningEvaluationService {
             - assumptions / issues / risks / decisions to add
             - whether the plan is ready for packet
 
+            phase_context in the payload tells you where you are:
+            - planning_startup_evaluation / planning_initial_evaluation: first pass after silent synthesis — ordinary ambiguity
+              must become either one clear ask OR ready_for_packet with uncertainty captured in governance arrays; never stall.
+            - planning_clarification: re-evaluation after a user clarification was merged — same ask-or-packet rule.
+            - planning_critique: post-packet critique pass — same ask-or-packet rule for follow-up asks.
+
             Rules:
             - Missing fields alone MUST NOT trigger a question.
             - Only blocking or branching gaps may justify ask_user_required=true.
@@ -78,7 +84,8 @@ public final class PlanningEvaluationService {
             - best_question.text must be empty when ask_user_required is false.
             - For normal planning ambiguity, do not leave the route stalled: either ask_user_required=true with exactly one
               plain best_question.text, OR ready_for_packet=true and carry uncertainty in assumptions_to_add, issues_to_add,
-              risks_to_add, or decisions_to_add (OPEN). Do not rely on "neither ask nor ready" for ordinary design forks.
+              risks_to_add, or decisions_to_add (OPEN). Never output askable=true on a gap together with ask_user_required=false
+              and ready_for_packet=false for ordinary design uncertainty — that combination is invalid.
             - ready_for_packet may be true while non-contradictory gaps remain if they are recorded as assumptions or
               open decisions; only true contradictions or missing facts that make any plan incoherent justify withholding ready.
             - Base all reasoning on the canonical state snapshot provided.
@@ -88,40 +95,30 @@ public final class PlanningEvaluationService {
               structured planning state, and any evidence present; do not treat "implementation not observed in repo"
               as a blocker unless it truly prevents a coherent plan or requires a blocking/branching decision.
 
-            JSON schema:
+            Valid output patterns (follow one; do not mix incompatible flags):
+
+            Pattern A — branching ambiguity (one question):
+              ask_user_required=true, best_question.text non-empty, ready_for_packet=false,
+              exactly one gap that is askable with blocking OR branching decision semantics (e.g. BRANCHING_DECISION).
+
+            Pattern B — non-blocking uncertainty (packetize):
+              ask_user_required=false, best_question.text empty, ready_for_packet=true,
+              populate assumptions_to_add / issues_to_add / risks_to_add / decisions_to_add (OPEN) as needed.
+
+            Pattern C — true machine or canonical failure only:
+              ask_user_required=false, best_question.text empty, ready_for_packet=false,
+              describe the failure in issues_to_add or gap descriptions; do not use this for ordinary unresolved design forks.
+
+            JSON object shape (fields required; arrays may be empty):
             {
-              "confidence": {
-                "score": 0,
-                "level": "low",
-                "summary": ""
-              },
-              "gaps": [
-                {
-                  "id": "missing_authority",
-                  "kind": "MISSING_AUTHORITY",
-                  "description": "",
-                  "blocking": true,
-                  "askable": true,
-                  "assumable": false
-                }
-              ],
+              "confidence": { "score": 0, "level": "low", "summary": "" },
+              "gaps": [ { "id": "", "kind": "BRANCHING_DECISION", "description": "", "blocking": false, "askable": true, "assumable": true } ],
               "ask_user_required": false,
-              "best_question": {
-                "text": "",
-                "rationale": ""
-              },
-              "assumptions_to_add": [
-                { "statement": "", "severity": "MEDIUM" }
-              ],
-              "issues_to_add": [
-                { "title": "", "detail": "", "severity": "MEDIUM", "blocking": false }
-              ],
-              "risks_to_add": [
-                { "statement": "", "impact": "", "likelihood": "" }
-              ],
-              "decisions_to_add": [
-                { "decision": "", "rationale": "", "status": "OPEN" }
-              ],
+              "best_question": { "text": "", "rationale": "" },
+              "assumptions_to_add": [ { "statement": "", "severity": "MEDIUM" } ],
+              "issues_to_add": [ { "title": "", "detail": "", "severity": "MEDIUM", "blocking": false } ],
+              "risks_to_add": [ { "statement": "", "impact": "", "likelihood": "" } ],
+              "decisions_to_add": [ { "decision": "", "rationale": "", "status": "OPEN" } ],
               "ready_for_packet": false
             }
 
@@ -135,7 +132,7 @@ public final class PlanningEvaluationService {
             MISSING_IMPLEMENTATION_SCOPE
             MISSING_ROLLOUT_BOUNDARY
 
-            If unsure, stay conservative, prefer assumptions over user questions, and keep JSON valid.
+            If unsure, prefer Pattern B (ready_for_packet with explicit assumptions/issues/decisions) over stalling, and keep JSON valid.
             """;
 
     private final OpenAiChatClient openAiChatClient;
@@ -402,14 +399,14 @@ public final class PlanningEvaluationService {
             boolean repairAttempted,
             boolean repairExhausted) {
         PlanningEvaluationDecision.EvaluationConfidence confidence = parseConfidence(root.path("confidence"));
-        List<CanonicalPlanningGap> gaps = parseGaps(root.path("gaps"));
+        List<CanonicalPlanningGap> gaps = new ArrayList<>(parseGaps(root.path("gaps")));
         boolean askUserRequired = root.path("ask_user_required").asBoolean(false);
         PlanningEvaluationDecision.EvaluationBestQuestion bestQuestion = parseBestQuestion(root.path("best_question"));
         List<PlanningEvaluationDecision.AssumptionProposal> assumptions = parseAssumptions(root.path("assumptions_to_add"));
         List<PlanningEvaluationDecision.IssueProposal> issues = parseIssues(root.path("issues_to_add"));
         List<PlanningEvaluationDecision.RiskProposal> risks = parseRisks(root.path("risks_to_add"));
         List<PlanningEvaluationDecision.DecisionProposal> decisions = parseDecisions(root.path("decisions_to_add"));
-        boolean coherentDraft = coherentPlanDraft(plan);
+        boolean coherentDraft = isCoherentPlanDraft(plan);
         boolean readyForPacket = root.path("ready_for_packet").asBoolean(false);
         if (context != null && context.structuredParseFailed() && !coherentDraft) {
             readyForPacket = false;
@@ -419,6 +416,39 @@ public final class PlanningEvaluationService {
         }
         if (hasDuplicateGapIds(gaps)) {
             return failure("EVALUATION_INVALID_DUPLICATE_GAP_ID", repairAttempted, repairExhausted);
+        }
+        if (!askUserRequired && !readyForPacket && countEligibleAskGaps(gaps) == 1) {
+            CanonicalPlanningGap sole = soleEligibleAskGap(gaps);
+            if (sole != null) {
+                String recovered = repairAskQuestionText("", sole, context);
+                if (!recovered.isBlank()) {
+                    askUserRequired = true;
+                    bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(recovered, "");
+                }
+            }
+        }
+        if (!askUserRequired
+                && !readyForPacket
+                && coherentDraft
+                && !hasBlockingContradiction(gaps)
+                && countEligibleAskGaps(gaps) == 0
+                && context != null) {
+            String dq = PlanningQuestionComposer.presentCanonicalQuestion(context.draftQuestionCandidate());
+            String ug = PlanningQuestionComposer.presentCanonicalQuestion(context.synthesisTopUnresolvedGap());
+            String recovered = !dq.isBlank() ? dq : ug;
+            if (!recovered.isBlank()) {
+                gaps.add(CanonicalPlanningGap.fromEvaluation(
+                        "draft_question_recovery",
+                        "BRANCHING_DECISION",
+                        recovered,
+                        false,
+                        true,
+                        true,
+                        "",
+                        List.of()));
+                askUserRequired = true;
+                bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(recovered, "");
+            }
         }
         if (askUserRequired) {
             CanonicalPlanningGap chosen = chooseAskGap(gaps);
@@ -444,16 +474,6 @@ public final class PlanningEvaluationService {
         }
         if (containsBlockingGap(gaps) && readyForPacket) {
             return failure("EVALUATION_INVALID_BLOCKING_READY", repairAttempted, repairExhausted);
-        }
-        if (!askUserRequired && !readyForPacket && countEligibleAskGaps(gaps) == 1) {
-            CanonicalPlanningGap sole = soleEligibleAskGap(gaps);
-            if (sole != null) {
-                String recovered = repairAskQuestionText("", sole, context);
-                if (!recovered.isBlank()) {
-                    askUserRequired = true;
-                    bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(recovered, "");
-                }
-            }
         }
         CanonicalPlanningGap topGap = selectTopGap(gaps);
         PlanningCanonicalNextAction nextAction =
@@ -492,7 +512,11 @@ public final class PlanningEvaluationService {
                 "");
     }
 
-    private static boolean coherentPlanDraft(FeaturePlanState plan) {
+    /**
+     * Whether the plan has enough structured draft material for ask-or-packet routing (used by evaluation, routing clamp,
+     * and normalizer safety nets).
+     */
+    public static boolean isCoherentPlanDraft(FeaturePlanState plan) {
         if (plan == null) {
             return false;
         }
@@ -517,18 +541,18 @@ public final class PlanningEvaluationService {
         if (!q.isBlank()) {
             return q;
         }
-        if (chosenGap != null) {
-            q = PlanningQuestionComposer.presentCanonicalQuestion(chosenGap.questionSeed());
+        if (context != null) {
+            q = PlanningQuestionComposer.presentCanonicalQuestion(context.draftQuestionCandidate());
             if (!q.isBlank()) {
                 return q;
             }
-        }
-        if (context != null) {
             q = PlanningQuestionComposer.presentCanonicalQuestion(context.synthesisTopUnresolvedGap());
             if (!q.isBlank()) {
                 return q;
             }
-            q = PlanningQuestionComposer.presentCanonicalQuestion(context.draftQuestionCandidate());
+        }
+        if (chosenGap != null) {
+            q = PlanningQuestionComposer.presentCanonicalQuestion(chosenGap.questionSeed());
         }
         return q != null ? q : "";
     }
@@ -549,7 +573,8 @@ public final class PlanningEvaluationService {
         return found;
     }
 
-    private static boolean hasBlockingContradiction(List<CanonicalPlanningGap> gaps) {
+    /** True when any evaluation gap is a blocking {@link CanonicalGapKind#CONTRADICTION}. */
+    public static boolean hasBlockingContradiction(List<CanonicalPlanningGap> gaps) {
         if (gaps == null) {
             return false;
         }

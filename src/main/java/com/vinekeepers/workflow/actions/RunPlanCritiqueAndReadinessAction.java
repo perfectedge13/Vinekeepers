@@ -10,7 +10,9 @@ import com.vinekeepers.state.planning.PlanAssumption;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanGovernanceSeverity;
 import com.vinekeepers.state.planning.PlanIssue;
+import com.vinekeepers.state.planning.PlanIssueStatus;
 import com.vinekeepers.state.planning.PlanConfidence;
 import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
@@ -36,14 +38,17 @@ import com.vinekeepers.workflow.planning.PlanningEvaluationDecision;
 import com.vinekeepers.workflow.planning.PlanningMaterialFingerprint;
 import com.vinekeepers.workflow.planning.PlanningEvaluationService;
 import com.vinekeepers.workflow.planning.PlanningNextAction;
+import com.vinekeepers.workflow.planning.PlanningQuestionComposer;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 import com.vinekeepers.workflow.planning.QuestionMode;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -116,6 +121,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                         "Finish the first autonomous drafting pass in this thread (planning cycle) before we can move to approval.",
                         ""));
             }
+            FeaturePlanState planAnnotated = applyCritiqueFindingsToPlanIssues(plan, findings);
             Instant now = Instant.now();
             int blockingFc =
                     (int) findings.stream().filter(PlanCritiqueFinding::isBlocksApproval).count();
@@ -159,7 +165,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                         confidence.getMaterialUnknownLabels());
             }
             FeaturePlanState next =
-                    plan.withPlanCritiqueSnapshot(snapshot)
+                    planAnnotated.withPlanCritiqueSnapshot(snapshot)
                             .withPlanConfidence(confidenceForStore)
                             .withPlanningIntakeStage(PlanningIntakeStage.READINESS_GATE, null);
             String materialFingerprint =
@@ -186,7 +192,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                         next.getClarificationTurnsCompleted(),
                                         PlanningEvaluationService.mergedPlanningDraftQuestionCandidate(state),
                                         PlanningEvaluationService.mergedPlanningTopUnresolvedGap(state)));
-                PlanningDecisionSnapshot routingSnapshot = PlanningDecisionNormalizer.fromEvaluation(evaluation);
+                PlanningDecisionSnapshot routingSnapshot = PlanningDecisionNormalizer.fromEvaluation(evaluation, next);
                 if (routingSnapshot.nextAction() == PlanningNextAction.ASK_USER) {
                     CanonicalPlanningGap g = PlanningAskUserSurface.resolveAskGap(evaluation);
                     String qText = PlanningAskUserSurface.resolveQuestionText(routingSnapshot, evaluation);
@@ -202,6 +208,21 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                     QuestionMode.OPEN);
                     clarificationQuestionText = projection.questionText();
                     clarificationGapId = g.gapId();
+                }
+            }
+            if (critiqueWantsClarification && clarificationQuestionText.isBlank()) {
+                String dq =
+                        PlanningQuestionComposer.presentCanonicalQuestion(
+                                PlanningEvaluationService.mergedPlanningDraftQuestionCandidate(state));
+                String ug =
+                        PlanningQuestionComposer.presentCanonicalQuestion(
+                                PlanningEvaluationService.mergedPlanningTopUnresolvedGap(state));
+                if (!dq.isBlank()) {
+                    clarificationQuestionText = dq;
+                    clarificationGapId = "critique_draft_question_recovery";
+                } else if (!ug.isBlank()) {
+                    clarificationQuestionText = ug;
+                    clarificationGapId = "critique_top_gap_recovery";
                 }
             }
             PlanningCanonicalDecision canonical =
@@ -265,6 +286,64 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             m.put("planningThreadReviewBuildError", "");
             return m;
         }
+    }
+
+    /**
+     * Surfaces critique findings as durable {@link PlanIssue} rows so packets and review copy share them without using
+     * critique as a routing stop signal.
+     */
+    private static FeaturePlanState applyCritiqueFindingsToPlanIssues(
+            FeaturePlanState plan, List<PlanCritiqueFinding> findings) {
+        if (plan == null || findings == null || findings.isEmpty()) {
+            return plan;
+        }
+        Set<String> existing =
+                plan.getIssues().stream().map(PlanIssue::getId).collect(Collectors.toCollection(LinkedHashSet::new));
+        FeaturePlanState out = plan;
+        Instant now = Instant.now();
+        for (PlanCritiqueFinding f : findings) {
+            String id = "critique-finding-" + f.getId();
+            if (existing.contains(id)) {
+                continue;
+            }
+            String msg = f.getMessage() != null ? f.getMessage().trim() : "";
+            if (msg.isBlank()) {
+                continue;
+            }
+            String title =
+                    f.getCode() != null && !f.getCode().isBlank()
+                            ? f.getCode()
+                            : (f.getCategory() != null ? f.getCategory() : "Critique");
+            out =
+                    out.withAppendedIssue(
+                            new PlanIssue(
+                                    id,
+                                    title,
+                                    msg,
+                                    f.isBlocksApproval() ? PlanIssueStatus.BLOCKING : PlanIssueStatus.OPEN,
+                                    mapCritiqueSeverityToGovernance(f.getSeverity()),
+                                    "PLAN_CRITIQUE",
+                                    "",
+                                    f.getRelatedFieldKeys(),
+                                    now,
+                                    now));
+            existing.add(id);
+        }
+        return out;
+    }
+
+    private static String mapCritiqueSeverityToGovernance(String severity) {
+        if (severity == null) {
+            return PlanGovernanceSeverity.MEDIUM;
+        }
+        String s = severity.trim().toUpperCase();
+        if ("MUST_FIX".equals(s) || "BLOCKER".equals(s) || "HIGH".equals(s)) {
+            return PlanGovernanceSeverity.HIGH;
+        }
+        if ("INFO".equals(s) || "LOW".equals(s)) {
+            return PlanGovernanceSeverity.LOW;
+        }
+        return PlanGovernanceSeverity.MEDIUM;
     }
 
     private static void putAssumptionIssueSummaries(Map<String, Object> spread, FeaturePlanState plan) {

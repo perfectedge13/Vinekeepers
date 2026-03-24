@@ -95,8 +95,9 @@ public final class PlanningCanonicalDecisionSupport {
     }
 
     /**
-     * Post-critique canonical routing. Question text and gap id must come from validated evaluation-backed clarification
-     * projection, never from free-text plan fields.
+     * Post-critique canonical routing. Prefer evaluation-backed clarification projection; when critique wants another ask but
+     * the evaluator returns no question, callers may recover one line from merged synthesis spread keys before falling through
+     * to a non-BLOCK readiness path.
      */
     public static PlanningCanonicalDecision normalizePostCritique(
             FeaturePlanState plan,
@@ -111,25 +112,7 @@ public final class PlanningCanonicalDecisionSupport {
         String status = readinessStatus != null ? readinessStatus : "";
         String q = clarificationQuestionText != null ? clarificationQuestionText.trim() : "";
         String gid = clarificationGapId != null ? clarificationGapId.trim() : "";
-        if (wantsClarification) {
-            if (q.isBlank()) {
-                return PlanningCanonicalDecision.create(
-                        "post_critique",
-                        PlanningIntakeStage.FAILED,
-                        PlanningCanonicalNextAction.BLOCK,
-                        PlanningInteractionState.NONE,
-                        notMaterializedFallback(plan, planningRepoEvidenceJson),
-                        confidenceSummary(plan),
-                        false,
-                        false,
-                        false,
-                        "",
-                        "",
-                        "",
-                        "Critique requested clarification but no evaluation-authorized question was available.",
-                        List.of(),
-                        materialStateChangeFingerprint);
-            }
+        if (wantsClarification && !q.isBlank()) {
             return PlanningCanonicalDecision.create(
                     "post_critique",
                     PlanningIntakeStage.CLARIFYING,
@@ -144,24 +127,6 @@ public final class PlanningCanonicalDecisionSupport {
                     gid,
                     q,
                     "",
-                    List.of(),
-                    materialStateChangeFingerprint);
-        }
-        if (PlanReadinessStatus.NOT_READY.equals(status) && !autoRevisionCapped && hasMaterialChange(plan, materialStateChangeFingerprint)) {
-            return PlanningCanonicalDecision.create(
-                    "post_critique",
-                    PlanningIntakeStage.FAILED,
-                    PlanningCanonicalNextAction.BLOCK,
-                    PlanningInteractionState.NONE,
-                    notMaterializedFallback(plan, planningRepoEvidenceJson),
-                    confidenceSummary(plan),
-                    false,
-                    false,
-                    false,
-                    "",
-                    "",
-                    "",
-                    "Critique found more drafting work, but this pass fail-closes instead of reopening a live continue-synthesis route.",
                     List.of(),
                     materialStateChangeFingerprint);
         }

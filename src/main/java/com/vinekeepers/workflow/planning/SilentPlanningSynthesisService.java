@@ -101,7 +101,8 @@ public final class SilentPlanningSynthesisService {
                             spread,
                             bind,
                             planPtr,
-                            lastSynthLlmLine);
+                            lastSynthLlmLine,
+                            !skipExpansion);
             planPtr = round.plan();
             depthOk = round.depthOk();
             depthReason = round.depthReason();
@@ -123,6 +124,10 @@ public final class SilentPlanningSynthesisService {
         return new SilentPlanningSynthesisResult(planPtr, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
     }
 
+    /**
+     * @param runExpandPlanningDrafts when false, skips {@link ExpandPlanningDraftsAction} because {@link #runExpansionPhase}
+     *     already ran in this cycle (full startup path — one expansion + one coordinator tighten before evaluation).
+     */
     public InnerRoundResult runSingleInnerRound(
             Event event,
             String contextId,
@@ -131,7 +136,8 @@ public final class SilentPlanningSynthesisService {
             Map<String, Object> spread,
             Map<String, Object> bind,
             FeaturePlanState plan,
-            String previousSynthLine) {
+            String previousSynthLine,
+            boolean runExpandPlanningDrafts) {
         FeaturePlanState planPtr = planStateStore.getByContextId(contextId).orElse(plan);
         List<String> roleTags = new ArrayList<>();
         List<PlanningCoordinatorRole> passOrder = ConfigurablePassRunner.resolveOrder(work, bind);
@@ -142,7 +148,9 @@ public final class SilentPlanningSynthesisService {
         }
         String lastRoleRoundSummary = summarizeRoleRound(passOrder, roleTags);
 
-        new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
+        if (runExpandPlanningDrafts) {
+            new ExpandPlanningDraftsAction(planStateStore, workProfileRegistry).run(event, work, bind);
+        }
 
         Object synthObj =
                 new RunLlmPlanningSynthesisAction(openAiChatClient, planStateStore, workProfileRegistry)

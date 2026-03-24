@@ -2797,9 +2797,12 @@ requirements:
       while PlanningMaterialCyclePacing and PlanningCanonicalDecisionSupport persist continuity state without becoming a second
       routing authority. Coordinator clarification follows a strict contract (one concrete blocking question when a required
       fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved plan state).
-      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. v2 rs_evaluation_branch routes on planningNextPhase
+      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass.
+      v2 rs_evaluation_branch routes on planningNextPhase
       only (planning_clarification, planning_packet, planning_blocked; no legacy boolean-first routing); unmatched phase falls
-      through to planning_routing_invariant (internal error, not user blocked-thread copy); blocked states fail closed instead of reopening a live CONTINUE_SYNTHESIS branch;
+      through to planning_routing_invariant (internal error, not user blocked-thread copy); post-packet critique does not fail-close
+      into BLOCK solely for NOT_READY plus material churn—findings annotate governance and the graph advances via defaultNextPhase;
+      CONTINUE_SYNTHESIS is not a live YAML branch;
       packet depth defers generic open-question filler blocking to clarification state when canonical user input is not required
       and the unresolved ledger has no OPEN blocking row.
     status: active
@@ -2854,15 +2857,18 @@ requirements:
           For canonical_v1 coordinator transport, PlanningEvaluationService evaluates canonical plan state after drafting;
           code validates that only blocking or branching gaps can surface ASK_USER, enforces maxQuestions=1, persists
           confidence from evaluation output, and routes only through the normalized planningNextAction and planningNextPhase snapshot without fallback to generic or ranked questioning when the canonical gap set is closed;
-          ordinary ambiguity resolves to ASK_USER (one repaired question when needed, using evaluator text then top_unresolved_gap
-          then merged draft_question_candidate spread keys) or READY_FOR_PACKET (assumptions/packet) rather than planning_blocked;
+          ordinary ambiguity resolves to ASK_USER (one repaired question when needed, using evaluator text then merged
+          draft_question_candidate then top_unresolved_gap spread keys, then gap seed) or READY_FOR_PACKET (assumptions/packet)
+          rather than planning_blocked; first-start evaluation payloads use phase_context planning_startup_evaluation and
+          post-merge passes use planning_clarification;
           planning_blocked is reserved for machine/validity failures, malformed evaluation JSON, blocking CONTRADICTION gaps, or
           incoherent plan state with no recovery path; missing repo inspection alone does not force BLOCKED when no gap is blocking:
           evaluation may coerce READY_FOR_PACKET when depth and structured parse are acceptable and the model withheld
           ready_for_packet without asserting blocking gaps, or when narrative/plan artifacts are materially present
         - >-
           Silent synthesis before first evaluation uses at most one inner drafting round (coordinator + synthesis + depth) by default
-          so demo paths do not loop visible draft updates; expansion remains one pass unless selective rerun skips it after clarification
+          and skips a redundant inner expand_planning_drafts when runExpansionPhase already ran in the same cycle so demo paths do
+          not double-expand; selective rerun after clarification may still run inner expand when expansion was skipped
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           is part of the canonical evaluation context so strong on-repo support can reduce unnecessary user asks without a second ranking path

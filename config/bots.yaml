@@ -350,6 +350,7 @@ workflows:
         kind: legacy_action
         action: planning_route_invariant_failed
         storeSpread: true
+      # planning_run_evaluation (Java) sets phase_context planning_startup_evaluation on first pass; planning_clarification here is the YAML phase id, not the evaluator payload label.
       cap_planning_clarification:
         kind: configurable_steps
         steps:
