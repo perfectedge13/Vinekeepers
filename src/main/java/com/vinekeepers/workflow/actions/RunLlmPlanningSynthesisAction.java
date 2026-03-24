@@ -12,6 +12,7 @@ import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.workflow.planning.PlanningLlmJsonSupport;
+import com.vinekeepers.workflow.planning.PlanningMaterialSpreadKeys;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,6 +90,8 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         spread.put("planningSynthesisFailureCategory", "");
         spread.put("planningSynthesisUpsertsAttempted", "0");
         spread.put("planningSynthesisUpsertsRejected", "0");
+        spread.put(PlanningMaterialSpreadKeys.SYNTHESIS_DRAFT_QUESTION_CANDIDATE_KEY, "");
+        spread.put(PlanningMaterialSpreadKeys.SYNTHESIS_TOP_UNRESOLVED_GAP_KEY, "");
         if (planStateStore == null || workProfileRegistry == null) {
             spread.put("planningLlmSkipReason", "MISSING_DEPS");
             return spread;
@@ -157,7 +160,14 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             return spread;
         }
         try {
-            applyStructuredResponse(event, state, contextId, spread, parsed.root());
+            JsonNode synthRoot = parsed.root();
+            applyStructuredResponse(event, state, contextId, spread, synthRoot);
+            spread.put(
+                    PlanningMaterialSpreadKeys.SYNTHESIS_DRAFT_QUESTION_CANDIDATE_KEY,
+                    PlanningLlmJsonSupport.readDraftQuestionCandidate(synthRoot));
+            spread.put(
+                    PlanningMaterialSpreadKeys.SYNTHESIS_TOP_UNRESOLVED_GAP_KEY,
+                    PlanningLlmJsonSupport.readTopUnresolvedGap(synthRoot));
             spread.put("planningSynthesisParseOk", "true");
         } catch (Exception e) {
             spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_UPSERT_REJECTED.name());

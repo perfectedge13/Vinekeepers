@@ -13,6 +13,7 @@ import com.vinekeepers.state.planning.FeaturePlanStateStore;
 import com.vinekeepers.workflow.planning.OpenAiPlanningContentGenerator;
 import com.vinekeepers.workflow.planning.PlanningContentGenerator;
 import com.vinekeepers.workflow.planning.PlanningLlmJsonSupport;
+import com.vinekeepers.workflow.planning.PlanningMaterialSpreadKeys;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -267,6 +268,12 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
             spread.put("planningExpansionFallbackUsed", "false");
             spread.put("planningLlmOk", "true");
             spread.put("planningLlmError", "");
+            spread.put(
+                    PlanningMaterialSpreadKeys.EXPANSION_DRAFT_QUESTION_CANDIDATE_KEY,
+                    PlanningLlmJsonSupport.readDraftQuestionCandidate(root));
+            spread.put(
+                    PlanningMaterialSpreadKeys.EXPANSION_TOP_UNRESOLVED_GAP_KEY,
+                    PlanningLlmJsonSupport.readTopUnresolvedGap(root));
         } catch (Exception e) {
             spread.put("planningLlmError", e.getMessage() != null ? e.getMessage() : "expansion parse failed");
             spread.put("planningExpansionFallbackUsed", "true");
@@ -363,6 +370,8 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         m.put("planningExpansionRepairAttempted", "false");
         m.put("planningExpansionRepairExhausted", "false");
         m.put("planningExpansionLatencyMs", "0");
+        m.put(PlanningMaterialSpreadKeys.EXPANSION_DRAFT_QUESTION_CANDIDATE_KEY, "");
+        m.put(PlanningMaterialSpreadKeys.EXPANSION_TOP_UNRESOLVED_GAP_KEY, "");
         return m;
     }
 

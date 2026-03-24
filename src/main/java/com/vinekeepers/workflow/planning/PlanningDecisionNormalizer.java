@@ -36,9 +36,9 @@ public final class PlanningDecisionNormalizer {
             return question.isBlank() ? PlanningNextAction.BLOCKED : PlanningNextAction.ASK_USER;
         }
         return switch (decision.nextAction()) {
-            case READY_FOR_PACKET -> PlanningNextAction.READY_FOR_PACKET;
+            case READY_FOR_PACKET, CONTINUE_SYNTHESIS -> PlanningNextAction.READY_FOR_PACKET;
             case ASK_USER -> !question.isBlank() ? PlanningNextAction.ASK_USER : PlanningNextAction.BLOCKED;
-            case CONTINUE_SYNTHESIS, BLOCK -> PlanningNextAction.BLOCKED;
+            case BLOCK -> PlanningNextAction.BLOCKED;
         };
     }
 

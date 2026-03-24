@@ -21,7 +21,7 @@ import java.util.Map;
  */
 public final class PlanningCyclePipeline {
 
-    private static final int MAX_BOT_INNER_ROUNDS = 3;
+    private static final int MAX_BOT_INNER_ROUNDS = 1;
 
     /** Spread flag {@code "true"} when an OpenAI role pass returned an interrupt-style error (e.g. {@code ERROR: interrupted}). */
     public static final String PLANNING_PASS_INTERRUPTED_KEY = "planningPassInterrupted";
@@ -334,7 +334,9 @@ public final class PlanningCyclePipeline {
                         depthOk,
                         depthReason != null ? depthReason : "",
                         structuredParseFailed,
-                        plan != null ? plan.getClarificationTurnsCompleted() : 0);
+                        plan != null ? plan.getClarificationTurnsCompleted() : 0,
+                        PlanningEvaluationService.mergedPlanningDraftQuestionCandidate(state),
+                        PlanningEvaluationService.mergedPlanningTopUnresolvedGap(state));
         PlanningEvaluationDecision decision =
                 planningEvaluationService.evaluate(event, state, plan, profile, evaluationContext);
         if (!decision.success()) {
@@ -355,14 +357,15 @@ public final class PlanningCyclePipeline {
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, projection);
         if (snapshot.nextAction() == PlanningNextAction.ASK_USER) {
-            CanonicalPlanningGap askGap = decision.chosenAskGap();
+            CanonicalPlanningGap askGap = PlanningAskUserSurface.resolveAskGap(decision);
+            String askText = PlanningAskUserSurface.resolveQuestionText(snapshot, decision);
             projection =
                     CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
                             ledger,
                             profile,
                             profile.getCoordinatorClarification(),
                             askGap,
-                            decision.canonicalQuestionText(),
+                            askText,
                             List.of(),
                             QuestionMode.OPEN);
             int nextAskCount = PlanningGapAskCounts.countForGap(plan.getPlanningGapAskCountsJson(), askGap.gapId()) + 1;

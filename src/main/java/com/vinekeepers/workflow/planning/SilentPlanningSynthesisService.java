@@ -109,11 +109,13 @@ public final class SilentPlanningSynthesisService {
             lastSynthLlmLine = round.lastSynthLlmLine();
             spread.put(
                     "planningCycleProgressSummary",
-                    "Planning draft round "
-                            + (inner + 1)
-                            + "/"
-                            + rounds
-                            + " — updating plan draft.");
+                    rounds <= 1
+                            ? "Planning draft updated (single pass before evaluation)."
+                            : "Planning draft round "
+                                    + (inner + 1)
+                                    + "/"
+                                    + rounds
+                                    + " — updating plan draft.");
             if (depthOk) {
                 break;
             }

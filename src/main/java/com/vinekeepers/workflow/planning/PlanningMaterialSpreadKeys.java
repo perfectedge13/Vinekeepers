@@ -23,5 +23,17 @@ public final class PlanningMaterialSpreadKeys {
     public static final String MATERIAL_REVISION_NEEDED_KEY = "planningMaterialRevisionNeeded";
     public static final String MATERIAL_PACKET_POSTING_ALLOWED_KEY = "planningMaterialPacketPostingAllowed";
 
+    /** Last synthesis JSON {@code draft_question_candidate}; recovery input for evaluation (not routing). */
+    public static final String SYNTHESIS_DRAFT_QUESTION_CANDIDATE_KEY = "planningSynthesisDraftQuestionCandidate";
+
+    /** Last expansion JSON {@code draft_question_candidate}; recovery input for evaluation (not routing). */
+    public static final String EXPANSION_DRAFT_QUESTION_CANDIDATE_KEY = "planningExpansionDraftQuestionCandidate";
+
+    /** Last synthesis JSON {@code top_unresolved_gap}; recovery input for evaluation (not routing). */
+    public static final String SYNTHESIS_TOP_UNRESOLVED_GAP_KEY = "planningSynthesisTopUnresolvedGap";
+
+    /** Last expansion JSON {@code top_unresolved_gap}; recovery input for evaluation (not routing). */
+    public static final String EXPANSION_TOP_UNRESOLVED_GAP_KEY = "planningExpansionTopUnresolvedGap";
+
     private PlanningMaterialSpreadKeys() {}
 }

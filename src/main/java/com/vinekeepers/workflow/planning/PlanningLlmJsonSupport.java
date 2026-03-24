@@ -277,6 +277,14 @@ public final class PlanningLlmJsonSupport {
         return q.isTextual() ? q.asText("").trim() : "";
     }
 
+    /** Optional unresolved-gap line from synthesis/expansion JSON; recovery input for evaluation only. */
+    public static String readTopUnresolvedGap(JsonNode root) {
+        if (root == null) {
+            return "";
+        }
+        return textField(root, "top_unresolved_gap");
+    }
+
     public static boolean hasMeaningfulPlanningContent(JsonNode root) {
         if (root == null || !root.isObject()) {
             return false;

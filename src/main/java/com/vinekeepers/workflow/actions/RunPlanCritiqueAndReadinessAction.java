@@ -28,6 +28,7 @@ import com.vinekeepers.state.workflow.UnresolvedItemLedger;
 import com.vinekeepers.workflow.planning.CanonicalPlanningGap;
 import com.vinekeepers.workflow.planning.CanonicalClarificationSpreadBuilder;
 import com.vinekeepers.workflow.planning.ClarificationProjection;
+import com.vinekeepers.workflow.planning.PlanningAskUserSurface;
 import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
 import com.vinekeepers.workflow.planning.PlanningDecisionNormalizer;
 import com.vinekeepers.workflow.planning.PlanningDecisionSnapshot;
@@ -182,24 +183,25 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                         true,
                                         "",
                                         false,
-                                        next.getClarificationTurnsCompleted()));
+                                        next.getClarificationTurnsCompleted(),
+                                        PlanningEvaluationService.mergedPlanningDraftQuestionCandidate(state),
+                                        PlanningEvaluationService.mergedPlanningTopUnresolvedGap(state)));
                 PlanningDecisionSnapshot routingSnapshot = PlanningDecisionNormalizer.fromEvaluation(evaluation);
                 if (routingSnapshot.nextAction() == PlanningNextAction.ASK_USER) {
-                    CanonicalPlanningGap g = evaluation.chosenAskGap();
-                    if (g != null) {
-                        UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
-                        ClarificationProjection projection =
-                                CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
-                                        ledger,
-                                        profile,
-                                        profile.getCoordinatorClarification(),
-                                        g,
-                                        evaluation.bestQuestion().text(),
-                                        List.of(),
-                                        QuestionMode.OPEN);
-                        clarificationQuestionText = projection.questionText();
-                        clarificationGapId = g.gapId();
-                    }
+                    CanonicalPlanningGap g = PlanningAskUserSurface.resolveAskGap(evaluation);
+                    String qText = PlanningAskUserSurface.resolveQuestionText(routingSnapshot, evaluation);
+                    UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
+                    ClarificationProjection projection =
+                            CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
+                                    ledger,
+                                    profile,
+                                    profile.getCoordinatorClarification(),
+                                    g,
+                                    qText,
+                                    List.of(),
+                                    QuestionMode.OPEN);
+                    clarificationQuestionText = projection.questionText();
+                    clarificationGapId = g.gapId();
                 }
             }
             PlanningCanonicalDecision canonical =

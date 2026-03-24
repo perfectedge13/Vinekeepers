@@ -22,6 +22,7 @@ import com.vinekeepers.state.planning.PlanRisk;
 import com.vinekeepers.state.planning.PlanRiskDecisionStatus;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningInteractionState;
+import com.vinekeepers.workflow.planreview.PlanStructuredMaterialDiagnostics;
 import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 
 import java.time.Instant;
@@ -46,7 +47,11 @@ public final class PlanningEvaluationService {
             boolean depthOk,
             String depthReason,
             boolean structuredParseFailed,
-            int priorClarificationAttempts) {}
+            int priorClarificationAttempts,
+            /** Merged synthesis-then-expansion draft_question_candidate; recovery input only. */
+            String draftQuestionCandidate,
+            /** Merged synthesis-then-expansion top_unresolved_gap; recovery input only. */
+            String synthesisTopUnresolvedGap) {}
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String EVALUATION_REPAIR_SHAPE_HINT =
@@ -71,7 +76,11 @@ public final class PlanningEvaluationService {
             - Low-risk unknowns should become assumptions_to_add, not questions.
             - Return at most one best_question.
             - best_question.text must be empty when ask_user_required is false.
-            - ready_for_packet must be false when blocking gaps remain.
+            - For normal planning ambiguity, do not leave the route stalled: either ask_user_required=true with exactly one
+              plain best_question.text, OR ready_for_packet=true and carry uncertainty in assumptions_to_add, issues_to_add,
+              risks_to_add, or decisions_to_add (OPEN). Do not rely on "neither ask nor ready" for ordinary design forks.
+            - ready_for_packet may be true while non-contradictory gaps remain if they are recorded as assumptions or
+              open decisions; only true contradictions or missing facts that make any plan incoherent justify withholding ready.
             - Base all reasoning on the canonical state snapshot provided.
             - Missing repo inspection or thin repo-specific grounding is only less context: do not, by itself, set
               blocking=true, ask_user_required=true, or withhold ready_for_packet when the plan is otherwise coherent.
@@ -133,6 +142,33 @@ public final class PlanningEvaluationService {
 
     public PlanningEvaluationService(OpenAiChatClient openAiChatClient) {
         this.openAiChatClient = openAiChatClient;
+    }
+
+    /**
+     * Merged {@code draft_question_candidate} from last synthesis then expansion spread keys (synthesis wins).
+     * Draft-only recovery input for evaluation; not a routing authority.
+     */
+    public static String mergedPlanningDraftQuestionCandidate(Map<String, Object> state) {
+        if (state == null) {
+            return "";
+        }
+        String synth = asString(state.get(PlanningMaterialSpreadKeys.SYNTHESIS_DRAFT_QUESTION_CANDIDATE_KEY));
+        if (!synth.isBlank()) {
+            return synth.trim();
+        }
+        return asString(state.get(PlanningMaterialSpreadKeys.EXPANSION_DRAFT_QUESTION_CANDIDATE_KEY)).trim();
+    }
+
+    /** Merged {@code top_unresolved_gap} from last synthesis then expansion (synthesis wins). */
+    public static String mergedPlanningTopUnresolvedGap(Map<String, Object> state) {
+        if (state == null) {
+            return "";
+        }
+        String synth = asString(state.get(PlanningMaterialSpreadKeys.SYNTHESIS_TOP_UNRESOLVED_GAP_KEY));
+        if (!synth.isBlank()) {
+            return synth.trim();
+        }
+        return asString(state.get(PlanningMaterialSpreadKeys.EXPANSION_TOP_UNRESOLVED_GAP_KEY)).trim();
     }
 
     public PlanningEvaluationDecision evaluate(
@@ -373,11 +409,12 @@ public final class PlanningEvaluationService {
         List<PlanningEvaluationDecision.IssueProposal> issues = parseIssues(root.path("issues_to_add"));
         List<PlanningEvaluationDecision.RiskProposal> risks = parseRisks(root.path("risks_to_add"));
         List<PlanningEvaluationDecision.DecisionProposal> decisions = parseDecisions(root.path("decisions_to_add"));
+        boolean coherentDraft = coherentPlanDraft(plan);
         boolean readyForPacket = root.path("ready_for_packet").asBoolean(false);
-        if (context != null && context.structuredParseFailed()) {
+        if (context != null && context.structuredParseFailed() && !coherentDraft) {
             readyForPacket = false;
         }
-        if (context != null && !context.depthOk()) {
+        if (context != null && !context.depthOk() && !coherentDraft) {
             readyForPacket = false;
         }
         if (hasDuplicateGapIds(gaps)) {
@@ -391,7 +428,8 @@ public final class PlanningEvaluationService {
             if (countEligibleAskGaps(gaps) != 1) {
                 return failure("EVALUATION_INVALID_MULTIPLE_ASK_GAPS", repairAttempted, repairExhausted);
             }
-            String canonicalQuestionText = PlanningQuestionComposer.presentCanonicalQuestion(bestQuestion.text());
+            String canonicalQuestionText =
+                    repairAskQuestionText(bestQuestion.text(), chosen, context);
             if (canonicalQuestionText.isBlank()) {
                 return failure("EVALUATION_INVALID_QUESTION", repairAttempted, repairExhausted);
             }
@@ -407,11 +445,19 @@ public final class PlanningEvaluationService {
         if (containsBlockingGap(gaps) && readyForPacket) {
             return failure("EVALUATION_INVALID_BLOCKING_READY", repairAttempted, repairExhausted);
         }
+        if (!askUserRequired && !readyForPacket && countEligibleAskGaps(gaps) == 1) {
+            CanonicalPlanningGap sole = soleEligibleAskGap(gaps);
+            if (sole != null) {
+                String recovered = repairAskQuestionText("", sole, context);
+                if (!recovered.isBlank()) {
+                    askUserRequired = true;
+                    bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(recovered, "");
+                }
+            }
+        }
         CanonicalPlanningGap topGap = selectTopGap(gaps);
-        boolean synthesisDraftAcceptableForPacket =
-                context == null || (context.depthOk() && !context.structuredParseFailed());
         PlanningCanonicalNextAction nextAction =
-                determineNextAction(askUserRequired, readyForPacket, gaps, synthesisDraftAcceptableForPacket);
+                resolveNextAction(askUserRequired, readyForPacket, gaps, coherentDraft, context);
         if (nextAction == PlanningCanonicalNextAction.READY_FOR_PACKET) {
             readyForPacket = true;
         }
@@ -444,6 +490,103 @@ public final class PlanningEvaluationService {
                 repairAttempted,
                 repairExhausted,
                 "");
+    }
+
+    private static boolean coherentPlanDraft(FeaturePlanState plan) {
+        if (plan == null) {
+            return false;
+        }
+        if (PlanStructuredMaterialDiagnostics.hasStructuredMaterialPlanningGaps(plan)) {
+            return true;
+        }
+        String ex = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
+        String fs = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
+        String pb = PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body");
+        if (ex != null && !ex.isBlank()) {
+            return true;
+        }
+        if (fs != null && !fs.isBlank()) {
+            return true;
+        }
+        return pb != null && !pb.isBlank();
+    }
+
+    private static String repairAskQuestionText(
+            String bestQuestionRaw, CanonicalPlanningGap chosenGap, EvaluationContext context) {
+        String q = PlanningQuestionComposer.presentCanonicalQuestion(blankToEmpty(bestQuestionRaw));
+        if (!q.isBlank()) {
+            return q;
+        }
+        if (chosenGap != null) {
+            q = PlanningQuestionComposer.presentCanonicalQuestion(chosenGap.questionSeed());
+            if (!q.isBlank()) {
+                return q;
+            }
+        }
+        if (context != null) {
+            q = PlanningQuestionComposer.presentCanonicalQuestion(context.synthesisTopUnresolvedGap());
+            if (!q.isBlank()) {
+                return q;
+            }
+            q = PlanningQuestionComposer.presentCanonicalQuestion(context.draftQuestionCandidate());
+        }
+        return q != null ? q : "";
+    }
+
+    private static CanonicalPlanningGap soleEligibleAskGap(List<CanonicalPlanningGap> gaps) {
+        if (gaps == null || gaps.isEmpty()) {
+            return null;
+        }
+        CanonicalPlanningGap found = null;
+        for (CanonicalPlanningGap gap : gaps) {
+            if (gap != null && gap.askable() && (gap.blocking() || gap.branching())) {
+                if (found != null) {
+                    return null;
+                }
+                found = gap;
+            }
+        }
+        return found;
+    }
+
+    private static boolean hasBlockingContradiction(List<CanonicalPlanningGap> gaps) {
+        if (gaps == null) {
+            return false;
+        }
+        for (CanonicalPlanningGap gap : gaps) {
+            if (gap != null && gap.kind() == CanonicalGapKind.CONTRADICTION && gap.blocking()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static PlanningCanonicalNextAction resolveNextAction(
+            boolean askUserRequired,
+            boolean readyForPacket,
+            List<CanonicalPlanningGap> gaps,
+            boolean coherentDraft,
+            EvaluationContext context) {
+        if (askUserRequired) {
+            return PlanningCanonicalNextAction.ASK_USER;
+        }
+        if (readyForPacket) {
+            return PlanningCanonicalNextAction.READY_FOR_PACKET;
+        }
+        if (hasBlockingContradiction(gaps)) {
+            return PlanningCanonicalNextAction.BLOCK;
+        }
+        if (coherentDraft) {
+            return PlanningCanonicalNextAction.READY_FOR_PACKET;
+        }
+        if (!containsBlockingGap(gaps) && synthesisContextAllowsPacketFallback(context)) {
+            return PlanningCanonicalNextAction.READY_FOR_PACKET;
+        }
+        return PlanningCanonicalNextAction.BLOCK;
+    }
+
+    private static boolean synthesisContextAllowsPacketFallback(EvaluationContext context) {
+        return context == null || (context.depthOk() && !context.structuredParseFailed());
     }
 
     private static PlanningEvaluationDecision failure(String machineError) {
@@ -781,26 +924,6 @@ public final class PlanningEvaluationService {
             }
         }
         return count;
-    }
-
-    private static PlanningCanonicalNextAction determineNextAction(
-            boolean askUserRequired,
-            boolean readyForPacket,
-            List<CanonicalPlanningGap> gaps,
-            boolean synthesisDraftAcceptableForPacket) {
-        if (askUserRequired) {
-            return PlanningCanonicalNextAction.ASK_USER;
-        }
-        if (readyForPacket) {
-            return PlanningCanonicalNextAction.READY_FOR_PACKET;
-        }
-        if (containsBlockingGap(gaps)) {
-            return PlanningCanonicalNextAction.BLOCK;
-        }
-        if (!synthesisDraftAcceptableForPacket) {
-            return PlanningCanonicalNextAction.BLOCK;
-        }
-        return PlanningCanonicalNextAction.READY_FOR_PACKET;
     }
 
     private static PlanningIntakeStage stageFor(PlanningCanonicalNextAction nextAction) {

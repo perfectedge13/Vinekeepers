@@ -62,7 +62,7 @@ class PlanningDecisionNormalizerTest {
     }
 
     @Test
-    void collapsesContinueSynthesisToBlocked() {
+    void mapsContinueSynthesisToReadyForPacket() {
         PlanningDecisionSnapshot snapshot =
                 PlanningDecisionNormalizer.fromEvaluation(
                         decision(
@@ -74,7 +74,7 @@ class PlanningDecisionNormalizerTest {
                                 "",
                                 "MATERIALIZED_NOT_INSPECTED"));
 
-        assertEquals(PlanningNextAction.BLOCKED, snapshot.nextAction());
+        assertEquals(PlanningNextAction.READY_FOR_PACKET, snapshot.nextAction());
     }
 
     private static PlanningEvaluationDecision decision(

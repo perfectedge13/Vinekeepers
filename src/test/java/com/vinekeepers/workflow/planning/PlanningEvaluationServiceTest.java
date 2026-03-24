@@ -1,10 +1,13 @@
 package com.vinekeepers.workflow.planning;
 
+import com.vinekeepers.profile.ArtifactState;
+import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.PlanConfidence;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -306,7 +309,7 @@ class PlanningEvaluationServiceTest {
     }
 
     @Test
-    void parseAndValidate_depthFailureBlocksWithoutBlockingGaps() throws Exception {
+    void parseAndValidate_depthFailureYieldsPacketWhenCoherentDraftExists() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -325,15 +328,17 @@ class PlanningEvaluationServiceTest {
                           "ready_for_packet": false
                         }
                         """,
-                        new PlanningEvaluationService.EvaluationContext("", "", "", false, "too thin", false, 0));
+                        new PlanningEvaluationService.EvaluationContext(
+                                "", "", "", false, "too thin", false, 0, "", ""),
+                        minimalCoherentPlan());
 
         assertTrue(result.success());
-        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.BLOCK, result.nextAction());
-        assertFalse(result.readyForPacket());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
+        assertTrue(result.readyForPacket());
     }
 
     @Test
-    void parseAndValidate_blocksWhenBlockingGapIsNotAskable() throws Exception {
+    void parseAndValidate_nonAskableBlockingGapYieldsPacketWhenCoherentDraftExists() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -341,7 +346,7 @@ class PlanningEvaluationServiceTest {
                         service,
                         """
                         {
-                          "confidence": { "score": 49, "level": "medium", "summary": "Blocked by one hard gap." },
+                          "confidence": { "score": 49, "level": "medium", "summary": "Scope gap recorded." },
                           "gaps": [
                             { "id": "gap_one", "kind": "MISSING_IMPLEMENTATION_SCOPE", "description": "Need implementation scope authority.", "blocking": true, "askable": false, "assumable": false }
                           ],
@@ -353,25 +358,97 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": false
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
+
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
+        assertTrue(result.readyForPacket());
+    }
+
+    @Test
+    void parseAndValidate_promotesAskUserFromSingleBranchUsingDraftCandidate() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 55, "level": "medium", "summary": "One branch open." },
+                          "gaps": [
+                            { "id": "model_pick", "kind": "BRANCHING_DECISION", "description": "Choose per-step vs workflow-wide model defaults.", "blocking": false, "askable": true, "assumable": false }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        new PlanningEvaluationService.EvaluationContext(
+                                "", "", "", true, "", false, 0, "Should model selection be per step or workflow-wide?", ""),
+                        minimalCoherentPlan());
+
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.ASK_USER, result.nextAction());
+        assertTrue(result.askUserRequired());
+        assertTrue(result.canonicalQuestionText().toLowerCase().contains("workflow"));
+    }
+
+    @Test
+    void parseAndValidate_blockingContradictionStillBlocks() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 30, "level": "low", "summary": "Contradiction." },
+                          "gaps": [
+                            { "id": "c1", "kind": "CONTRADICTION", "description": "Artifacts disagree on rollout.", "blocking": true, "askable": false, "assumable": false }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
         assertTrue(result.success());
         assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.BLOCK, result.nextAction());
-        assertEquals("Need implementation scope authority.", result.blockReason());
+    }
+
+    private static PlanningEvaluationService.EvaluationContext ctxEmpty() {
+        return new PlanningEvaluationService.EvaluationContext("", "", "", true, "", false, 0, "", "");
     }
 
     private static PlanningEvaluationDecision parseAndValidate(
             PlanningEvaluationService service, String json) throws Exception {
-        return parseAndValidate(
-                service,
-                json,
-                new PlanningEvaluationService.EvaluationContext("", "", "", true, "", false, 0));
+        return parseAndValidate(service, json, ctxEmpty());
     }
 
     private static PlanningEvaluationDecision parseAndValidate(
             PlanningEvaluationService service,
             String json,
             PlanningEvaluationService.EvaluationContext ctx) throws Exception {
+        return parseAndValidate(service, json, ctx, minimalPlan());
+    }
+
+    private static PlanningEvaluationDecision parseAndValidate(
+            PlanningEvaluationService service,
+            String json,
+            PlanningEvaluationService.EvaluationContext ctx,
+            FeaturePlanState plan) throws Exception {
         Method parse = PlanningEvaluationService.class.getDeclaredMethod(
                 "parseAndValidate",
                 com.fasterxml.jackson.databind.JsonNode.class,
@@ -382,7 +459,7 @@ class PlanningEvaluationServiceTest {
         parse.setAccessible(true);
         com.fasterxml.jackson.databind.JsonNode root =
                 new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-        return (PlanningEvaluationDecision) parse.invoke(service, root, minimalPlan(), ctx, false, false);
+        return (PlanningEvaluationDecision) parse.invoke(service, root, plan, ctx, false, false);
     }
 
     private static FeaturePlanState minimalPlan() {
@@ -413,6 +490,58 @@ class PlanningEvaluationServiceTest {
                 null,
                 "software_feature_planning_v2",
                 Map.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static FeaturePlanState minimalCoherentPlan() {
+        Map<String, ArtifactState> artifacts = new LinkedHashMap<>();
+        artifacts.put(
+                "requirements_spec",
+                new ArtifactState(
+                        "requirements_spec",
+                        Map.of(
+                                "narrative",
+                                new SectionState(
+                                        "narrative",
+                                        SectionState.STATUS_DRAFT,
+                                        Map.of("feature_summary", "Ship OAuth on the public API with backward-compatible defaults."),
+                                        List.of()))));
+        return new FeaturePlanState(
+                "c",
+                "f",
+                "s",
+                "room",
+                null,
+                null,
+                "t",
+                "req",
+                "PLANNING",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                FeaturePlanState.initialSectionStatuses(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "software_feature_planning_v2",
+                artifacts,
                 null,
                 null,
                 null,

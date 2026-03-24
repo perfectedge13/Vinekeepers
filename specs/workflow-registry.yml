@@ -2789,9 +2789,10 @@ requirements:
       configurable_steps only and does not use linear_workflow_ref. WorkflowRunnerFactory yields GraphWorkflowRunner when phases are present. Generic UnresolvedItemLedger and
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
-      allowlists template keys.       Planning cycle logic lives in PlanningCyclePipeline; silent synthesis runs before one
+      allowlists template keys.       Planning cycle logic lives in       PlanningCyclePipeline; silent synthesis runs before one
       PlanningEvaluationService call, which returns canonical gaps, confidence, one optional question, AIRD deltas, and
-      ready_for_packet.       PlanningDecisionNormalizer reduces that result to the exclusive live routing contract
+      ready_for_packet (ask-or-assume: ordinary ambiguity becomes ASK_USER or READY_FOR_PACKET, not planning_blocked).
+      PlanningDecisionNormalizer reduces that result to the exclusive live routing contract
       (planningNextAction, planningNextPhase, planningLastConfidence, planningNextQuestion, planningBlockingReason, planningRepoEvidenceStatus),
       while PlanningMaterialCyclePacing and PlanningCanonicalDecisionSupport persist continuity state without becoming a second
       routing authority. Coordinator clarification follows a strict contract (one concrete blocking question when a required
@@ -2853,8 +2854,15 @@ requirements:
           For canonical_v1 coordinator transport, PlanningEvaluationService evaluates canonical plan state after drafting;
           code validates that only blocking or branching gaps can surface ASK_USER, enforces maxQuestions=1, persists
           confidence from evaluation output, and routes only through the normalized planningNextAction and planningNextPhase snapshot without fallback to generic or ranked questioning when the canonical gap set is closed;
-          missing repo inspection alone does not force BLOCKED when no gap is blocking: evaluation may coerce READY_FOR_PACKET when depth
-          and structured parse are acceptable and the model withheld ready_for_packet without asserting blocking gaps
+          ordinary ambiguity resolves to ASK_USER (one repaired question when needed, using evaluator text then top_unresolved_gap
+          then merged draft_question_candidate spread keys) or READY_FOR_PACKET (assumptions/packet) rather than planning_blocked;
+          planning_blocked is reserved for machine/validity failures, malformed evaluation JSON, blocking CONTRADICTION gaps, or
+          incoherent plan state with no recovery path; missing repo inspection alone does not force BLOCKED when no gap is blocking:
+          evaluation may coerce READY_FOR_PACKET when depth and structured parse are acceptable and the model withheld
+          ready_for_packet without asserting blocking gaps, or when narrative/plan artifacts are materially present
+        - >-
+          Silent synthesis before first evaluation uses at most one inner drafting round (coordinator + synthesis + depth) by default
+          so demo paths do not loop visible draft updates; expansion remains one pass unless selective rerun skips it after clarification
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           is part of the canonical evaluation context so strong on-repo support can reduce unnecessary user asks without a second ranking path
