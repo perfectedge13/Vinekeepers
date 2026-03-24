@@ -125,7 +125,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyPostAssessRoutesOnPlanningCanonicalNextActionOnly() throws Exception {
+    void arriettyPostAssessRoutesOnPlanningNextActionOnly() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -140,20 +140,42 @@ class ArriettyV2WorkflowYamlTest {
         for (Map<String, Object> rule : rs) {
             @SuppressWarnings("unchecked")
             Map<String, Object> when = (Map<String, Object>) rule.get("when");
-            assertTrue(when != null && when.containsKey("equals"), "post-assess rules must use equals on canonical decision state");
+            assertTrue(when != null && when.containsKey("equals"), "post-assess rules must use equals on live routing state");
             @SuppressWarnings("unchecked")
             Map<String, Object> eq = (Map<String, Object>) when.get("equals");
-            assertEquals("planningCanonicalNextAction", String.valueOf(eq.get("key")));
+            assertEquals("planningNextAction", String.valueOf(eq.get("key")));
             actions.add(String.valueOf(eq.get("value")));
         }
         assertEquals(
                 Set.of(
                         "ASK_USER",
                         "READY_FOR_PACKET",
-                        "CONTINUE_SYNTHESIS",
-                        "BLOCK"),
+                        "BLOCKED"),
                 actions,
-                "post-assess must map each canonical action explicitly (no legacy boolean fallthrough)");
+                "post-assess must map each live routing action explicitly");
+    }
+
+    @Test
+    void arriettyClarificationCapabilityBranchesOnPlanningNextAction() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capability = (Map<String, Object>) capabilities.get("cap_planning_clarification");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) capability.get("steps");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> branch = steps.get(2);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> branches = (List<Map<String, Object>>) branch.get("branches");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> when = (Map<String, Object>) branches.get(0).get("when");
+        assertEquals("planningNextAction", String.valueOf(when.get("key")));
+        assertEquals("ASK_USER", String.valueOf(when.get("value")));
     }
 
     @Test

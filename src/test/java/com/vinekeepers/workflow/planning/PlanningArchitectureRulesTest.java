@@ -28,7 +28,6 @@ public final class PlanningArchitectureRulesTest {
             "com.vinekeepers.workflow.planning.PlanningPostDraftGovernor",
             "com.vinekeepers.workflow.planning.PlanningPostDraftAction",
             "com.vinekeepers.workflow.planning.PlanningMaterialRoutingOutcome",
-            "com.vinekeepers.workflow.planning.PlanningCycleEvaluationStage",
             "com.vinekeepers.workflow.actions.PlanningFinalizePlanningCycleAction",
             "com.vinekeepers.profile.CoordinatorClarificationEnginePolicy");
 

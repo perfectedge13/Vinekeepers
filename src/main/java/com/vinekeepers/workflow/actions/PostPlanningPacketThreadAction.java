@@ -5,11 +5,13 @@ import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
-import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningRole;
-import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
+import com.vinekeepers.workflow.planning.PlanningDecisionSnapshot;
+import com.vinekeepers.workflow.planning.PlanningNextAction;
+import com.vinekeepers.workflow.planning.PlanningPromptFormatter;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
+import com.vinekeepers.workflow.planning.PlanningRoutingBridge;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,10 +31,6 @@ import java.util.Optional;
 public final class PostPlanningPacketThreadAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final Logger log = LoggerFactory.getLogger(PostPlanningPacketThreadAction.class);
-    private static final String PRE_POST_NOTICE =
-            "**Update:** I'm posting the planning packet now (may be several messages), then running automated readiness checks. "
-                    + "You'll get a short **pre-launch review** summary right after — approval buttons come once that passes.";
-
     private final ReplySender replySender;
     private final FeaturePlanStateStore planStore;
     private final OutboundDeliveryRouter outboundDeliveryRouter;
@@ -82,21 +80,18 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             return spread;
         }
         boolean depthOk = !"false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
-        String canonicalNextAction =
-                firstNonBlank(
-                        getString(state, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY),
-                        plan.getPlanningCanonicalDecision().nextAction().name());
+        String nextAction = firstNonBlank(getString(state, PlanningRoutingBridge.NEXT_ACTION_KEY), "");
         boolean packetAllowed = PlanningReadinessSpread.packetPostingAllowed(state);
-        if (!PlanningCanonicalNextAction.READY_FOR_PACKET.name().equalsIgnoreCase(canonicalNextAction)) {
+        if (!PlanningNextAction.READY_FOR_PACKET.name().equalsIgnoreCase(nextAction)) {
             spread.put(
                     "planningPacketPostError",
-                    "The canonical planning decision does not allow packet posting for this cycle.");
+                    "The evaluated planning decision does not allow packet posting for this cycle.");
             return spread;
         }
         if (state != null && !packetAllowed) {
             spread.put(
                     "planningPacketPostError",
-                    "The canonical planning decision is not in a packet-postable state yet.");
+                    "The evaluated planning decision is not in a packet-postable state yet.");
             return spread;
         }
         if (state != null && !depthOk) {
@@ -125,7 +120,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                                 fingerprint,
                                 Math.max(1, parsePostedVersion(state)))
                                 .withLastPostedPacketDecisionId(
-                                        firstNonBlank(getString(state, PlanningCanonicalDecisionSupport.CANONICAL_DECISION_ID_KEY), "")));
+                                        firstNonBlank(getString(state, "planningCanonicalDecisionId"), "")));
             }
             spread.put("planningPacketPostedVersion", String.valueOf(parsePostedVersion(state)));
             spread.put("planningPacketSkippedDuplicate", "true");
@@ -141,8 +136,20 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             spread.put("planningPacketPostError", "Empty planning packet.");
             return spread;
         }
+        PlanningDecisionSnapshot snapshot =
+                new PlanningDecisionSnapshot(
+                        PlanningNextAction.READY_FOR_PACKET,
+                        null,
+                        "",
+                        "",
+                        getString(state, PlanningRoutingBridge.REPO_EVIDENCE_STATUS_KEY),
+                        getString(state, PlanningRoutingBridge.DECISION_SUMMARY_KEY));
         Optional<String> noticeErr =
-                outboundDeliveryRouter.sendAsRoleExplicit(sendTarget, null, PRE_POST_NOTICE, PlanningRole.ORCHESTRATOR);
+                outboundDeliveryRouter.sendAsRoleExplicit(
+                        sendTarget,
+                        null,
+                        PlanningPromptFormatter.formatPacketIntro(snapshot),
+                        PlanningRole.ORCHESTRATOR);
         noticeErr.ifPresent(err -> log.warn("Planning packet pre-post notice not delivered: {}", err));
         for (String chunk : chunks) {
             Optional<String> err =
@@ -156,7 +163,7 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                 plan.withPacketPosted(Instant.now(), "", fingerprint, chunks.size())
                         .withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null)
                         .withLastPostedPacketDecisionId(
-                                firstNonBlank(getString(state, PlanningCanonicalDecisionSupport.CANONICAL_DECISION_ID_KEY), "")));
+                                firstNonBlank(getString(state, "planningCanonicalDecisionId"), "")));
         spread.put("planningPacketPosted", "true");
         spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.PACKET_POSTED.name());
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));

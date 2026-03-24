@@ -171,6 +171,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                                 PlanningCyclePipeline.PARTIAL_LAST_SYNTH_KEY, "evaluation next"),
                         Map.of());
 
+        assertEquals("ASK_USER", spread.get("planningNextAction"));
         assertEquals("ASK_USER", spread.get("planningCanonicalNextAction"));
         assertEquals("true", spread.get("planningCanonicalUserInputRequired"));
         assertEquals("Who approves the rollout boundary for this feature?", spread.get("planningClarificationQuestionText"));

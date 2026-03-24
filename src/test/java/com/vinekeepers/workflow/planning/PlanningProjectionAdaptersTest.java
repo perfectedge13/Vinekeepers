@@ -53,10 +53,11 @@ class PlanningProjectionAdaptersTest {
         ClarificationProjection proj = ClarificationProjection.fromSelection(CanonicalClarificationSelection.none());
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(UnresolvedItemLedger.empty(), proj);
-        PlanningEvaluationDecision decision = minimalDecision(true);
+        PlanningDecisionSnapshot snapshot =
+                new PlanningDecisionSnapshot(PlanningNextAction.ASK_USER, 50, "Which option?", "", "MATERIALIZED", "");
         Map<String, Object> spread = new LinkedHashMap<>();
         spread.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, "BLOCK");
-        PlanningClarificationProjectionAdapter.applyPreCanonicalEvaluationClarification(spread, upsert, proj, decision);
+        PlanningClarificationProjectionAdapter.applyPreCanonicalEvaluationClarification(spread, upsert, proj, snapshot);
         assertEquals("BLOCK", spread.get(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY));
     }
 
@@ -125,7 +126,7 @@ class PlanningProjectionAdaptersTest {
 
         assertEquals("CONTINUE_SYNTHESIS", spread.get(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY));
         String summary = (String) spread.get("planningCycleProgressSummary");
-        assertTrue(summary.contains("CONTINUE_SYNTHESIS"), summary);
+        assertTrue(summary.contains("BLOCKED"), summary);
     }
 
     private static PlanningEvaluationDecision minimalDecision(boolean success) {

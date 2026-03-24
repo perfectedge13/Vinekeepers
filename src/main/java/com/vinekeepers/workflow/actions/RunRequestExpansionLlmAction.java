@@ -318,13 +318,6 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         appendBul(sb, "**Impacted components**", text(root, "impacted_components"));
         appendBul(sb, "**Validation concerns**", text(root, "validation_concerns"));
         appendBul(sb, "**Design options**", text(root, "design_options"));
-        appendBul(sb, "**Repo evidence (this pass)**", text(root, "repo_evidence_this_pass"));
-        appendBul(sb, "**Top unresolved gap**", text(root, "top_unresolved_gap"));
-        appendBul(sb, "**Recommended action**", text(root, "recommended_action"));
-        String qNeeded = text(root, "question_if_needed");
-        if (!qNeeded.isBlank()) {
-            sb.append("**Clarification (single)**\n").append(qNeeded).append("\n\n");
-        }
         JsonNode asm = root.path("explicit_assumptions");
         if (asm.isArray() && asm.size() > 0) {
             sb.append("**Explicit assumptions**\n");

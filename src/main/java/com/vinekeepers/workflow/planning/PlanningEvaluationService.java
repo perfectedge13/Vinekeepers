@@ -783,7 +783,7 @@ public final class PlanningEvaluationService {
         if (containsBlockingGap(gaps)) {
             return PlanningCanonicalNextAction.BLOCK;
         }
-        return PlanningCanonicalNextAction.CONTINUE_SYNTHESIS;
+        return PlanningCanonicalNextAction.BLOCK;
     }
 
     private static PlanningIntakeStage stageFor(PlanningCanonicalNextAction nextAction) {

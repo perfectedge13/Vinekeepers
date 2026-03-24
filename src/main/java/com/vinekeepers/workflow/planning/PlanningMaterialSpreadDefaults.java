@@ -22,6 +22,12 @@ public final class PlanningMaterialSpreadDefaults {
         m.put("planningPacketDepthOk", "false");
         m.put("planningPacketDepthReason", "");
         m.put("planningPacketDepthRetryRecommended", "false");
+        m.put(PlanningRoutingBridge.NEXT_ACTION_KEY, PlanningNextAction.BLOCKED.name());
+        m.put(PlanningRoutingBridge.LAST_CONFIDENCE_KEY, "");
+        m.put(PlanningRoutingBridge.NEXT_QUESTION_KEY, "");
+        m.put(PlanningRoutingBridge.BLOCKING_REASON_KEY, "");
+        m.put(PlanningRoutingBridge.REPO_EVIDENCE_STATUS_KEY, "");
+        m.put(PlanningRoutingBridge.DECISION_SUMMARY_KEY, "");
         m.put(PlanningReadinessSpread.PACKET_POSTING_ALLOWED_KEY, "false");
         m.put(PlanningReadinessSpread.REVIEW_ALLOWED_KEY, "false");
         m.put(PlanningReadinessSpread.APPROVAL_ALLOWED_KEY, "false");

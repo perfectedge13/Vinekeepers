@@ -29,9 +29,12 @@ import com.vinekeepers.workflow.planning.CanonicalPlanningGap;
 import com.vinekeepers.workflow.planning.CanonicalClarificationSpreadBuilder;
 import com.vinekeepers.workflow.planning.ClarificationProjection;
 import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
+import com.vinekeepers.workflow.planning.PlanningDecisionNormalizer;
+import com.vinekeepers.workflow.planning.PlanningDecisionSnapshot;
 import com.vinekeepers.workflow.planning.PlanningEvaluationDecision;
 import com.vinekeepers.workflow.planning.PlanningMaterialFingerprint;
 import com.vinekeepers.workflow.planning.PlanningEvaluationService;
+import com.vinekeepers.workflow.planning.PlanningNextAction;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 import com.vinekeepers.workflow.planning.QuestionMode;
 
@@ -180,7 +183,8 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                         "",
                                         false,
                                         next.getClarificationTurnsCompleted()));
-                if (evaluation.success() && evaluation.askUserRequired()) {
+                PlanningDecisionSnapshot routingSnapshot = PlanningDecisionNormalizer.fromEvaluation(evaluation);
+                if (routingSnapshot.nextAction() == PlanningNextAction.ASK_USER) {
                     CanonicalPlanningGap g = evaluation.chosenAskGap();
                     if (g != null) {
                         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
@@ -412,7 +416,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
         }
         return switch (canonical.nextAction()) {
             case ASK_USER -> "Needs one more clarification";
-            case CONTINUE_SYNTHESIS -> "Needs another synthesis pass";
+            case CONTINUE_SYNTHESIS -> "Blocked";
             case READY_FOR_PACKET -> canonical.approvalAllowed() ? "Ready for approval" : "Ready for human review";
             case BLOCK -> "Blocked";
         };
@@ -426,7 +430,7 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             case ASK_USER ->
                     "Needs one more clarification before the packet can move forward.";
             case CONTINUE_SYNTHESIS ->
-                    "Needs another silent synthesis pass before human review.";
+                    "Blocked until a human revises the plan or resolves the remaining blockers.";
             case READY_FOR_PACKET ->
                     canonical.approvalAllowed()
                             ? "Ready for approval once you review the checklist below."

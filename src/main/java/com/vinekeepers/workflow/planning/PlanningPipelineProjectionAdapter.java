@@ -27,8 +27,12 @@ public final class PlanningPipelineProjectionAdapter {
             int cycleIteration) {
         DeliberationEngine.applyDerivedDeliberationSpread(spread);
         spread.put("planningAssumptionsUsed", String.valueOf(decision.assumptionsToAdd().size()));
+        String nextActionName =
+                PlanningProgressProjection.firstNonBlank(
+                        PlanningProgressProjection.getString(spread, PlanningRoutingBridge.NEXT_ACTION_KEY),
+                        PlanningRoutingBridge.snapshotFromCanonical(canonical).nextAction().name());
         PlanningProgressProjection.applyCycleProgressSummaryAfterEvaluation(
-                spread, cycleIteration, canonical.nextAction().name());
+                spread, cycleIteration, nextActionName);
         if (!decision.success()) {
             PlanningProgressProjection.applyUserVisibleEvaluationFailure(spread, decision.machineError());
         }

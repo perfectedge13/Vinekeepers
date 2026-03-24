@@ -118,6 +118,12 @@ workflows:
       - planReadinessStatusLabel
       - planningCanonicalActionLabel
       - planningCanonicalActionSummary
+      - planningNextAction
+      - planningLastConfidence
+      - planningNextQuestion
+      - planningBlockingReason
+      - planningRepoEvidenceStatus
+      - planningDecisionSummary
       - planReadinessSummary
       - planAssumptionsSummary
       - planIssuesSummary
@@ -338,7 +344,7 @@ workflows:
         - type: branch
           branches:
           - when:
-              key: planningCanonicalNextAction
+              key: planningNextAction
               value: ASK_USER
             next: 3
           - when: else
@@ -636,7 +642,11 @@ workflows:
         kind: legacy_action
         action: post_channel_message
         bind:
-          content: 'Planning is blocked right now — {{planningCycleUserVisibleFailure}}
+          content: 'Planning is blocked right now. The packet is not being posted yet.
+
+            {{planningBlockingReason}}
+
+            {{planningCycleUserVisibleFailure}}
 
             {{planReadinessSummary}}'
           asRole: orchestrator
@@ -665,47 +675,35 @@ workflows:
       rs_evaluation_branch:
         - when:
             equals:
-              key: planningCanonicalNextAction
+              key: planningNextAction
               value: ASK_USER
           then:
           - transition: planning_clarification
         - when:
             equals:
-              key: planningCanonicalNextAction
+              key: planningNextAction
               value: READY_FOR_PACKET
           then:
           - transition: planning_packet
         - when:
             equals:
-              key: planningCanonicalNextAction
-              value: CONTINUE_SYNTHESIS
-          then:
-          - transition: planning_silent_synthesis
-        - when:
-            equals:
-              key: planningCanonicalNextAction
-              value: BLOCK
+              key: planningNextAction
+              value: BLOCKED
           then:
           - transition: planning_blocked
       rs_critique:
         - when:
             equals:
-              key: planningCanonicalNextAction
-              value: BLOCK
+              key: planningNextAction
+              value: BLOCKED
           then:
           - transition: planning_blocked
         - when:
             equals:
-              key: planningCanonicalNextAction
+              key: planningNextAction
               value: ASK_USER
           then:
           - transition: planning_clarification
-        - when:
-            equals:
-              key: planningCanonicalNextAction
-              value: CONTINUE_SYNTHESIS
-          then:
-          - transition: planning_revision_reset
         - when:
             equals:
               key: planningReviewAllowed

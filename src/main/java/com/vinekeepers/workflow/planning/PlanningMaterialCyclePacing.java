@@ -25,15 +25,14 @@ public final class PlanningMaterialCyclePacing {
                 switch (canonical.nextAction()) {
                     case ASK_USER -> PlanningSynthesisAction.ASK_USER;
                     case READY_FOR_PACKET -> PlanningSynthesisAction.READY_FOR_PACKET;
-                    case CONTINUE_SYNTHESIS -> PlanningSynthesisAction.CONTINUE_SYNTHESIS;
+                    case CONTINUE_SYNTHESIS -> PlanningSynthesisAction.BLOCK;
                     case BLOCK -> PlanningSynthesisAction.BLOCK;
                 };
         boolean ask = canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER;
         boolean readyPost =
                 canonical.nextAction() == PlanningCanonicalNextAction.READY_FOR_PACKET
                         && canonical.packetPostingAllowed();
-        boolean revisionNeeded =
-                ask || canonical.nextAction() == PlanningCanonicalNextAction.CONTINUE_SYNTHESIS;
+        boolean revisionNeeded = ask;
         boolean packetPostingAllowed =
                 action == PlanningSynthesisAction.READY_FOR_PACKET || action == PlanningSynthesisAction.ASSUME_AND_CONTINUE;
         writeMaterialPacingKeys(

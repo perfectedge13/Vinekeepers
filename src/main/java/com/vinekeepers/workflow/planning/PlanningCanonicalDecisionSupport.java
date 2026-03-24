@@ -58,6 +58,10 @@ public final class PlanningCanonicalDecisionSupport {
                 stringValue(state.get(LAST_MATERIAL_CHANGE_FP_KEY)));
     }
 
+    public static void projectRoutingSnapshotFromCanonical(Map<String, Object> spread, PlanningCanonicalDecision decision) {
+        PlanningRoutingBridge.projectSnapshotToSpread(spread, PlanningRoutingBridge.snapshotFromCanonical(decision));
+    }
+
     /**
      * Canonical decision fields without clarification-shaped keys; use with {@link
      * PlanningClarificationProjectionAdapter#applyFromCanonicalDecision} or evaluation overlays.
@@ -86,6 +90,7 @@ public final class PlanningCanonicalDecisionSupport {
 
     public static void projectToSpread(Map<String, Object> spread, PlanningCanonicalDecision decision) {
         projectCanonicalCoreToSpread(spread, decision);
+        projectRoutingSnapshotFromCanonical(spread, decision);
         PlanningClarificationProjectionAdapter.applyFromCanonicalDecision(spread, decision);
     }
 
@@ -145,8 +150,8 @@ public final class PlanningCanonicalDecisionSupport {
         if (PlanReadinessStatus.NOT_READY.equals(status) && !autoRevisionCapped && hasMaterialChange(plan, materialStateChangeFingerprint)) {
             return PlanningCanonicalDecision.create(
                     "post_critique",
-                    PlanningIntakeStage.DRAFTING,
-                    PlanningCanonicalNextAction.CONTINUE_SYNTHESIS,
+                    PlanningIntakeStage.FAILED,
+                    PlanningCanonicalNextAction.BLOCK,
                     PlanningInteractionState.NONE,
                     notMaterializedFallback(plan, planningRepoEvidenceJson),
                     confidenceSummary(plan),
@@ -156,7 +161,7 @@ public final class PlanningCanonicalDecisionSupport {
                     "",
                     "",
                     "",
-                    "",
+                    "Critique found more drafting work, but this pass fail-closes instead of reopening a live continue-synthesis route.",
                     List.of(),
                     materialStateChangeFingerprint);
         }

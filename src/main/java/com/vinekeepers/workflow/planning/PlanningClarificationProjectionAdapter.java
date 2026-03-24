@@ -24,23 +24,26 @@ public final class PlanningClarificationProjectionAdapter {
             Map<String, Object> spread,
             PlanningDeliberationLedgerSync.UpsertResult upsert,
             ClarificationProjection projection,
-            PlanningEvaluationDecision decision) {
+            PlanningDecisionSnapshot snapshot) {
         UnresolvedItemLedger.mergeLedgerIntoSpread(spread, upsert.ledger());
         spread.put("planningClarificationLedgerItemId", upsert.activeItemId().orElse(""));
-        spread.put("planningCanonicalUserInputRequired", decision.askUserRequired() ? "true" : "false");
+        boolean askUser = snapshot != null && snapshot.nextAction() == PlanningNextAction.ASK_USER;
+        spread.put("planningCanonicalUserInputRequired", askUser ? "true" : "false");
         spread.put("planningClarificationChoicesJson", projection.choicesJson());
         spread.put("planningClarificationMetaJson", projection.metaJson());
         spread.put("planningClarificationUseStructuredChoices", projection.useStructuredChoices() ? "true" : "false");
-        spread.put("planningClarificationQuestionText", projection.questionText() != null ? projection.questionText() : "");
+        spread.put(
+                "planningClarificationQuestionText",
+                askUser && projection.questionText() != null ? projection.questionText() : "");
         spread.put(
                 "planningClarificationOrchestratorPrompt",
-                projection.orchestratorPrompt() != null ? projection.orchestratorPrompt() : "");
+                askUser && projection.orchestratorPrompt() != null ? projection.orchestratorPrompt() : "");
         spread.put(
                 CLARIFICATION_CONFIDENCE_SCORE_KEY,
-                String.format(Locale.ROOT, "%.3f", decision.confidence().score() / 100.0));
+                String.format(Locale.ROOT, "%.3f", (snapshot != null && snapshot.lastConfidence() != null ? snapshot.lastConfidence() : 0) / 100.0));
         spread.put(
                 CLARIFICATION_CONFIDENCE_HIGH_KEY,
-                decision.confidence().score() >= 67 ? "true" : "false");
+                snapshot != null && snapshot.lastConfidence() != null && snapshot.lastConfidence() >= 67 ? "true" : "false");
     }
 
     /**

@@ -25,7 +25,7 @@ public final class DeliberationEngine {
                 switch (next.toUpperCase(Locale.ROOT)) {
                     case "ASK_USER" -> "await_user";
                     case "READY_FOR_PACKET" -> "review_ready";
-                    case "CONTINUE_SYNTHESIS" -> "autonomous_draft";
+                    case "CONTINUE_SYNTHESIS" -> "other";
                     case "BLOCK" -> "other";
                     default -> phaseFromStageOnly(stage);
                 };

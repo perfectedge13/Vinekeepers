@@ -261,7 +261,10 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             spread.put("planningClarificationMetaJson", "{}");
             spread.put("planningClarificationQuestionText", "");
             spread.put("planningCanonicalUserInputRequired", "false");
-            spread.put("planningCanonicalNextAction", "CONTINUE_SYNTHESIS");
+            spread.put("planningCanonicalNextAction", "BLOCK");
+            spread.put("planningNextAction", "BLOCKED");
+            spread.put("planningNextQuestion", "");
+            spread.put("planningBlockingReason", "");
             DeliberationEngine.applyDerivedDeliberationSpread(spread);
             DeliberationDirtyPassIndex.writeDirtyPassesSpread(spread, state, bind, List.of("clarification_merge"));
             spread.put("planningClarificationRaw", "");

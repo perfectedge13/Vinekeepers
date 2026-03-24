@@ -56,13 +56,14 @@ public final class PlanningReadinessSpread {
     }
 
     public static boolean hasPendingClarification(Map<String, ?> map) {
-        return "WAITING_FOR_TEXT_REPLY".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_INTERACTION_STATE_KEY))
+        return PlanningNextAction.ASK_USER.name().equalsIgnoreCase(getString(map, PlanningRoutingBridge.NEXT_ACTION_KEY))
+                || "WAITING_FOR_TEXT_REPLY".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_INTERACTION_STATE_KEY))
                 || "CLARIFYING".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_STAGE_KEY))
                 || truthy(map, "planningCanonicalUserInputRequired");
     }
 
     public static boolean packetPostingAllowed(Map<String, ?> map) {
-        return "READY_FOR_PACKET".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY))
+        return "READY_FOR_PACKET".equalsIgnoreCase(getString(map, PlanningRoutingBridge.NEXT_ACTION_KEY))
                 && truthy(map, PACKET_POSTING_ALLOWED_KEY);
     }
 

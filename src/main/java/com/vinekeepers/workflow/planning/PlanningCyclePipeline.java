@@ -47,6 +47,7 @@ public final class PlanningCyclePipeline {
 
     private record EvaluationLedgerPhase(
             PlanningEvaluationDecision decision,
+            PlanningDecisionSnapshot snapshot,
             FeaturePlanState plan,
             ClarificationProjection projection,
             PlanningDeliberationLedgerSync.UpsertResult upsert,
@@ -238,12 +239,14 @@ public final class PlanningCyclePipeline {
                 evaluatePersistAndSyncLedger(
                         event, state, spread, contextId, plan, profile, cycleIteration, depthOk, depthReason);
         PlanningEvaluationDecision decision = phase.decision();
+        PlanningDecisionSnapshot snapshot = phase.snapshot();
         plan = phase.plan();
         ClarificationProjection projection = phase.projection();
         PlanningDeliberationLedgerSync.UpsertResult upsert = phase.upsert();
+        PlanningRoutingBridge.projectSnapshotToSpread(spread, snapshot);
 
         PlanningClarificationProjectionAdapter.applyPreCanonicalEvaluationClarification(
-                spread, upsert, projection, decision);
+                spread, upsert, projection, snapshot);
 
         Map<String, Object> signal = new LinkedHashMap<>();
         if (state != null) {
@@ -252,7 +255,9 @@ public final class PlanningCyclePipeline {
         signal.putAll(spread);
         String materialFingerprint = PlanningMaterialFingerprint.materialStateChangeFingerprint(signal, plan);
         PlanningCanonicalDecision canonical =
-                decision.toCanonicalDecision(
+                PlanningRoutingBridge.toCanonicalDecision(
+                        snapshot,
+                        decision,
                         "planning_evaluation",
                         plan != null
                                 ? plan.getAssumptions().stream()
@@ -344,10 +349,11 @@ public final class PlanningCyclePipeline {
         }
 
         ClarificationProjection projection = ClarificationProjection.fromSelection(CanonicalClarificationSelection.none());
+        PlanningDecisionSnapshot snapshot = PlanningDecisionNormalizer.fromEvaluation(decision);
         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
         PlanningDeliberationLedgerSync.UpsertResult upsert =
                 PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, projection);
-        if (decision.nextAction() == PlanningCanonicalNextAction.ASK_USER) {
+        if (snapshot.nextAction() == PlanningNextAction.ASK_USER) {
             CanonicalPlanningGap askGap = decision.chosenAskGap();
             projection =
                     CanonicalClarificationSpreadBuilder.projectCanonicalPlanningGap(
@@ -372,7 +378,7 @@ public final class PlanningCyclePipeline {
             ledger = PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(ledger, java.util.Set.of());
             upsert = PlanningDeliberationLedgerSync.upsertOpenQuestion(ledger, projection);
         }
-        return new EvaluationLedgerPhase(decision, plan, projection, upsert, structuredParseFailed);
+        return new EvaluationLedgerPhase(decision, snapshot, plan, projection, upsert, structuredParseFailed);
     }
 
     private void applyMaterialReadinessCanonicalAndPersistence(
@@ -405,8 +411,7 @@ public final class PlanningCyclePipeline {
                 spread,
                 signal,
                 plan,
-                canonical.nextAction() == PlanningCanonicalNextAction.CONTINUE_SYNTHESIS
-                        || canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER,
+                canonical.nextAction() == PlanningCanonicalNextAction.ASK_USER,
                 situation);
         spread.put(PlanningCanonicalDecisionSupport.LAST_MATERIAL_CHANGE_FP_KEY, materialFingerprint);
     }
@@ -450,7 +455,9 @@ public final class PlanningCyclePipeline {
     }
 
     private static Map<String, Object> baseSpread() {
-        return PlanningMaterialSpreadDefaults.newPlanningCycleBaseSpread();
+        Map<String, Object> spread = PlanningMaterialSpreadDefaults.newPlanningCycleBaseSpread();
+        PlanningRoutingBridge.clearLiveRoutingKeys(spread);
+        return spread;
     }
 
     private static int parseInt(String s, int dflt) {

@@ -538,7 +538,7 @@ assets:
   - id: ASSET-PLANNING-SYNTHESIS-ACTION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/planning/PlanningSynthesisAction.java
-    role: Internal synthesis-pacing enum for ASK_USER / ASSUME_AND_CONTINUE / READY_FOR_PACKET / CONTINUE_SYNTHESIS / BLOCK; live YAML routes on planningCanonicalNextAction only
+    role: Internal synthesis-pacing enum for ASK_USER / ASSUME_AND_CONTINUE / READY_FOR_PACKET / CONTINUE_SYNTHESIS / BLOCK; live YAML routes on planningNextAction only
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1956,8 +1956,8 @@ assets:
       rejects when they do not match CanonicalMergeTargetPaths for that gap; applies planningClarificationRaw to the declared artifact
       slice with structured outcomes (resolved / partial / ambiguous / contradiction) and a single plan update per success path; stores
       planningPreviousClarificationQuestionText from meta question text (exact surfaced copy, not pipeline normalize); clears
-      planningClarificationChoicesJson; on success sets planningCanonicalNextAction CONTINUE_SYNTHESIS so the next routing
-      pass re-enters silent synthesis, while DeliberationEngine + planningDirtyPassesJson keep audit visibility; spreads
+      planningClarificationChoicesJson; on success clears the live clarification route and fail-closes live routing until the next
+      evaluation pass rewrites planningNextAction, while DeliberationEngine + planningDirtyPassesJson keep audit visibility; spreads
       planningClarificationMergeOk true on success and planningClarificationMergeError when merge cannot run, humanized via
       PlanningUserFacingCopy
     requires:
@@ -2790,12 +2790,15 @@ requirements:
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys.       Planning cycle logic lives in PlanningCyclePipeline; silent synthesis runs before one
       PlanningEvaluationService call, which returns canonical gaps, confidence, one optional question, AIRD deltas, and
-      ready_for_packet. PlanningMaterialCyclePacing and PlanningCanonicalDecisionSupport then project deterministic routing
-      from the canonical evaluation result only. Coordinator clarification follows a strict contract (one concrete blocking
-      question when a required fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved
-      plan state). PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. v2 evaluation-branch rulesets route on planningCanonicalNextAction (no legacy boolean-first routing); silent synthesis continues only after
-      listed material changes or a new revision situation; packet depth defers generic open-question filler blocking to clarification
-      state when canonical user input is not required and the unresolved ledger has no OPEN blocking row.
+      ready_for_packet. PlanningDecisionNormalizer reduces that result to the exclusive live routing contract
+      (planningNextAction, planningLastConfidence, planningNextQuestion, planningBlockingReason, planningRepoEvidenceStatus),
+      while PlanningMaterialCyclePacing and PlanningCanonicalDecisionSupport persist continuity state without becoming a second
+      routing authority. Coordinator clarification follows a strict contract (one concrete blocking question when a required
+      fact is missing; no generic meta/completeness prompts; open-question substance grounded in unresolved plan state).
+      PlanningRolePassRunner delegates to StructuredLlmArtifactUpsertPass. v2 evaluation-branch rulesets route on planningNextAction
+      only (no legacy boolean-first routing); blocked states fail closed instead of reopening a live CONTINUE_SYNTHESIS branch;
+      packet depth defers generic open-question filler blocking to clarification state when canonical user input is not required
+      and the unresolved ledger has no OPEN blocking row.
     status: active
     priority: high
     type: functional
@@ -2847,7 +2850,7 @@ requirements:
         - >-
           For canonical_v1 coordinator transport, PlanningEvaluationService evaluates canonical plan state after drafting;
           code validates that only blocking or branching gaps can surface ASK_USER, enforces maxQuestions=1, persists
-          confidence from evaluation output, and routes without fallback to generic or ranked questioning when the canonical gap set is closed
+          confidence from evaluation output, and routes only through the normalized planningNextAction snapshot without fallback to generic or ranked questioning when the canonical gap set is closed
         - >-
           Repo workspace evidence (planningRepoEvidenceJson and related spreads from ensure_repo_workspace / optional RAG prep)
           is part of the canonical evaluation context so strong on-repo support can reduce unnecessary user asks without a second ranking path
@@ -2875,16 +2878,16 @@ requirements:
         - >-
           arrietty_room_v2 uses named phases plus embedded configurable_steps segments; configurable_steps persist isolated segment
           cursors; kickoff routes through planning_ingress/planning_kickoff; planning_preflight / planning_silent_synthesis /
-          planning_clarification own the intake spine, and rs_evaluation_branch branches only on planningCanonicalNextAction
-          (fail-closed default planning_blocked); CONTINUE_SYNTHESIS routes directly back to planning_silent_synthesis;
+          planning_clarification own the intake spine, and rs_evaluation_branch branches only on planningNextAction
+          (ASK_USER, READY_FOR_PACKET, BLOCKED; fail-closed default planning_blocked); CONTINUE_SYNTHESIS is not a live YAML branch;
           FeaturePlanState planner recovery fields persist synthesis failure category, phase, recoverable flag, and
           humanized last recovery hint; clarification uses the explicit planning_clarification phase when
           the coordinator must ask the operator; ArriettyV2WorkflowYamlTest guards phase ownership, evaluation branching, and bans
           linear_workflow_ref in production config
         - >-
           When coordinator planning reaches the ready-to-move-forward path, user-facing progress copy says the next long
-          step is posting the planning packet and running readiness checks, and post_planning_packet_thread emits a brief
-          preamble before chunking so the intake thread is not silent during that wait
+          step is posting the planning packet and running readiness checks only when planningNextAction is READY_FOR_PACKET,
+          and post_planning_packet_thread emits a brief preamble only for that route so the intake thread is not silent during that wait
         - >-
           Planning packet sections and declarative readiness gate messages shown to operators use PlanningUserFacingCopy and
           work-profile titles where applicable so raw artifact paths and enum tokens are not the primary Discord copy
