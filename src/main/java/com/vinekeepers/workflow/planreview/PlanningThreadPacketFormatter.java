@@ -66,7 +66,7 @@ public final class PlanningThreadPacketFormatter {
         String arch = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary"), SECTION_SOFT_MAX);
         String comps = truncate(PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted"), SECTION_SOFT_MAX);
         String risksArt = truncate(PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary"), SECTION_SOFT_MAX);
-        String openQ = truncate(PlanningArtifactTexts.effectiveOpenQuestions(plan), SECTION_SOFT_MAX);
+        String openQ = truncate(PlanningArtifactTexts.unresolvedQuestionSummary(plan), SECTION_SOFT_MAX);
         String decisionsArt = truncate(PlanningArtifactTexts.allRepeatableFieldLines(plan, "decision_log", "decisions", "decision_text"), SECTION_SOFT_MAX * 2);
 
         StringBuilder sb = new StringBuilder();
@@ -328,14 +328,7 @@ public final class PlanningThreadPacketFormatter {
             }
             return tb.toString().trim();
         }
-        if (artifactFallback != null && !artifactFallback.isBlank()) {
-            String list = bulletLinesAsDiscordList("Open question", artifactFallback);
-            if (!list.isBlank()) {
-                return list;
-            }
-            return orPlaceholder(artifactFallback);
-        }
-        return orPlaceholder(artifactFallback);
+        return "_No unresolved gaps remain._";
     }
 
     private static String formatReadinessSection(FeaturePlanState plan) {

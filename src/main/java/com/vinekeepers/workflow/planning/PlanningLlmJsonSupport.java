@@ -132,7 +132,7 @@ public final class PlanningLlmJsonSupport {
                 : rawAssistant;
         String user =
                 "The following text was meant to be one JSON object but is invalid. "
-                        + "Return only corrected JSON (same keys/shape intent: upserts array, follow_up_questions array).\n\n"
+                        + "Return only corrected JSON (same keys/shape intent: repo_evidence_this_pass string, upserts array, top_unresolved_gap string, question_if_needed string, recommended_action string, explicit_assumptions array).\n\n"
                         + snippet;
         String out;
         try {
@@ -234,25 +234,6 @@ public final class PlanningLlmJsonSupport {
         return new UpsertApplyResult(attempted, applied, List.copyOf(rejected));
     }
 
-    public static List<String> readFollowUpQuestions(JsonNode root) {
-        List<String> followUps = new ArrayList<>();
-        if (root == null) {
-            return followUps;
-        }
-        JsonNode fq = root.path("follow_up_questions");
-        if (fq.isArray()) {
-            for (JsonNode n : fq) {
-                if (n.isTextual()) {
-                    String q = n.asText().trim();
-                    if (!q.isBlank()) {
-                        followUps.add(q);
-                    }
-                }
-            }
-        }
-        return followUps;
-    }
-
     public static String readSingleQuestionIfNeeded(JsonNode root) {
         if (root == null) {
             return "";
@@ -270,9 +251,6 @@ public final class PlanningLlmJsonSupport {
             return true;
         }
         if (!readSingleQuestionIfNeeded(root).isBlank()) {
-            return true;
-        }
-        if (!readFollowUpQuestions(root).isEmpty()) {
             return true;
         }
         if (!textField(root, "top_unresolved_gap").isBlank()) {

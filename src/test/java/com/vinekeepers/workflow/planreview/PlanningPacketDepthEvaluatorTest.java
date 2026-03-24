@@ -86,7 +86,7 @@ class PlanningPacketDepthEvaluatorTest {
     }
 
     @Test
-    void evaluate_v2Profile_thinOpenQuestionsFailWithoutRelax() {
+    void evaluate_v2Profile_noLongerFailsOnThinLegacyOpenQuestions() {
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
         String exploration = "word ".repeat(30);
         String narrative = "state ".repeat(20);
@@ -95,8 +95,7 @@ class PlanningPacketDepthEvaluatorTest {
         PlanningPacketDepthEvaluator.DepthResult r =
                 PlanningPacketDepthEvaluator.evaluate(
                         plan, reg.get("software_feature_planning_v2").orElseThrow(), false);
-        assertFalse(r.ok());
-        assertTrue(r.reason().contains("Open questions") || r.reason().contains("template"));
+        assertTrue(r.ok(), r.reason());
     }
 
     @Test
@@ -263,17 +262,11 @@ class PlanningPacketDepthEvaluatorTest {
         SectionState valSec = new SectionState("checks", SectionState.STATUS_DRAFT, valValues, List.of());
         ArtifactState valArt = new ArtifactState("validation_plan", Map.of("checks", valSec));
 
-        Map<String, Object> oqValues = new LinkedHashMap<>();
-        oqValues.put("open_questions", "None — ready to implement after confirming OAuth scope with security.");
-        SectionState oqSec = new SectionState("backlog", SectionState.STATUS_DRAFT, oqValues, List.of());
-        ArtifactState oqArt = new ArtifactState("open_questions_block", Map.of("backlog", oqSec));
-
         Map<String, ArtifactState> arts = new LinkedHashMap<>();
         arts.put("requirements_spec", reqArt);
         arts.put("request_exploration", exArt);
         arts.put("architecture_notes", archArt);
         arts.put("validation_plan", valArt);
-        arts.put("open_questions_block", oqArt);
         FeaturePlanState empty = new FeaturePlanState(
                 "ctx",
                 "f",
@@ -315,9 +308,7 @@ class PlanningPacketDepthEvaluatorTest {
     }
 
     /**
-     * Declarative readiness skips blank {@code open_questions} artifact; supplemental depth uses
-     * {@link com.vinekeepers.workflow.planreview.PlanningArtifactTexts#effectiveOpenQuestions} which can be a short
-     * substantive unresolved line — exercising supplemental open-question relax without failing declarative minWords.
+     * Declarative readiness reads unresolved questions from canonical governance state rather than a packet artifact.
      */
     private static FeaturePlanState v2PlanBlankArtifactOpenQuestionsWithEffectiveShortLine(
             String explorationBody, String currentState, String featureSummary) {
@@ -349,17 +340,11 @@ class PlanningPacketDepthEvaluatorTest {
         SectionState valSec = new SectionState("checks", SectionState.STATUS_DRAFT, valValues, List.of());
         ArtifactState valArt = new ArtifactState("validation_plan", Map.of("checks", valSec));
 
-        Map<String, Object> oqValues = new LinkedHashMap<>();
-        oqValues.put("open_questions", "");
-        SectionState oqSec = new SectionState("backlog", SectionState.STATUS_DRAFT, oqValues, List.of());
-        ArtifactState oqArt = new ArtifactState("open_questions_block", Map.of("backlog", oqSec));
-
         Map<String, ArtifactState> arts = new LinkedHashMap<>();
         arts.put("requirements_spec", reqArt);
         arts.put("request_exploration", exArt);
         arts.put("architecture_notes", archArt);
         arts.put("validation_plan", valArt);
-        arts.put("open_questions_block", oqArt);
         FeaturePlanState empty = new FeaturePlanState(
                 "ctx",
                 "f",

@@ -229,7 +229,7 @@ public final class PlanningPostDraftGovernor {
             return resultFor(
                     PlanningPostDraftAction.ASSUME_AND_CONTINUE,
                     "**Continuing**\n\nThe current draft is above the clarification confidence threshold, so I'm moving "
-                            + "forward instead of spending another cycle on low-value follow-up questions.",
+                            + "forward instead of spending another cycle on a low-value clarification pass.",
                     false);
         }
 
@@ -387,6 +387,14 @@ public final class PlanningPostDraftGovernor {
                 + dr.hashCode()
                 + "|g="
                 + (gap != null ? gap.hashCode() : 0);
+    }
+
+    public static String materialStateChangeFingerprint(Map<String, Object> signalState, FeaturePlanState plan) {
+        String repo = shortHash(getString(signalState, "planningRepoEvidenceJson"));
+        int asm = plan != null ? plan.getAssumptions().size() : 0;
+        int crit = critiqueBlockingCount(plan);
+        String draft = observabilityDraftFingerprint(plan);
+        return "repo=" + repo + "|asm=" + asm + "|crit=" + crit + "|draft=" + draft;
     }
 
     private static boolean detectMaterialChange(

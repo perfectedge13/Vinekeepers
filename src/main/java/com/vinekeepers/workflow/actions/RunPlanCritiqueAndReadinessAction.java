@@ -15,6 +15,7 @@ import com.vinekeepers.state.planning.PlanCritiqueFinding;
 import com.vinekeepers.state.planning.PlanCritiqueLifecycleStatus;
 import com.vinekeepers.state.planning.PlanCritiqueSnapshot;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
+import com.vinekeepers.state.planning.PlanningCanonicalDecision;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.discovery.StructuredDiscoverySupport;
 import com.vinekeepers.workflow.planreview.PlanCritiqueRubric;
@@ -22,6 +23,7 @@ import com.vinekeepers.workflow.planreview.PlanCritiqueSupport;
 import com.vinekeepers.workflow.planreview.PlanReadinessEvaluator;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
+import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
 import com.vinekeepers.workflow.planning.PlanningPostDraftGovernor;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 
@@ -145,11 +147,28 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                     plan.withPlanCritiqueSnapshot(snapshot)
                             .withPlanConfidence(confidenceForStore)
                             .withPlanningIntakeStage(PlanningIntakeStage.READINESS_GATE, null);
+            String materialFingerprint =
+                    PlanningPostDraftGovernor.materialStateChangeFingerprint(
+                            state != null ? new LinkedHashMap<>(state) : Map.of(),
+                            next);
+            boolean critiqueWantsClarification = wantsClarificationSweep(next, state, findings);
+            PlanningCanonicalDecision canonical =
+                    PlanningCanonicalDecisionSupport.normalizePostCritique(
+                            next,
+                            readinessStatus,
+                            critiqueWantsClarification,
+                            critiqueAutoReplansCapped,
+                            getString(state, "planningRepoEvidenceJson"),
+                            materialFingerprint,
+                            canonicalActionSummary(readinessStatus, critiqueAutoReplansCapped, critiqueWantsClarification));
+            next =
+                    next.withPlanningCanonicalDecision(canonical, materialFingerprint, "")
+                            .withPlanningIntakeStage(canonical.stage(), null);
             planStateStore.update(next);
 
             Map<String, Object> spread = new LinkedHashMap<>();
             spread.put("planCritiqueError", "");
-            spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.READINESS_GATE.name());
+            PlanningCanonicalDecisionSupport.projectToSpread(spread, canonical);
             if (PlanReadinessStatus.READY.equals(readinessStatus)
                     || PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus)
                     || PlanReadinessStatus.REVIEWABLE.equals(readinessStatus)) {
@@ -162,14 +181,8 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                 spread.put("planningCritiqueAutoRevisionCount", prevCtr);
             }
             putReadinessStatus(spread, readinessStatus);
-            boolean critiqueWantsClarification = wantsClarificationSweep(next, state, findings);
-            String critiqueNextAction =
-                    deriveCritiqueNextAction(readinessStatus, critiqueAutoReplansCapped, critiqueWantsClarification);
-            spread.put("planningCritiqueNextAction", critiqueNextAction);
-            spread.put("planningNextActionLabel", humanizeNextAction(critiqueNextAction));
-            spread.put("planningNextActionSummary", nextActionSummary(critiqueNextAction));
-            spread.put("planningCritiqueOpenClarificationSweep", critiqueWantsClarification ? "true" : "false");
-            spread.put("planningCritiqueAutoRevisionCapped", critiqueAutoReplansCapped ? "true" : "false");
+            spread.put("planningCanonicalActionLabel", canonicalActionLabel(canonical));
+            spread.put("planningCanonicalActionSummary", canonicalActionSummary(canonical));
             spread.put("planConfidenceLevel", confidenceForStore.getLevel() != null ? confidenceForStore.getLevel() : "");
             spread.put(
                     "planConfidenceScore",
@@ -193,9 +206,9 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
             } catch (JsonProcessingException ignored) {
                 m.put("planCritiqueFindingsJson", "[]");
             }
-            m.put("planningCritiqueOpenClarificationSweep", "false");
             putAssumptionIssueSummaries(m, plan);
-            mergePlanningThreadReview(m, event, state, bind);
+            m.put("planningThreadReviewBody", "");
+            m.put("planningThreadReviewBuildError", "");
             return m;
         }
     }
@@ -353,52 +366,54 @@ public final class RunPlanCritiqueAndReadinessAction implements com.vinekeepers.
                                 && !"INTAKE_DISCOVERY_INCOMPLETE".equalsIgnoreCase(f.getCode()));
     }
 
-    private static String deriveCritiqueNextAction(
+    private static String canonicalActionLabel(PlanningCanonicalDecision canonical) {
+        if (canonical == null) {
+            return "Blocked";
+        }
+        return switch (canonical.nextAction()) {
+            case ASK_ONE_QUESTION -> "Needs one more clarification";
+            case AUTONOMOUS_REDRAFT -> "Needs internal revision";
+            case POST_PACKET -> canonical.approvalAllowed() ? "Ready for approval" : "Ready for human review";
+            case BLOCK -> "Blocked";
+        };
+    }
+
+    private static String canonicalActionSummary(PlanningCanonicalDecision canonical) {
+        if (canonical == null) {
+            return "Blocked until a human revises the plan or resolves the remaining blockers.";
+        }
+        return switch (canonical.nextAction()) {
+            case ASK_ONE_QUESTION ->
+                    "Needs one more clarification before the packet can move forward.";
+            case AUTONOMOUS_REDRAFT ->
+                    "Needs another internal revision pass before human review.";
+            case POST_PACKET ->
+                    canonical.approvalAllowed()
+                            ? "Ready for approval once you review the checklist below."
+                            : "Ready for human review, but not yet ready for approval.";
+            case BLOCK ->
+                    "Blocked until a human revises the plan or resolves the remaining blockers.";
+        };
+    }
+
+    private static String canonicalActionSummary(
             String readinessStatus,
             boolean critiqueAutoReplansCapped,
             boolean critiqueWantsClarification) {
         if (critiqueWantsClarification) {
-            return "ASK_ONE_QUESTION";
+            return "Needs one more clarification before the packet can move forward.";
         }
-        if (PlanReadinessStatus.BLOCKED.equals(readinessStatus) || critiqueAutoReplansCapped) {
-            return "BLOCK";
-        }
-        if (PlanReadinessStatus.NOT_READY.equals(readinessStatus)) {
-            return "REVISE_INTERNAL";
+        if (PlanReadinessStatus.NOT_READY.equals(readinessStatus) && !critiqueAutoReplansCapped) {
+            return "Needs another internal revision pass before human review.";
         }
         if (PlanReadinessStatus.REVIEWABLE.equals(readinessStatus)) {
-            return "REVIEWABLE";
+            return "Ready for human review, but not yet ready for approval.";
         }
         if (PlanReadinessStatus.CONDITIONALLY_READY.equals(readinessStatus)
                 || PlanReadinessStatus.READY.equals(readinessStatus)) {
-            return "APPROVAL";
+            return "Ready for approval once you review the checklist below.";
         }
-        return "BLOCK";
-    }
-
-    private static String humanizeNextAction(String nextAction) {
-        return switch (nextAction) {
-            case "ASK_ONE_QUESTION" -> "Needs one more clarification";
-            case "REVISE_INTERNAL" -> "Needs internal revision";
-            case "REVIEWABLE" -> "Ready for human review";
-            case "APPROVAL" -> "Ready for approval";
-            default -> "Blocked";
-        };
-    }
-
-    private static String nextActionSummary(String nextAction) {
-        return switch (nextAction) {
-            case "ASK_ONE_QUESTION" ->
-                    "Needs one more clarification before the packet can move forward.";
-            case "REVISE_INTERNAL" ->
-                    "Needs another internal revision pass before human review.";
-            case "REVIEWABLE" ->
-                    "Ready for human review, but not yet ready for approval.";
-            case "APPROVAL" ->
-                    "Ready for approval once you review the checklist below.";
-            default ->
-                    "Blocked until a human revises the plan or resolves the remaining blockers.";
-        };
+        return "Blocked until a human revises the plan or resolves the remaining blockers.";
     }
 
     private static int parseNonNegativeInt(String raw, int dflt) {

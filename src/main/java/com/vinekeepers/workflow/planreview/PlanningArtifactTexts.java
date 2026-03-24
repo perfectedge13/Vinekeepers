@@ -10,10 +10,8 @@ import com.vinekeepers.state.planning.PlanRiskDecisionStatus;
 
 import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -21,8 +19,6 @@ import java.util.stream.Collectors;
  * Reads canonical artifact section values (same paths as proposal auto-apply / thread review body).
  */
 public final class PlanningArtifactTexts {
-
-    public static final String NO_OPEN_QUESTIONS_READY = "None — ready to implement.";
 
     private PlanningArtifactTexts() {}
 
@@ -149,25 +145,11 @@ public final class PlanningArtifactTexts {
         return i.getDetail() != null ? i.getDetail().trim() : "";
     }
 
-    public static String effectiveOpenQuestions(FeaturePlanState plan) {
+    public static String unresolvedQuestionSummary(FeaturePlanState plan) {
         if (plan == null) {
             return "";
         }
         List<String> lines = substantiveUnresolvedQuestionLines(plan);
-        if (!lines.isEmpty()) {
-            return lines.stream().collect(Collectors.joining("\n"));
-        }
-        return NO_OPEN_QUESTIONS_READY;
-    }
-
-    public static boolean isReadyToImplementOpenQuestions(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        String normalized = value.trim()
-                .replace('—', '-')
-                .replaceAll("\\s+", " ")
-                .toLowerCase(Locale.ROOT);
-        return "none - ready to implement.".equals(normalized) || "none - ready to implement".equals(normalized);
+        return lines.stream().collect(Collectors.joining("\n"));
     }
 }

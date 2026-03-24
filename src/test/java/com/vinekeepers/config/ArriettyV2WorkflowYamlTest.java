@@ -141,21 +141,20 @@ class ArriettyV2WorkflowYamlTest {
         for (Map<String, Object> rule : rs) {
             @SuppressWarnings("unchecked")
             Map<String, Object> when = (Map<String, Object>) rule.get("when");
-            assertTrue(when != null && when.containsKey("equals"), "post-assess rules must use equals (planningPostDraftAction only)");
+            assertTrue(when != null && when.containsKey("equals"), "post-assess rules must use equals on canonical decision state");
             @SuppressWarnings("unchecked")
             Map<String, Object> eq = (Map<String, Object>) when.get("equals");
-            assertEquals("planningPostDraftAction", String.valueOf(eq.get("key")));
+            assertEquals("planningCanonicalNextAction", String.valueOf(eq.get("key")));
             actions.add(String.valueOf(eq.get("value")));
         }
         assertEquals(
                 Set.of(
                         "ASK_ONE_QUESTION",
                         "POST_PACKET",
-                        "ASSUME_AND_CONTINUE",
                         "AUTONOMOUS_REDRAFT",
                         "BLOCK"),
                 actions,
-                "post-assess must map each PlanningPostDraftAction explicitly (no legacy boolean fallthrough)");
+                "post-assess must map each canonical action explicitly (no legacy boolean fallthrough)");
     }
 
     @Test

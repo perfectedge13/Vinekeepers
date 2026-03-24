@@ -137,9 +137,11 @@ nav:
               - output-format: cursor/skills/nova-spec/output-format.md
               - sub-skills:
                   - scan: cursor/skills/nova-spec/sub-skills/scan.md
+                  - scan-output: cursor/skills/nova-spec/sub-skills/scan-output.md
                   - infer-domains: cursor/skills/nova-spec/sub-skills/infer-domains.md
                   - categorize-features-to-domains: cursor/skills/nova-spec/sub-skills/categorize-features-to-domains.md
                   - categorize-features-to-domains-output: cursor/skills/nova-spec/sub-skills/categorize-features-to-domains-output.md
+                  - propose-registry-layout: cursor/skills/nova-spec/sub-skills/propose-registry-layout.md
                   - update-specs-index: cursor/skills/nova-spec/sub-skills/update-specs-index.md
                   - update-registry: cursor/skills/nova-spec/sub-skills/update-registry.md
                   - sync-mkdoc: cursor/skills/nova-spec/sub-skills/sync-mkdoc.md

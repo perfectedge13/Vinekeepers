@@ -181,16 +181,16 @@ public final class PlanCritiqueSupport {
                             + current.length() + " chars; need at least " + MIN_CURRENT_STATE_CHARS + ").",
                     "requirements_spec.narrative"));
         }
-        String oq = PlanningArtifactTexts.effectiveOpenQuestions(plan);
-        if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(oq) && oq.length() < MIN_OPEN_QUESTIONS_CHARS) {
+        String oq = PlanningArtifactTexts.unresolvedQuestionSummary(plan);
+        if (!oq.isBlank() && oq.length() < MIN_OPEN_QUESTIONS_CHARS) {
             out.add(new PlanCritiqueFinding(
                     "crit-v2-oq-" + seq.getAndIncrement(),
                     "COVERAGE",
                     "MUST_FIX",
                     "INSUFFICIENT_OPEN_QUESTIONS",
-                    "Open questions block is missing or too thin ("
+                    "Canonical unresolved-gap summary is too thin ("
                             + oq.length() + " chars; need at least " + MIN_OPEN_QUESTIONS_CHARS + ").",
-                    "open_questions_block.backlog"));
+                    "plan.unresolvedQuestions"));
         }
         var art = plan.getArtifacts().get("decision_log");
         var sec = art != null ? art.getSectionsById().get("decisions") : null;
@@ -261,13 +261,6 @@ public final class PlanCritiqueSupport {
                 seq,
                 "requirements_spec.narrative.acceptance_criteria",
                 PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
-        checkPlaceholderField(
-                profile,
-                plan,
-                out,
-                seq,
-                "open_questions_block.backlog.open_questions",
-                PlanningArtifactTexts.effectiveOpenQuestions(plan));
     }
 
     private static void checkPlaceholderField(

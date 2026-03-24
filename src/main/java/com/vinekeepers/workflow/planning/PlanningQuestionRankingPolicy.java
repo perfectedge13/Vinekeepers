@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Ranks LLM/critique follow-up questions, applies safe defaults as assumptions instead of asking,
+ * Ranks LLM/critique clarification candidates, applies safe defaults as assumptions instead of asking,
  * and prepares at most one clarification round per cycle ({@code maxQuestions} is typically {@code 1} so only the first
  * qualifying concrete ask is considered). Open questions default to plain-text capture;
  * structured buttons are used only when the work profile enables bounded UI and the question has an explicit

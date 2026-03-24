@@ -137,9 +137,9 @@ class IntakeBlockingClarificationTest {
     }
 
     @Test
-    void openQuestionsFallbackDoesNotExposeInternalFieldPath() throws JsonProcessingException {
+    void requiredFieldPromptDoesNotExposeInternalFieldPath() throws JsonProcessingException {
         String json =
-                "[{\"gapId\":\"oq\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"open_questions_block\",\"sectionId\":\"backlog\",\"fieldId\":\"open_questions\",\"reason\":\"Missing required field open_questions_block.backlog.open_questions\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"\"}]";
+                "[{\"gapId\":\"req\",\"kind\":\"REQUIRED_FIELD\",\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\",\"fieldId\":\"feature_summary\",\"reason\":\"Missing required field requirements_spec.narrative.feature_summary\",\"severity\":\"HIGH\",\"status\":\"OPEN\",\"source\":\"profile\",\"userFacingDetail\":\"\"}]";
         Map<String, Object> spread =
                 (Map<String, Object>)
                         StructuredDiscoverySupport.buildIntakeBlockingClarificationSpread(json);
@@ -147,6 +147,6 @@ class IntakeBlockingClarificationTest {
         assertTrue(prompt.contains("Before we can finalize the plan"));
         assertTrue(prompt.contains("Reply in plain text in this thread."));
         assertFalse(prompt.contains("Missing required field"));
-        assertFalse(prompt.contains("open_questions_block.backlog.open_questions"));
+        assertFalse(prompt.contains("requirements_spec.narrative.feature_summary"));
     }
 }

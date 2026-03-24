@@ -20,7 +20,6 @@ import java.util.Map;
 import static com.vinekeepers.workflow.planning.PlanningGapEvaluator.PLANNING_CLARIFICATION_CHANNEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.vinekeepers.profile.WorkProfileDefinition;
@@ -192,53 +191,8 @@ class PlanningCyclePipelineCanonicalClarificationTest {
 
     @Test
     void semanticClarificationAllowed_falseWithoutPassSignals() {
-        FeaturePlanState plan = bareFeaturePlan();
+        FeaturePlanState plan = bareFeaturePlanWithRequest("Lets plug different models into different workflow steps.");
         assertFalse(PlanningCyclePipeline.semanticClarificationAllowed(plan, Map.of(), false));
-    }
-
-    @Test
-    void canonicalResolveClarificationRoundRequiresPostDraftSemanticsToOpenGap() {
-        CoordinatorClarificationGapRule rule =
-                new CoordinatorClarificationGapRule(
-                        "model_override_granularity",
-                        true,
-                        "Which workflow steps should support model overrides first?",
-                        List.of("override", "step"),
-                        List.of("model", "step"),
-                        List.of("named steps", "per step", "step types", "both"));
-        CoordinatorClarificationSettings coord =
-                new CoordinatorClarificationSettings(CoordinatorClarificationMode.CANONICAL_V1, List.of(rule));
-        WorkProfileDefinition profile =
-                new WorkProfileDefinition(
-                        "p",
-                        "",
-                        List.of(),
-                        List.of(),
-                        false,
-                        false,
-                        List.of(),
-                        coord);
-        FeaturePlanState plan = bareFeaturePlan();
-        FeaturePlanStateStore store = new FeaturePlanStateStore();
-        store.update(plan);
-        WorkProfileRegistry registry = new WorkProfileRegistry();
-        registry.register(profile);
-        PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, registry);
-        List<String> followUps =
-                List.of("Which workflow steps should support model overrides first, and what default model/provider must remain the fallback?");
-
-        Object preDraft =
-                invokeResolveClarificationRound(
-                        pipeline, "c", plan, Map.of(), profile, followUps, false);
-        assertFalse(invokeCanonicalClarificationPending(preDraft));
-        assertTrue(invokeLlmUserInputSuggested(preDraft));
-        assertNotNull(invokeFallbackQuestion(preDraft));
-        assertFalse(invokeFallbackQuestion(preDraft).isBlank());
-
-        Object postDraft =
-                invokeResolveClarificationRound(
-                        pipeline, "c", plan, Map.of(), profile, followUps, true);
-        assertTrue(invokeCanonicalClarificationPending(postDraft));
     }
 
     @Test
@@ -341,23 +295,6 @@ class PlanningCyclePipelineCanonicalClarificationTest {
     }
 
     @Test
-    void synthFallbackPrefersFreshRankedQuestionOverLeadingGenericHint() {
-        RankedClarification ranked =
-                invokeRankSynthFallbackQuestion(
-                        bareFeaturePlanV2(),
-                        UnresolvedItemLedger.empty(),
-                        WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"))
-                                .get("software_feature_planning_v2")
-                                .orElseThrow(),
-                        List.of(
-                                "Can you add more detail?",
-                                "Which workflow step should keep the default model when no override is configured?"));
-        assertTrue(ranked.userInputRequired());
-        assertFalse(ranked.questionText().isBlank());
-        assertFalse("Can you add more detail?".equalsIgnoreCase(ranked.questionText()));
-    }
-
-    @Test
     void applyAskOneQuestionUserVisibleCopy_forcesQuestionOnlyOrchestratorAndProgressLines() {
         FeaturePlanState plan = bareFeaturePlan();
         FeaturePlanStateStore store = new FeaturePlanStateStore();
@@ -365,7 +302,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         WorkProfileRegistry registry = new WorkProfileRegistry();
         PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, registry);
         Map<String, Object> spread = new LinkedHashMap<>();
-        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.ASK_ONE_QUESTION.name());
+        spread.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, "ASK_ONE_QUESTION");
         spread.put("planningClarificationQuestionText", "Which concrete package should own the new type?");
         spread.put("planningOrchestratorRoundSummary", "**What I'm tracking:** should be replaced");
         spread.put("planningCycleProgressSummary", "old progress");
@@ -384,7 +321,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         store.update(plan);
         PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, new WorkProfileRegistry());
         Map<String, Object> spread = new LinkedHashMap<>();
-        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.ASK_ONE_QUESTION.name());
+        spread.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, "ASK_ONE_QUESTION");
         spread.put("planningClarificationQuestionText", "Which API version?");
         spread.put("planningClarificationStuck", "true");
         spread.put("planningClarificationStuckHint", "This clarification thread has been waiting.");
@@ -401,7 +338,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         store.update(plan);
         PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, new WorkProfileRegistry());
         Map<String, Object> spread = new LinkedHashMap<>();
-        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.POST_PACKET.name());
+        spread.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, "POST_PACKET");
         spread.put("planningOrchestratorRoundSummary", "keep me");
         invokeApplyAskOneQuestionUserVisibleCopy(pipeline, "c", spread, plan);
         assertEquals("keep me", spread.get("planningOrchestratorRoundSummary"));
@@ -414,7 +351,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         store.update(plan);
         PlanningCyclePipeline pipeline = new PlanningCyclePipeline(null, store, new WorkProfileRegistry());
         Map<String, Object> spread = new LinkedHashMap<>();
-        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, PlanningPostDraftAction.ASK_ONE_QUESTION.name());
+        spread.put(PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY, "ASK_ONE_QUESTION");
         spread.put("planningClarificationQuestionText", "");
         invokeApplyAskOneQuestionUserVisibleCopy(pipeline, "c", spread, plan);
         String summary = String.valueOf(spread.get("planningOrchestratorRoundSummary"));
@@ -434,14 +371,11 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         null,
                         Map.of(
                                 "contextId", "c",
-                                "planningJustMergedClarification", "true",
-                                PlanningCyclePipeline.PARTIAL_AGGREGATED_FOLLOWUPS_KEY,
-                                        "[\"Which workflow step still needs a model override?\"]"),
+                                "planningJustMergedClarification", "true"),
                         Map.of());
         assertTrue("true".equals(spread.get("planningSelectiveRerunActive")));
         assertTrue(String.valueOf(spread.get("planningSelectiveRerunNote")).contains("skipping a full re-scan"));
-        assertTrue(String.valueOf(spread.get(PlanningCyclePipeline.PARTIAL_AGGREGATED_FOLLOWUPS_KEY))
-                .contains("model override"));
+        assertFalse(spread.containsKey("planningPartialAggregatedFollowUpsJson"));
     }
 
     private static void invokeApplyAskOneQuestionUserVisibleCopy(
@@ -513,93 +447,11 @@ class PlanningCyclePipelineCanonicalClarificationTest {
         }
     }
 
-    private static RankedClarification invokeRankSynthFallbackQuestion(
-            FeaturePlanState plan,
-            UnresolvedItemLedger ledger,
-            WorkProfileDefinition profile,
-            List<String> aggregatedFollowUps) {
-        try {
-            var m =
-                    PlanningCyclePipeline.class.getDeclaredMethod(
-                            "rankSynthFallbackQuestion",
-                            FeaturePlanState.class,
-                            UnresolvedItemLedger.class,
-                            WorkProfileDefinition.class,
-                            List.class);
-            m.setAccessible(true);
-            return (RankedClarification) m.invoke(null, plan, ledger, profile, aggregatedFollowUps);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static Object invokeResolveClarificationRound(
-            PlanningCyclePipeline pipeline,
-            String contextId,
-            FeaturePlanState plan,
-            Map<String, Object> state,
-            WorkProfileDefinition profile,
-            List<String> aggregatedFollowUps,
-            boolean draftingCompletedThisInvocation) {
-        try {
-            var m =
-                    PlanningCyclePipeline.class.getDeclaredMethod(
-                            "resolveClarificationRound",
-                            String.class,
-                            FeaturePlanState.class,
-                            Map.class,
-                            WorkProfileDefinition.class,
-                            List.class,
-                            boolean.class);
-            m.setAccessible(true);
-            return m.invoke(
-                    pipeline,
-                    contextId,
-                    plan,
-                    state,
-                    profile,
-                    aggregatedFollowUps,
-                    draftingCompletedThisInvocation);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static boolean invokeCanonicalClarificationPending(Object outcome) {
-        try {
-            var m = outcome.getClass().getDeclaredMethod("canonicalClarificationPending");
-            m.setAccessible(true);
-            return (boolean) m.invoke(outcome);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static boolean invokeLlmUserInputSuggested(Object outcome) {
-        try {
-            var m = outcome.getClass().getDeclaredMethod("llmUserInputSuggested");
-            m.setAccessible(true);
-            return (boolean) m.invoke(outcome);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static String invokeFallbackQuestion(Object outcome) {
-        try {
-            var rankedMethod = outcome.getClass().getDeclaredMethod("rankedLlm");
-            rankedMethod.setAccessible(true);
-            Object ranked = rankedMethod.invoke(outcome);
-            var questionMethod = ranked.getClass().getDeclaredMethod("questionText");
-            questionMethod.setAccessible(true);
-            Object question = questionMethod.invoke(ranked);
-            return question != null ? question.toString() : "";
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private static FeaturePlanState bareFeaturePlan() {
+        return bareFeaturePlanWithRequest("Short request");
+    }
+
+    private static FeaturePlanState bareFeaturePlanWithRequest(String request) {
         return new FeaturePlanState(
                 "c",
                 "f",
@@ -608,7 +460,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                 null,
                 null,
                 "t",
-                "Short request",
+                request,
                 "PLANNING",
                 null,
                 null,

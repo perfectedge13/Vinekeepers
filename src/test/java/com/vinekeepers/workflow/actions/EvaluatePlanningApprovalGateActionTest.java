@@ -73,7 +73,7 @@ class EvaluatePlanningApprovalGateActionTest {
         state.put("contextId", "c3");
         state.put("planningPacketPostedVersion", "1");
         state.put("planningPacketDepthOk", "true");
-        state.put("planningUserInputRequired", "true");
+        state.put("planningCanonicalInteractionState", "WAITING_FOR_TEXT_REPLY");
         @SuppressWarnings("unchecked")
         Map<String, Object> spread =
                 (Map<String, Object>) new EvaluatePlanningApprovalGateAction(store)

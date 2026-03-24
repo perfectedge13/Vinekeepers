@@ -14,9 +14,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Derives open coordinator clarification gaps from canonical plan text and profile rules. LLM follow-up strings only
- * trigger gaps when they match configured {@code hintDetectAllOf} patterns — they are not themselves the source of
- * truth for whether a gap remains.
+ * Derives open coordinator clarification gaps from canonical plan text and profile rules.
  */
 public final class CoordinatorClarificationGapEvaluator {
 
@@ -33,8 +31,8 @@ public final class CoordinatorClarificationGapEvaluator {
      * rules fire.
      */
     public static List<OpenGap> evaluateOpenGaps(
-            FeaturePlanState plan, CoordinatorClarificationSettings settings, List<String> llmHints) {
-        return evaluateOpenGaps(plan, settings, llmHints, true);
+            FeaturePlanState plan, CoordinatorClarificationSettings settings) {
+        return evaluateOpenGaps(plan, settings, true);
     }
 
     /**
@@ -44,19 +42,17 @@ public final class CoordinatorClarificationGapEvaluator {
     public static List<OpenGap> evaluateOpenGaps(
             FeaturePlanState plan,
             CoordinatorClarificationSettings settings,
-            List<String> llmHints,
             boolean semanticGapsAllowed) {
         if (plan == null || settings == null || !settings.isCanonicalV1() || !semanticGapsAllowed) {
             return List.of();
         }
         String canonical = buildCanonicalResolutionText(plan);
-        List<String> hints = llmHints != null ? llmHints : List.of();
         List<OpenGap> out = new ArrayList<>();
         for (CoordinatorClarificationGapRule rule : settings.getGaps()) {
             if (isResolved(canonical, rule)) {
                 continue;
             }
-            if (!isTriggered(canonical, hints, rule)) {
+            if (!canonicalOpenMatches(canonical, rule)) {
                 continue;
             }
             String q = rule.getQuestionTemplate();
@@ -104,12 +100,6 @@ public final class CoordinatorClarificationGapEvaluator {
         return false;
     }
 
-    static boolean isTriggered(String canonicalLower, List<String> hints, CoordinatorClarificationGapRule rule) {
-        boolean hintOk = hintMatches(hints, rule);
-        boolean canonOk = canonicalOpenMatches(canonicalLower, rule);
-        return hintOk || canonOk;
-    }
-
     /**
      * Normalizes a free-text clarification reply into a canonical resolution marker for the asked gap when possible.
      * This gives merge/reconciliation a deterministic path instead of relying on the raw answer wording to happen to
@@ -146,33 +136,6 @@ public final class CoordinatorClarificationGapEvaluator {
             case GAP_MODEL_OVERRIDE_GRANULARITY -> inferModelOverrideGranularityResolution(normalizedAnswer);
             default -> "";
         };
-    }
-
-    private static boolean hintMatches(List<String> hints, CoordinatorClarificationGapRule rule) {
-        List<String> allOf = rule.getHintDetectAllOf();
-        if (allOf.isEmpty()) {
-            return false;
-        }
-        for (String hintLine : hints) {
-            if (hintLine == null || hintLine.isBlank()) {
-                continue;
-            }
-            String h = hintLine.toLowerCase(Locale.ROOT);
-            boolean ok = true;
-            for (String part : allOf) {
-                if (part == null || part.isBlank()) {
-                    continue;
-                }
-                if (!h.contains(part.toLowerCase(Locale.ROOT).trim())) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (ok) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean canonicalOpenMatches(String canonicalLower, CoordinatorClarificationGapRule rule) {

@@ -16,14 +16,12 @@ import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
- * Optional OpenAI-backed pass: merges structured upserts into plan artifacts and records follow-up questions for
- * discovery. Safe no-op when API is unavailable; failures are visible via spread keys (never a silent hang).
+ * Optional OpenAI-backed pass: merges structured upserts into plan artifacts and records at most one clarification
+ * question for discovery. Safe no-op when API is unavailable; failures are visible via spread keys (never a silent hang).
  */
 public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.workflow.WorkflowAction {
 
@@ -46,25 +44,23 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                 }
               ],
               "top_unresolved_gap": "string or empty",
-              "recommended_action": "ASK_ONE_QUESTION | ASSUME_AND_CONTINUE | POST_PACKET | BLOCK",
+              "recommended_action": "ASK_ONE_QUESTION | AUTONOMOUS_REDRAFT | POST_PACKET | BLOCK",
               "question_if_needed": "single string — empty unless recommended_action is ASK_ONE_QUESTION",
               "explicit_assumptions": ["short strings"]
             }
-            If the model still emits a legacy follow_up_questions array, it is ignored except for backward compatibility.
-            Always leave follow_up_questions empty when it is present.
             Always put any single clarification in question_if_needed only.
             Use only artifact/section ids that exist in the profile snapshot. Prefer enriching current_state_summary,
-            feature_summary, scope_summary, user_stories, acceptance_criteria, open_questions. Keep values concise.
+            feature_summary, scope_summary, user_stories, and acceptance_criteria. Keep values concise.
             Return exactly one JSON object as the full response body. Do not add prefatory text, explanations, or trailing notes.
-            If you are unsure, prefer {"upserts":[],"follow_up_questions":[],"explicit_assumptions":[],"question_if_needed":"",
-            "top_unresolved_gap":"","recommended_action":"POST_PACKET","repo_evidence_this_pass":"not_inspected"}
+            If you are unsure, prefer {"upserts":[],"explicit_assumptions":[],"question_if_needed":"",
+            "top_unresolved_gap":"","recommended_action":"AUTONOMOUS_REDRAFT","repo_evidence_this_pass":"not_inspected"}
             over malformed JSON or placeholder keys.
             Wrong: {"artifactId":"requirements_spec","sectionId":"feature_summary","data":{"current_state_summary":"x"}}
             Right: {"artifactId":"requirements_spec","sectionId":"narrative","data":{"feature_summary":"x","current_state_summary":"y"}}
             Separate observed repo facts this pass from inference and unknowns; do not name paths/packages unless observed.
             At most one clarification question per response, only in question_if_needed.
-            If nothing should change, return {"upserts":[],"follow_up_questions":[],"explicit_assumptions":[],
-            "question_if_needed":"","top_unresolved_gap":"","recommended_action":"POST_PACKET","repo_evidence_this_pass":"not_inspected"}.
+            If nothing should change, return {"upserts":[],"explicit_assumptions":[],
+            "question_if_needed":"","top_unresolved_gap":"","recommended_action":"AUTONOMOUS_REDRAFT","repo_evidence_this_pass":"not_inspected"}.
             """;
 
     private final OpenAiChatClient openAiChatClient;
@@ -86,7 +82,6 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
         spread.put("planningLlmOk", "false");
         spread.put("planningLlmError", "");
         spread.put("planningLlmSkipReason", "");
-        spread.put("planningFollowUpQuestionsJson", "[]");
         spread.put("planningLlmUpsertCount", "0");
         spread.put("planningSynthesisParseOk", "false");
         spread.put("planningSynthesisRepairAttempted", "false");
@@ -133,7 +128,7 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                     OpenAiCallContext.planning(
                             event,
                             state,
-                            "Synthesizing the draft plan and follow-up questions (asking ChatGPT).");
+                            "Synthesizing the draft plan and single clarification beat (asking ChatGPT).");
             raw = openAiChatClient.complete(SYSTEM, userPayload, model, timeoutMs, callCtx);
         } catch (Exception e) {
             spread.put("planningSynthesisFailureCategory", PlanningFailureCategory.SYNTHESIS_TRANSPORT_ERROR.name());
@@ -189,18 +184,9 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
             spread.put("planningLlmOk", "false");
             spread.put("planningLlmError", PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
             spread.put("planningLlmUpsertCount", "0");
-            spread.put("planningFollowUpQuestionsJson", "[]");
             return;
         }
-        List<String> followUps = new ArrayList<>(PlanningLlmJsonSupport.readFollowUpQuestions(root));
-        String qNeeded = PlanningLlmJsonSupport.readSingleQuestionIfNeeded(root);
-        if (followUps.isEmpty() && !qNeeded.isBlank()) {
-            followUps.add(qNeeded);
-        } else if (followUps.size() > 1) {
-            followUps = new ArrayList<>(followUps.subList(0, 1));
-        }
         spread.put("planningLlmUpsertCount", Integer.toString(upsertResult.applied()));
-        spread.put("planningFollowUpQuestionsJson", JSON.writeValueAsString(followUps));
         spread.put("planningLlmOk", "true");
         spread.put("planningLlmError", "");
         spread.put(
@@ -221,12 +207,11 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                 "section_id_examples",
                 Map.of(
                         "requirements_spec", "narrative",
-                        "open_questions_block", "backlog",
                         "overall_plan", "outline",
                         "request_exploration", "analysis"));
         snap.put(
                 "field_id_note",
-                "feature_summary, current_state_summary, scope_summary, and open_questions are field ids inside data, not sectionId values.");
+                "feature_summary, current_state_summary, and scope_summary are field ids inside data, not sectionId values.");
         Map<String, Object> artifacts = new LinkedHashMap<>();
         artifacts.put(
                 "request_exploration",
@@ -253,13 +238,6 @@ public final class RunLlmPlanningSynthesisAction implements com.vinekeepers.work
                                 "acceptance_criteria",
                                 PlanningArtifactTexts.artifactField(
                                         plan, "requirements_spec", "narrative", "acceptance_criteria"))));
-        artifacts.put(
-                "open_questions_block",
-                Map.of(
-                        "backlog",
-                        sectionData(
-                                "open_questions",
-                                PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"))));
         artifacts.put(
                 "overall_plan",
                 Map.of(

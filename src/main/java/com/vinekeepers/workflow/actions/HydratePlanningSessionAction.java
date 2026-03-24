@@ -9,6 +9,7 @@ import com.vinekeepers.state.planning.FeatureRoomStateStore;
 import com.vinekeepers.state.planning.PlanReadinessStatus;
 import com.vinekeepers.state.planning.PlanningIntakeBindingResolver;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
+import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
 import java.util.LinkedHashMap;
@@ -104,6 +105,9 @@ public final class HydratePlanningSessionAction implements com.vinekeepers.workf
                 codeChange = plan.getInitialRequest();
             }
             out.put("canonicalPlanningIntakeStage", plan.getPlanningIntakeStage().name());
+            if (plan.getPlanningCanonicalDecision() != null) {
+                PlanningCanonicalDecisionSupport.projectToSpread(out, plan.getPlanningCanonicalDecision());
+            }
             if (plan.getPacketPostedAt() != null) {
                 out.put("planningPacketPosted", "true");
                 int v = plan.getPacketPostedChunkCount() > 0 ? plan.getPacketPostedChunkCount() : 1;

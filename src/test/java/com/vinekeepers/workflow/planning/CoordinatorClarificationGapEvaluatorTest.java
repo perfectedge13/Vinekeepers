@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CoordinatorClarificationGapEvaluatorTest {
 
     @Test
-    void openWhenHintMatchesAndNotResolved() {
+    void openWhenCanonicalSignalMatchesAndNotResolved() {
         CoordinatorClarificationSettings settings =
                 new CoordinatorClarificationSettings(
                         CoordinatorClarificationMode.CANONICAL_V1,
@@ -25,14 +25,13 @@ class CoordinatorClarificationGapEvaluatorTest {
                                 new CoordinatorClarificationGapRule(
                                         "g1",
                                         false,
-                                        "Question about config vs runtime?",
-                                        List.of("config", "runtime"),
+                                        "Should this stay config-driven or move to runtime?",
                                         List.of(),
+                                        List.of("config", "runtime"),
                                         List.of("config-driven", "config only"))));
-        FeaturePlanState plan = minimalPlan("ctx", "do something");
+        FeaturePlanState plan = minimalPlan("ctx", "Need to decide whether this should stay in config or move to runtime.");
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                        plan, settings, List.of("Should we change config or runtime?"));
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         assertEquals(1, open.size());
         assertEquals("g1", open.get(0).gapId());
     }
@@ -47,15 +46,14 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         "g1",
                                         false,
                                         "Question?",
-                                        List.of("config", "runtime"),
                                         List.of(),
+                                        List.of("config", "runtime"),
                                         List.of("config-driven"))));
         FeaturePlanState plan =
                 minimalPlan("ctx", "x")
                         .withAppendedAssumption(PlanAssumption.fromLegacyText("a1", "We go config-driven for this feature.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                        plan, settings, List.of("config versus runtime?"));
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         assertTrue(open.isEmpty());
     }
 
@@ -69,18 +67,15 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         "g1",
                                         false,
                                         "Ask?",
-                                        List.of("config", "runtime"),
                                         List.of(),
+                                        List.of("config", "runtime"),
                                         List.of("decision (user"))));
         FeaturePlanState plan =
                 minimalPlan("ctx", "req")
                         .withAppendedAssumption(
                                 PlanAssumption.fromLegacyText("a1", "Decision (user choice A): config only", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                        plan,
-                        settings,
-                        List.of("Paraphrase: runtime vs config tradeoff?"));
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         assertTrue(open.isEmpty());
     }
 
@@ -94,8 +89,8 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         "config_vs_runtime_scope",
                                         false,
                                         "Config or runtime?",
-                                        List.of("config", "runtime"),
                                         List.of(),
+                                        List.of("config", "runtime"),
                                         List.of(
                                                 "config-driven",
                                                 "static",
@@ -107,8 +102,7 @@ class CoordinatorClarificationGapEvaluatorTest {
                         .withAppendedAssumption(
                                 PlanAssumption.fromLegacyText("a1", "Static is fine for this piece.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                        plan, settings, List.of("config versus runtime?"));
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         assertTrue(open.isEmpty());
     }
 
@@ -122,13 +116,12 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         "g_meta",
                                         false,
                                         "Please list any open questions you still have about this plan.",
-                                        List.of("scope"),
                                         List.of(),
+                                        List.of("scope"),
                                         List.of())));
         FeaturePlanState plan = minimalPlan("ctx", "unclear scope");
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                        plan, settings, List.of("We should clarify product scope"));
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         assertTrue(open.isEmpty());
     }
 
@@ -142,13 +135,12 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         "g1",
                                         false,
                                         "Question about config vs runtime?",
-                                        List.of("config", "runtime"),
                                         List.of(),
+                                        List.of("config", "runtime"),
                                         List.of("config-driven", "config only"))));
         FeaturePlanState plan = minimalPlan("ctx", "do something");
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                        plan, settings, List.of("Should we change config or runtime?"), false);
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings, false);
         assertTrue(open.isEmpty());
     }
 
@@ -162,8 +154,8 @@ class CoordinatorClarificationGapEvaluatorTest {
                                         "wide",
                                         false,
                                         "Wide?",
-                                        List.of("config", "runtime"),
                                         List.of(),
+                                        List.of("config", "runtime"),
                                         List.of("both")),
                                 new CoordinatorClarificationGapRule(
                                         "narrow",
@@ -176,7 +168,7 @@ class CoordinatorClarificationGapEvaluatorTest {
                 minimalPlan("ctx", "x")
                         .withAppendedAssumption(PlanAssumption.fromLegacyText("a1", "User chose both config and runtime.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings, List.of());
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         assertEquals(1, open.size());
         assertEquals("narrow", open.get(0).gapId());
     }
@@ -197,7 +189,7 @@ class CoordinatorClarificationGapEvaluatorTest {
         FeaturePlanState openPlan =
                 minimalPlan("ctx", "Lets plug different models into different workflow steps.");
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(openPlan, settings, List.of());
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(openPlan, settings);
         assertEquals(1, open.size());
         assertEquals("model_override_granularity", open.get(0).gapId());
 
@@ -205,7 +197,7 @@ class CoordinatorClarificationGapEvaluatorTest {
                 openPlan.withAppendedAssumption(
                         PlanAssumption.fromLegacyText("a1", "Decision (user): use named steps for overrides.", Instant.now()));
         List<CoordinatorClarificationGapEvaluator.OpenGap> resolved =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(resolvedPlan, settings, List.of());
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(resolvedPlan, settings);
         assertTrue(resolved.isEmpty());
     }
 
@@ -234,8 +226,8 @@ class CoordinatorClarificationGapEvaluatorTest {
                         "config_vs_runtime_scope",
                         false,
                         "Config or runtime?",
-                        List.of("config", "runtime"),
                         List.of(),
+                        List.of("config", "runtime"),
                         List.of("config only", "runtime only", "both"));
         String line =
                 CoordinatorClarificationGapEvaluator.buildExplicitResolutionLine(

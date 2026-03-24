@@ -64,7 +64,7 @@ class EvaluatePlanningPacketDepthActionTest {
     }
 
     @Test
-    void noRelaxWhenCanonicalUserInputRequired() {
+    void canonicalUserInputRequiredDoesNotReintroduceOpenQuestionDepthFailure() {
         FeaturePlanStateStore plans = new FeaturePlanStateStore();
         plans.put(planWithRelaxedOpenQuestionScenario("ctx-block"));
         WorkProfileRegistry reg = WorkProfileLoader.load(Path.of("config", "work-profiles.yaml"));
@@ -81,15 +81,14 @@ class EvaluatePlanningPacketDepthActionTest {
                                 new Event("discord:x", "message", Map.of()),
                                 state,
                                 Map.of("contextId", "ctx-block"));
-        assertEquals("false", spread.get("planningPacketDepthOk"));
+        assertEquals("true", spread.get("planningPacketDepthOk"));
         assertFalse(spread.containsKey("planningReviewReady"));
-        assertFalse(String.valueOf(spread.get("planningPacketDepthReason")).isBlank());
+        assertFalse(String.valueOf(spread.get("planningPacketDepthReason")).contains("Open questions"));
     }
 
     /**
-     * Same shape as {@link com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluatorTest}: blank artifact
-     * open_questions (declarative skip) plus a short substantive unresolved line driving supplemental open-question
-     * checks until relaxed.
+     * Same shape as {@link com.vinekeepers.workflow.planreview.PlanningPacketDepthEvaluatorTest}: canonical unresolved
+     * questions stay on governance state, not in a packet artifact.
      */
     private static FeaturePlanState planWithRelaxedOpenQuestionScenario(String contextId) {
         String exploration = "word ".repeat(30);
@@ -122,17 +121,11 @@ class EvaluatePlanningPacketDepthActionTest {
         SectionState valSec = new SectionState("checks", SectionState.STATUS_DRAFT, valValues, List.of());
         ArtifactState valArt = new ArtifactState("validation_plan", Map.of("checks", valSec));
 
-        Map<String, Object> oqValues = new LinkedHashMap<>();
-        oqValues.put("open_questions", "");
-        SectionState oqSec = new SectionState("backlog", SectionState.STATUS_DRAFT, oqValues, List.of());
-        ArtifactState oqArt = new ArtifactState("open_questions_block", Map.of("backlog", oqSec));
-
         Map<String, ArtifactState> arts = new LinkedHashMap<>();
         arts.put("requirements_spec", reqArt);
         arts.put("request_exploration", exArt);
         arts.put("architecture_notes", archArt);
         arts.put("validation_plan", valArt);
-        arts.put("open_questions_block", oqArt);
 
         FeaturePlanState base =
                 new FeaturePlanState(

@@ -17,9 +17,7 @@ import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,17 +43,16 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
               "compatibility_fallback": "string",
               "impacted_components": "string — only concrete paths/packages if repo_evidence_this_pass is observed; otherwise say unknown or name assumptions explicitly",
               "top_unresolved_gap": "string or empty if none",
-              "recommended_action": "ASK_ONE_QUESTION | ASSUME_AND_CONTINUE | POST_PACKET | BLOCK",
+              "recommended_action": "ASK_ONE_QUESTION | AUTONOMOUS_REDRAFT | POST_PACKET | BLOCK",
               "question_if_needed": "single string — at most one clarification question; empty unless recommended_action is ASK_ONE_QUESTION",
               "explicit_assumptions": ["short assumption strings when inferring"],
               "validation_concerns": "string",
               "design_options": "optional string",
-              "follow_up_decisions": "optional array with at most one object { id, question, choice_a, choice_b, choice_c } — only for bounded-choice UI; otherwise omit",
               "upserts": [ { "artifactId": "requirements_spec", "sectionId": "narrative", "mode": "replace", "data": { "current_state_summary": "value", "feature_summary": "value", "scope_summary": "value" } } ]
             }
             Ground every factual claim: separate what you observed in the repo snapshot this pass vs what you inferred vs unknown.
             Do not fabricate file paths or packages when repo_evidence_this_pass is not observed.
-            Prefer question_if_needed for any clarification; never emit multiple questions across follow_up_decisions and question_if_needed.
+            Prefer question_if_needed for any clarification; never emit multiple candidate questions.
             Populate fields from the user's feature request and repo snapshot. Avoid echoing the request verbatim as the only content.
             Return exactly one JSON object as the entire response body. Do not add commentary before or after it.
             If you are unsure, prefer an empty or conservative JSON object over malformed JSON, prose, or placeholder keys.
@@ -263,24 +260,6 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
                 return spread;
             }
 
-            List<String> followUps = new ArrayList<>();
-            String qIfNeeded = PlanningLlmJsonSupport.readSingleQuestionIfNeeded(root);
-            if (!qIfNeeded.isBlank()) {
-                followUps.add(qIfNeeded);
-            }
-            JsonNode fd = root.path("follow_up_decisions");
-            if (fd.isArray() && followUps.size() < 1) {
-                for (JsonNode n : fd) {
-                    if (n.isObject()) {
-                        String q = n.path("question").asText("").trim();
-                        if (!q.isBlank()) {
-                            followUps.add(q);
-                            break;
-                        }
-                    }
-                }
-            }
-            spread.put("planningExpansionFollowUpsJson", JSON.writeValueAsString(followUps));
             spread.put("planningExpansionUpsertExtras", String.valueOf(appliedExtras));
             spread.put("planningExpansionFromLlm", "true");
             spread.put("planningExpansionRichBody", explorationBody.length() >= 200 ? "true" : "false");
@@ -383,7 +362,6 @@ public final class RunRequestExpansionLlmAction implements com.vinekeepers.workf
         m.put("planningExpansionSource", "");
         m.put("planningExpansionFromLlm", "false");
         m.put("planningExpansionRichBody", "false");
-        m.put("planningExpansionFollowUpsJson", "[]");
         m.put("planningExpansionUpsertExtras", "0");
         m.put("planningExpansionUpsertsAttempted", "0");
         m.put("planningExpansionUpsertsRejected", "0");

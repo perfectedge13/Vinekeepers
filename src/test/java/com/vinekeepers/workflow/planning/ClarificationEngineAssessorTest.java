@@ -23,7 +23,7 @@ class ClarificationEngineAssessorTest {
         FeaturePlanState plan = basePlan("ctx", "config versus runtime tradeoff");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), false, null, false);
+                        plan, settings, false, null, false);
         assertTrue(out.isEmpty());
     }
 
@@ -36,7 +36,7 @@ class ClarificationEngineAssessorTest {
         FeaturePlanState plan = basePlan("ctx", "config versus runtime tradeoff");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+                        plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASK_USER, out.get(0).decision());
     }
@@ -52,7 +52,7 @@ class ClarificationEngineAssessorTest {
                         .withWorkspaceLinkage("ws1", "MATERIALIZED", "/repo/worktree", "");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+                        plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
         assertTrue(out.get(0).assumptionToRecord().contains("g_nb"));
@@ -70,7 +70,7 @@ class ClarificationEngineAssessorTest {
                         .withClarificationQuestionSurfaced("q2");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+                        plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
     }
@@ -85,7 +85,7 @@ class ClarificationEngineAssessorTest {
                 basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("q1");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+                        plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.LOW_PRIORITY_DEFER, out.get(0).decision());
     }
@@ -101,7 +101,7 @@ class ClarificationEngineAssessorTest {
                 basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("q1");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+                        plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.BLOCK_AS_UNIMPLEMENTABLE, out.get(0).decision());
         assertTrue(out.get(0).assumptionToRecord().contains("budget exhausted"));
@@ -117,7 +117,7 @@ class ClarificationEngineAssessorTest {
                 basePlan("ctx", "config versus runtime tradeoff").withClarificationQuestionSurfaced("ask:g_nb:1");
         List<ClarificationEngineAssessor.AssessedGap> out =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, null, false);
+                        plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, out.get(0).decision());
     }
@@ -135,10 +135,10 @@ class ClarificationEngineAssessorTest {
                         .withWorkspaceLinkage("ws1", null, "/tmp/plan-repo", "");
         List<ClarificationEngineAssessor.AssessedGap> withoutCritique =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, json, false);
+                        plan, settings, true, json, false);
         List<ClarificationEngineAssessor.AssessedGap> withCritique =
                 ClarificationEngineAssessor.assessCanonicalGaps(
-                        plan, settings, List.of("Should we use config or runtime?"), true, json, true);
+                        plan, settings, true, json, true);
         assertEquals(ClarificationResolutionDecision.ASK_USER, withoutCritique.get(0).decision());
         assertEquals(ClarificationResolutionDecision.ASSUME_AND_CONTINUE, withCritique.get(0).decision());
     }
@@ -171,7 +171,7 @@ class ClarificationEngineAssessorTest {
                 basePlan("ctx", "Lets plug different models into different workflow steps.")
                         .withWorkspaceLinkage("ws1", "MATERIALIZED", "/repo/worktree", "");
         List<ClarificationEngineAssessor.AssessedGap> out =
-                ClarificationEngineAssessor.assessCanonicalGaps(plan, settings, List.of(), true, null, false);
+                ClarificationEngineAssessor.assessCanonicalGaps(plan, settings, true, null, false);
         assertEquals(1, out.size());
         assertEquals(ClarificationResolutionDecision.ASK_USER, out.get(0).decision());
     }
@@ -181,8 +181,8 @@ class ClarificationEngineAssessorTest {
                 blocking ? "g_blk" : "g_nb",
                 blocking,
                 blocking ? "Blocking: pick config or runtime?" : "Non-blocking: prefer config or runtime?",
-                List.of("config", "runtime"),
                 List.of(),
+                List.of("config", "runtime"),
                 List.of());
     }
 

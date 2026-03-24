@@ -69,6 +69,10 @@ public final class FeaturePlanState {
     private final String planningFailurePhase;
     private final boolean planningRecoverableDraftAvailable;
     private final String planningLastRecoveryHint;
+    private final String planningCanonicalDecisionJson;
+    private final String planningLastPostedPacketDecisionId;
+    private final String planningLastAskedQuestionDecisionId;
+    private final String planningLastMaterialStateChangeFingerprint;
     private final Instant createdAt;
     private final Instant updatedAt;
 
@@ -162,7 +166,11 @@ public final class FeaturePlanState {
                 null,
                 null,
                 null,
-                Boolean.FALSE);
+                Boolean.FALSE,
+                null,
+                null,
+                null,
+                null);
     }
 
     public FeaturePlanState(
@@ -216,6 +224,118 @@ public final class FeaturePlanState {
             String planningFailurePhase,
             String planningLastRecoveryHint,
             Boolean planningRecoverableDraftAvailable) {
+        this(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                updatedAt,
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    public FeaturePlanState(
+            String contextId,
+            String featureId,
+            String featureSlug,
+            String roomChannelId,
+            String intakeThreadId,
+            String repoRef,
+            String title,
+            String initialRequest,
+            String planStatus,
+            List<RequirementEntry> requirements,
+            List<PlanAssumption> assumptions,
+            List<PlanIssue> issues,
+            List<ValidationEntry> validationNotes,
+            SolutionOutline solutionOutline,
+            TraceabilityPlaceholder traceability,
+            ProjectContextSummary projectContext,
+            Map<PlanSectionKey, PlanSectionStatus> sectionStatuses,
+            PlanConfidence planConfidence,
+            PlanApproval planApproval,
+            PlanCritiqueSnapshot planCritiqueSnapshot,
+            String repoWorkspaceId,
+            String repoWorkspaceStatus,
+            String repoLocalPath,
+            String repoAccessNotes,
+            String profileId,
+            Map<String, ArtifactState> artifacts,
+            List<PlanRisk> risks,
+            List<PlanDecision> decisions,
+            List<String> unresolvedQuestions,
+            String critiqueLifecycleStatus,
+            Instant packetPostedAt,
+            String packetMessageRef,
+            String packetPostedFingerprint,
+            Integer packetPostedChunkCount,
+            Instant createdAt,
+            Instant updatedAt,
+            PlanningIntakeStage planningIntakeStage,
+            Instant planningIntakeStageEnteredAt,
+            Integer intakeKickoffPostedVersion,
+            String intakeKickoffPostedFingerprint,
+            String planningOrchestrationFailureReason,
+            Boolean autonomousPlanningPassCompleted,
+            Integer clarificationTurnsCompleted,
+            List<String> clarificationOutcomeHistory,
+            String clarificationCoordinatorLedgerJson,
+            String coordinatorConfiguredBotId,
+            String planningFailureCategory,
+            String planningFailurePhase,
+            String planningLastRecoveryHint,
+            Boolean planningRecoverableDraftAvailable,
+            String planningCanonicalDecisionJson,
+            String planningLastPostedPacketDecisionId,
+            String planningLastAskedQuestionDecisionId,
+            String planningLastMaterialStateChangeFingerprint) {
         this.contextId = Objects.requireNonNull(contextId, "contextId");
         this.featureId = featureId;
         this.featureSlug = featureSlug;
@@ -286,6 +406,18 @@ public final class FeaturePlanState {
                         ? planningLastRecoveryHint.trim()
                         : "";
         this.planningRecoverableDraftAvailable = Boolean.TRUE.equals(planningRecoverableDraftAvailable);
+        this.planningCanonicalDecisionJson =
+                planningCanonicalDecisionJson != null && !planningCanonicalDecisionJson.isBlank()
+                        ? planningCanonicalDecisionJson
+                        : "{}";
+        this.planningLastPostedPacketDecisionId =
+                planningLastPostedPacketDecisionId != null ? planningLastPostedPacketDecisionId.trim() : "";
+        this.planningLastAskedQuestionDecisionId =
+                planningLastAskedQuestionDecisionId != null ? planningLastAskedQuestionDecisionId.trim() : "";
+        this.planningLastMaterialStateChangeFingerprint =
+                planningLastMaterialStateChangeFingerprint != null
+                        ? planningLastMaterialStateChangeFingerprint.trim()
+                        : "";
         this.createdAt = effectiveCreated;
         this.updatedAt = updatedAt != null ? updatedAt : this.createdAt;
     }
@@ -417,7 +549,11 @@ public final class FeaturePlanState {
                 planningFailureCategory,
                 planningFailurePhase,
                 planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint);
     }
 
     /**
@@ -750,7 +886,11 @@ public final class FeaturePlanState {
                 planningFailureCategory,
                 planningFailurePhase,
                 planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint);
     }
 
     /**
@@ -1074,6 +1214,26 @@ public final class FeaturePlanState {
 
     public String getPlanningLastRecoveryHint() {
         return planningLastRecoveryHint;
+    }
+
+    public String getPlanningCanonicalDecisionJson() {
+        return planningCanonicalDecisionJson;
+    }
+
+    public PlanningCanonicalDecision getPlanningCanonicalDecision() {
+        return PlanningCanonicalDecision.fromJson(planningCanonicalDecisionJson);
+    }
+
+    public String getPlanningLastPostedPacketDecisionId() {
+        return planningLastPostedPacketDecisionId;
+    }
+
+    public String getPlanningLastAskedQuestionDecisionId() {
+        return planningLastAskedQuestionDecisionId;
+    }
+
+    public String getPlanningLastMaterialStateChangeFingerprint() {
+        return planningLastMaterialStateChangeFingerprint;
     }
 
     public FeaturePlanState withCoordinatorConfiguredBotId(String configuredBotId) {
@@ -1437,6 +1597,133 @@ public final class FeaturePlanState {
                 planningRecoverableDraftAvailable);
     }
 
+    public FeaturePlanState withPlanningCanonicalDecision(
+            PlanningCanonicalDecision decision,
+            String lastMaterialStateChangeFingerprint,
+            String lastAskedQuestionDecisionId) {
+        String nextJson = decision != null ? decision.toJson() : "{}";
+        String nextFingerprint =
+                lastMaterialStateChangeFingerprint != null ? lastMaterialStateChangeFingerprint.trim() : "";
+        String nextAsked = lastAskedQuestionDecisionId != null ? lastAskedQuestionDecisionId.trim() : "";
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                nextJson,
+                planningLastPostedPacketDecisionId,
+                nextAsked,
+                nextFingerprint);
+    }
+
+    public FeaturePlanState withLastPostedPacketDecisionId(String decisionId) {
+        String next = decisionId != null ? decisionId.trim() : "";
+        if (next.equals(planningLastPostedPacketDecisionId)) {
+            return this;
+        }
+        return new FeaturePlanState(
+                contextId,
+                featureId,
+                featureSlug,
+                roomChannelId,
+                intakeThreadId,
+                repoRef,
+                title,
+                initialRequest,
+                planStatus,
+                requirements,
+                assumptions,
+                issues,
+                validationNotes,
+                solutionOutline,
+                traceability,
+                projectContext,
+                sectionStatuses,
+                planConfidence,
+                planApproval,
+                planCritiqueSnapshot,
+                repoWorkspaceId,
+                repoWorkspaceStatus,
+                repoLocalPath,
+                repoAccessNotes,
+                profileId,
+                artifacts,
+                risks,
+                decisions,
+                unresolvedQuestions,
+                critiqueLifecycleStatus,
+                packetPostedAt,
+                packetMessageRef,
+                packetPostedFingerprint,
+                packetPostedChunkCount,
+                createdAt,
+                Instant.now(),
+                planningIntakeStage,
+                planningIntakeStageEnteredAt,
+                intakeKickoffPostedVersion,
+                intakeKickoffPostedFingerprint,
+                planningOrchestrationFailureReason,
+                autonomousPlanningPassCompleted,
+                clarificationTurnsCompleted,
+                clarificationOutcomeHistory,
+                clarificationCoordinatorLedgerJson,
+                coordinatorConfiguredBotId,
+                planningFailureCategory,
+                planningFailurePhase,
+                planningLastRecoveryHint,
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                next,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint);
+    }
+
     private static List<String> appendHistory(List<String> prior, String line) {
         List<String> n = new ArrayList<>(prior != null ? prior : List.of());
         n.add(line);
@@ -1503,7 +1790,11 @@ public final class FeaturePlanState {
                 planningFailureCategory,
                 planningFailurePhase,
                 planningLastRecoveryHint,
-                planningRecoverableDraftAvailable);
+                planningRecoverableDraftAvailable,
+                planningCanonicalDecisionJson,
+                planningLastPostedPacketDecisionId,
+                planningLastAskedQuestionDecisionId,
+                planningLastMaterialStateChangeFingerprint);
     }
 
     public FeaturePlanState withIntakeKickoffPosted(int version, String fingerprint) {

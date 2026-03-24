@@ -48,7 +48,7 @@ public final class BuildRolePlanningThreadMessagesAction implements com.vinekeep
         String arch = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary");
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
         String risks = PlanningArtifactTexts.artifactField(plan, "risk_register", "main", "risk_summary");
-        String openQ = PlanningArtifactTexts.effectiveOpenQuestions(plan);
+        String openQ = PlanningArtifactTexts.unresolvedQuestionSummary(plan);
         int issueCount = plan.getIssues() != null ? plan.getIssues().size() : 0;
 
         out.put("architectThreadMessage", buildArchitect(outline, decisions, arch, comps));

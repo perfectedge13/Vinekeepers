@@ -7,7 +7,6 @@ import com.vinekeepers.profile.WorkProfileRegistry;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -18,7 +17,7 @@ public final class PlanningRolePassRunner {
 
     private PlanningRolePassRunner() {}
 
-    public record RolePassResult(int upsertsApplied, List<String> followUps, String error, boolean skipped) {}
+    public record RolePassResult(int upsertsApplied, String error, boolean skipped) {}
 
     public static RolePassResult run(
             PlanningCoordinatorRole role,

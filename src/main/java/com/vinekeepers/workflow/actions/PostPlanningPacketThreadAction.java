@@ -5,8 +5,10 @@ import com.vinekeepers.connectors.ReplySender;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.planning.FeaturePlanState;
 import com.vinekeepers.state.planning.FeaturePlanStateStore;
+import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.state.planning.PlanningRole;
+import com.vinekeepers.workflow.planning.PlanningCanonicalDecisionSupport;
 import com.vinekeepers.workflow.planning.PlanningReadinessSpread;
 import com.vinekeepers.workflow.planreview.PlanningThreadPacketFormatter;
 import org.slf4j.Logger;
@@ -79,30 +81,30 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
             spread.put("planningPacketPostError", "No plan for context.");
             return spread;
         }
-        boolean legacyDepthOnly = truthy(getString(bind, "planningPostCompatLegacyDepthOnly"));
         boolean depthOk = !"false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")));
+        String canonicalNextAction =
+                firstNonBlank(
+                        getString(state, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY),
+                        plan.getPlanningCanonicalDecision().nextAction().name());
         boolean packetAllowed = PlanningReadinessSpread.packetPostingAllowed(state);
-        if (legacyDepthOnly) {
-            if (state != null && "false".equalsIgnoreCase(String.valueOf(state.get("planningPacketDepthOk")))) {
-                spread.put(
-                        "planningPacketPostError",
-                        "The draft still needs more depth before the packet can post (legacy depth-only mode). Add detail in this thread and run another pass.");
-                return spread;
-            }
-        } else {
-            if (state != null && !packetAllowed) {
-                spread.put(
-                        "planningPacketPostError",
-                        "The draft is waiting on clarification or another drafting pass, so the packet cannot post yet.");
-                return spread;
-            }
-            if (state != null && !depthOk) {
-                spread.put(
-                        "planningPacketPostError",
-                        "The draft is not ready to post yet because depth checks still fail. "
-                                + "Reply in this thread with more detail or wait for the coordinator to finish another drafting pass.");
-                return spread;
-            }
+        if (!PlanningCanonicalNextAction.POST_PACKET.name().equalsIgnoreCase(canonicalNextAction)) {
+            spread.put(
+                    "planningPacketPostError",
+                    "The canonical planning decision does not allow packet posting for this cycle.");
+            return spread;
+        }
+        if (state != null && !packetAllowed) {
+            spread.put(
+                    "planningPacketPostError",
+                    "The canonical planning decision is not in a packet-postable state yet.");
+            return spread;
+        }
+        if (state != null && !depthOk) {
+            spread.put(
+                    "planningPacketPostError",
+                    "The draft is not ready to post yet because depth checks still fail. "
+                            + "Reply in this thread with more detail or wait for the coordinator to finish another drafting pass.");
+            return spread;
         }
 
         String request = firstNonBlank(plan.getInitialRequest(), getString(state, "codeChange"));
@@ -121,7 +123,9 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
                                 Instant.now(),
                                 "",
                                 fingerprint,
-                                Math.max(1, parsePostedVersion(state))));
+                                Math.max(1, parsePostedVersion(state)))
+                                .withLastPostedPacketDecisionId(
+                                        firstNonBlank(getString(state, PlanningCanonicalDecisionSupport.CANONICAL_DECISION_ID_KEY), "")));
             }
             spread.put("planningPacketPostedVersion", String.valueOf(parsePostedVersion(state)));
             spread.put("planningPacketSkippedDuplicate", "true");
@@ -150,7 +154,9 @@ public final class PostPlanningPacketThreadAction implements com.vinekeepers.wor
         }
         planStore.update(
                 plan.withPacketPosted(Instant.now(), "", fingerprint, chunks.size())
-                        .withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null));
+                        .withPlanningIntakeStage(PlanningIntakeStage.PACKET_POSTED, null)
+                        .withLastPostedPacketDecisionId(
+                                firstNonBlank(getString(state, PlanningCanonicalDecisionSupport.CANONICAL_DECISION_ID_KEY), "")));
         spread.put("planningPacketPosted", "true");
         spread.put("canonicalPlanningIntakeStage", PlanningIntakeStage.PACKET_POSTED.name());
         spread.put("planningPacketChunkCount", String.valueOf(chunks.size()));

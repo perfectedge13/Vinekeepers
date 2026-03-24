@@ -37,7 +37,6 @@ public final class ClarificationEngineAssessor {
     public static List<AssessedGap> assessCanonicalGaps(
             FeaturePlanState plan,
             CoordinatorClarificationSettings settings,
-            List<String> llmHints,
             boolean semanticGapsAllowed,
             String planningRepoEvidenceJson,
             boolean critiqueBlockingFollowUp) {
@@ -45,7 +44,7 @@ public final class ClarificationEngineAssessor {
             return List.of();
         }
         List<CoordinatorClarificationGapEvaluator.OpenGap> open =
-                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings, llmHints);
+                CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, settings);
         if (open.isEmpty()) {
             return List.of();
         }

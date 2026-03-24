@@ -68,9 +68,8 @@ class PhaseCPlanActionsTest {
         assertTrue(spread.containsKey("planReadinessStatus"));
         assertTrue(spread.containsKey("planReadinessStatusLabel"));
         assertTrue(spread.containsKey("planReadinessCheckpointGuide"));
-        assertTrue(spread.containsKey("planningCritiqueNextAction"));
-        assertTrue(spread.containsKey("planningNextActionLabel"));
-        assertTrue(spread.containsKey("planningNextActionSummary"));
+        assertTrue(spread.containsKey("planningCanonicalActionLabel"));
+        assertTrue(spread.containsKey("planningCanonicalActionSummary"));
         assertEquals(
                 PlanningUserFacingCopy.humanizeReadinessStatus(String.valueOf(spread.get("planReadinessStatus"))),
                 spread.get("planReadinessStatusLabel"));

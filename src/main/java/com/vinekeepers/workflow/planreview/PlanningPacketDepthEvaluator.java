@@ -24,8 +24,6 @@ public final class PlanningPacketDepthEvaluator {
     public static final int MIN_EXPLORATION_WORDS = 24;
     /** Minimum for current state or feature summary (either one satisfying is enough). */
     public static final int MIN_NARRATIVE_WORDS = 14;
-    /** Minimum words for open questions when present. */
-    public static final int MIN_OPEN_QUESTIONS_WORDS = 8;
     private static final double MAX_ECHO_OVERLAP = 0.72;
 
     private static final Pattern TOKEN = Pattern.compile("\\w+", Pattern.UNICODE_CHARACTER_CLASS);
@@ -55,7 +53,7 @@ public final class PlanningPacketDepthEvaluator {
 
     /**
      * When {@code profile} has declarative readiness ({@link WorkProfileDefinition#hasDeclarativeReadiness()}),
-     * runs {@link GenericReadinessEvaluator} first, then supplemental checks (workspace, open questions, validation).
+     * runs {@link GenericReadinessEvaluator} first, then supplemental checks (workspace, validation).
      * Otherwise runs the legacy all-in-one depth gate (v1 profiles).
      */
     public static DepthResult evaluate(FeaturePlanState plan, WorkProfileDefinition profile) {
@@ -64,8 +62,8 @@ public final class PlanningPacketDepthEvaluator {
 
     /**
      * Same as {@link #evaluate(FeaturePlanState, WorkProfileDefinition)} but when {@code relaxOpenQuestionSupplemental} is
-     * true, skips supplemental open-question thin/placeholder checks (canonical clarification already clear — severity
-     * belongs in the clarification engine, not packet depth).
+     * true, skips any remaining clarification-derived supplemental checks. Canonical clarification owns unresolved-gap
+     * severity; packet depth no longer scores open-question text.
      */
     public static DepthResult evaluate(
             FeaturePlanState plan, WorkProfileDefinition profile, boolean relaxOpenQuestionSupplemental) {
@@ -90,7 +88,6 @@ public final class PlanningPacketDepthEvaluator {
         String current = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "current_state_summary");
         String feature = PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "feature_summary");
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
-        String openQ = PlanningArtifactTexts.effectiveOpenQuestions(plan);
         String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
 
         int exWords = wordCount(exploration);
@@ -136,18 +133,6 @@ public final class PlanningPacketDepthEvaluator {
                             + " (the repo workspace is ready, so we expect code-backed touchpoints).");
         }
 
-        if (!relaxOpenQuestionSupplemental) {
-            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
-                    && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
-                return new DepthResult(false, "Open questions list is too short or template-like.");
-            }
-            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
-                    && !openQ.isBlank()
-                    && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
-                return new DepthResult(false, "Open questions still look like starter template text.");
-            }
-        }
-
         if (!validationLooksFeatureSpecific(validation, requestTokens, request)) {
             return new DepthResult(
                     false,
@@ -157,13 +142,12 @@ public final class PlanningPacketDepthEvaluator {
         return new DepthResult(true, "Depth OK (exploration " + exWords + " words).");
     }
 
-    /** Supplemental checks after declarative profile rules pass (workspace, open questions, validation specificity). */
+    /** Supplemental checks after declarative profile rules pass (workspace and validation specificity). */
     private static DepthResult supplementalAfterDeclarative(
             FeaturePlanState plan, boolean relaxOpenQuestionSupplemental) {
         String request = plan.getInitialRequest() != null ? plan.getInitialRequest().trim() : "";
         Set<String> requestTokens = significantTokens(request);
         String comps = PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted");
-        String openQ = PlanningArtifactTexts.effectiveOpenQuestions(plan);
         String validation = PlanningArtifactTexts.artifactField(plan, "validation_plan", "checks", "validation_notes");
         String exploration = PlanningArtifactTexts.artifactField(plan, "request_exploration", "analysis", "exploration_body");
         int exWords = wordCount(exploration);
@@ -174,18 +158,6 @@ public final class PlanningPacketDepthEvaluator {
                     false,
                     "Under **Architecture — components affected**, list concrete file paths, packages, or extensions"
                             + " (the repo workspace is ready, so we expect code-backed touchpoints).");
-        }
-
-        if (!relaxOpenQuestionSupplemental) {
-            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ) && !openQ.isBlank()
-                    && wordCount(openQ) < MIN_OPEN_QUESTIONS_WORDS) {
-                return new DepthResult(false, "Open questions list is too short or template-like.");
-            }
-            if (!PlanningArtifactTexts.isReadyToImplementOpenQuestions(openQ)
-                    && !openQ.isBlank()
-                    && PlanningPlaceholderDetection.looksLikePlaceholder(openQ)) {
-                return new DepthResult(false, "Open questions still look like starter template text.");
-            }
         }
 
         if (!validationLooksFeatureSpecific(validation, requestTokens, request)) {

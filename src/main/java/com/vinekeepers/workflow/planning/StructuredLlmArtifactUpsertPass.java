@@ -15,7 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -42,10 +41,10 @@ public final class StructuredLlmArtifactUpsertPass {
             String systemPromptBlock,
             String userTaskHint) {
         if (planStore == null || profileRegistry == null || plan == null || profile == null) {
-            return new RolePassResult(0, List.of(), "missing deps", true);
+            return new RolePassResult(0, "missing deps", true);
         }
         if (client == null || !client.isConfigured()) {
-            return new RolePassResult(0, List.of(), "NO_API_KEY", true);
+            return new RolePassResult(0, "NO_API_KEY", true);
         }
         String contextId = plan.getContextId();
         String system = systemPromptBlock != null ? systemPromptBlock : "";
@@ -58,24 +57,24 @@ public final class StructuredLlmArtifactUpsertPass {
         } catch (Exception e) {
             log.warn("{} pass failed: {} — {}", roleNameForPayload, e.getClass().getName(), chainBrief(e));
             String msg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.getClass().getSimpleName();
-            return new RolePassResult(0, List.of(), msg, false);
+            return new RolePassResult(0, msg, false);
         }
         if (raw.startsWith("ERROR:")) {
-            return new RolePassResult(0, List.of(), raw, false);
+            return new RolePassResult(0, raw, false);
         }
         PlanningLlmJsonSupport.ParsedJsonObjectResult parsed =
                 PlanningLlmJsonSupport.parseJsonObjectWithRepair(client, raw, roleNameForPayload, event, state);
         if (!parsed.success()) {
             log.warn("{} pass parse failed: {}", roleNameForPayload, parsed.errorMessage());
             String brief = parsed.errorMessage() != null ? truncateOneLine(parsed.errorMessage(), 400) : "parse failed";
-            return new RolePassResult(0, List.of(), STRUCTURED_JSON_PARSE_PREFIX + brief, false);
+            return new RolePassResult(0, STRUCTURED_JSON_PARSE_PREFIX + brief, false);
         }
         try {
             return parseAndApplyUpserts(parsed.root(), event, state, contextId, planStore, profileRegistry);
         } catch (Exception e) {
             log.warn("{} pass apply failed: {}", roleNameForPayload, e.getMessage());
             String brief = e.getMessage() != null ? truncateOneLine(e.getMessage(), 400) : "apply failed";
-            return new RolePassResult(0, List.of(), brief, false);
+            return new RolePassResult(0, brief, false);
         }
     }
 
@@ -92,12 +91,7 @@ public final class StructuredLlmArtifactUpsertPass {
         if (upsertResult.attempted() > 0 && upsertResult.applied() == 0) {
             throw new IllegalArgumentException(PlanningLlmJsonSupport.summarizeRejectedUpserts(upsertResult));
         }
-        List<String> followUps = PlanningLlmJsonSupport.readFollowUpQuestions(root);
-        String qIfNeeded = PlanningLlmJsonSupport.readSingleQuestionIfNeeded(root);
-        if (followUps.isEmpty() && !qIfNeeded.isBlank()) {
-            followUps = List.of(qIfNeeded);
-        }
-        return new RolePassResult(upsertResult.applied(), followUps, "", false);
+        return new RolePassResult(upsertResult.applied(), "", false);
     }
 
     private static String coordinatorPassActivityLine(String roleNameForPayload) {
@@ -132,7 +126,6 @@ public final class StructuredLlmArtifactUpsertPass {
         snap.put("scope_summary", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "scope_summary"));
         snap.put("user_stories", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "user_stories"));
         snap.put("acceptance_criteria", PlanningArtifactTexts.artifactField(plan, "requirements_spec", "narrative", "acceptance_criteria"));
-        snap.put("open_questions", PlanningArtifactTexts.artifactField(plan, "open_questions_block", "backlog", "open_questions"));
         snap.put("plan_body", PlanningArtifactTexts.artifactField(plan, "overall_plan", "outline", "plan_body"));
         snap.put("architecture_summary", PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "architecture_summary"));
         snap.put("components_impacted", PlanningArtifactTexts.artifactField(plan, "architecture_notes", "impact", "components_impacted"));

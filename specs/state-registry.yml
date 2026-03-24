@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T22:30:00Z"
+  updated_utc: "2026-03-24T03:48:06Z"
 
 project:
   id: vinekeepers
@@ -79,9 +79,31 @@ assets:
       autonomousPlanningPassCompleted plus clarificationTurnsCompleted / clarificationOutcomeHistory back post-draft clarification engine and discovery gap gating on the plan record;
       durable coordinatorConfiguredBotId for routing when FeatureRoomState is evicted; withPlannerRecoveryFields persists
       planningFailureCategory, planningFailurePhase, planningRecoverableDraftAvailable, planningLastRecoveryHint for typed
-      synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads;
+      synthesis/orchestration recovery metadata surfaced through hydrate_planning_session spreads; also persists
+      planningCanonicalDecisionJson plus lastPosted/lastAsked canonical decision ids and a material-state-change fingerprint
+      so post-draft and post-critique routing can be verified against one durable canonical decision model;
       planning room cycle may persist PlanningIntakeStage.CLARIFYING when the post-draft governor selects ASK_ONE_QUESTION and intake
       was not already clarifying
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-CANONICAL-DECISION
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningCanonicalDecision.java
+    role: >-
+      Typed durable canonical planning decision record (source, nextAction, stage, interactionState, posting/review/approval
+      allowances, top-gap metadata, observability ids) that FeaturePlanState persists as the single routing authority
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-CANONICAL-NEXT-ACTION
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningCanonicalNextAction.java
+    role: Canonical routable next actions for planning (ASK_ONE_QUESTION, AUTONOMOUS_REDRAFT, POST_PACKET, BLOCK)
+    requires: [REQ-STATE-001]
+    feature_ids: [FEAT-STATE]
+  - id: ASSET-PLANNING-INTERACTION-STATE
+    kind: source
+    path: src/main/java/com/vinekeepers/state/planning/PlanningInteractionState.java
+    role: Canonical operator interaction posture for planning (for example WAITING_FOR_TEXT_REPLY) persisted with the canonical decision
     requires: [REQ-STATE-001]
     feature_ids: [FEAT-STATE]
   - id: ASSET-CLARIFICATION-RESOLUTION-DECISION
@@ -349,6 +371,9 @@ requirements:
           planningOrchestrationFailureReason for terminal intake failures; withPlanningIntakeStage / withIntakeKickoffPosted /
           withPlanningOrchestrationFailure update the canonical intake spine
         - >-
+          FeaturePlanState also persists planningCanonicalDecisionJson plus lastPosted/lastAsked decision ids and a
+          material-state-change fingerprint so post-draft and post-critique routing can be verified against one durable canonical decision
+        - >-
           PlanningCyclePipeline may advance FeaturePlanState to PlanningIntakeStage.CLARIFYING when PlanningPostDraftGovernor
           resolves to ASK_ONE_QUESTION and the plan was not already in CLARIFYING
         - >-
@@ -510,8 +535,9 @@ features:
     doc_path: features/domain/state/state.md
     summary: >-
       StateStore persists and loads per-bot, per-conversation workflow state; state.workflow holds generic UnresolvedItem
-      models for config-driven clarification ledgers (REQ-WORKFLOW-002); planning package includes PlanningFailureCategory and
-      PlanningIntakeBindingResolver for durable recovery metadata and intake-thread binding when room state is missing.
+      models for config-driven clarification ledgers (REQ-WORKFLOW-002); planning package includes the typed canonical
+      decision model (PlanningCanonicalDecision / PlanningCanonicalNextAction / PlanningInteractionState), PlanningFailureCategory,
+      and PlanningIntakeBindingResolver for durable recovery metadata and intake-thread binding when room state is missing.
     requirement_ids: [REQ-STATE-001]
-    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-FAILURE-CATEGORY, ASSET-PLANNING-INTAKE-BINDING-RESOLVER, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
+    asset_ids: [ASSET-STATE-STORE, ASSET-LUNA-STATE, ASSET-PLANNING-ROLE, ASSET-ROOM-PARTICIPANT, ASSET-FEATURE-ROOM-STATE, ASSET-FEATURE-ROOM-STATE-STORE, ASSET-FEATURE-PLAN-STATE, ASSET-PLANNING-CANONICAL-DECISION, ASSET-PLANNING-CANONICAL-NEXT-ACTION, ASSET-PLANNING-INTERACTION-STATE, ASSET-CLARIFICATION-RESOLUTION-DECISION, ASSET-PLANNING-INTAKE-STAGE, ASSET-PLANNING-FAILURE-CATEGORY, ASSET-PLANNING-INTAKE-BINDING-RESOLVER, ASSET-PLAN-ASSUMPTION, ASSET-PLAN-ISSUE, ASSET-PLAN-RISK, ASSET-PLAN-DECISION, ASSET-PLAN-CONFIDENCE, ASSET-PLAN-CRITIQUE-RUBRIC-SCORES, ASSET-PLAN-CRITIQUE-LIFECYCLE-STATUS, ASSET-FEATURE-PLAN-STATE-STORE, ASSET-UNRESOLVED-ITEM, ASSET-UNRESOLVED-ITEM-STATUS, ASSET-REPO-WORKSPACE-STATE, ASSET-REPO-WORKSPACE-STATE-STORE, ASSET-DEFAULT-REPO-REF-RESOLVER, ASSET-REPO-WORKSPACE-PROGRESS-PHASE, ASSET-REPO-WORKSPACE-PROGRESS-CALLBACK, ASSET-REPO-WORKSPACE-SERVICE, ASSET-WORK-PROFILE-REGISTRY, ASSET-ARTIFACT-STATE-FACTORY, ASSET-BIND-PLACEHOLDER-RESOLVER]
     status: active

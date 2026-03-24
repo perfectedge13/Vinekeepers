@@ -226,13 +226,6 @@ public final class ClarificationPromptQualityGate {
         String artifactId = safeToken(gap.getArtifactId());
         String sectionId = safeToken(gap.getSectionId());
         String fieldId = safeToken(gap.getFieldId());
-        if ("open_questions_block".equals(artifactId)
-                && "backlog".equals(sectionId)
-                && "open_questions".equals(fieldId)) {
-            return "Before we can finalize the plan, tell us which unknowns still need confirmation before "
-                    + "implementation. Put one item per line when possible, or reply \"None — ready to implement\" "
-                    + "if nothing remains. Reply in plain text in this thread.";
-        }
         String area = describeRequiredFieldArea(artifactId, sectionId, fieldId);
         if (area.isBlank()) {
             return "";

@@ -315,27 +315,6 @@ profiles:
                 promptHint: >-
                   What could go wrong, mitigations, rollout/fallback; one risk per line or bullet when possible
                   (packets can render a labeled list for easier scanning).
-      - artifactId: open_questions_block
-        title: Open questions
-        ownerRoles: [ORCHESTRATOR]
-        requiredForApproval: true
-        sections:
-          - sectionId: backlog
-            title: Unresolved questions
-            repeatable: false
-            required: true
-            fields:
-              - fieldId: open_questions
-                label: Open questions
-                type: text
-                required: true
-                skipReadinessIfBlank: true
-                minWords: 8
-                readinessChecks:
-                  - placeholder
-                promptHint: >-
-                  Unknowns to confirm, one per line or bullet when possible (packets show a labeled list when there are
-                  multiple). Use "None — ready to implement" if truly none.
       - artifactId: decision_log
         title: Decision log
         ownerRoles: [ORCHESTRATOR]

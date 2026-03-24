@@ -27,9 +27,10 @@ import com.vinekeepers.workflow.actions.ExpandPlanningDraftsAction;
 import com.vinekeepers.workflow.actions.RunLlmPlanningSynthesisAction;
 import com.vinekeepers.workflow.actions.RunRequestExpansionLlmAction;
 import com.vinekeepers.workflow.actions.SynthesizePreCritiqueArtifactsAction;
-import com.vinekeepers.workflow.discovery.ClarificationPromptQualityGate;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.state.planning.ClarificationResolutionDecision;
+import com.vinekeepers.state.planning.PlanningCanonicalDecision;
+import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 import com.vinekeepers.state.planning.PlanningFailureCategory;
 import com.vinekeepers.state.planning.PlanningIntakeStage;
 import com.vinekeepers.workflow.planning.ClarificationEngineAssessor.AssessedGap;
@@ -55,9 +56,6 @@ public final class PlanningCyclePipeline {
 
     private static final int MAX_BOT_INNER_ROUNDS = 3;
     private static final ObjectMapper JSON = new ObjectMapper();
-
-    /** Partial-cycle YAML: aggregated follow-up strings between expansion / inner-round / finalize actions. */
-    public static final String PARTIAL_AGGREGATED_FOLLOWUPS_KEY = "planningPartialAggregatedFollowUpsJson";
 
     /** Spread flag {@code "true"} when an OpenAI role pass returned an interrupt-style error (e.g. {@code ERROR: interrupted}). */
     public static final String PLANNING_PASS_INTERRUPTED_KEY = "planningPassInterrupted";
@@ -130,18 +128,16 @@ public final class PlanningCyclePipeline {
         cycleIteration++;
         spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
 
-        List<String> aggregatedFollowUps = new ArrayList<>();
         boolean selective = selectiveRerunAfterClarificationEnabled(state, bind);
         boolean justMerged = "true".equalsIgnoreCase(getString(state, "planningJustMergedClarification"));
         boolean skipExpansion = selective && justMerged;
         if (!skipExpansion) {
-            runExpansionPhase(event, work, spread, bind, aggregatedFollowUps);
+            runExpansionPhase(event, work, spread, bind);
         } else {
             spread.put("planningSelectiveRerunActive", "true");
             spread.put(
                     "planningSelectiveRerunNote",
                     "Thanks — I'm refreshing the draft from your last answer (skipping a full re-scan this pass).");
-            mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
         }
 
         String depthReason = "";
@@ -154,7 +150,7 @@ public final class PlanningCyclePipeline {
         for (int inner = 0; inner < innerRounds; inner++) {
             InnerRoundResult round =
                     runSingleInnerRound(
-                            event, contextId, profile, work, spread, bind, aggregatedFollowUps, planPtr, lastSynthLlmLine);
+                            event, contextId, profile, work, spread, bind, planPtr, lastSynthLlmLine);
             planPtr = round.plan();
             depthOk = round.depthOk();
             depthReason = round.depthReason();
@@ -175,7 +171,7 @@ public final class PlanningCyclePipeline {
 
         plan = planStateStore.getByContextId(contextId).orElse(planPtr);
         ClarificationRoundOutcome clr =
-                resolveClarificationRound(contextId, plan, state, profile, aggregatedFollowUps, true);
+                resolveClarificationRound(contextId, plan, state, profile, true);
         plan = clr.plan();
         RankedClarification rankedLlm = clr.rankedLlm();
         PlanningDeliberationLedgerSync.UpsertResult upsert = clr.upsert();
@@ -218,6 +214,7 @@ public final class PlanningCyclePipeline {
                 spread,
                 plan,
                 clr,
+                ranked,
                 profile,
                 userInputRequired,
                 readyToPost,
@@ -303,8 +300,7 @@ public final class PlanningCyclePipeline {
     }
 
     /**
-     * Partial cycle: request expansion LLM + build request exploration. Resets {@link #PARTIAL_AGGREGATED_FOLLOWUPS_KEY}
-     * in the returned spread (merge into session before inner rounds). Bumps {@code planningRoomCycleIteration}.
+     * Partial cycle: request expansion LLM + build request exploration. Bumps {@code planningRoomCycleIteration}.
      */
     public Map<String, Object> runExpansionPhaseOnly(Event event, Map<String, Object> state, Map<String, Object> bind) {
         Map<String, Object> spread = baseSpread();
@@ -315,7 +311,6 @@ public final class PlanningCyclePipeline {
         }
         int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0) + 1;
         spread.put("planningRoomCycleIteration", String.valueOf(cycleIteration));
-        List<String> aggregatedFollowUps = readAggregatedFromState(state);
         boolean selective = selectiveRerunAfterClarificationEnabled(state, bind);
         boolean justMerged = "true".equalsIgnoreCase(getString(state, "planningJustMergedClarification"));
         if (selective && justMerged) {
@@ -323,20 +318,14 @@ public final class PlanningCyclePipeline {
             spread.put(
                     "planningSelectiveRerunNote",
                     "Thanks — I'm refreshing the draft from your last answer (skipping a full re-scan this pass).");
-            if (aggregatedFollowUps.isEmpty()) {
-                mergeExpansionFollowUpsFromWork(ctx.work(), aggregatedFollowUps);
-            }
         } else {
-            aggregatedFollowUps = new ArrayList<>();
-            runExpansionPhase(event, ctx.work(), spread, bind, aggregatedFollowUps);
+            runExpansionPhase(event, ctx.work(), spread, bind);
         }
-        putAggregatedJson(spread, aggregatedFollowUps);
         return spread;
     }
 
     /**
      * Partial cycle: one Arrietty planning round, expand drafts, synthesis, pre-critique, depth check.
-     * Reads/writes {@link #PARTIAL_AGGREGATED_FOLLOWUPS_KEY} via state (after merge) and returned spread.
      */
     public Map<String, Object> runInnerRoundOnce(Event event, Map<String, Object> state, Map<String, Object> bind) {
         Map<String, Object> spread = baseSpread();
@@ -346,7 +335,6 @@ public final class PlanningCyclePipeline {
             return spread;
         }
         String contextId = ctx.contextId();
-        List<String> aggregatedFollowUps = readAggregatedFromState(state);
         String prevSynth = getString(state, PARTIAL_LAST_SYNTH_KEY);
         FeaturePlanState plan = ctx.plan();
         InnerRoundResult round =
@@ -357,10 +345,8 @@ public final class PlanningCyclePipeline {
                         ctx.work(),
                         spread,
                         bind,
-                        aggregatedFollowUps,
                         plan,
                         prevSynth != null ? prevSynth : "");
-        putAggregatedJson(spread, aggregatedFollowUps);
         spread.put(PARTIAL_LAST_ROLE_SUMMARY_KEY, round.lastRoleRoundSummary());
         spread.put(PARTIAL_LAST_SYNTH_KEY, round.lastSynthLlmLine());
         spread.put(PARTIAL_DEPTH_OK_KEY, round.depthOk() ? "true" : "false");
@@ -380,7 +366,6 @@ public final class PlanningCyclePipeline {
         }
         String contextId = ctx.contextId();
         int cycleIteration = parseInt(getString(state, "planningRoomCycleIteration"), 0);
-        List<String> aggregatedFollowUps = readAggregatedFromState(state);
         boolean depthOk = "true".equalsIgnoreCase(getString(state, PARTIAL_DEPTH_OK_KEY));
         String depthReason = getString(state, PARTIAL_DEPTH_REASON_KEY);
         if (depthReason == null) {
@@ -404,7 +389,7 @@ public final class PlanningCyclePipeline {
         FeaturePlanState plan = planStateStore.getByContextId(contextId).orElse(ctx.plan());
         WorkProfileDefinition profileFin = ctx.profile();
         ClarificationRoundOutcome clrFin =
-                resolveClarificationRound(contextId, plan, state, profileFin, aggregatedFollowUps, true);
+                resolveClarificationRound(contextId, plan, state, profileFin, true);
         plan = clrFin.plan();
         RankedClarification rankedLlmFin = clrFin.rankedLlm();
         PlanningDeliberationLedgerSync.UpsertResult upsertFin = clrFin.upsert();
@@ -452,6 +437,7 @@ public final class PlanningCyclePipeline {
                 spread,
                 plan,
                 clrFin,
+                ranked,
                 profileFin,
                 userInputRequired,
                 readyToPost,
@@ -541,7 +527,6 @@ public final class PlanningCyclePipeline {
             FeaturePlanState plan,
             Map<String, Object> state,
             WorkProfileDefinition profile,
-            List<String> aggregatedFollowUps,
             boolean draftingCompletedThisInvocation) {
         UnresolvedItemLedger ledger = UnresolvedItemLedger.readFrom(state);
         CoordinatorClarificationSettings coord = profile.getCoordinatorClarification();
@@ -549,13 +534,15 @@ public final class PlanningCyclePipeline {
         if (coord.isCanonicalV1()) {
             boolean semanticAllowed = semanticClarificationAllowed(plan, state, draftingCompletedThisInvocation);
             boolean critiqueSweep =
-                    "true".equalsIgnoreCase(getString(state, "planningCritiqueOpenClarificationSweep"));
+                    plan != null
+                            && plan.getPlanningCanonicalDecision() != null
+                            && "post_critique".equalsIgnoreCase(plan.getPlanningCanonicalDecision().source())
+                            && plan.getPlanningCanonicalDecision().nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION;
             for (int sweep = 0; sweep < 3; sweep++) {
                 List<AssessedGap> assessedSweep =
                         ClarificationEngineAssessor.assessCanonicalGaps(
                                 plan,
                                 coord,
-                                aggregatedFollowUps,
                                 semanticAllowed,
                                 getString(state, "planningRepoEvidenceJson"),
                                 critiqueSweep);
@@ -587,7 +574,6 @@ public final class PlanningCyclePipeline {
                     ClarificationEngineAssessor.assessCanonicalGaps(
                             plan,
                             coord,
-                            aggregatedFollowUps,
                             semanticAllowed,
                             getString(state, "planningRepoEvidenceJson"),
                             critiqueSweep);
@@ -612,13 +598,11 @@ public final class PlanningCyclePipeline {
                     ClarificationEngineAssessor.assessCanonicalGaps(
                             plan,
                             coord,
-                            aggregatedFollowUps,
                             semanticAllowed,
                             getString(state, "planningRepoEvidenceJson"),
                             critiqueSweep);
             List<CoordinatorClarificationGapEvaluator.OpenGap> openRawFinal =
-                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                            plan, coord, aggregatedFollowUps, semanticAllowed);
+                    CoordinatorClarificationGapEvaluator.evaluateOpenGaps(plan, coord, semanticAllowed);
             CoordinatorClarificationGapEvaluator.OpenGap topAskFinal = null;
             for (AssessedGap ag : assessedFinal) {
                 if (ag.decision() == ClarificationResolutionDecision.ASK_USER) {
@@ -645,7 +629,7 @@ public final class PlanningCyclePipeline {
                                     : CoordinatorClarificationGapEvaluator.openGapIds(openRawFinal));
             RankedClarification rankedBeforeEnsure =
                     topAskFinal == null
-                            ? rankSynthFallbackQuestion(plan, ledger, profile, aggregatedFollowUps)
+                            ? emptyRankedClarification()
                             : rankCanonicalOpenTopGap(
                                     plan,
                                     ledger,
@@ -696,7 +680,7 @@ public final class PlanningCyclePipeline {
         rankedLlm =
                 PlanningQuestionRankingPolicy.rank(
                         plan,
-                        aggregatedFollowUps,
+                        List.of(),
                         1,
                         ledger,
                         profile.isBoundedClarificationChoicesEnabled(),
@@ -719,6 +703,7 @@ public final class PlanningCyclePipeline {
             Map<String, Object> spread,
             FeaturePlanState plan,
             ClarificationRoundOutcome clr,
+            RankedClarification ranked,
             WorkProfileDefinition profile,
             boolean userInputRequired,
             boolean readyToPost,
@@ -772,15 +757,6 @@ public final class PlanningCyclePipeline {
                 }
             }
         }
-        if (gov.action() == PlanningPostDraftAction.ASK_ONE_QUESTION
-                && contextId != null
-                && !contextId.isBlank()
-                && plan != null
-                && plan.getPlanningIntakeStage() != PlanningIntakeStage.CLARIFYING) {
-            FeaturePlanState clarifying = plan.withPlanningIntakeStage(PlanningIntakeStage.CLARIFYING, java.time.Instant.now());
-            planStateStore.update(clarifying);
-            plan = planStateStore.getByContextId(contextId).orElse(clarifying);
-        }
         boolean effectiveReady = gov.readyToPostPacket();
         if (gov.action() == PlanningPostDraftAction.BLOCK) {
             spread.put("planningUserInputRequired", "false");
@@ -802,15 +778,6 @@ public final class PlanningCyclePipeline {
                 plan = planStateStore.getByContextId(contextId).orElse(updated);
             }
         }
-        spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
-        spread.put("planningPhase", gov.planningPhase());
-        spread.put("planningRevisionNeeded", gov.revisionNeeded() ? "true" : "false");
-        PlanningReadinessSpread.applyCycleReadiness(spread, gov);
-        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, gov.action().name());
-        spread.put(
-                PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY,
-                gov.noticeMarkdown() != null ? gov.noticeMarkdown() : "");
-        boolean wantsRevision = !effectiveReady && !effectiveUser;
         String situation =
                 PlanningPostDraftGovernor.revisionSituationFingerprint(
                         depthOk,
@@ -819,8 +786,62 @@ public final class PlanningCyclePipeline {
                         effectiveUser,
                         effectiveReady,
                         clr.upsert().ledger());
+        String materialFingerprint =
+                PlanningPostDraftGovernor.materialStateChangeFingerprint(signal, plan);
+        PlanningCanonicalDecision canonical =
+                PlanningCanonicalDecisionSupport.normalizePostDraft(
+                        plan,
+                        gov,
+                        ranked,
+                        getString(signal, "planningRepoEvidenceJson"),
+                        clarificationGapId(ranked),
+                        materialFingerprint);
+        if (contextId != null && !contextId.isBlank() && plan != null) {
+            String askedDecisionId =
+                    canonical.nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION ? canonical.decisionId() : "";
+            FeaturePlanState updatedPlan =
+                    plan.withPlanningCanonicalDecision(canonical, materialFingerprint, askedDecisionId)
+                            .withPlanningIntakeStage(canonical.stage(), java.time.Instant.now());
+            if (canonical.nextAction() == PlanningCanonicalNextAction.BLOCK) {
+                String synthCat = blankToEmpty(getString(spread, "planningSynthesisFailureCategory"));
+                if (!synthCat.isBlank()) {
+                    boolean rd = "true".equalsIgnoreCase(getString(spread, "planningRecoverableDraftAfterSynthesis"));
+                    updatedPlan =
+                            updatedPlan.withPlannerRecoveryFields(
+                                    PlanningFailureCategory.parse(synthCat),
+                                    getString(spread, "planningPhase"),
+                                    rd,
+                                    PlanningUserFacingCopy.humanizePlanningRoomCycleErrorCode(synthCat));
+                }
+            }
+            planStateStore.update(updatedPlan);
+            plan = planStateStore.getByContextId(contextId).orElse(updatedPlan);
+        }
+        effectiveUser = canonical.nextAction() == PlanningCanonicalNextAction.ASK_ONE_QUESTION;
+        effectiveReady = canonical.nextAction() == PlanningCanonicalNextAction.POST_PACKET;
+        spread.put("planningReadyToPostPacket", effectiveReady ? "true" : "false");
+        spread.put("planningPhase", gov.planningPhase());
+        spread.put("planningRevisionNeeded", gov.revisionNeeded() ? "true" : "false");
+        PlanningReadinessSpread.applyCycleReadiness(
+                spread,
+                new PlanningPostDraftGovernor.Result(
+                        gov.action(),
+                        gov.outcome(),
+                        gov.noticeMarkdown(),
+                        gov.forceUserInputRequired(),
+                        effectiveUser,
+                        effectiveReady,
+                        gov.planningPhase(),
+                        gov.revisionNeeded()));
+        PlanningCanonicalDecisionSupport.projectToSpread(spread, canonical);
+        spread.put(PlanningPostDraftGovernor.SPREAD_KEY, gov.action().name());
+        spread.put(
+                PlanningPostDraftGovernor.NOTICE_MARKDOWN_KEY,
+                gov.noticeMarkdown() != null ? gov.noticeMarkdown() : "");
+        boolean wantsRevision = !effectiveReady && !effectiveUser;
         PlanningPostDraftGovernor.writePersistenceKeys(
                 spread, signal, plan, gov, wantsRevision, situation);
+        spread.put(PlanningCanonicalDecisionSupport.LAST_MATERIAL_CHANGE_FP_KEY, materialFingerprint);
     }
 
     /**
@@ -831,8 +852,8 @@ public final class PlanningCyclePipeline {
         if (spread == null) {
             return;
         }
-        if (!PlanningPostDraftAction.ASK_ONE_QUESTION.name().equalsIgnoreCase(
-                getString(spread, PlanningPostDraftGovernor.SPREAD_KEY))) {
+        if (!PlanningCanonicalNextAction.ASK_ONE_QUESTION.name().equalsIgnoreCase(
+                getString(spread, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY))) {
             return;
         }
         FeaturePlanState p = plan;
@@ -864,6 +885,19 @@ public final class PlanningCyclePipeline {
         spread.put("planningCycleProgressSummary", line);
         spread.put("userCopyCoordinatorProgress", line);
         spread.put("planningOrchestratorRoundSummary", line);
+    }
+
+    private static String clarificationGapId(RankedClarification ranked) {
+        if (ranked == null || ranked.metaJson() == null || ranked.metaJson().isBlank()) {
+            return "";
+        }
+        try {
+            Map<String, Object> meta = JSON.readValue(ranked.metaJson(), new TypeReference<>() {});
+            Object gapId = meta.get("gapId");
+            return gapId != null ? gapId.toString().trim() : "";
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     static boolean resolvePlanningUserInputRequired(
@@ -1096,77 +1130,6 @@ public final class PlanningCyclePipeline {
         return withCoordinatorGapMeta(ranked, top.gapId(), top.blocking());
     }
 
-    private static RankedClarification rankSynthFallbackQuestion(
-            FeaturePlanState plan,
-            UnresolvedItemLedger ledger,
-            WorkProfileDefinition profile,
-            List<String> aggregatedFollowUps) {
-        if (aggregatedFollowUps == null || aggregatedFollowUps.isEmpty()) {
-            return emptyRankedClarification();
-        }
-        List<String> fallback = new ArrayList<>();
-        for (String q : aggregatedFollowUps) {
-            if (q != null && !q.isBlank()) {
-                fallback.add(q.trim());
-            }
-        }
-        if (fallback.isEmpty()) {
-            return emptyRankedClarification();
-        }
-        RankedClarification ranked =
-                PlanningQuestionRankingPolicy.rank(
-                        plan,
-                        fallback,
-                        1,
-                        ledger,
-                        profile != null && profile.isBoundedClarificationChoicesEnabled(),
-                        profile != null && profile.isInferBoundedChoiceFromOrInTextEnabled());
-        String question = ranked.questionText() != null ? ranked.questionText().trim() : "";
-        if (ranked.userInputRequired() && !question.isBlank() && !ClarificationPromptQualityGate.isGenericOrMetaClarification(question)) {
-            return ranked;
-        }
-        String bestCandidate = "";
-        int bestScore = Integer.MIN_VALUE;
-        for (String candidate : fallback) {
-            if (candidate == null || candidate.isBlank()) {
-                continue;
-            }
-            String trimmed = candidate.trim();
-            if (!ClarificationPromptQualityGate.acceptableClarificationCandidate(trimmed)
-                    || ClarificationPromptQualityGate.isGenericOrMetaClarification(trimmed)
-                    || ledger.hasFingerprintMergeClosed(trimmed)) {
-                continue;
-            }
-            int candidateScore = synthFallbackQuestionScore(trimmed);
-            if (candidateScore > bestScore) {
-                bestCandidate = trimmed;
-                bestScore = candidateScore;
-            }
-        }
-        if (!bestCandidate.isBlank()) {
-            return new RankedClarification(true, "", "[]", "{}", 0, ranked.assumptionsToRecord(), false, bestCandidate);
-        }
-        return emptyRankedClarification();
-    }
-
-    private static int synthFallbackQuestionScore(String question) {
-        String q = question != null ? question.toLowerCase(java.util.Locale.ROOT) : "";
-        int score = Math.min(4, q.length() / 40);
-        if (q.contains("workflow") || q.contains("step")) {
-            score += 4;
-        }
-        if (q.contains("model") || q.contains("provider") || q.contains("override")) {
-            score += 4;
-        }
-        if (q.contains("default") || q.contains("fallback")) {
-            score += 2;
-        }
-        if (q.contains("detail")) {
-            score -= 2;
-        }
-        return score;
-    }
-
     private static void applyClarificationConfidence(
             Map<String, Object> spread,
             Map<String, Object> state,
@@ -1379,8 +1342,7 @@ public final class PlanningCyclePipeline {
             Event event,
             Map<String, Object> work,
             Map<String, Object> spread,
-            Map<String, Object> bind,
-            List<String> aggregatedFollowUps) {
+            Map<String, Object> bind) {
         spread.put("planningPhase", "REQUEST_EXPANSION");
         Object expansionObj =
                 new RunRequestExpansionLlmAction(openAiChatClient, planStateStore, workProfileRegistry).run(event, work, bind);
@@ -1389,7 +1351,6 @@ public final class PlanningCyclePipeline {
             Map<String, Object> exp = (Map<String, Object>) expMap;
             mergeSpreadIntoWorkAndOuter(exp, work, spread);
         }
-        mergeExpansionFollowUpsFromWork(work, aggregatedFollowUps);
         new BuildRequestExplorationAction(planStateStore, workProfileRegistry).run(event, work, bind);
     }
 
@@ -1400,7 +1361,6 @@ public final class PlanningCyclePipeline {
             Map<String, Object> work,
             Map<String, Object> spread,
             Map<String, Object> bind,
-            List<String> aggregatedFollowUps,
             FeaturePlanState plan,
             String previousSynthLine) {
         spread.put("planningPhase", "DRAFTING");
@@ -1409,7 +1369,7 @@ public final class PlanningCyclePipeline {
         List<PlanningCoordinatorRole> passOrder = ConfigurablePassRunner.resolveOrder(work, bind);
         spread.put("planningRolePassOrderResolved", passOrder.toString());
         for (PlanningCoordinatorRole passRole : passOrder) {
-            runRole(passRole, planPtr, profile, event, work, spread, aggregatedFollowUps, roleTags);
+            runRole(passRole, planPtr, profile, event, work, spread, roleTags);
             planPtr = planStateStore.getByContextId(contextId).orElse(planPtr);
         }
         String lastRoleRoundSummary = summarizeRoleRound(passOrder, roleTags);
@@ -1422,7 +1382,6 @@ public final class PlanningCyclePipeline {
         @SuppressWarnings("unchecked")
         Map<String, Object> synthSpread = synthObj instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
         mergeSpreadIntoWorkAndOuter(synthSpread, work, spread);
-        mergeSynthFollowUps(spread, aggregatedFollowUps);
         applyImmediateSynthesisFailure(contextId, spread, synthSpread);
         String lastSynthLlmLine = pickSynthLlmLine(synthSpread, previousSynthLine);
 
@@ -1438,32 +1397,6 @@ public final class PlanningCyclePipeline {
         spread.put("planningPacketDepthReason", depthReason);
         spread.put("planningPacketDepthRetryRecommended", depthOk ? "false" : "true");
         return new InnerRoundResult(planPtr, depthOk, depthReason, lastRoleRoundSummary, lastSynthLlmLine);
-    }
-
-    private static List<String> readAggregatedFromState(Map<String, Object> state) {
-        if (state == null) {
-            return new ArrayList<>();
-        }
-        Object raw = state.get(PARTIAL_AGGREGATED_FOLLOWUPS_KEY);
-        if (raw == null || raw.toString().isBlank()) {
-            return new ArrayList<>();
-        }
-        try {
-            List<String> list = JSON.readValue(raw.toString(), new TypeReference<>() {});
-            return list != null ? new ArrayList<>(list) : new ArrayList<>();
-        } catch (JsonProcessingException e) {
-            return new ArrayList<>();
-        }
-    }
-
-    private static void putAggregatedJson(Map<String, Object> spread, List<String> aggregatedFollowUps) {
-        try {
-            spread.put(
-                    PARTIAL_AGGREGATED_FOLLOWUPS_KEY,
-                    JSON.writeValueAsString(aggregatedFollowUps != null ? aggregatedFollowUps : List.of()));
-        } catch (JsonProcessingException e) {
-            spread.put(PARTIAL_AGGREGATED_FOLLOWUPS_KEY, "[]");
-        }
     }
 
     private static void mergeSpreadIntoWorkAndOuter(
@@ -1646,46 +1579,6 @@ public final class PlanningCyclePipeline {
         return (ex != null && !ex.isBlank()) || (fs != null && !fs.isBlank());
     }
 
-    private static void mergeExpansionFollowUpsFromWork(Map<String, Object> work, List<String> aggregated) {
-        if (work == null || aggregated == null) {
-            return;
-        }
-        Object raw = work.get("planningExpansionFollowUpsJson");
-        if (raw == null) {
-            return;
-        }
-        try {
-            List<String> qs = JSON.readValue(raw.toString(), new TypeReference<>() {});
-            for (String q : qs) {
-                if (q != null && !q.isBlank()) {
-                    aggregated.add(q.trim());
-                }
-            }
-        } catch (JsonProcessingException ignored) {
-            // ignore
-        }
-    }
-
-    private static void mergeSynthFollowUps(Map<String, Object> synthesisSpread, List<String> aggregated) {
-        if (synthesisSpread == null) {
-            return;
-        }
-        Object raw = synthesisSpread.get("planningFollowUpQuestionsJson");
-        if (raw == null) {
-            return;
-        }
-        try {
-            List<String> qs = JSON.readValue(raw.toString(), new TypeReference<>() {});
-            for (String q : qs) {
-                if (q != null && !q.isBlank()) {
-                    aggregated.add(q.trim());
-                }
-            }
-        } catch (JsonProcessingException ignored) {
-            // ignore
-        }
-    }
-
     private void runRole(
             PlanningCoordinatorRole role,
             FeaturePlanState plan,
@@ -1693,15 +1586,11 @@ public final class PlanningCyclePipeline {
             Event event,
             Map<String, Object> state,
             Map<String, Object> spread,
-            List<String> aggregatedFollowUps,
             List<String> roleRoundTags) {
         spread.put("planningPhase", "CRITIQUING");
         RolePassResult r =
                 PlanningRolePassRunner.run(
                         role, openAiChatClient, plan, profile, event, state, planStateStore, workProfileRegistry);
-        if (!r.followUps().isEmpty()) {
-            aggregatedFollowUps.addAll(r.followUps());
-        }
         String label = roleUserLabel(role);
         if (r.skipped() && "NO_API_KEY".equals(r.error())) {
             roleRoundTags.add("SKIP_NO_KEY");

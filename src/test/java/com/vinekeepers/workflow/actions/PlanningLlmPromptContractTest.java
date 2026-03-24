@@ -16,7 +16,10 @@ class PlanningLlmPromptContractTest {
         String system = staticStringField(RunRequestExpansionLlmAction.class, "SYSTEM");
         assertTrue(system.contains("question_if_needed"));
         assertTrue(system.contains("recommended_action"));
-        assertTrue(system.contains("ASK_ONE_QUESTION | ASSUME_AND_CONTINUE | POST_PACKET | BLOCK"));
+        assertTrue(system.contains("ASK_ONE_QUESTION"));
+        assertTrue(system.contains("AUTONOMOUS_REDRAFT"));
+        assertTrue(system.contains("POST_PACKET"));
+        assertTrue(system.contains("BLOCK"));
         assertTrue(system.contains("top_unresolved_gap"));
         assertTrue(system.contains("explicit_assumptions"));
         assertTrue(system.contains("repo_evidence_this_pass"));
@@ -26,6 +29,8 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("current_state_summary"));
         assertTrue(system.contains("never use the literal key \"fieldId\""));
         assertFalse(system.contains("candidate_open_questions"));
+        assertFalse(system.contains("follow_up_decisions"));
+        assertFalse(system.contains("follow_up_questions"));
         assertFalse(system.contains("\"fieldId\": \"value\""));
     }
 
@@ -37,13 +42,16 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("repo_evidence_this_pass"));
         assertTrue(system.contains("recommended_action"));
         assertTrue(system.contains("top_unresolved_gap"));
-        assertTrue(system.contains("Always leave follow_up_questions empty"));
+        assertTrue(system.contains("AUTONOMOUS_REDRAFT"));
         assertTrue(system.contains("Return exactly one JSON object"));
         assertTrue(system.contains("Wrong: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"feature_summary\""));
         assertTrue(system.contains("Right: {\"artifactId\":\"requirements_spec\",\"sectionId\":\"narrative\""));
         assertTrue(system.contains("do not name paths/packages unless observed"));
         assertTrue(system.contains("current_state_summary"));
         assertTrue(system.contains("never use the literal key \"fieldId\""));
+        assertFalse(system.contains("open_questions_block"));
+        assertFalse(system.contains("None — ready to implement"));
+        assertFalse(system.contains("follow_up_questions"));
         assertFalse(system.contains("\"fieldId\": \"value string\""));
     }
 
@@ -60,9 +68,12 @@ class PlanningLlmPromptContractTest {
         assertTrue(system.contains("requirements_spec"));
         assertTrue(system.contains("sectionId\": \"narrative\""));
         assertTrue(system.contains("feature_summary"));
-        assertTrue(system.contains("open_questions"));
+        assertTrue(system.contains("question_if_needed"));
+        assertTrue(system.contains("top_unresolved_gap"));
+        assertTrue(system.contains("repo_evidence_this_pass"));
         assertTrue(system.contains("literal key \"fieldId\""));
-        assertTrue(system.contains("If you are unsure, return {\"upserts\":[],\"follow_up_questions\":[]}"));
+        assertTrue(system.contains("AUTONOMOUS_REDRAFT"));
+        assertFalse(system.contains("open_questions_block.backlog"));
         assertFalse(system.contains("\"fieldId\": \"value\""));
     }
 

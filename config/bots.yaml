@@ -114,9 +114,8 @@ workflows:
       - planningPacketSkipReason
       - planReadinessStatus
       - planReadinessStatusLabel
-      - planningCritiqueNextAction
-      - planningNextActionLabel
-      - planningNextActionSummary
+      - planningCanonicalActionLabel
+      - planningCanonicalActionSummary
       - planReadinessSummary
       - planAssumptionsSummary
       - planIssuesSummary
@@ -434,7 +433,7 @@ workflows:
 
               **Status:** {{planReadinessStatusLabel}}
 
-              **Next action:** {{planningNextActionLabel}}
+              **Next action:** {{planningCanonicalActionLabel}}
 
               {{planReadinessSummary}}
 
@@ -493,7 +492,7 @@ workflows:
 
             **Status:** {{planReadinessStatusLabel}}
 
-            **Next action:** {{planningNextActionLabel}}
+            **Next action:** {{planningCanonicalActionLabel}}
 
             {{planReadinessSummary}}
 
@@ -520,7 +519,7 @@ workflows:
         bind:
           content: '**Approval held** — {{planningApprovalGateReason}}
 
-            {{planningNextActionSummary}}
+            {{planningCanonicalActionSummary}}
 
             Reply with `revise` to run another planning round, or `continue` after you have more context to review.'
           asRole: orchestrator
@@ -685,59 +684,53 @@ workflows:
       rs_post_draft:
         - when:
             equals:
-              key: planningPostDraftAction
+              key: planningCanonicalNextAction
               value: ASK_ONE_QUESTION
           then:
           - transition: planning_clarification
         - when:
             equals:
-              key: planningPostDraftAction
+              key: planningCanonicalNextAction
               value: POST_PACKET
           then:
           - transition: planning_packet
         - when:
             equals:
-              key: planningPostDraftAction
-              value: ASSUME_AND_CONTINUE
-          then:
-          - transition: planning_packet
-        - when:
-            equals:
-              key: planningPostDraftAction
+              key: planningCanonicalNextAction
               value: AUTONOMOUS_REDRAFT
           then:
           - transition: planning_redraft_notice
         - when:
             equals:
-              key: planningPostDraftAction
+              key: planningCanonicalNextAction
               value: BLOCK
           then:
           - transition: planning_blocked
       rs_critique:
         - when:
             equals:
-              key: planningCritiqueNextAction
+              key: planningCanonicalNextAction
               value: BLOCK
           then:
           - transition: planning_blocked
         - when:
             equals:
-              key: planningCritiqueNextAction
+              key: planningCanonicalNextAction
               value: ASK_ONE_QUESTION
           then:
           - transition: planning_clarification
         - when:
             equals:
-              key: planningCritiqueNextAction
-              value: REVIEWABLE
-          then:
-          - transition: planning_human_review
-        - when:
-            equals:
-              key: planningCritiqueNextAction
-              value: REVISE_INTERNAL
+              key: planningCanonicalNextAction
+              value: AUTONOMOUS_REDRAFT
           then:
           - transition: planning_revision_reset
+        - when:
+            equals:
+              key: planningReviewAllowed
+              value: 'true'
+          then:
+          - transition: planning_human_review
       rs_human_review:
         - when:
             equals:

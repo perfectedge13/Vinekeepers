@@ -44,28 +44,13 @@ class PlanningPromptFormatterTest {
     }
 
     @Test
-    void requiredFieldPromptForOpenQuestionsUsesClarificationSafeWording() {
-        FieldDefinition field = new FieldDefinition(
-                "open_questions",
-                "Open questions",
-                "text",
-                true,
-                "Unknowns to confirm, one per line.");
-        SectionDefinition section = new SectionDefinition(
-                "backlog",
-                "Unresolved questions",
-                false,
-                true,
-                List.of(field));
-        ArtifactDefinition artifact = new ArtifactDefinition(
-                "open_questions_block",
-                "Open questions",
-                List.of(),
-                true,
-                List.of(section));
-        String prompt = PlanningPromptFormatter.requiredFieldPrompt(artifact, section, field, -1);
-        assertTrue(prompt.contains("None — ready to implement"));
-        assertFalse(prompt.toLowerCase().contains("open questions"));
+    void requiredFieldPromptNeverEmitsLegacyReadyToImplementRitual() {
+        WorkProfileDefinition profile = sampleProfile();
+        ArtifactDefinition art = profile.getArtifactsById().get("governance_decisions");
+        SectionDefinition sec = art.getSections().get(0);
+        FieldDefinition f = sec.getFields().get(0);
+        String prompt = PlanningPromptFormatter.requiredFieldPrompt(art, sec, f, -1);
+        assertFalse(prompt.contains("None — ready to implement"));
         assertTrue(ClarificationPromptQualityGate.passes(prompt));
     }
 

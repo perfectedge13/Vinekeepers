@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-24T01:00:00Z"
+  updated_utc: "2026-03-24T03:48:06Z"
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -385,11 +385,12 @@ assets:
     role: >-
       Composable planning-room cycle logic invoked by execute_planning_room_cycle; exposes partial phases
       runExpansionPhaseOnly, runInnerRoundOnce, finalizePlanningCycleSpread for planning_cycle_* actions and v2 YAML composition;
-      planningPartialAggregatedFollowUpsJson carries follow-ups between partial calls; ranks clarifications with ledger fingerprint
+      split-cycle execution no longer persists intermediate follow-up question arrays between actions
       filtering; optional selective rerun after merge (skips expansion, one inner round); ConfigurablePassRunner resolves
       the Arrietty planning pass from planningRolePassOrder bind (legacy architect/auditor/scribe tokens collapse to the same pass); derives a
-      single pre-packet loop outcome through PlanningPostDraftGovernor (ASK / REDRAFT / POST / ASSUME / BLOCK) and treats planningPhase,
-      planningReadyToPostPacket, and planningRevisionNeeded as derived views of that result; DeliberationEngine
+      single pre-packet semantic outcome through PlanningPostDraftGovernor, then normalizes it into one persisted canonical decision
+      on FeaturePlanState (stage / nextAction / interactionState / routing booleans / gap metadata) so YAML and packet posting route only from canonical decision projections; planningPhase,
+      planningReadyToPostPacket, and planningRevisionNeeded remain derived diagnostics only; DeliberationEngine
       derives deliberationPhase; enriches userCopy* keys and typed ProgressEventLog; when work profile coordinatorClarification
       mode is canonical_v1, CoordinatorClarificationGapEvaluator plus reconcileCanonicalOpenGaps drive which clarification upserts
       and planningUserInputRequired follows open-gap evaluation (not OPEN-ledger-first); merge/reconciliation can add an explicit
@@ -399,11 +400,11 @@ assets:
       and ClarificationPromptQualityGate drop generic/meta/completeness/catch-all open-question prompts; ranked open-question substance
       aligns with unresolved plan state (governance + artifact text), not free-form LLM filler; canonical coordinator questions use
       plain-text ranking unless a gap rule sets useBoundedChoiceUi; userCopyCoordinatorProgress mirrors human progress text for
-      post_planning_progress_if_changed; legacy profiles still rank aggregated LLM follow-ups with ledger fingerprint filtering;
-      PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;       PlanningQuestionRankingPolicy.rank uses
+      post_planning_progress_if_changed; PlanningGapEvaluator effectiveRanked skips ledger rehydration in canonical_v1 mode;
+      PlanningQuestionRankingPolicy.rank uses
       maxQuestions budget 1 for coordinator LLM follow-up ranking and canonical repair paths; ClarificationEngineAssessor runs after
       draft/gap evaluation for canonical_v1, using repo-grounding evidence strength, CoordinatorClarificationEnginePolicy thresholds,
-      clarification-turn budget, per-gap ask budget, and critique follow-up state to choose ClarificationResolutionDecision before surfacing a question;
+      clarification-turn budget, per-gap ask budget, and post-critique canonical ask state to choose ClarificationResolutionDecision before surfacing a question;
       planningCycleUserVisibleFailure maps
       planningRoomCycleError through PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine and LLM error/skip lines through
       humanizePlanningCycleFailureFragment; planningOrchestratorRoundSummary and
@@ -412,15 +413,14 @@ assets:
       synthesizes a non-empty RankedClarification before upsert so ledger and prompts stay consistent; spread keys
       planningCanonicalUserInputRequired and planningLlmUserInputSuggested expose open-gap vs raw ranker signals alongside
       planningUserInputRequired; on a full cycle completion with no planningRoomCycleError, spreads planningAutonomousFirstPassCompleted true;
-      finalizePlanningCycleSpread reassesses canonical clarification with post-draft semantics after the inner round and, when canonical
-      reassessment still yields no open gap, may preserve a single synthesized clarification question as a narrow fallback instead of
-      letting the fail-closed post-assess route collapse into planning_blocked;
+      finalizePlanningCycleSpread reassesses canonical clarification with post-draft semantics after the inner round and routes from the
+      persisted canonical decision only;
       alongside machine planningRoomCycleError codes, spreads planningRoomCycleErrorUserMessage (PlanningUserFacingCopy.humanizePlanningRoomCycleErrorLine)
       for Discord templates; orchestrator workspace line uses PlanningDraftSupport.humanizeRepoWorkspaceStatus instead of raw enum tokens;
-      PlanningPostDraftGovernor derives planningPostDraftAction (ASK_ONE_QUESTION, ASSUME_AND_CONTINUE, POST_PACKET, BLOCK,
-      AUTONOMOUS_REDRAFT) plus a canonical loop outcome, planningPostDraftNoticeMarkdown, planningAutonomousRedraftCount,
-      planningClarificationConfidenceScore/high, and material/revision baselines so Arrietty v2 post-assess YAML
-      routes only on that action (no truthy planningUserInputRequired/planningReadyToPostPacket convergence); finalizePlanningCycleSpread
+      PlanningPostDraftGovernor still derives planningPostDraftAction (including transient ASSUME_AND_CONTINUE), but PlanningCyclePipeline now
+      collapses that into canonical nextAction values (ASK_ONE_QUESTION, AUTONOMOUS_REDRAFT, POST_PACKET, BLOCK) plus planningPostDraftNoticeMarkdown,
+      planningAutonomousRedraftCount, planningClarificationConfidenceScore/high, and material/revision baselines so Arrietty v2 post-assess YAML
+      routes only on canonical decision projections (no truthy planningUserInputRequired/planningReadyToPostPacket convergence and no ASSUME_AND_CONTINUE router); finalizePlanningCycleSpread
       persists FeaturePlanState.autonomousPlanningPassCompleted when the split draft path completes without cycle error (parity with execute),
       mirrors selective rerun after a merged clarification, and re-derives plan governance before the governor runs;
       applyImmediateSynthesisFailure sets planningRecoverableDraftAfterSynthesis and planningSuppressAutonomousRedraftNotice for
@@ -435,6 +435,17 @@ assets:
       still empty) so packet/review preamble does not mix into that beat
     requires:
       - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-PLANNING-CANONICAL-DECISION-SUPPORT
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/planning/PlanningCanonicalDecisionSupport.java
+    role: >-
+      Canonical decision normalizer/projection helper for planning; builds the persisted PlanningCanonicalDecision after draft
+      and critique passes, derives canonical stage and interaction state, and projects canonical-only spread keys for YAML routing
+    requires:
+      - REQ-WORKFLOW-001
+      - REQ-WORKFLOW-002
     feature_ids:
       - FEAT-WORKFLOW-STEPS
   - id: ASSET-PLANNING-POST-DRAFT-GOVERNOR
@@ -1627,9 +1638,9 @@ assets:
     role: >-
       Workflow action run_plan_critique_and_readiness — builds findings, PlanCritiqueRubric rollup, PlanReadinessCalculator
       output; persists PlanCritiqueSnapshot (rubric, blocking counts, required revisions), PlanConfidence (readiness,
-      confidenceScore, confidenceReasons, structuredKnownFactCount, materialUnknownCount, materialUnknownLabels), critiqueLifecycleStatus COMPLETE; storeSpread canonical planReadinessStatus,
-      planReadinessStatusLabel (PlanningUserFacingCopy for Discord templates), planningCritiqueNextAction, planningNextActionLabel,
-      planningNextActionSummary, planConfidenceScore, planConfidenceLevel,
+      confidenceScore, confidenceReasons, structuredKnownFactCount, materialUnknownCount, materialUnknownLabels), critiqueLifecycleStatus COMPLETE, and a canonical post-critique decision on FeaturePlanState;
+      storeSpread canonical planReadinessStatus, planReadinessStatusLabel (PlanningUserFacingCopy for Discord templates), planningCanonicalActionLabel,
+      planningCanonicalActionSummary, planConfidenceScore, planConfidenceLevel,
       planReadinessSummary, planReadinessCheckpointGuide (plain-English explanatory checkpoint copy when planReadinessStatus is
       REVIEWABLE; points the operator to the upcoming interactive choice prompt and text fallback instead of restating button labels;
       empty otherwise; PlanningUserFacingCopy.readinessCheckpointGuideForDiscord),
@@ -1717,9 +1728,9 @@ assets:
     role: >-
       Planning packet depth gate: when WorkProfileDefinition has declarative readiness (readiness.anyOfGroups and/or field
       richness keys), runs GenericReadinessEvaluator then supplemental checks (workspace/components, open questions, validation
-      specificity); relaxOpenQuestionSupplementalChecks(state) skips thin/placeholder open_questions supplemental checks when
-      planningCanonicalUserInputRequired is false and the unresolved ledger has no OPEN blocking row; accepts "None — ready to implement"
-      when no unresolved questions remain; otherwise legacy all-in-one heuristics (word counts, placeholder/anti-echo, etc.);
+      specificity); relaxOpenQuestionSupplementalChecks(state) now serves only canonical clarification gating and no longer scores
+      free-text open_questions artifacts or ready-to-implement sentinels; otherwise legacy all-in-one heuristics (word counts,
+      placeholder/anti-echo, etc.);
       user-facing depth reasons describe architecture/components in plain language (no raw field ids)
     requires:
       - REQ-WORKFLOW-001
@@ -1839,9 +1850,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/planreview/PlanningArtifactTexts.java
     role: >-
       Reads canonical artifact section bodies (same paths as proposal auto-apply / thread review) for repeatable fields and
-      open_questions; substantiveUnresolvedQuestionLines and effectiveOpenQuestions filter FeaturePlanState.unresolvedQuestions for
-      Discord packet “open questions” so meta/completeness filler does not appear; supplies NO_OPEN_QUESTIONS_READY sentinel and
-      normalized text used when ranking clarifications against unresolved plan state
+      unresolved-question projections; substantiveUnresolvedQuestionLines and unresolvedQuestionSummary filter
+      FeaturePlanState.unresolvedQuestions for Discord packet “open questions” so meta/completeness filler does not appear
     requires:
       - REQ-WORKFLOW-001
       - REQ-WORKFLOW-002
@@ -1903,7 +1913,7 @@ assets:
       Workflow action run_llm_planning_synthesis — optional LLM JSON upserts into plan artifacts via UpsertArtifactSectionDataAction;
       ChatGPT prompts require repo evidence tiers (observed this pass vs inferred vs unknown), a single recommended_action aligned with
       post-draft routing semantics, at most one question_if_needed, and forbid generic open-question candidate lists; storeSpread
-      planningLlmOk, planningLlmError, planningLlmSkipReason, planningFollowUpQuestionsJson; no-op when API key absent;
+      planningLlmOk, planningLlmError, planningLlmSkipReason; no-op when API key absent;
       parse uses shared PlanningLlmJsonSupport extraction and attempts one bounded JSON repair pass; spreads planningSynthesisFailureCategory
       (PlanningFailureCategory: SYNTHESIS_TRANSPORT_ERROR, SYNTHESIS_JSON_INVALID, SYNTHESIS_REPAIR_EXHAUSTED,
       SYNTHESIS_UPSERT_REJECTED, SYNTHESIS_EMPTY_NOOP), planningSynthesisRepairAttempted, planningSynthesisRepairExhausted when repair
@@ -1922,7 +1932,7 @@ assets:
     role: >-
       Workflow action run_request_expansion_llm — structured JSON expansion into exploration_body and narrative/architecture
       fields; ChatGPT system prompt requires repo_evidence_this_pass tiers, recommended_action enum, single question_if_needed,
-      and caps follow-ups to one (optional follow_up_decisions only when bounded UI); forbids naming repo touchpoints not observed
+      and forbids multi-question follow-up structures or naming repo touchpoints not observed
       in supplied evidence; prompt examples use real software_feature_planning_v2 section ids and field ids rather than generic fieldId
       placeholders; uses PlanningContentGenerator with OpenAiPlanningContentGenerator as the default OpenAI-backed implementation;
       user payload may include planningRepoEvidenceJson and optional RAG snippets when present in workflow state; when a materialized
@@ -2306,9 +2316,8 @@ requirements:
           post_planning_packet_thread builds the planning packet from FeaturePlanState (PlanningThreadPacketFormatter includes
           canonical governance sections), splits for Discord size limits, posts orchestrator messages to the intake/spec thread,
           spreads planningPacketPosted / planningPacketChunkCount, and persists packetPostedAt / fingerprint / chunk count on
-          FeaturePlanState when the send succeeds; default gate allows post when planningPacketDepthOk is true OR
-          reviewReady/planningReviewReady is true; bind planningPostCompatLegacyDepthOnly true restores depth-only legacy
-          behavior; skips duplicate sends when planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full
+          FeaturePlanState when the send succeeds; gate is fail-closed and requires canonical next action POST_PACKET plus
+          canonical packet-posting allowance and passing depth checks; skips duplicate sends when planningPacketLastPostedFingerprint matches the SHA-256 of the normalized full
           packet body unless bind forceRepost is true, spreading planningPacketSkippedDuplicate and a short
           planningPacketSkipReason for thread UX
         - >-
@@ -3938,6 +3947,7 @@ features:
       - ASSET-EXTRACT-EVENT-FIELDS-STEP
       - ASSET-WORKFLOW-CAPABILITY-SUPPORT
       - ASSET-PLANNING-CYCLE-PIPELINE
+      - ASSET-PLANNING-CANONICAL-DECISION-SUPPORT
       - ASSET-PLANNING-GAP-EVALUATOR
       - ASSET-PLANNING-COORDINATOR-ROLE
       - ASSET-CONFIGURABLE-PASS-RUNNER

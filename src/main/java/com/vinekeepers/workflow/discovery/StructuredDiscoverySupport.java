@@ -10,7 +10,6 @@ import com.vinekeepers.profile.SectionDefinition;
 import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.profile.WorkProfileDefinition;
 import com.vinekeepers.workflow.planning.PlanningPromptFormatter;
-import com.vinekeepers.workflow.planreview.PlanningArtifactTexts;
 import com.vinekeepers.state.planning.DiscoveryAgenda;
 import com.vinekeepers.state.planning.DiscoveryGap;
 import com.vinekeepers.state.planning.DiscoveryQuestion;
@@ -326,7 +325,7 @@ public final class StructuredDiscoverySupport {
             Map<String, Object> empty = emptyDiscoveryPromptSpread();
             empty.put(
                     "discoveryCurrentQuestionPrompt",
-                    PlanningArtifactTexts.NO_OPEN_QUESTIONS_READY + " Reply in plain text in this thread.");
+                    "Reply in plain text in this thread with the one missing detail we still need.");
             return empty;
         }
         DiscoveryQuestion first = toQuestionWithPrompt(chosen, prompt, 1);

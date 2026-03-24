@@ -176,7 +176,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             if (profileDef != null && profileDef.getCoordinatorClarification().isCanonicalV1()) {
                 var open =
                         CoordinatorClarificationGapEvaluator.evaluateOpenGaps(
-                                refreshed, profileDef.getCoordinatorClarification(), List.of());
+                                refreshed, profileDef.getCoordinatorClarification());
                 ledger =
                         PlanningDeliberationLedgerSync.reconcileCanonicalOpenGaps(
                                 ledger, CoordinatorClarificationGapEvaluator.openGapIds(open));

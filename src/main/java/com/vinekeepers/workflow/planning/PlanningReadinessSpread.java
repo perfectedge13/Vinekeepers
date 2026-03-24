@@ -56,19 +56,14 @@ public final class PlanningReadinessSpread {
     }
 
     public static boolean hasPendingClarification(Map<String, ?> map) {
-        return truthy(map, "planningCanonicalUserInputRequired")
-                || truthy(map, "planningUserInputRequired")
-                || "WAITING_FOR_CLARIFICATION".equalsIgnoreCase(getString(map, "planningPhase"))
-                || "CLARIFYING".equalsIgnoreCase(getString(map, "canonicalPlanningIntakeStage"));
+        return "WAITING_FOR_TEXT_REPLY".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_INTERACTION_STATE_KEY))
+                || "CLARIFYING".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_STAGE_KEY))
+                || truthy(map, "planningCanonicalUserInputRequired");
     }
 
     public static boolean packetPostingAllowed(Map<String, ?> map) {
-        if (truthy(map, PACKET_POSTING_ALLOWED_KEY)) {
-            return true;
-        }
-        String action = getString(map, PlanningPostDraftGovernor.SPREAD_KEY);
-        return !hasPendingClarification(map)
-                && ("POST_PACKET".equalsIgnoreCase(action) || "ASSUME_AND_CONTINUE".equalsIgnoreCase(action));
+        return "POST_PACKET".equalsIgnoreCase(getString(map, PlanningCanonicalDecisionSupport.CANONICAL_NEXT_ACTION_KEY))
+                && truthy(map, PACKET_POSTING_ALLOWED_KEY);
     }
 
     public static boolean humanReadinessAcknowledged(Map<String, ?> map) {

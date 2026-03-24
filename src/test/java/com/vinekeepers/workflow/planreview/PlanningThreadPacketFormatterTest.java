@@ -163,7 +163,7 @@ class PlanningThreadPacketFormatterTest {
                         null,
                         null,
                         null);
-        String eq = PlanningArtifactTexts.effectiveOpenQuestions(plan);
+        String eq = PlanningArtifactTexts.unresolvedQuestionSummary(plan);
         assertTrue(eq.contains("rollback"));
         assertFalse(eq.toLowerCase().contains("open questions"));
     }
