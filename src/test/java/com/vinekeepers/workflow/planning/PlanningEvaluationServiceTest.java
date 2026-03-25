@@ -359,6 +359,69 @@ class PlanningEvaluationServiceTest {
     }
 
     @Test
+    void parseAndValidate_clarificationPhasePromotesPacketWhenNoFollowUpQuestionRemains() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 58, "level": "medium", "summary": "Clarification resolved enough ambiguity." },
+                          "gaps": [
+                            { "id": "weak_val", "kind": "WEAK_VALIDATION", "description": "Validation can be refined later.", "blocking": false, "askable": false, "assumable": true }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        new PlanningEvaluationService.EvaluationContext(
+                                "planning_clarification", "", "", true, "", false, 1, "", ""),
+                        minimalPlan());
+
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
+        assertTrue(result.readyForPacket());
+        assertFalse(result.askUserRequired());
+    }
+
+    @Test
+    void parseAndValidate_clarificationPhaseStillBlocksOnBlockingContradiction() throws Exception {
+        PlanningEvaluationService service = new PlanningEvaluationService(null);
+
+        PlanningEvaluationDecision result =
+                parseAndValidate(
+                        service,
+                        """
+                        {
+                          "confidence": { "score": 22, "level": "low", "summary": "The draft contradicts the clarified answer." },
+                          "gaps": [
+                            { "id": "contra_one", "kind": "CONTRADICTION", "description": "The clarified model policy conflicts with the current plan.", "blocking": true, "askable": false, "assumable": false }
+                          ],
+                          "ask_user_required": false,
+                          "best_question": { "text": "", "rationale": "" },
+                          "assumptions_to_add": [],
+                          "issues_to_add": [],
+                          "risks_to_add": [],
+                          "decisions_to_add": [],
+                          "ready_for_packet": false
+                        }
+                        """,
+                        new PlanningEvaluationService.EvaluationContext(
+                                "planning_clarification", "", "", true, "", false, 1, "", ""),
+                        minimalPlan());
+
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.BLOCK, result.nextAction());
+        assertFalse(result.readyForPacket());
+    }
+
+    @Test
     void parseAndValidate_nonAskableBlockingGapYieldsPacketWhenCoherentDraftExists() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 

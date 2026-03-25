@@ -2862,7 +2862,8 @@ requirements:
           ordinary ambiguity resolves to ASK_USER (one repaired question when needed, using evaluator text then merged
           draft_question_candidate then top_unresolved_gap spread keys, then gap seed) or READY_FOR_PACKET (assumptions/packet)
           rather than planning_blocked; first-start evaluation payloads use phase_context planning_startup_evaluation and
-          post-merge passes use planning_clarification;
+          post-merge passes use planning_clarification, where a no-question clarification result promotes READY_FOR_PACKET unless a
+          blocking CONTRADICTION remains;
           planning_blocked is reserved for machine/validity failures, malformed evaluation JSON, blocking CONTRADICTION gaps, or
           incoherent plan state with no recovery path; missing repo inspection alone does not force BLOCKED when no gap is blocking:
           evaluation may coerce READY_FOR_PACKET when depth and structured parse are acceptable and the model withheld
