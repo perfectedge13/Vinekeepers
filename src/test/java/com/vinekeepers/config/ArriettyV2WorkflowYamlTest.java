@@ -178,7 +178,7 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
-    void arriettyClarificationSuccessLoopsBackToEvaluationBeforeRouting() throws Exception {
+    void arriettyClarificationSuccessReevaluatesOnceThenReturnsToGraphRouting() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
@@ -190,12 +190,12 @@ class ArriettyV2WorkflowYamlTest {
         Map<String, Object> capability = (Map<String, Object>) capabilities.get("cap_planning_clarification");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) capability.get("steps");
-        Map<String, Object> replayBranch = steps.get(10);
-        assertEquals("branch", String.valueOf(replayBranch.get("type")));
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> branches = (List<Map<String, Object>>) replayBranch.get("branches");
-        assertEquals("else", String.valueOf(branches.get(0).get("when")));
-        assertEquals(1, ((Number) branches.get(0).get("next")).intValue());
+        Map<String, Object> reevaluate = steps.get(10);
+        assertEquals("call_action", String.valueOf(reevaluate.get("type")));
+        assertEquals("planning_run_evaluation", String.valueOf(reevaluate.get("action")));
+        assertEquals("true", String.valueOf(reevaluate.get("storeSpread")));
+        Map<String, Object> done = steps.get(11);
+        assertEquals("done", String.valueOf(done.get("type")));
     }
 
     @Test

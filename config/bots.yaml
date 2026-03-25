@@ -409,10 +409,11 @@ workflows:
             content: Thanks — I've recorded that and I'm folding it into the draft. You'll see another short update when this pass finishes.
             asRole: orchestrator
             target: thread
-        - type: branch
-          branches:
-          - when: else
-            next: 1
+        - type: call_action
+          action: planning_run_evaluation
+          storeSpread: true
+        - type: done
+          message: ''
         - type: call_action
           action: post_channel_message
           bind:

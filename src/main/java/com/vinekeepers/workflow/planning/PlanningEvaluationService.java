@@ -421,8 +421,7 @@ public final class PlanningEvaluationService {
             bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion("", "");
         }
         CanonicalPlanningGap topGap = selectTopGap(gaps);
-        PlanningCanonicalNextAction nextAction =
-                resolveNextAction(askUserRequired, coherentDraft, context, gaps);
+        PlanningCanonicalNextAction nextAction = resolveNextAction(askUserRequired, coherentDraft);
         boolean readyForPacket = nextAction == PlanningCanonicalNextAction.READY_FOR_PACKET;
         String blockReason = determineBlockReason(nextAction, topGap);
         if (nextAction == PlanningCanonicalNextAction.BLOCK && blockReason.isBlank()) {
@@ -551,28 +550,14 @@ public final class PlanningEvaluationService {
 
     private static PlanningCanonicalNextAction resolveNextAction(
             boolean askUserRequired,
-            boolean coherentDraft,
-            EvaluationContext context,
-            List<CanonicalPlanningGap> gaps) {
+            boolean coherentDraft) {
         if (askUserRequired) {
             return PlanningCanonicalNextAction.ASK_USER;
         }
-        if (coherentDraft || shouldFinalizeAfterClarification(context, gaps)) {
+        if (coherentDraft) {
             return PlanningCanonicalNextAction.READY_FOR_PACKET;
         }
         return PlanningCanonicalNextAction.BLOCK;
-    }
-
-    private static boolean shouldFinalizeAfterClarification(
-            EvaluationContext context,
-            List<CanonicalPlanningGap> gaps) {
-        if (context == null) {
-            return false;
-        }
-        if (!"planning_clarification".equalsIgnoreCase(blankToEmpty(context.phaseContext()))) {
-            return false;
-        }
-        return !hasBlockingContradiction(gaps);
     }
 
     private static PlanningEvaluationDecision failure(String machineError) {
