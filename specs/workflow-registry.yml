@@ -1957,8 +1957,8 @@ assets:
       rejects when they do not match CanonicalMergeTargetPaths for that gap; applies planningClarificationRaw to the declared artifact
       slice with best-effort outcomes (resolved / partial / contradiction) and a single plan update per success path, even when a structured-choice prompt receives plain text; stores
       planningPreviousClarificationQuestionText from meta question text (exact surfaced copy, not pipeline normalize); clears
-      planningClarificationChoicesJson; on success clears the live clarification route and fail-closes live routing until the next
-      evaluation pass rewrites planningNextAction, while DeliberationEngine + planningDirtyPassesJson keep audit visibility; spreads
+      planningClarificationChoicesJson; on success seeds neutral live routing so the clarification capability can immediately
+      re-run evaluation instead of falling through planning_blocked, while DeliberationEngine + planningDirtyPassesJson keep audit visibility; spreads
       planningClarificationMergeOk true on success and planningClarificationMergeError when merge cannot run, humanized via
       PlanningUserFacingCopy
     requires:

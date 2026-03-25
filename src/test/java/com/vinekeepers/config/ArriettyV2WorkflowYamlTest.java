@@ -178,6 +178,27 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
+    void arriettyClarificationSuccessLoopsBackToEvaluationBeforeRouting() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capability = (Map<String, Object>) capabilities.get("cap_planning_clarification");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) capability.get("steps");
+        Map<String, Object> replayBranch = steps.get(10);
+        assertEquals("branch", String.valueOf(replayBranch.get("type")));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> branches = (List<Map<String, Object>>) replayBranch.get("branches");
+        assertEquals("else", String.valueOf(branches.get(0).get("when")));
+        assertEquals(1, ((Number) branches.get(0).get("next")).intValue());
+    }
+
+    @Test
     void arriettyAllowedKeys_excludesLegacyPostDraftSpreadKey() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")

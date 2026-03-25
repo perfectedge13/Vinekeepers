@@ -53,6 +53,8 @@ class MergePlanningClarificationChoiceActionTest {
         Map<String, Object> spread = (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-a"));
         assertEquals("true", spread.get("planningClarificationMergeOk"));
         assertEquals("false", spread.get("planningCanonicalUserInputRequired"));
+        assertEquals("", spread.get("planningNextAction"));
+        assertEquals("", spread.get("planningNextPhase"));
         assertFalse(spread.containsKey("planningUserInputRequired"));
     }
 
@@ -219,6 +221,8 @@ class MergePlanningClarificationChoiceActionTest {
 
         assertEquals("true", spread.get("planningClarificationMergeOk"));
         assertEquals("", spread.get("planningClarificationMergeError"));
+        assertEquals("", spread.get("planningNextAction"));
+        assertEquals("", spread.get("planningNextPhase"));
         FeaturePlanState refreshed = store.getByContextId("ctx-merge-structured-text").orElseThrow();
         String decisionBlob =
                 PlanningArtifactTexts.allRepeatableFieldLines(refreshed, "decision_log", "decisions", "decision_text");

@@ -13,7 +13,6 @@ import com.vinekeepers.workflow.deliberation.DeliberationDirtyPassIndex;
 import com.vinekeepers.workflow.deliberation.DeliberationEngine;
 import com.vinekeepers.workflow.planning.CanonicalMergeTargetPaths;
 import com.vinekeepers.workflow.planning.PlanningDeliberationLedgerSync;
-import com.vinekeepers.workflow.planning.PlanningGapAskCounts;
 import com.vinekeepers.workflow.planning.PlanningRoutingBridge;
 import com.vinekeepers.workflow.planreview.PlanningUserFacingCopy;
 
@@ -233,15 +232,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
 
             spread.put("planningClarificationMerged", "true");
             spread.put("planningJustMergedClarification", "true");
-            spread.put("planningClarificationChoicesJson", "[]");
-            spread.put("planningClarificationMetaJson", "{}");
-            spread.put("planningClarificationQuestionText", "");
-            spread.put("planningCanonicalUserInputRequired", "false");
-            spread.put("planningCanonicalNextAction", "BLOCK");
-            spread.put("planningNextAction", "BLOCKED");
-            spread.put(PlanningRoutingBridge.NEXT_PHASE_KEY, PlanningRoutingBridge.PHASE_PLANNING_BLOCKED);
-            spread.put("planningNextQuestion", "");
-            spread.put("planningBlockingReason", "");
+            PlanningRoutingBridge.seedNeutralCycleRoutingKeys(spread);
             DeliberationEngine.applyDerivedDeliberationSpread(spread);
             DeliberationDirtyPassIndex.writeDirtyPassesSpread(spread, state, bind, List.of("clarification_merge"));
             spread.put("planningClarificationRaw", "");
