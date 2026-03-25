@@ -379,8 +379,16 @@ workflows:
               key: planningClarificationStuck
               value: 'true'
             next: 4
+            clear:
+            - planningClarificationRaw
+            - planningClarificationMergeOk
+            - planningClarificationMergeError
           - when: else
             next: 5
+            clear:
+            - planningClarificationRaw
+            - planningClarificationMergeOk
+            - planningClarificationMergeError
         - type: call_action
           action: post_channel_message
           bind:

@@ -178,6 +178,35 @@ class ArriettyV2WorkflowYamlTest {
     }
 
     @Test
+    void arriettyClarificationEntryClearsPriorReplyStateBeforePrompting() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capabilities = (Map<String, Object>) room.get("capabilities");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> capability = (Map<String, Object>) capabilities.get("cap_planning_clarification");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) capability.get("steps");
+        Map<String, Object> branch = steps.get(3);
+        assertEquals("branch", String.valueOf(branch.get("type")));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> branches = (List<Map<String, Object>>) branch.get("branches");
+        for (Map<String, Object> branchEntry : branches) {
+            @SuppressWarnings("unchecked")
+            List<String> clear = (List<String>) branchEntry.get("clear");
+            assertEquals(
+                    List.of(
+                            "planningClarificationRaw",
+                            "planningClarificationMergeOk",
+                            "planningClarificationMergeError"),
+                    clear);
+        }
+    }
+
+    @Test
     void arriettyClarificationSuccessReevaluatesOnceThenReturnsToGraphRouting() throws Exception {
         Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
         @SuppressWarnings("unchecked")
