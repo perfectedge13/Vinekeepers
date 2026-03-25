@@ -393,6 +393,45 @@ class GraphWorkflowRunnerTest {
     }
 
     @Test
+    void conversationalThreadSession_reopensWhenTerminalButLaunchNotComplete() {
+        WorkflowActionRegistry reg = new WorkflowActionRegistry();
+        reg.register("mark_reopened", (e, s, b) -> Map.of("reopened", "true"));
+
+        Map<String, Object> wf = new LinkedHashMap<>();
+        wf.put("workflowSchema", "v2");
+        wf.put("entryPhase", "start");
+        Map<String, Object> phases = new LinkedHashMap<>();
+        phases.put("start", Map.of("pipeline", List.of("cap1"), "defaultNextPhase", "done"));
+        phases.put("done", Map.of("pipeline", List.of(), "terminal", true));
+        wf.put("phases", phases);
+        wf.put("capabilities", Map.of("cap1", Map.of("kind", "legacy_action", "action", "mark_reopened", "storeSpread", true)));
+
+        WorkflowV2Model model = WorkflowV2Loader.load("thread_resume_v2", wf);
+        GraphWorkflowRunner runner =
+                new GraphWorkflowRunner(
+                        model, reg, null, ToolPolicy.allowAll(), ConversationMode.CONVERSATIONAL, "thread", Map.of(), null);
+
+        StateStore store = new StateStore();
+        String key = "bot:arrietty:conv:thread-xyz";
+        com.vinekeepers.workflow.ConfigurableWorkflowState terminal = new com.vinekeepers.workflow.ConfigurableWorkflowState();
+        terminal.markCompleted();
+        terminal.put(GraphWorkflowRunner.PHASE_KEY, "__v2_done");
+        store.put(key, terminal);
+
+        Event event =
+                new Event(
+                        "discord:x",
+                        "message",
+                        Map.of("channelId", "thread-xyz", "threadId", "thread-xyz", "authorId", "u1", "content", "revise"));
+        WorkflowRunResult result = runner.runResult(event, store, "arrietty");
+
+        assertTrue(result.isCompleted());
+        assertTrue(!String.valueOf(result.getReplyMessage()).contains("already completed"));
+        var state = store.get(key, com.vinekeepers.workflow.ConfigurableWorkflowState.class).orElseThrow();
+        assertEquals("true", state.get("reopened"));
+    }
+
+    @Test
     void legacyActionWithNullMessageExceptionReturnsNonEmptyError() {
         ToolRegistry registry = new ToolRegistry();
         registry.register(new Tool() {

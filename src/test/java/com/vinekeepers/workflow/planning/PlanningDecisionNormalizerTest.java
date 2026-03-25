@@ -48,7 +48,7 @@ class PlanningDecisionNormalizerTest {
     }
 
     @Test
-    void askRequiredWithBlankQuestionPacketizesWhenCoherentDraftPresent() {
+    void askRequiredWithBlankQuestionBlocksUntilEvaluationProvidesQuestion() {
         FeaturePlanState plan = PlanningEvaluationServiceTest.minimalCoherentPlan();
         PlanningDecisionSnapshot snapshot =
                 PlanningDecisionNormalizer.fromEvaluation(
@@ -62,7 +62,7 @@ class PlanningDecisionNormalizerTest {
                                 "MATERIALIZED_OBSERVED"),
                         plan);
 
-        assertEquals(PlanningNextAction.READY_FOR_PACKET, snapshot.nextAction());
+        assertEquals(PlanningNextAction.BLOCKED, snapshot.nextAction());
     }
 
     @Test

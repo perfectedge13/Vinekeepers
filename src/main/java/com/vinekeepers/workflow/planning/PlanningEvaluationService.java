@@ -400,87 +400,29 @@ public final class PlanningEvaluationService {
             boolean repairExhausted) {
         PlanningEvaluationDecision.EvaluationConfidence confidence = parseConfidence(root.path("confidence"));
         List<CanonicalPlanningGap> gaps = new ArrayList<>(parseGaps(root.path("gaps")));
-        boolean askUserRequired = root.path("ask_user_required").asBoolean(false);
         PlanningEvaluationDecision.EvaluationBestQuestion bestQuestion = parseBestQuestion(root.path("best_question"));
         List<PlanningEvaluationDecision.AssumptionProposal> assumptions = parseAssumptions(root.path("assumptions_to_add"));
         List<PlanningEvaluationDecision.IssueProposal> issues = parseIssues(root.path("issues_to_add"));
         List<PlanningEvaluationDecision.RiskProposal> risks = parseRisks(root.path("risks_to_add"));
         List<PlanningEvaluationDecision.DecisionProposal> decisions = parseDecisions(root.path("decisions_to_add"));
         boolean coherentDraft = isCoherentPlanDraft(plan);
-        boolean readyForPacket = root.path("ready_for_packet").asBoolean(false);
-        if (context != null && context.structuredParseFailed() && !coherentDraft) {
-            readyForPacket = false;
-        }
-        if (context != null && !context.depthOk() && !coherentDraft) {
-            readyForPacket = false;
-        }
         if (hasDuplicateGapIds(gaps)) {
             return failure("EVALUATION_INVALID_DUPLICATE_GAP_ID", repairAttempted, repairExhausted);
         }
-        if (!askUserRequired && !readyForPacket && countEligibleAskGaps(gaps) == 1) {
-            CanonicalPlanningGap sole = soleEligibleAskGap(gaps);
-            if (sole != null) {
-                String recovered = repairAskQuestionText("", sole, context);
-                if (!recovered.isBlank()) {
-                    askUserRequired = true;
-                    bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(recovered, "");
-                }
-            }
-        }
-        if (!askUserRequired
-                && !readyForPacket
-                && coherentDraft
-                && !hasBlockingContradiction(gaps)
-                && countEligibleAskGaps(gaps) == 0
-                && context != null) {
-            String dq = PlanningQuestionComposer.presentCanonicalQuestion(context.draftQuestionCandidate());
-            String ug = PlanningQuestionComposer.presentCanonicalQuestion(context.synthesisTopUnresolvedGap());
-            String recovered = !dq.isBlank() ? dq : ug;
-            if (!recovered.isBlank()) {
-                gaps.add(CanonicalPlanningGap.fromEvaluation(
-                        "draft_question_recovery",
-                        "BRANCHING_DECISION",
-                        recovered,
-                        false,
-                        true,
-                        true,
-                        "",
-                        List.of()));
-                askUserRequired = true;
-                bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(recovered, "");
-            }
-        }
+        CanonicalPlanningGap chosen = chooseAskGap(gaps);
+        String canonicalQuestionText = resolveFinalQuestion(bestQuestion.text(), chosen, context, gaps);
+        boolean askUserRequired = !canonicalQuestionText.isBlank();
         if (askUserRequired) {
-            CanonicalPlanningGap chosen = chooseAskGap(gaps);
-            if (chosen == null) {
-                return failure("EVALUATION_INVALID_NO_ELIGIBLE_ASK_GAP", repairAttempted, repairExhausted);
-            }
-            if (countEligibleAskGaps(gaps) != 1) {
-                return failure("EVALUATION_INVALID_MULTIPLE_ASK_GAPS", repairAttempted, repairExhausted);
-            }
-            String canonicalQuestionText =
-                    repairAskQuestionText(bestQuestion.text(), chosen, context);
-            if (canonicalQuestionText.isBlank()) {
-                return failure("EVALUATION_INVALID_QUESTION", repairAttempted, repairExhausted);
-            }
+            gaps = ensureAskGap(gaps, chosen, canonicalQuestionText);
             bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion(
                     canonicalQuestionText,
                     blankToEmpty(bestQuestion.rationale()));
-        } else if (!bestQuestion.text().isBlank()) {
-            return failure("EVALUATION_INVALID_UNEXPECTED_QUESTION", repairAttempted, repairExhausted);
-        }
-        if (askUserRequired && readyForPacket) {
-            return failure("EVALUATION_INVALID_CONFLICTING_ROUTE", repairAttempted, repairExhausted);
-        }
-        if (containsBlockingGap(gaps) && readyForPacket) {
-            return failure("EVALUATION_INVALID_BLOCKING_READY", repairAttempted, repairExhausted);
+        } else {
+            bestQuestion = new PlanningEvaluationDecision.EvaluationBestQuestion("", "");
         }
         CanonicalPlanningGap topGap = selectTopGap(gaps);
-        PlanningCanonicalNextAction nextAction =
-                resolveNextAction(askUserRequired, readyForPacket, gaps, coherentDraft, context);
-        if (nextAction == PlanningCanonicalNextAction.READY_FOR_PACKET) {
-            readyForPacket = true;
-        }
+        PlanningCanonicalNextAction nextAction = resolveNextAction(askUserRequired, coherentDraft);
+        boolean readyForPacket = nextAction == PlanningCanonicalNextAction.READY_FOR_PACKET;
         String blockReason = determineBlockReason(nextAction, topGap);
         if (nextAction == PlanningCanonicalNextAction.BLOCK && blockReason.isBlank()) {
             return failure("EVALUATION_INVALID_BLOCK_WITHOUT_REASON", repairAttempted, repairExhausted);
@@ -557,20 +499,40 @@ public final class PlanningEvaluationService {
         return q != null ? q : "";
     }
 
-    private static CanonicalPlanningGap soleEligibleAskGap(List<CanonicalPlanningGap> gaps) {
-        if (gaps == null || gaps.isEmpty()) {
-            return null;
+    private static String resolveFinalQuestion(
+            String bestQuestionRaw,
+            CanonicalPlanningGap chosenGap,
+            EvaluationContext context,
+            List<CanonicalPlanningGap> gaps) {
+        String q = repairAskQuestionText(bestQuestionRaw, chosenGap, context);
+        if (!q.isBlank()) {
+            return q;
         }
-        CanonicalPlanningGap found = null;
-        for (CanonicalPlanningGap gap : gaps) {
-            if (gap != null && gap.askable() && (gap.blocking() || gap.branching())) {
-                if (found != null) {
-                    return null;
-                }
-                found = gap;
+        if (context != null) {
+            q = PlanningQuestionComposer.presentCanonicalQuestion(context.synthesisTopUnresolvedGap());
+            if (!q.isBlank()) {
+                return q;
             }
         }
-        return found;
+        return "";
+    }
+
+    private static List<CanonicalPlanningGap> ensureAskGap(
+            List<CanonicalPlanningGap> gaps, CanonicalPlanningGap chosenGap, String questionText) {
+        if (chosenGap != null) {
+            return List.copyOf(gaps);
+        }
+        List<CanonicalPlanningGap> next = new ArrayList<>(gaps != null ? gaps : List.of());
+        next.add(CanonicalPlanningGap.fromEvaluation(
+                "planning_question_recovery",
+                "BRANCHING_DECISION",
+                questionText,
+                false,
+                true,
+                true,
+                "",
+                List.of()));
+        return List.copyOf(next);
     }
 
     /** True when any evaluation gap is a blocking {@link CanonicalGapKind#CONTRADICTION}. */
@@ -588,30 +550,14 @@ public final class PlanningEvaluationService {
 
     private static PlanningCanonicalNextAction resolveNextAction(
             boolean askUserRequired,
-            boolean readyForPacket,
-            List<CanonicalPlanningGap> gaps,
-            boolean coherentDraft,
-            EvaluationContext context) {
+            boolean coherentDraft) {
         if (askUserRequired) {
             return PlanningCanonicalNextAction.ASK_USER;
-        }
-        if (readyForPacket) {
-            return PlanningCanonicalNextAction.READY_FOR_PACKET;
-        }
-        if (hasBlockingContradiction(gaps)) {
-            return PlanningCanonicalNextAction.BLOCK;
         }
         if (coherentDraft) {
             return PlanningCanonicalNextAction.READY_FOR_PACKET;
         }
-        if (!containsBlockingGap(gaps) && synthesisContextAllowsPacketFallback(context)) {
-            return PlanningCanonicalNextAction.READY_FOR_PACKET;
-        }
         return PlanningCanonicalNextAction.BLOCK;
-    }
-
-    private static boolean synthesisContextAllowsPacketFallback(EvaluationContext context) {
-        return context == null || (context.depthOk() && !context.structuredParseFailed());
     }
 
     private static PlanningEvaluationDecision failure(String machineError) {
@@ -909,18 +855,6 @@ public final class PlanningEvaluationService {
         return null;
     }
 
-    private static boolean containsBlockingGap(List<CanonicalPlanningGap> gaps) {
-        if (gaps == null) {
-            return false;
-        }
-        for (CanonicalPlanningGap gap : gaps) {
-            if (gap != null && gap.blocking()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static boolean hasDuplicateGapIds(List<CanonicalPlanningGap> gaps) {
         if (gaps == null || gaps.isEmpty()) {
             return false;
@@ -936,19 +870,6 @@ public final class PlanningEvaluationService {
             }
         }
         return false;
-    }
-
-    private static int countEligibleAskGaps(List<CanonicalPlanningGap> gaps) {
-        if (gaps == null || gaps.isEmpty()) {
-            return 0;
-        }
-        int count = 0;
-        for (CanonicalPlanningGap gap : gaps) {
-            if (gap != null && gap.askable() && (gap.blocking() || gap.branching())) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private static PlanningIntakeStage stageFor(PlanningCanonicalNextAction nextAction) {

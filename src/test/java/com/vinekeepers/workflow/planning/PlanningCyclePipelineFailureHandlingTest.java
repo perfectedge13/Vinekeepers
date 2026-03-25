@@ -68,7 +68,7 @@ class PlanningCyclePipelineFailureHandlingTest {
     }
 
     @Test
-    void runEvaluationOnly_failClosesOnInvalidEvaluation() throws Exception {
+    void runEvaluationOnly_recoversQuestionInsteadOfFailClosing() throws Exception {
         HttpClient http = mock(HttpClient.class);
         HttpResponse<String> evaluationResponse = assistantResponse(
                 """
@@ -102,14 +102,14 @@ class PlanningCyclePipelineFailureHandlingTest {
                                 PlanningCyclePipeline.PARTIAL_LAST_SYNTH_KEY, "evaluation next"),
                         Map.of());
 
-        assertEquals("EVALUATION_INVALID_NO_ELIGIBLE_ASK_GAP", spread.get("planningRoomCycleError"));
+        assertEquals("", spread.get("planningRoomCycleError"));
         assertEquals("false", spread.get("planningPacketPostingAllowed"));
-        assertEquals("BLOCKED", spread.get("planningNextAction"));
+        assertEquals("ASK_USER", spread.get("planningNextAction"));
         assertEquals(
-                PlanningRoutingBridge.PHASE_PLANNING_BLOCKED,
+                PlanningRoutingBridge.PHASE_PLANNING_CLARIFICATION,
                 spread.get(PlanningRoutingBridge.NEXT_PHASE_KEY));
-        assertEquals("BLOCK", spread.get("planningCanonicalNextAction"));
-        assertFalse("true".equals(spread.get("planningCanonicalUserInputRequired")));
+        assertEquals("ASK_USER", spread.get("planningCanonicalNextAction"));
+        assertEquals("true", spread.get("planningCanonicalUserInputRequired"));
         assertFalse(spread.containsKey("planningUserInputRequired"));
     }
 

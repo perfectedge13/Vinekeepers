@@ -58,6 +58,7 @@ class PostPlanningPacketThreadActionTest {
         assertTrue(chunks > 0);
         assertEquals(chunks + 1, sent.size());
         assertTrue(sent.get(0).contains("posting the planning packet now"));
+        assertTrue(!sent.get(0).toLowerCase().contains("pre-launch review"));
 
         Map<String, Object> state2 = new LinkedHashMap<>(state);
         state2.putAll(spread1);

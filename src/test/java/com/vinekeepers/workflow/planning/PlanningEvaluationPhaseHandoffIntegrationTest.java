@@ -1,6 +1,8 @@
 package com.vinekeepers.workflow.planning;
 
 import com.vinekeepers.connectors.openai.OpenAiChatClient;
+import com.vinekeepers.profile.ArtifactState;
+import com.vinekeepers.profile.SectionState;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.profile.TestWorkProfiles;
 import com.vinekeepers.profile.WorkProfileDefinition;
@@ -107,6 +109,7 @@ class PlanningEvaluationPhaseHandoffIntegrationTest {
                 new OpenAiChatClient(http, "https://api.openai.com/v1", "sk-test-key", "gpt-4o-mini");
 
         TestContext ctx = createContext("ctx-stale-blocked-handoff", client);
+        ctx.planStore().update(ctx.plan().withArtifacts(coherentArtifacts()));
         Map<String, Object> state = baseEvalState(ctx.plan().getContextId());
         state.put(PlanningRoutingBridge.NEXT_ACTION_KEY, "BLOCKED");
         state.put(PlanningRoutingBridge.NEXT_PHASE_KEY, PlanningRoutingBridge.PHASE_PLANNING_BLOCKED);
@@ -200,7 +203,8 @@ class PlanningEvaluationPhaseHandoffIntegrationTest {
                                 "repoRef", "perfectedge13/Vinekeepers",
                                 "initialRequest", "Packet-ready handoff test"),
                         Map.of("profileId", "software_feature_planning_v2")));
-        FeaturePlanState plan = planStore.getByContextId(contextId).orElseThrow();
+        FeaturePlanState plan = planStore.getByContextId(contextId).orElseThrow().withArtifacts(coherentArtifacts());
+        planStore.update(plan);
         WorkProfileDefinition profile = registry.get("software_feature_planning_v2").orElseThrow();
         PlanningCyclePipeline pipeline = new PlanningCyclePipeline(openAiChatClient, planStore, registry);
         return new TestContext(pipeline, plan, profile, planStore);
@@ -228,4 +232,20 @@ class PlanningEvaluationPhaseHandoffIntegrationTest {
             FeaturePlanState plan,
             WorkProfileDefinition profile,
             FeaturePlanStateStore planStore) {}
+
+    private static Map<String, ArtifactState> coherentArtifacts() {
+        Map<String, ArtifactState> artifacts = new LinkedHashMap<>();
+        artifacts.put(
+                "requirements_spec",
+                new ArtifactState(
+                        "requirements_spec",
+                        Map.of(
+                                "narrative",
+                                new SectionState(
+                                        "narrative",
+                                        SectionState.STATUS_DRAFT,
+                                        Map.of("feature_summary", "Packet-ready handoff test"),
+                                        List.of()))));
+        return artifacts;
+    }
 }

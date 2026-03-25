@@ -116,8 +116,14 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
         if (terminal
                 && conversationMode == ConversationMode.CONVERSATIONAL
                 && com.vinekeepers.workflow.ConfigurableWorkflowRunner.isThreadScopedSessionKey(stateKey, botId)) {
-            stateStore.put(stateKey, state);
-            return WorkflowRunResult.completed(THREAD_PLANNING_IDLE_MESSAGE);
+            if (!launchCompleted(state)) {
+                reopenThreadPlanningSession(state);
+                stateStore.put(stateKey, state);
+                terminal = false;
+            } else {
+                stateStore.put(stateKey, state);
+                return WorkflowRunResult.completed(THREAD_PLANNING_IDLE_MESSAGE);
+            }
         }
         if (terminal) {
             state.resetForNewRun();
@@ -678,5 +684,20 @@ public final class GraphWorkflowRunner implements WorkflowRunner {
             stateStore.put(stateKey, state);
             return delegated;
         }
+    }
+
+    private boolean launchCompleted(ConfigurableWorkflowState state) {
+        return "true".equalsIgnoreCase(stringOrBlank(state != null ? state.get("launchSucceeded") : null));
+    }
+
+    private void reopenThreadPlanningSession(ConfigurableWorkflowState state) {
+        if (state == null) {
+            return;
+        }
+        state.markActive();
+        state.setStepIndex(0);
+        state.put(PHASE_KEY, model.getEntryPhase());
+        state.put(PIPELINE_INDEX_KEY, "0");
+        state.put(ACTIVE_STEPS_CAPABILITY_KEY, "");
     }
 }

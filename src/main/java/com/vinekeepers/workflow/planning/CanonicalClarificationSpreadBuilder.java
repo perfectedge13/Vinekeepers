@@ -21,7 +21,7 @@ public final class CanonicalClarificationSpreadBuilder {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern OR_SPLIT = Pattern.compile("\\s+or\\s+", Pattern.CASE_INSENSITIVE);
-    private static final int MIN_BOUNDED_OPTION_LEN = 5;
+    private static final int MIN_BOUNDED_OPTION_LEN = 4;
     private static final int MAX_BOUNDED_OPTION_LEN = 90;
 
     private CanonicalClarificationSpreadBuilder() {}
@@ -80,7 +80,8 @@ public final class CanonicalClarificationSpreadBuilder {
                         && profile != null
                         && profile.isBoundedClarificationChoicesEnabled();
         boolean inferOr = bounded && rule != null && rule.isInferOrChoices();
-        ClarificationOptions boundedOpts = bounded && inferOr ? inferBoundedOrOptions(q) : null;
+        ClarificationOptions boundedOpts =
+                inferDecisionForkOptions(q, bounded && inferOr ? inferBoundedOrOptions(q) : null);
         String mergePath = mergeTargetPath.trim();
         try {
             Map<String, Object> meta = new LinkedHashMap<>();
@@ -100,7 +101,7 @@ public final class CanonicalClarificationSpreadBuilder {
                                 "id",
                                 "planning_clarify_default",
                                 "label",
-                                "Use recommended default",
+                                "Not sure / choose default",
                                 "description",
                                 "Record the default below and continue."));
                 for (int i = 0; i < boundedOpts.labels().size(); i++) {
@@ -118,7 +119,7 @@ public final class CanonicalClarificationSpreadBuilder {
                                     ""));
                 }
                 String choicesJson = JSON.writeValueAsString(choiceMaps);
-                String prompt = "**" + q + "**\n\nPick an option below, or **Use recommended default** if that fits.";
+                String prompt = "**" + q + "**\n\nPick an option below, or choose the default path if you are not sure.";
                 return new CanonicalClarificationSelection(
                         true,
                         gid,
@@ -165,24 +166,60 @@ public final class CanonicalClarificationSpreadBuilder {
     private record ClarificationOptions(
             List<String> labels, String defaultAssumption, String optA, String optB, String optC) {}
 
+    private static ClarificationOptions inferDecisionForkOptions(String question, ClarificationOptions optInOptions) {
+        if (optInOptions != null) {
+            return optInOptions;
+        }
+        ClarificationOptions threeWay = inferThreeWayOptions(question);
+        if (threeWay != null) {
+            return threeWay;
+        }
+        return inferBoundedOrOptions(question);
+    }
+
+    private static ClarificationOptions inferThreeWayOptions(String question) {
+        if (question == null || question.isBlank()) {
+            return null;
+        }
+        String q = question.trim().replaceFirst("\\?$", "");
+        int lastOr = q.toLowerCase().lastIndexOf(" or ");
+        if (lastOr < 0) {
+            return null;
+        }
+        String left = q.substring(0, lastOr).trim();
+        String thirdRaw = q.substring(lastOr + 4).trim();
+        int comma = left.lastIndexOf(',');
+        if (comma < 0) {
+            return null;
+        }
+        String middleRaw = left.substring(comma + 1).trim();
+        String firstRaw = left.substring(0, comma).trim();
+        int firstComma = firstRaw.lastIndexOf(',');
+        if (firstComma >= 0) {
+            middleRaw = firstRaw.substring(firstComma + 1).trim();
+            firstRaw = firstRaw.substring(0, firstComma).trim();
+        }
+        String a = cleanOption(firstRaw);
+        String b = cleanOption(middleRaw);
+        String c = cleanOption(thirdRaw);
+        if (!validOption(a) || !validOption(b) || !validOption(c)) {
+            return null;
+        }
+        String def = "Proceed with " + a + " unless product guidance prefers " + b + " or " + c + ".";
+        return new ClarificationOptions(List.of(a, b, c), def, a, b, c);
+    }
+
     private static ClarificationOptions inferBoundedOrOptions(String question) {
         String[] parts = OR_SPLIT.split(question, 3);
         if (parts.length < 2) {
             return null;
         }
-        String rightRaw = parts[1] != null ? parts[1].trim() : "";
         if (parts.length >= 3 && parts[2] != null && !parts[2].isBlank()) {
-            return null;
-        }
-        if ((parts[0] != null && parts[0].contains(",")) || rightRaw.contains(",")) {
             return null;
         }
         String a = cleanOption(parts[0]);
         String b = cleanOption(parts[1]);
-        if (a.length() < MIN_BOUNDED_OPTION_LEN
-                || b.length() < MIN_BOUNDED_OPTION_LEN
-                || a.length() > MAX_BOUNDED_OPTION_LEN
-                || b.length() > MAX_BOUNDED_OPTION_LEN) {
+        if (!validOption(a) || !validOption(b)) {
             return null;
         }
         String def = "Proceed with " + a + " unless product guidance prefers " + b + ".";
@@ -194,7 +231,28 @@ public final class CanonicalClarificationSpreadBuilder {
             return "";
         }
         String t = raw.replaceFirst("(?i)^(should|must|will|can)\\s+", "").trim();
+        t = stripLeadingDecisionStem(t);
+        t = t.replaceAll("^[,\\s]+", "").trim();
+        t = t.replaceAll("[,\\s]+$", "").trim();
         t = t.replaceFirst("\\?$", "").trim();
         return truncate(t, 80);
+    }
+
+    private static String stripLeadingDecisionStem(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String lowered = value.toLowerCase();
+        for (String token : List.of(" live in ", " belong in ", " be in ", " be configured in ", " be stored in ")) {
+            int idx = lowered.lastIndexOf(token);
+            if (idx >= 0) {
+                return value.substring(idx + token.length()).trim();
+            }
+        }
+        return value;
+    }
+
+    private static boolean validOption(String value) {
+        return value.length() >= MIN_BOUNDED_OPTION_LEN && value.length() <= MAX_BOUNDED_OPTION_LEN;
     }
 }

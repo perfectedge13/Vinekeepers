@@ -1841,8 +1841,8 @@ assets:
     kind: source
     path: src/main/java/com/vinekeepers/workflow/actions/PostPlanningPacketThreadAction.java
     role: >-
-      Workflow action post_planning_packet_thread — posts a short operator notice before packet chunks (multi-message packet,
-      readiness checks, and that a pre-launch review summary follows before approval buttons); on success updates FeaturePlanState
+      Workflow action post_planning_packet_thread — posts a short neutral operator notice before packet chunks (multi-message packet only,
+      without pre-launch / approval promises before post success); on success updates FeaturePlanState
       with packetPostedAt, fingerprint, chunk count (message ref nullable until connector returns ids) and sets PlanningIntakeStage.PACKET_POSTED;
       refuses packet posting when the clarification-first spread contract says packet posting is not allowed
     requires:
@@ -2790,8 +2790,9 @@ requirements:
       ProgressDedupeHelper support clarification and progress dedupe without planning-only engine APIs. WorkflowRulesEngine
       evaluates ordered rules with ANDed predicates. PromptForFieldStep honors control.mode plain_text. WorkflowSafeTemplateRenderer
       allowlists template keys.       Planning cycle logic lives in       PlanningCyclePipeline; silent synthesis runs before one
-      PlanningEvaluationService call, which returns canonical gaps, confidence, one optional question, AIRD deltas, and
-      ready_for_packet (ask-or-assume: ordinary ambiguity becomes ASK_USER or READY_FOR_PACKET, not planning_blocked).
+      PlanningEvaluationService call, which is the single post-draft routing authority: usable question (best_question,
+      draft_question_candidate, then top_unresolved_gap recovery) becomes ASK_USER; otherwise a coherent draft becomes
+      READY_FOR_PACKET; otherwise BLOCKED stays reserved for machine / malformed-evaluation / incoherent-plan failure.
       PlanningDecisionNormalizer reduces that result to the exclusive live routing contract
       (planningNextAction, planningNextPhase, planningLastConfidence, planningNextQuestion, planningBlockingReason, planningRepoEvidenceStatus),
       while PlanningMaterialCyclePacing and PlanningCanonicalDecisionSupport persist continuity state without becoming a second
@@ -2802,7 +2803,8 @@ requirements:
       only (planning_clarification, planning_packet, planning_blocked; no legacy boolean-first routing); unmatched phase falls
       through to planning_routing_invariant (internal error, not user blocked-thread copy); post-packet critique does not fail-close
       into BLOCK solely for NOT_READY plus material churn—findings annotate governance and the graph advances via defaultNextPhase;
-      CONTINUE_SYNTHESIS is not a live YAML branch;
+      review / preapproval phases are illegal until planningPacketPosted is true, and non-launched intake threads reopen on later
+      messages instead of returning the terminal idle copy; CONTINUE_SYNTHESIS is not a live YAML branch;
       packet depth defers generic open-question filler blocking to clarification state when canonical user input is not required
       and the unresolved ledger has no OPEN blocking row.
     status: active

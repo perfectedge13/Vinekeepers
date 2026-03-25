@@ -168,7 +168,6 @@ class ArriettyV2WorkflowYamlTest {
         Map<String, Object> capability = (Map<String, Object>) capabilities.get("cap_planning_clarification");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) capability.get("steps");
-        @SuppressWarnings("unchecked")
         Map<String, Object> branch = steps.get(2);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> branches = (List<Map<String, Object>>) branch.get("branches");
@@ -209,6 +208,39 @@ class ArriettyV2WorkflowYamlTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> assess = (Map<String, Object>) phases.get("planning_clarification");
         assertEquals("planning_routing_invariant", String.valueOf(assess.get("defaultNextPhase")));
+    }
+
+    @Test
+    void arriettyCritiqueRequiresPostedPacketBeforeReviewOrPreapproval() throws Exception {
+        Map<String, Object> root = new Yaml().load(Files.newBufferedReader(Path.of("config", "bots.yaml")));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) root.get("workflows");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> room = (Map<String, Object>) workflows.get(ARRIETTY_V2_ID);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> phases = (Map<String, Object>) room.get("phases");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> critique = (Map<String, Object>) phases.get("planning_critique");
+        assertEquals("planning_blocked", String.valueOf(critique.get("defaultNextPhase")));
+
+        @SuppressWarnings("unchecked")
+        Map<String, List<Map<String, Object>>> rulesets =
+                (Map<String, List<Map<String, Object>>>) room.get("rulesets");
+        List<Map<String, Object>> rules = rulesets.get("rs_critique");
+        long postedGatedRules = rules.stream()
+                .map(rule -> castMap(rule.get("when")))
+                .filter(when -> when != null && when.containsKey("truthy"))
+                .filter(when -> {
+                    Map<String, Object> truthy = castMap(when.get("truthy"));
+                    return "planningPacketPosted".equals(String.valueOf(truthy.get("key")));
+                })
+                .count();
+        assertTrue(postedGatedRules >= 2, "review/preapproval transitions must require a posted packet");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object value) {
+        return value instanceof Map<?, ?> ? (Map<String, Object>) value : null;
     }
 
     @Test

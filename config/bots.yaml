@@ -176,7 +176,7 @@ workflows:
         - cap_set_stage_critiquing
         - cap_run_plan_critique_and_readiness
         rulesRef: rs_critique
-        defaultNextPhase: planning_preapproval_review
+        defaultNextPhase: planning_blocked
       planning_human_review:
         pipeline:
         - cap_planning_human_review
@@ -694,6 +694,8 @@ workflows:
             equals:
               key: planningIngressMode
               value: APPROVAL_INTERACTION
+            truthy:
+              key: planningPacketPosted
           then:
           - transition: planning_preapproval_review
       rs_evaluation_branch:
@@ -729,11 +731,18 @@ workflows:
           then:
           - transition: planning_clarification
         - when:
+            truthy:
+              key: planningPacketPosted
             equals:
               key: planningReviewAllowed
               value: 'true'
           then:
           - transition: planning_human_review
+        - when:
+            truthy:
+              key: planningPacketPosted
+          then:
+          - transition: planning_preapproval_review
       rs_human_review:
         - when:
             equals:

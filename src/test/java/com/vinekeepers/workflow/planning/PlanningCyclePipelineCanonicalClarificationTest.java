@@ -73,7 +73,7 @@ class PlanningCyclePipelineCanonicalClarificationTest {
     }
 
     @Test
-    void canonicalProjectionSkipsStructuredChoicesWithoutGapBoundedUiOptIn() {
+    void canonicalProjectionInfersStructuredChoicesForDiscreteDecisionFork() {
         CoordinatorClarificationSettings coord =
                 new CoordinatorClarificationSettings(
                         CoordinatorClarificationMode.CANONICAL_V1,
@@ -111,11 +111,14 @@ class PlanningCyclePipelineCanonicalClarificationTest {
                         profile,
                         coord,
                         gap,
-                        "Use option A or option B for timeouts?",
+                        "Should model selection live in workflow definitions, runtime settings, or both?",
                         List.of(),
                         QuestionMode.OPEN);
-        assertFalse(ranked.useStructuredChoices());
+        assertTrue(ranked.useStructuredChoices());
         assertTrue(ranked.userInputRequired());
+        assertTrue(ranked.choicesJson().contains("workflow definitions"));
+        assertTrue(ranked.choicesJson().contains("runtime settings"));
+        assertTrue(ranked.choicesJson().contains("both"));
     }
 
     @Test

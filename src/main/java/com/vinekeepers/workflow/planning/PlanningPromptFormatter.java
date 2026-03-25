@@ -219,8 +219,7 @@ public final class PlanningPromptFormatter {
 
     public static String formatPacketIntro(PlanningDecisionSnapshot snapshot) {
         requireAction(snapshot, PlanningNextAction.READY_FOR_PACKET);
-        return "**Update:** I'm posting the planning packet now (may be several messages), then running automated readiness checks. "
-                + "You'll get a short **pre-launch review** summary right after - approval buttons come once that passes.";
+        return "**Update:** I'm posting the planning packet now (may be several messages).";
     }
 
     private static void requireAction(PlanningDecisionSnapshot snapshot, PlanningNextAction expected) {

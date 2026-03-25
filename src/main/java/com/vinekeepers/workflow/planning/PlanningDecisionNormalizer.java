@@ -1,7 +1,6 @@
 package com.vinekeepers.workflow.planning;
 
 import com.vinekeepers.state.planning.FeaturePlanState;
-import com.vinekeepers.state.planning.PlanningCanonicalNextAction;
 
 /**
  * One-way conversion from evaluation output to the exclusive live routing snapshot.
@@ -11,14 +10,6 @@ public final class PlanningDecisionNormalizer {
     private PlanningDecisionNormalizer() {}
 
     public static PlanningDecisionSnapshot fromEvaluation(PlanningEvaluationDecision decision) {
-        return fromEvaluation(decision, null);
-    }
-
-    /**
-     * @param plan optional; when present, coherent drafts never map to {@link PlanningNextAction#BLOCKED} for a successful
-     *     evaluation that only reported {@link PlanningCanonicalNextAction#BLOCK} without a blocking contradiction.
-     */
-    public static PlanningDecisionSnapshot fromEvaluation(PlanningEvaluationDecision decision, FeaturePlanState plan) {
         if (decision == null) {
             return new PlanningDecisionSnapshot(
                     PlanningNextAction.BLOCKED,
@@ -29,7 +20,7 @@ public final class PlanningDecisionNormalizer {
                     "");
         }
         String question = decision.canonicalQuestionText();
-        PlanningNextAction nextAction = mapNextAction(decision, question, plan);
+        PlanningNextAction nextAction = mapNextAction(decision, question);
         return new PlanningDecisionSnapshot(
                 nextAction,
                 decision.confidence() != null ? decision.confidence().score() : null,
@@ -39,27 +30,13 @@ public final class PlanningDecisionNormalizer {
                 decision.summary());
     }
 
-    private static PlanningNextAction mapNextAction(
-            PlanningEvaluationDecision decision, String question, FeaturePlanState plan) {
+    public static PlanningDecisionSnapshot fromEvaluation(PlanningEvaluationDecision decision, FeaturePlanState ignoredPlan) {
+        return fromEvaluation(decision);
+    }
+
+    private static PlanningNextAction mapNextAction(PlanningEvaluationDecision decision, String question) {
         if (!decision.success()) {
             return PlanningNextAction.BLOCKED;
-        }
-        if (decision.askUserRequired()) {
-            if (!question.isBlank()) {
-                return PlanningNextAction.ASK_USER;
-            }
-            if (plan != null
-                    && PlanningEvaluationService.isCoherentPlanDraft(plan)
-                    && !PlanningEvaluationService.hasBlockingContradiction(decision.gaps())) {
-                return PlanningNextAction.READY_FOR_PACKET;
-            }
-            return PlanningNextAction.BLOCKED;
-        }
-        if (decision.nextAction() == PlanningCanonicalNextAction.BLOCK
-                && plan != null
-                && PlanningEvaluationService.isCoherentPlanDraft(plan)
-                && !PlanningEvaluationService.hasBlockingContradiction(decision.gaps())) {
-            return PlanningNextAction.READY_FOR_PACKET;
         }
         return switch (decision.nextAction()) {
             case READY_FOR_PACKET, CONTINUE_SYNTHESIS -> PlanningNextAction.READY_FOR_PACKET;

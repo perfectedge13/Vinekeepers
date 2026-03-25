@@ -140,14 +140,16 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": false
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
         assertFalse(result.success());
         assertEquals("EVALUATION_INVALID_DUPLICATE_GAP_ID", result.machineError());
     }
 
     @Test
-    void parseAndValidate_rejectsMultipleEligibleAskGaps() throws Exception {
+    void parseAndValidate_collapsesMultipleEligibleAskGapsToOneQuestion() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -168,14 +170,17 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": false
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
-        assertFalse(result.success());
-        assertEquals("EVALUATION_INVALID_MULTIPLE_ASK_GAPS", result.machineError());
+        assertTrue(result.success());
+        assertTrue(result.askUserRequired());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.ASK_USER, result.nextAction());
     }
 
     @Test
-    void parseAndValidate_rejectsAskUserWithoutEligibleGap() throws Exception {
+    void parseAndValidate_recoversAskUserWithoutEligibleGap() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -195,14 +200,18 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": false
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
-        assertFalse(result.success());
-        assertEquals("EVALUATION_INVALID_NO_ELIGIBLE_ASK_GAP", result.machineError());
+        assertTrue(result.success());
+        assertTrue(result.askUserRequired());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.ASK_USER, result.nextAction());
+        assertEquals("Who approves this rollout?", result.canonicalQuestionText());
     }
 
     @Test
-    void parseAndValidate_rejectsUnexpectedQuestionWhenAskIsFalse() throws Exception {
+    void parseAndValidate_usesEvaluatorQuestionEvenWhenAskFlagIsFalse() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -220,14 +229,18 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": false
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
-        assertFalse(result.success());
-        assertEquals("EVALUATION_INVALID_UNEXPECTED_QUESTION", result.machineError());
+        assertTrue(result.success());
+        assertTrue(result.askUserRequired());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.ASK_USER, result.nextAction());
+        assertTrue(result.canonicalQuestionText().contains("Should we still ask something"));
     }
 
     @Test
-    void parseAndValidate_rejectsConflictingAskAndReadyRoute() throws Exception {
+    void parseAndValidate_prefersAskUserOverConflictingReadyFlag() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -247,14 +260,17 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": true
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
-        assertFalse(result.success());
-        assertEquals("EVALUATION_INVALID_CONFLICTING_ROUTE", result.machineError());
+        assertTrue(result.success());
+        assertTrue(result.askUserRequired());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.ASK_USER, result.nextAction());
     }
 
     @Test
-    void parseAndValidate_rejectsReadyForPacketWithBlockingGap() throws Exception {
+    void parseAndValidate_packetizesBlockingGapWhenDraftIsCoherent() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -274,10 +290,13 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": true
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
-        assertFalse(result.success());
-        assertEquals("EVALUATION_INVALID_BLOCKING_READY", result.machineError());
+        assertTrue(result.success());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
+        assertTrue(result.readyForPacket());
     }
 
     @Test
@@ -301,7 +320,9 @@ class PlanningEvaluationServiceTest {
                           "decisions_to_add": [],
                           "ready_for_packet": false
                         }
-                        """);
+                        """,
+                        ctxEmpty(),
+                        minimalCoherentPlan());
 
         assertTrue(result.success());
         assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
@@ -473,7 +494,7 @@ class PlanningEvaluationServiceTest {
     }
 
     @Test
-    void parseAndValidate_blockingContradictionStillBlocks() throws Exception {
+    void parseAndValidate_blockingContradictionStillPacketizesWhenDraftIsCoherent() throws Exception {
         PlanningEvaluationService service = new PlanningEvaluationService(null);
 
         PlanningEvaluationDecision result =
@@ -498,7 +519,7 @@ class PlanningEvaluationServiceTest {
                         minimalCoherentPlan());
 
         assertTrue(result.success());
-        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.BLOCK, result.nextAction());
+        assertEquals(com.vinekeepers.state.planning.PlanningCanonicalNextAction.READY_FOR_PACKET, result.nextAction());
     }
 
     private static PlanningEvaluationService.EvaluationContext ctxEmpty() {
