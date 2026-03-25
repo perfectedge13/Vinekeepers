@@ -177,6 +177,57 @@ class MergePlanningClarificationChoiceActionTest {
                 decisionBlob);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void canonicalV1MergeAcceptsPlainTextReplyWhenStructuredChoicesWereShown() {
+        CoordinatorClarificationGapRule granularity =
+                new CoordinatorClarificationGapRule(
+                        "model_override_granularity",
+                        true,
+                        "Per step or step type?",
+                        List.of("override", "step"),
+                        List.of("model", "step"),
+                        List.of("named steps", "per step", "step types", "both"));
+        WorkProfileRegistry reg = new WorkProfileRegistry();
+        reg.register(
+                new WorkProfileDefinition(
+                        "p_merge_structured_text",
+                        "",
+                        minimalArtifactsForDecisionLogMerge(),
+                        List.of(),
+                        false,
+                        false,
+                        List.of(),
+                        new CoordinatorClarificationSettings(
+                                CoordinatorClarificationMode.CANONICAL_V1, List.of(granularity))));
+        FeaturePlanStateStore store = new FeaturePlanStateStore();
+        store.update(plan("ctx-merge-structured-text", "p_merge_structured_text", "route models by workflow step"));
+        var action = new MergePlanningClarificationChoiceAction(store, reg);
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("contextId", "ctx-merge-structured-text");
+        state.put("planningClarificationRaw", "Just a per step llm choice");
+        state.put("planningClarificationChoicesJson", "[{\"id\":\"planning_clarify_opt_a\",\"label\":\"Option A\"}]");
+        state.put(
+                "planningClarificationMetaJson",
+                metaJson(
+                        "model_override_granularity",
+                        "Per step or step type?",
+                        CanonicalMergeTargetPaths.defaultMergeTargetPath("model_override_granularity")));
+
+        Map<String, Object> spread =
+                (Map<String, Object>) action.run(null, state, Map.of("contextId", "ctx-merge-structured-text"));
+
+        assertEquals("true", spread.get("planningClarificationMergeOk"));
+        assertEquals("", spread.get("planningClarificationMergeError"));
+        FeaturePlanState refreshed = store.getByContextId("ctx-merge-structured-text").orElseThrow();
+        String decisionBlob =
+                PlanningArtifactTexts.allRepeatableFieldLines(refreshed, "decision_log", "decisions", "decision_text");
+        assertTrue(
+                decisionBlob.contains(
+                        "Coordinator gap resolution (model_override_granularity): Just a per step llm choice"),
+                decisionBlob);
+    }
+
     private static FeaturePlanState plan(String contextId, String profileId, String request) {
         return new FeaturePlanState(
                 contextId,

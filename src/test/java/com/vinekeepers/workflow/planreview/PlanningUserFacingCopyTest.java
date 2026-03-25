@@ -127,6 +127,9 @@ class PlanningUserFacingCopyTest {
         assertEquals(
                 "That reply could not be applied; try again.",
                 PlanningUserFacingCopy.humanizePlanningClarificationMergeError("Something vague went wrong"));
+        assertEquals(
+                "Your reply was interpreted best-effort so planning can continue.",
+                PlanningUserFacingCopy.humanizePlanningClarificationMergeError("AMBIGUOUS_REPLY"));
     }
 
     @Test

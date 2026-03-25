@@ -117,39 +117,14 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
             boolean structuredUi = choicesRaw != null && !choicesRaw.isBlank() && !"[]".equals(choicesRaw.trim());
             String trimmedChoice = choice.trim();
 
-            MergeInterpretation interpretation = MergeInterpretation.RESOLVED;
-            if (structuredUi) {
-                if (!"planning_clarify_default".equals(trimmedChoice)
-                        && !"planning_clarify_opt_a".equals(trimmedChoice)
-                        && !"planning_clarify_opt_b".equals(trimmedChoice)
-                        && !"planning_clarify_opt_c".equals(trimmedChoice)) {
-                    interpretation = MergeInterpretation.AMBIGUOUS;
-                }
-            } else {
-                interpretation = interpretOpenText(trimmedChoice);
-            }
-
-            if (interpretation == MergeInterpretation.AMBIGUOUS) {
-                FeaturePlanState amb =
-                        plan.withAppendedIssue(
-                                        PlanIssue.fromLegacyText(
-                                                "iss-clar-amb-"
-                                                        + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
-                                                "Ambiguous clarification reply for gap `"
-                                                        + coordinatorGapId
-                                                        + "` (could not apply to a single structured outcome).",
-                                                Instant.now()))
-                                .withPlanningGapAskCountsJson(
-                                        PlanningGapAskCounts.incrementFailedMerge(
-                                                plan.getPlanningGapAskCountsJson(), coordinatorGapId))
-                                .withClarificationEngineNote(
-                                        mergeOutcomeNote("ambiguous", coordinatorGapId, mergeTargetPath));
-                planStateStore.update(amb);
-                spread.put(
-                        "planningClarificationMergeError",
-                        PlanningUserFacingCopy.humanizePlanningClarificationMergeError("AMBIGUOUS_REPLY"));
-                return spread;
-            }
+            MergeInterpretation interpretation =
+                    structuredUi
+                                    && ("planning_clarify_default".equals(trimmedChoice)
+                                            || "planning_clarify_opt_a".equals(trimmedChoice)
+                                            || "planning_clarify_opt_b".equals(trimmedChoice)
+                                            || "planning_clarify_opt_c".equals(trimmedChoice))
+                            ? MergeInterpretation.RESOLVED
+                            : interpretOpenText(trimmedChoice);
 
             String answerSummary;
             String decisionLine;
@@ -312,7 +287,6 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
     private enum MergeInterpretation {
         RESOLVED,
         PARTIAL,
-        AMBIGUOUS,
         CONTRADICTION
     }
 
@@ -321,21 +295,7 @@ public final class MergePlanningClarificationChoiceAction implements com.vinekee
         if (t.matches("^(yes|no|y|n|ok|okay)$")) {
             return MergeInterpretation.RESOLVED;
         }
-        if (t.length() < 3) {
-            return MergeInterpretation.AMBIGUOUS;
-        }
-        if (t.contains("not sure")
-                || t.contains("maybe")
-                || t.contains("either way")
-                || t.contains("unclear")
-                || t.contains("don't know")
-                || t.contains("dont know")) {
-            return MergeInterpretation.AMBIGUOUS;
-        }
         if (t.startsWith("partial:")) {
-            return MergeInterpretation.PARTIAL;
-        }
-        if (t.length() <= 8 && t.split("\\s+").length <= 2) {
             return MergeInterpretation.PARTIAL;
         }
         if (t.contains("wrong")

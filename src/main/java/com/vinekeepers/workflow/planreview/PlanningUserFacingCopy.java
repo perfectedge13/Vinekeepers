@@ -244,7 +244,7 @@ public final class PlanningUserFacingCopy {
             case "MERGE_TARGET_INVALID" ->
                     "The merge target path is not valid for this profile; reply was not written into the plan.";
             case "AMBIGUOUS_REPLY" ->
-                    "Your reply did not match a single clear option; try again with one concrete answer.";
+                    "Your reply was interpreted best-effort so planning can continue.";
             case "MERGE_TARGET_MISMATCH" ->
                     "The clarification metadata does not match this gap's merge contract; nothing was written.";
             case "PARTIAL_MERGE" ->
