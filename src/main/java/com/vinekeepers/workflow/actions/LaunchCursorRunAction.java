@@ -8,6 +8,7 @@ import com.vinekeepers.core.cursor.CursorInstructionComposer;
 import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.events.Event;
+import com.vinekeepers.workflow.WorkflowStepModel;
 import com.vinekeepers.state.LifecycleContextStore;
 
 import java.time.Instant;
@@ -72,6 +73,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
         String deliveryChannelId = getString(args, "deliveryChannelId");
+        String stepModelId = resolveStepModelId(args);
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -79,7 +81,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                firstNonBlank(stepModelId, Env.get("CURSOR_MODEL", ""))
         );
 
         try {
@@ -173,5 +175,13 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         if (t.startsWith("https://github.com/")) return t;
         if (t.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) return "https://github.com/" + t;
         return null;
+    }
+
+    private static String resolveStepModelId(Map<String, Object> args) {
+        WorkflowStepModel stepModel = WorkflowStepModel.fromConfig(args.get("__stepModel"));
+        if (stepModel == null || stepModel.getModelId().isBlank()) {
+            return null;
+        }
+        return stepModel.getModelId();
     }
 }

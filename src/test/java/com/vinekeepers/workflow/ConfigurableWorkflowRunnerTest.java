@@ -9,7 +9,9 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConfigurableWorkflowRunnerTest {
@@ -406,5 +408,43 @@ class ConfigurableWorkflowRunnerTest {
         assertEquals("Room: arrietty room", result.getReplyMessage());
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
+    }
+
+    @Test
+    void runCallActionStepIncludesStepModelInActionArgs() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("read_model", (e, s, b) -> {
+            Object raw = b.get("__stepModel");
+            assertNotNull(raw);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> model = (Map<String, Object>) raw;
+            return model.get("provider") + ":" + model.get("modelId");
+        });
+        List<Map<String, Object>> steps = List.of(
+                Map.of(
+                        "type", "call_action",
+                        "action", "read_model",
+                        "model", Map.of("provider", "openai", "modelId", "gpt-4.1"),
+                        "storeIn", "modelOut"),
+                Map.of("type", "done", "message", "Model: {{modelOut}}")
+        );
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(
+                new WorkflowDefinition("model-per-step", steps), registry);
+        String out = runner.run(new Event("test", "message", Map.of()), new StateStore(), "luna");
+        assertEquals("Model: openai:gpt-4.1", out);
+    }
+
+    @Test
+    void configurableRunnerRejectsUnsupportedStepModelProvider() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of(
+                        "type", "call_action",
+                        "action", "read_model",
+                        "model", Map.of("provider", "anthropic", "modelId", "claude-3-7-sonnet"))
+        );
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> new ConfigurableWorkflowRunner(new WorkflowDefinition("bad-provider", steps), new WorkflowActionRegistry()));
+        assertTrue(ex.getMessage().contains("Unsupported workflow step model provider"));
     }
 }

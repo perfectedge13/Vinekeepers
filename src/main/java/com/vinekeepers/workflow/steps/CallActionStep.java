@@ -5,6 +5,7 @@ import com.vinekeepers.bot.ToolPolicy;
 import com.vinekeepers.tools.ToolRunner;
 import com.vinekeepers.workflow.ConfigurableWorkflowState;
 import com.vinekeepers.workflow.StepResult;
+import com.vinekeepers.workflow.WorkflowStepModel;
 import com.vinekeepers.workflow.WorkflowActionRegistry;
 import com.vinekeepers.workflow.WorkflowStep;
 
@@ -22,19 +23,26 @@ public final class CallActionStep implements WorkflowStep {
     private final String actionId;
     private final Map<String, Object> bind;
     private final String storeIn;
+    private final WorkflowStepModel stepModel;
 
     public CallActionStep(WorkflowActionRegistry registry, String actionId, Map<String, Object> bind, String storeIn) {
-        this(registry, null, null, actionId, bind, storeIn);
+        this(registry, null, null, actionId, bind, storeIn, null);
     }
 
     public CallActionStep(WorkflowActionRegistry registry, ToolRunner toolRunner, ToolPolicy toolPolicy,
                           String actionId, Map<String, Object> bind, String storeIn) {
+        this(registry, toolRunner, toolPolicy, actionId, bind, storeIn, null);
+    }
+
+    public CallActionStep(WorkflowActionRegistry registry, ToolRunner toolRunner, ToolPolicy toolPolicy,
+                          String actionId, Map<String, Object> bind, String storeIn, WorkflowStepModel stepModel) {
         this.registry = registry != null ? registry : new WorkflowActionRegistry();
         this.toolRunner = toolRunner;
         this.toolPolicy = toolPolicy;
         this.actionId = actionId != null ? actionId : "";
         this.bind = bind != null ? Map.copyOf(bind) : Map.of();
         this.storeIn = storeIn;
+        this.stepModel = stepModel;
     }
 
     @Override
@@ -55,6 +63,9 @@ public final class CallActionStep implements WorkflowStep {
             args.putAll(state.getData());
         }
         args.put("__event", buildEventMetadata(event));
+        if (stepModel != null && !stepModel.isEmpty()) {
+            args.put("__stepModel", stepModel.toMap());
+        }
         for (Map.Entry<String, Object> entry : bind.entrySet()) {
             args.put(entry.getKey(), resolve(entry.getValue(), state));
         }

@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interprets a workflow definition from config and persists conversational runtime state.
@@ -18,6 +19,7 @@ import java.util.Map;
 public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurableWorkflowRunner.class);
+    private static final Set<String> SUPPORTED_STEP_MODEL_PROVIDERS = Set.of("openai");
 
     private final String sessionKeyStrategyName;
     private final List<WorkflowStep> steps;
@@ -137,6 +139,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             if (type == null) {
                 type = "done";
             }
+            WorkflowStepModel stepModel = parseAndValidateStepModel(stepMap, type);
             switch (type) {
                 case "ask_input" -> out.add(new com.vinekeepers.workflow.steps.AskForInputStep(
                         (String) stepMap.get("prompt"),
@@ -169,7 +172,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         toolPolicy,
                         (String) stepMap.get("action"),
                         (Map<String, Object>) stepMap.get("bind"),
-                        (String) stepMap.get("storeIn")));
+                        (String) stepMap.get("storeIn"),
+                        stepModel));
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(
@@ -178,5 +182,23 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    private static WorkflowStepModel parseAndValidateStepModel(Map<String, Object> stepMap, String stepType) {
+        WorkflowStepModel stepModel = WorkflowStepModel.fromConfig(stepMap.get("model"));
+        if (stepModel == null) {
+            return null;
+        }
+        String provider = stepModel.getProvider().toLowerCase();
+        if (!SUPPORTED_STEP_MODEL_PROVIDERS.contains(provider)) {
+            throw new IllegalArgumentException(
+                    "Unsupported workflow step model provider '" + stepModel.getProvider()
+                            + "' for step type '" + stepType + "'. Supported providers: " + SUPPORTED_STEP_MODEL_PROVIDERS);
+        }
+        if (stepModel.getModelId().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Workflow step model.modelId is required when model is set for step type '" + stepType + "'.");
+        }
+        return new WorkflowStepModel(provider, stepModel.getModelId());
     }
 }

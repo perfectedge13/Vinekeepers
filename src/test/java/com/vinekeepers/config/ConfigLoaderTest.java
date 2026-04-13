@@ -275,4 +275,40 @@ class ConfigLoaderTest {
         assertEquals(1, bots.size());
         assertFalse(bots.get(0).isHandlesOwnedSpaces());
     }
+
+    @Test
+    void loadFromPathParsesWorkflowStepModelConfiguration(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+                workflow:
+                  type: configured
+                  params:
+                    workflowRef: luna_cursor
+            workflows:
+              luna_cursor:
+                steps:
+                  - type: call_action
+                    action: launch_cursor_run
+                    model:
+                      provider: openai
+                      modelId: gpt-4.1-mini
+            routing: []
+            """);
+
+        BotConfig config = loader.loadFromPath(yaml);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflow = (Map<String, Object>) config.getWorkflows().get("luna_cursor");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) workflow.get("steps");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> model = (Map<String, Object>) steps.get(0).get("model");
+
+        assertEquals("openai", model.get("provider"));
+        assertEquals("gpt-4.1-mini", model.get("modelId"));
+    }
 }

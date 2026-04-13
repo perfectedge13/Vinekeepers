@@ -2,10 +2,10 @@ package com.vinekeepers.workflow;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /**
- * Definition of a configurable workflow: id and list of step configs (type, prompt, storeIn, action, bind, etc.).
+ * Definition of a configurable workflow: id and list of step configs
+ * (type, prompt, storeIn, action, bind, optional model, etc.).
  */
 public final class WorkflowDefinition {
 

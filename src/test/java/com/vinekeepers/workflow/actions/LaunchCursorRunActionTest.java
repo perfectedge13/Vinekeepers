@@ -7,6 +7,7 @@ import com.vinekeepers.core.cursor.CursorAgentLaunchResult;
 import com.vinekeepers.core.cursor.CursorCloudAdapter;
 import com.vinekeepers.core.cursor.CursorCloudException;
 import com.vinekeepers.core.cursor.LifecycleRunRecord;
+import com.vinekeepers.env.Env;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
 import com.vinekeepers.state.StateStore;
@@ -18,6 +19,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LaunchCursorRunActionTest {
@@ -176,6 +178,78 @@ class LaunchCursorRunActionTest {
         Object result = action.run(null, Map.of(), Map.of(
                 "project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
         assertTrue(result.toString().startsWith("Cursor launch failed:"));
+    }
+
+    @Test
+    void runUsesStepModelWhenProvidedInArgs() {
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest req) {
+                assertEquals("gpt-4.1-mini", req.model());
+                return new CursorAgentLaunchResult(
+                        "step-model", "Run", "CREATING",
+                        req.repositoryUrl(), req.baseRef(), req.branchName(),
+                        "https://cursor.com/agents?id=step-model", null, true, NOW);
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return null;
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "skey",
+                "__stepModel", Map.of("provider", "openai", "modelId", "gpt-4.1-mini")));
+        assertTrue(result.toString().contains("Launching Cursor Cloud run"));
+    }
+
+    @Test
+    void runUsesEnvModelWhenStepModelIsMissing() {
+        String expectedModel = Env.get("CURSOR_MODEL", "");
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest req) {
+                assertEquals(expectedModel, req.model());
+                return new CursorAgentLaunchResult(
+                        "default-model", "Run", "CREATING",
+                        req.repositoryUrl(), req.baseRef(), req.branchName(),
+                        "https://cursor.com/agents?id=default-model", null, true, NOW);
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return null;
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "skey"));
+        assertTrue(result.toString().contains("Launching Cursor Cloud run"));
     }
 
     private static CursorCloudAdapter stubAdapter() {
