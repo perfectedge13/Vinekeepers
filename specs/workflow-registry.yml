@@ -298,8 +298,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
     role: >-
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
-      intent, choices, confirmLabel, cancelLabel, fields, and trimAndLower for steps; applies StepResult clearKeys to
-      state before setStepIndex
+      intent, choices, confirmLabel, cancelLabel, fields, trimAndLower, and optional step model; validates step model
+      provider support (openai for now); applies StepResult clearKeys to state before setStepIndex
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -336,7 +336,17 @@ assets:
   - id: ASSET-CALL-ACTION-STEP
     kind: source
     path: src/main/java/com/vinekeepers/workflow/steps/CallActionStep.java
-    role: Step that invokes a registered WorkflowAction or ToolRunner-backed tool with bound arguments
+    role: >-
+      Step that invokes a registered WorkflowAction or ToolRunner-backed tool with bound arguments; forwards optional
+      __stepModel metadata (provider/modelId) when configured on the step
+    requires:
+      - REQ-WORKFLOW-001
+    feature_ids:
+      - FEAT-WORKFLOW-STEPS
+  - id: ASSET-WORKFLOW-STEP-MODEL
+    kind: source
+    path: src/main/java/com/vinekeepers/workflow/WorkflowStepModel.java
+    role: Optional per-step model config parser/normalizer (string or map with provider/modelId)
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -602,7 +612,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/actions/LaunchCursorRunAction.java
     role: >-
       Workflow action to launch a Cursor cloud run and register run record; passes optional deliveryChannelId into
-      LifecycleRunRecord; ack/status to Discord (e.g. launching) and directs user to lifecycle room
+      LifecycleRunRecord; prefers per-step modelId from __stepModel over CURSOR_MODEL; ack/status to Discord (e.g.
+      launching) and directs user to lifecycle room
     requires:
       - REQ-LUNA-001
       - REQ-WORKFLOW-001
@@ -649,6 +660,12 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
+        - >-
+          Workflow steps may set optional model (string model id or map provider/modelId); runtime currently supports
+          provider openai only and rejects unsupported providers
+        - >-
+          CallActionStep forwards optional __stepModel metadata to action/tool args; launch_cursor_run uses
+          __stepModel.modelId when present and falls back to CURSOR_MODEL otherwise
         - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
           contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
           default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
@@ -677,6 +694,7 @@ requirements:
         - ASSET-CONFIGURABLE-WORKFLOW-STATE
         - ASSET-WORKFLOW-DEFINITION
         - ASSET-CONFIGURABLE-WORKFLOW-RUNNER
+        - ASSET-WORKFLOW-STEP-MODEL
         - ASSET-ASK-FOR-INPUT-STEP
         - ASSET-PROMPT-FOR-FIELD-STEP
         - ASSET-CAPTURE-FIELD-STEP
@@ -799,6 +817,24 @@ requirements:
             and lowercased value
           testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
           testMethod: runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action step forwards configured __stepModel provider/modelId to action args
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionStepIncludesStepModelInActionArgs
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL-PROVIDER
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify configurable runner rejects unsupported workflow step model providers
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: configurableRunnerRejectsUnsupportedStepModelProvider
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-STEP-MODEL
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run uses __stepModel.modelId when provided in args
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesStepModelWhenProvidedInArgs
           preconditions: []
         - id: MANUAL-WORKFLOW
           title: Workflow interface
