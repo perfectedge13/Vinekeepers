@@ -637,6 +637,9 @@ requirements:
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
         - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
         - >-
+          call_action step supports optional model; when set it is passed into action args as model and can override
+          env defaults for model-aware actions
+        - >-
           capture_field step supports optional trimAndLower (boolean); when true, captured text is trimmed and
           lowercased; for message events content is read from payload content or text (and optional contentKey)
         - StepResult may carry clearKeys; runner applies clearKeys to state before setStepIndex (edit-reprompt)
@@ -753,6 +756,12 @@ requirements:
           title: CallActionStepTest
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-CALL-ACTION-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action model config is passed as action arg
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionStepModelAddsModelToActionArgs
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
@@ -1121,6 +1130,18 @@ requirements:
             (e.g. launching) and lifecycle room
           testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
           testMethod: runLaunchesAndStoresRecordAndBindsContext
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-MODEL-OVERRIDE
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run uses per-step model when provided in action args
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesPerStepOpenAiModelOverride
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-MODEL-UNSUPPORTED
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run rejects unsupported non-openai model providers
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runRejectsUnsupportedModelProvider
           preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow

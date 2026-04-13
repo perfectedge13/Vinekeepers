@@ -23,6 +23,7 @@ import com.vinekeepers.state.StateStore;
 public final class LaunchCursorRunAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final String DEFAULT_BASE_BRANCH = "main";
+    private static final String SUPPORTED_MODEL_PROVIDER = "openai";
 
     private final CursorCloudAdapter adapter;
     private final StateStore stateStore;
@@ -72,6 +73,10 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
         String deliveryChannelId = getString(args, "deliveryChannelId");
+        String model = resolveConfiguredModel(getString(args, "model"));
+        if (model == null && args.containsKey("model")) {
+            return "Unsupported model provider. Currently only OpenAI models are supported.";
+        }
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -79,7 +84,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                firstNonBlank(model, Env.get("CURSOR_MODEL", ""))
         );
 
         try {
@@ -173,5 +178,17 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         if (t.startsWith("https://github.com/")) return t;
         if (t.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) return "https://github.com/" + t;
         return null;
+    }
+
+    private static String resolveConfiguredModel(String model) {
+        if (model == null || model.isBlank()) {
+            return null;
+        }
+        String normalized = model.trim();
+        String provider = normalized.contains("/") ? normalized.substring(0, normalized.indexOf('/')) : SUPPORTED_MODEL_PROVIDER;
+        if (!SUPPORTED_MODEL_PROVIDER.equalsIgnoreCase(provider)) {
+            return null;
+        }
+        return normalized;
     }
 }

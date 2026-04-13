@@ -19,6 +19,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class LaunchCursorRunActionTest {
 
@@ -152,6 +153,69 @@ class LaunchCursorRunActionTest {
         assertTrue(ack.contains("Status: launching"), "ack must include status");
         assertTrue(ack.contains("lifecycle room"), "ack must mention lifecycle room");
         assertTrue(ack.contains("Agent: "), "ack must include agent URL when present");
+    }
+
+    @Test
+    void runUsesStepLevelOpenAiModelWhenProvided() {
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        final CursorAgentLaunchRequest[] captured = new CursorAgentLaunchRequest[1];
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                captured[0] = request;
+                return new CursorAgentLaunchResult(
+                        "agent-model", "Run", "CREATING",
+                        request.repositoryUrl(), request.baseRef(), request.branchName(),
+                        "https://cursor.com/agents?id=agent-model", null, true, NOW);
+            }
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "owner/repo", "codeChange", "Add feature", "__sessionKey", "skey",
+                "model", "openai/gpt-4.1"));
+        assertTrue(result.toString().contains("Launching Cursor Cloud run"));
+        assertNotNull(captured[0]);
+        assertEquals("openai/gpt-4.1", captured[0].model());
+    }
+
+    @Test
+    void runRejectsUnsupportedModelProvider() {
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        final CursorAgentLaunchRequest[] captured = new CursorAgentLaunchRequest[1];
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                captured[0] = request;
+                return new CursorAgentLaunchResult(
+                        "agent-unsupported", "Run", "CREATING",
+                        request.repositoryUrl(), request.baseRef(), request.branchName(),
+                        "https://cursor.com/agents?id=agent-unsupported", null, true, NOW);
+            }
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "owner/repo", "codeChange", "Add feature", "__sessionKey", "skey",
+                "model", "anthropic/claude-3-7-sonnet"));
+        assertEquals("Unsupported model provider. Currently only OpenAI models are supported.", result);
+        assertNull(captured[0]);
     }
 
     @Test

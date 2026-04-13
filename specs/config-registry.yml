@@ -53,7 +53,8 @@ assets:
     role: >-
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
-      workflowRef arrietty_room, optional create_thread step with storeIn deliveryChannelId, handlesOwnedSpaces,
+      workflowRef arrietty_room, optional create_thread step with storeIn deliveryChannelId, call_action model
+      override (OpenAI currently supported), handlesOwnedSpaces,
       capture_field trimAndLower for room name UX, branch value "" for blank/empty; done step main-room redirect
       message e.g. "Launching now. See <#{{channelId}}>.")
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
