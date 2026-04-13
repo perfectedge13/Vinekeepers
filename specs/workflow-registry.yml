@@ -298,8 +298,8 @@ assets:
     path: src/main/java/com/vinekeepers/workflow/ConfigurableWorkflowRunner.java
     role: >-
       Run workflow from WorkflowDefinition with conversational pause/resume, session keys, tool-backed actions; parses
-      intent, choices, confirmLabel, cancelLabel, fields, and trimAndLower for steps; applies StepResult clearKeys to
-      state before setStepIndex
+      intent, choices, confirmLabel, cancelLabel, fields, trimAndLower, and step-level model for call_action steps;
+      applies StepResult clearKeys to state before setStepIndex
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -636,6 +636,7 @@ requirements:
         - Configurable workflow state records waiting field, pending prompt, completion, and error status
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
         - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
+        - call_action step supports optional model value and forwards it to action bind args as model
         - >-
           capture_field step supports optional trimAndLower (boolean); when true, captured text is trimmed and
           lowercased; for message events content is read from payload content or text (and optional contentKey)
@@ -753,6 +754,12 @@ requirements:
           title: CallActionStepTest
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-CALL-ACTION-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action step model is forwarded to action bind args
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionStepPassesModelFromStepConfigIntoBindArgs
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
@@ -890,6 +897,9 @@ requirements:
         - >-
           launch_cursor_run acknowledgement to Discord includes optional status (e.g. launching) and directs user to
           lifecycle room; passes optional deliveryChannelId from bind/state into LifecycleRunRecord
+        - >-
+          launch_cursor_run accepts optional model from step bind/state as string or {provider, modelId}; when
+          provider is specified it must be openai; request uses modelId
       examples: []
     traceability:
       assets:
@@ -1121,6 +1131,18 @@ requirements:
             (e.g. launching) and lifecycle room
           testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
           testMethod: runLaunchesAndStoresRecordAndBindsContext
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-STEP-MODEL
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run uses per-step model from bind args when provided
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesModelFromWorkflowStepBindWhenProvided
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-STEP-MODEL-NON-OPENAI
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run rejects non-openai provider in per-step model config
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runRejectsNonOpenAiModelProviderFromWorkflowStep
           preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow

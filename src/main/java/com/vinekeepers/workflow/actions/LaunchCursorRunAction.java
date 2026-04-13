@@ -11,6 +11,7 @@ import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContextStore;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -72,6 +73,10 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
         String deliveryChannelId = getString(args, "deliveryChannelId");
+        String model = resolveModel(args);
+        if (model == null) {
+            return "Invalid model in state. Only OpenAI models are supported for workflow steps.";
+        }
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -79,7 +84,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                model
         );
 
         try {
@@ -161,6 +166,36 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String resolveModel(Map<String, Object> args) {
+        if (args == null || !args.containsKey("model")) {
+            return Env.get("CURSOR_MODEL", "");
+        }
+        Object modelValue = args.get("model");
+        if (modelValue instanceof String text) {
+            String trimmed = text.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        }
+        if (modelValue instanceof Map<?, ?> rawMap) {
+            Map<String, Object> modelMap = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                if (entry.getKey() != null) {
+                    modelMap.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+            String provider = getString(modelMap, "provider");
+            if (provider != null && !provider.isBlank() && !"openai".equalsIgnoreCase(provider.trim())) {
+                return null;
+            }
+            String modelId = getString(modelMap, "modelId");
+            if (modelId == null || modelId.isBlank()) {
+                return null;
+            }
+            return modelId.trim();
+        }
+        return null;
     }
 
     private static Instant firstNonBlankInstant(Instant a, Instant b) {

@@ -152,6 +152,9 @@ workflows:
           lifecycleBotName: "Arrietty"
       - type: call_action
         action: launch_cursor_run
+        model:
+          provider: openai
+          modelId: gpt-4.1
         bind: {}
         storeIn: launchMessage
       - type: done

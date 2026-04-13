@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-04-13T00:00:00Z"
 
 project:
   id: vinekeepers
@@ -44,7 +44,7 @@ assets:
   - id: ASSET-CONFIG-LOADER
     kind: source
     path: src/main/java/com/vinekeepers/config/ConfigLoader.java
-    role: Load bot definitions, routing, workflows, bot runtime options, optional handlesOwnedSpaces per bot, and Discord mention filters from YAML
+    role: Load bot definitions, routing, workflows (including optional per-step model for call_action), bot runtime options, optional handlesOwnedSpaces per bot, and Discord mention filters from YAML
     requires: [REQ-CONFIG-001]
     feature_ids: [FEAT-CONFIG]
   - id: ASSET-BOTS-YAML
@@ -74,7 +74,7 @@ assets:
 requirements:
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration. Workflow call_action steps may set optional model (string model id or map with provider/modelId), and only OpenAI provider is accepted for per-step model overrides.
     status: active
     priority: high
     type: functional
@@ -90,6 +90,7 @@ requirements:
         - BotConfig maps to BotDefinition structure
         - ConfigLoader parses workflow.type and workflow.params from YAML into BotDefinition
         - ConfigLoader parses workflows map and optional bot runtime options from YAML into BotConfig and BotDefinition
+        - ConfigLoader validates optional workflow step model values and accepts only OpenAI provider for per-step model overrides
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
         - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
@@ -128,6 +129,18 @@ requirements:
           intent: Verify handlesOwnedSpaces absent in bot YAML yields false on BotDefinition
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildBotsParsesHandlesOwnedSpacesAbsentAsFalse
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-WORKFLOW-STEP-MODEL-OPENAI
+          title: ConfigLoaderTest
+          intent: Verify workflow step model accepts string or provider openai/modelId map
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: loadFromPathParsesWorkflowStepModelMapOpenAi
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-WORKFLOW-STEP-MODEL-REJECT-NON-OPENAI
+          title: ConfigLoaderTest
+          intent: Verify workflow step model rejects non-openai provider
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: loadFromPathRejectsWorkflowStepModelWithNonOpenAiProvider
           preconditions: []
 
 features:

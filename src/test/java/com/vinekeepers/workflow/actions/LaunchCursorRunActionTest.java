@@ -178,6 +178,52 @@ class LaunchCursorRunActionTest {
         assertTrue(result.toString().startsWith("Cursor launch failed:"));
     }
 
+    @Test
+    void runUsesModelFromWorkflowStepBindWhenProvided() {
+        final CursorAgentLaunchRequest[] capturedRequest = new CursorAgentLaunchRequest[1];
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                capturedRequest[0] = request;
+                return new CursorAgentLaunchResult(
+                        "agent-model", "Run", "CREATING",
+                        request.repositoryUrl(), request.baseRef(), request.branchName(),
+                        "https://cursor.com/agents?id=agent-model", null, true, NOW);
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "acme/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "s1",
+                "model", Map.of("provider", "openai", "modelId", "gpt-4.1-mini")));
+        assertTrue(result.toString().contains("Launching Cursor Cloud run"));
+        assertNotNull(capturedRequest[0]);
+        assertEquals("gpt-4.1-mini", capturedRequest[0].model());
+    }
+
+    @Test
+    void runRejectsNonOpenAiModelProviderFromWorkflowStep() {
+        LaunchCursorRunAction action = new LaunchCursorRunAction(stubAdapter(), new StateStore(), new LifecycleContextStore());
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "acme/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "s1",
+                "model", Map.of("provider", "anthropic", "modelId", "claude-3-5-sonnet")));
+        assertEquals("Invalid model in state. Only OpenAI models are supported for workflow steps.", result);
+    }
+
     private static CursorCloudAdapter stubAdapter() {
         return new CursorCloudAdapter() {
             @Override

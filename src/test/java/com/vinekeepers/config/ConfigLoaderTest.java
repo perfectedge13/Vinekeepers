@@ -275,4 +275,88 @@ class ConfigLoaderTest {
         assertEquals(1, bots.size());
         assertFalse(bots.get(0).isHandlesOwnedSpaces());
     }
+
+    @Test
+    void loadFromPathParsesWorkflowStepModelString(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+                workflow:
+                  type: configured
+                  params:
+                    workflowRef: model_flow
+            workflows:
+              model_flow:
+                steps:
+                  - type: call_action
+                    action: launch_cursor_run
+                    model: gpt-4.1-mini
+            routing: []
+            """);
+
+        BotConfig config = loader.loadFromPath(yaml);
+        assertNotNull(config.getWorkflows());
+    }
+
+    @Test
+    void loadFromPathParsesWorkflowStepModelMapOpenAi(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+                workflow:
+                  type: configured
+                  params:
+                    workflowRef: model_flow
+            workflows:
+              model_flow:
+                steps:
+                  - type: call_action
+                    action: launch_cursor_run
+                    model:
+                      provider: openai
+                      modelId: gpt-4.1
+            routing: []
+            """);
+
+        BotConfig config = loader.loadFromPath(yaml);
+        assertNotNull(config.getWorkflows());
+    }
+
+    @Test
+    void loadFromPathRejectsWorkflowStepModelWithNonOpenAiProvider(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+                workflow:
+                  type: configured
+                  params:
+                    workflowRef: model_flow
+            workflows:
+              model_flow:
+                steps:
+                  - type: call_action
+                    action: launch_cursor_run
+                    model:
+                      provider: anthropic
+                      modelId: claude-sonnet
+            routing: []
+            """);
+
+        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> loader.loadFromPath(yaml));
+        assertTrue(ex.getMessage().contains("provider must be openai"));
+    }
 }

@@ -85,6 +85,22 @@ class ConfigurableWorkflowRunnerTest {
     }
 
     @Test
+    void runCallActionStepPassesModelFromStepConfigIntoBindArgs() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("echoModel", (e, s, b) -> b.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "echoModel", "model", "gpt-4.1-mini", "storeIn", "modelOut"),
+                Map.of("type", "done", "message", "Model: {{modelOut}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("action-model-flow", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        Event event = new Event("test", "msg", Map.of());
+        StateStore store = new StateStore();
+        String out = runner.run(event, store, "b");
+        assertEquals("Model: gpt-4.1-mini", out);
+    }
+
+    @Test
     void runPromptAndCapturePausesThenResumesAtCaptureStep() {
         List<Map<String, Object>> steps = List.of(
                 Map.of("type", "prompt_for_field", "prompt", "Which project?", "storeIn", "project"),

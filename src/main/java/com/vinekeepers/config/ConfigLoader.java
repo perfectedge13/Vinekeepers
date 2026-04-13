@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,7 @@ public final class ConfigLoader {
                 config.setBots((List<Map<String, Object>>) root.get("bots"));
                 config.setRouting((List<Map<String, Object>>) root.get("routing"));
                 config.setWorkflows((Map<String, Object>) root.get("workflows"));
+                validateWorkflowStepModels(config.getWorkflows());
                 Object defaultKey = root.get("defaultDiscordTokenEnvKey");
                 config.setDefaultDiscordTokenEnvKey(defaultKey != null ? defaultKey.toString().trim() : null);
             }
@@ -149,5 +151,73 @@ public final class ConfigLoader {
     private ToolPolicy parseToolPolicy(Map<String, Object> p) {
         if (p == null) return ToolPolicy.allowAll();
         return new ToolPolicy(toSet((List<String>) p.get("allowed")), toSet((List<String>) p.get("denied")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void validateWorkflowStepModels(Map<String, Object> workflows) {
+        if (workflows == null || workflows.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> workflowEntry : workflows.entrySet()) {
+            if (!(workflowEntry.getValue() instanceof Map<?, ?> workflowMap)) {
+                continue;
+            }
+            Object stepsValue = workflowMap.get("steps");
+            if (!(stepsValue instanceof List<?> steps)) {
+                continue;
+            }
+            for (int i = 0; i < steps.size(); i++) {
+                Object stepValue = steps.get(i);
+                if (!(stepValue instanceof Map<?, ?> stepMap)) {
+                    continue;
+                }
+                if (!stepMap.containsKey("model")) {
+                    continue;
+                }
+                validateOpenAiModelValue((Map<String, Object>) stepMap, workflowEntry.getKey(), i);
+            }
+        }
+    }
+
+    private static void validateOpenAiModelValue(Map<String, Object> stepMap, String workflowId, int stepIndex) {
+        Object modelValue = stepMap.get("model");
+        if (modelValue instanceof String text) {
+            if (!text.isBlank()) {
+                return;
+            }
+            throw invalidWorkflowModel(workflowId, stepIndex, "model id cannot be blank");
+        }
+        if (modelValue instanceof Map<?, ?> mapValue) {
+            Map<String, Object> modelMap = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : mapValue.entrySet()) {
+                if (entry.getKey() != null) {
+                    modelMap.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+            String provider = asTrimmedString(modelMap.get("provider"));
+            String modelId = asTrimmedString(modelMap.get("modelId"));
+            if (modelId == null || modelId.isBlank()) {
+                throw invalidWorkflowModel(workflowId, stepIndex, "model.modelId is required");
+            }
+            if (provider != null && !provider.equalsIgnoreCase("openai")) {
+                throw invalidWorkflowModel(workflowId, stepIndex,
+                        "provider must be openai when model is configured per step");
+            }
+            return;
+        }
+        throw invalidWorkflowModel(workflowId, stepIndex, "model must be a string or map");
+    }
+
+    private static IllegalArgumentException invalidWorkflowModel(String workflowId, int stepIndex, String detail) {
+        return new IllegalArgumentException(
+                "Invalid model in workflows." + workflowId + ".steps[" + stepIndex + "]: " + detail);
+    }
+
+    private static String asTrimmedString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
     }
 }
