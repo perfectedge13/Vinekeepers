@@ -19,6 +19,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class LaunchCursorRunActionTest {
 
@@ -176,6 +177,69 @@ class LaunchCursorRunActionTest {
         Object result = action.run(null, Map.of(), Map.of(
                 "project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
         assertTrue(result.toString().startsWith("Cursor launch failed:"));
+    }
+
+    @Test
+    void runUsesStepModelWhenOpenAiPrefixed() {
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        CapturingAdapter adapter = new CapturingAdapter();
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "skey",
+                "__stepModel", "openai-gpt-4.1"));
+
+        assertTrue(result.toString().contains("Launching Cursor Cloud run"));
+        assertNotNull(adapter.lastRequest);
+        assertEquals("gpt-4.1", adapter.lastRequest.model());
+    }
+
+    @Test
+    void runRejectsNonOpenAiStepModel() {
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        CapturingAdapter adapter = new CapturingAdapter();
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+
+        Object result = action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "skey",
+                "__stepModel", "anthropic-claude-3.7-sonnet"));
+
+        assertEquals("Unsupported workflow step model provider. Only OpenAI models are supported.", result);
+        assertFalse(stateStore.contains("cursor:session:skey:lastRun"));
+        assertTrue(adapter.lastRequest == null);
+    }
+
+    private static final class CapturingAdapter implements CursorCloudAdapter {
+        private CursorAgentLaunchRequest lastRequest;
+
+        @Override
+        public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+            this.lastRequest = request;
+            return new CursorAgentLaunchResult(
+                    "captured", "Run", "CREATING",
+                    request.repositoryUrl(), request.baseRef(), request.branchName(),
+                    "https://cursor.com/agents?id=captured", null, true, NOW);
+        }
+
+        @Override
+        public CursorAgentDetails getAgent(String agentId) {
+            return null;
+        }
+
+        @Override
+        public CursorAgentConversation getConversation(String agentId) {
+            return new CursorAgentConversation(agentId, List.of());
+        }
+
+        @Override
+        public void addFollowup(String agentId, String promptText) {
+        }
     }
 
     private static CursorCloudAdapter stubAdapter() {

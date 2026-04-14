@@ -85,6 +85,27 @@ class ConfigurableWorkflowRunnerTest {
     }
 
     @Test
+    void runCallActionStepPassesConfiguredStepModelInArgs() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("echoModel", (e, s, b) -> b.get("__stepModel"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of(
+                        "type", "call_action",
+                        "action", "echoModel",
+                        "model", "openai-gpt-4o-mini",
+                        "storeIn", "selectedModel"),
+                Map.of("type", "done", "message", "Model: {{selectedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("action-model-flow", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        Event event = new Event("test", "msg", Map.of());
+        StateStore store = new StateStore();
+
+        String out = runner.run(event, store, "b");
+        assertEquals("Model: openai-gpt-4o-mini", out);
+    }
+
+    @Test
     void runPromptAndCapturePausesThenResumesAtCaptureStep() {
         List<Map<String, Object>> steps = List.of(
                 Map.of("type", "prompt_for_field", "prompt", "Which project?", "storeIn", "project"),

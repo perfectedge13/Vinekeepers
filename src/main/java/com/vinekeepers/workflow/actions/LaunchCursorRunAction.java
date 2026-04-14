@@ -23,6 +23,7 @@ import com.vinekeepers.state.StateStore;
 public final class LaunchCursorRunAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final String DEFAULT_BASE_BRANCH = "main";
+    private static final String OPENAI_PROVIDER_PREFIX = "openai-";
 
     private final CursorCloudAdapter adapter;
     private final StateStore stateStore;
@@ -72,6 +73,11 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
         String deliveryChannelId = getString(args, "deliveryChannelId");
+        String stepModel = getString(args, "__stepModel");
+        String resolvedModel = resolveCursorModel(stepModel);
+        if (stepModel != null && resolvedModel == null) {
+            return "Unsupported workflow step model provider. Only OpenAI models are supported.";
+        }
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -79,7 +85,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                resolvedModel
         );
 
         try {
@@ -172,6 +178,18 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         String t = project.trim();
         if (t.startsWith("https://github.com/")) return t;
         if (t.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) return "https://github.com/" + t;
+        return null;
+    }
+
+    private static String resolveCursorModel(String stepModel) {
+        if (stepModel == null || stepModel.isBlank()) {
+            return Env.get("CURSOR_MODEL", "");
+        }
+        String trimmed = stepModel.trim();
+        if (trimmed.toLowerCase(Locale.ROOT).startsWith(OPENAI_PROVIDER_PREFIX)) {
+            String modelSuffix = trimmed.substring(OPENAI_PROVIDER_PREFIX.length()).trim();
+            return modelSuffix.isBlank() ? null : modelSuffix;
+        }
         return null;
     }
 }

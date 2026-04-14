@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-04-14T00:00:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -635,7 +635,9 @@ requirements:
         - Configurable workflows support prompt_for_field and capture_field steps for conversational pause/resume
         - Configurable workflow state records waiting field, pending prompt, completion, and error status
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
-        - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
+        - >-
+          CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool; optional step
+          key model is forwarded as __stepModel in action args
         - >-
           capture_field step supports optional trimAndLower (boolean); when true, captured text is trimmed and
           lowercased; for message events content is read from payload content or text (and optional contentKey)
@@ -654,6 +656,9 @@ requirements:
           default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
           bind/state updates LifecycleContextStore via setDeliveryTargetId(contextId, threadId); no store update on
           failure; storeIn (e.g. deliveryChannelId) stores thread id or sentinel THREAD_CREATE_FAILED in state
+        - >-
+          launch_cursor_run supports optional per-step model override from step key model; only openai-* values are
+          accepted and mapped to Cursor model id (strip openai- prefix), otherwise launch is rejected
       examples: []
     traceability:
       assets:
@@ -754,6 +759,12 @@ requirements:
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
           preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action step model is forwarded to action args as __stepModel
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionStepPassesConfiguredStepModelInArgs
+          preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
           intent: Verify DoneStep completes with message and template
@@ -772,6 +783,18 @@ requirements:
             returns sentinel; lifecycle owner gateway when channel has context; setDeliveryTargetId on success when
             contextId present; no store update on failure
           testClass: com.vinekeepers.workflow.actions.CreateThreadActionTest
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-STEP-MODEL
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run supports call_action model override and rejects non-openai providers
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesStepModelWhenOpenAiPrefixed
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-STEP-MODEL-REJECT-NON-OPENAI
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run returns validation error for non-openai step model values
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runRejectsNonOpenAiStepModel
           preconditions: []
         - id: UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-PRECEDENCE
           title: CreateLifecycleContextActionTest

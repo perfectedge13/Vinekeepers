@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-04-14T00:00:00Z"
 
 project:
   id: vinekeepers
@@ -54,8 +54,9 @@ assets:
       Bot definitions YAML (Luna routing, Discord mention activation, optional discordAuthors, optional
       discordTokenEnvKey and handlesOwnedSpaces per bot, lifecycleBotName in step bind; Arrietty template with
       workflowRef arrietty_room, optional create_thread step with storeIn deliveryChannelId, handlesOwnedSpaces,
-      capture_field trimAndLower for room name UX, branch value "" for blank/empty; done step main-room redirect
-      message e.g. "Launching now. See <#{{channelId}}>.")
+      capture_field trimAndLower for room name UX, branch value "" for blank/empty; call_action supports optional
+      model (openai-*), e.g. launch_cursor_run model openai-gpt-4.1; done step main-room redirect message e.g.
+      "Launching now. See <#{{channelId}}>.")
     requires: [REQ-CONFIG-001, REQ-LUNA-001]
     feature_ids: [FEAT-CONFIG, FEAT-CURSOR-GATHERING]
   - id: ASSET-BOT-CONFIG
@@ -74,7 +75,7 @@ assets:
 requirements:
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration. Workflow steps may include optional per-step model key (e.g. call_action model openai-gpt-4.1) for actions that support step-level model selection.
     status: active
     priority: high
     type: functional
@@ -94,6 +95,7 @@ requirements:
         - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
+        - Workflow call_action steps can include optional model (openai-*) to request step-level model override passed to action args
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]
@@ -128,6 +130,12 @@ requirements:
           intent: Verify handlesOwnedSpaces absent in bot YAML yields false on BotDefinition
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildBotsParsesHandlesOwnedSpacesAbsentAsFalse
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-WORKFLOW-STEP-MODEL
+          title: ConfigLoaderTest
+          intent: Verify workflow step model key (e.g. call_action model openai-gpt-4.1) is preserved in loaded workflow map
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: loadFromPathParsesWorkflowStepModel
           preconditions: []
 
 features:

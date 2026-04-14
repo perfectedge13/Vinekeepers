@@ -22,19 +22,26 @@ public final class CallActionStep implements WorkflowStep {
     private final String actionId;
     private final Map<String, Object> bind;
     private final String storeIn;
+    private final String model;
 
     public CallActionStep(WorkflowActionRegistry registry, String actionId, Map<String, Object> bind, String storeIn) {
-        this(registry, null, null, actionId, bind, storeIn);
+        this(registry, null, null, actionId, bind, storeIn, null);
     }
 
     public CallActionStep(WorkflowActionRegistry registry, ToolRunner toolRunner, ToolPolicy toolPolicy,
                           String actionId, Map<String, Object> bind, String storeIn) {
+        this(registry, toolRunner, toolPolicy, actionId, bind, storeIn, null);
+    }
+
+    public CallActionStep(WorkflowActionRegistry registry, ToolRunner toolRunner, ToolPolicy toolPolicy,
+                          String actionId, Map<String, Object> bind, String storeIn, String model) {
         this.registry = registry != null ? registry : new WorkflowActionRegistry();
         this.toolRunner = toolRunner;
         this.toolPolicy = toolPolicy;
         this.actionId = actionId != null ? actionId : "";
         this.bind = bind != null ? Map.copyOf(bind) : Map.of();
         this.storeIn = storeIn;
+        this.model = normalizeModel(model);
     }
 
     @Override
@@ -55,6 +62,9 @@ public final class CallActionStep implements WorkflowStep {
             args.putAll(state.getData());
         }
         args.put("__event", buildEventMetadata(event));
+        if (model != null) {
+            args.put("__stepModel", model);
+        }
         for (Map.Entry<String, Object> entry : bind.entrySet()) {
             args.put(entry.getKey(), resolve(entry.getValue(), state));
         }
@@ -80,5 +90,13 @@ public final class CallActionStep implements WorkflowStep {
             return state != null ? state.get(key) : null;
         }
         return text;
+    }
+
+    private static String normalizeModel(String configuredModel) {
+        if (configuredModel == null) {
+            return null;
+        }
+        String trimmed = configuredModel.trim();
+        return trimmed.isBlank() ? null : trimmed;
     }
 }

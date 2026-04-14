@@ -169,7 +169,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         toolPolicy,
                         (String) stepMap.get("action"),
                         (Map<String, Object>) stepMap.get("bind"),
-                        (String) stepMap.get("storeIn")));
+                        (String) stepMap.get("storeIn"),
+                        (String) stepMap.get("model")));
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(
