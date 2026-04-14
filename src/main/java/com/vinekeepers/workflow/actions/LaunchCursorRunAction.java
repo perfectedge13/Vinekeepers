@@ -9,6 +9,8 @@ import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.env.Env;
 import com.vinekeepers.events.Event;
 import com.vinekeepers.state.LifecycleContextStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -23,6 +25,7 @@ import com.vinekeepers.state.StateStore;
 public final class LaunchCursorRunAction implements com.vinekeepers.workflow.WorkflowAction {
 
     private static final String DEFAULT_BASE_BRANCH = "main";
+    private static final Logger log = LoggerFactory.getLogger(LaunchCursorRunAction.class);
 
     private final CursorCloudAdapter adapter;
     private final StateStore stateStore;
@@ -72,6 +75,13 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
         String deliveryChannelId = getString(args, "deliveryChannelId");
+        String configuredFallbackModel = Env.get("CURSOR_MODEL", "");
+        String requestedModel = getString(args, "model");
+        String selectedModel = resolveModel(requestedModel, configuredFallbackModel);
+        if (selectedModel != null && selectedModel.isBlank()) {
+            // Keep request semantics aligned with adapter default-model resolution.
+            selectedModel = null;
+        }
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -79,7 +89,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                selectedModel
         );
 
         try {
@@ -161,6 +171,30 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    static String resolveModel(String requestedModel, String fallbackModel) {
+        if (requestedModel == null || requestedModel.isBlank()) {
+            return fallbackModel;
+        }
+        String candidate = requestedModel.trim();
+        if (isSupportedOpenAiModel(candidate)) {
+            return candidate;
+        }
+        log.warn("Unsupported workflow step model '{}' configured; falling back to CURSOR_MODEL.", candidate);
+        return fallbackModel;
+    }
+
+    static boolean isSupportedOpenAiModel(String model) {
+        String value = model.toLowerCase(Locale.ROOT);
+        if (value.startsWith("openai/")) {
+            value = value.substring("openai/".length());
+        }
+        return value.startsWith("gpt-")
+                || value.startsWith("o1")
+                || value.startsWith("o3")
+                || value.startsWith("o4")
+                || value.startsWith("chatgpt-");
     }
 
     private static Instant firstNonBlankInstant(Instant a, Instant b) {

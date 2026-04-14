@@ -94,6 +94,7 @@ requirements:
         - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
+        - Workflow call_action steps may declare a top-level model key (for example launch_cursor_run model override); loader preserves this key for runtime workflow execution
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]

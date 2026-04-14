@@ -148,6 +148,37 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void loadFromPathParsesWorkflowStepModelField(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: "You are Luna"
+                workflow:
+                  type: configured
+                  params:
+                    workflowRef: luna_cursor
+            workflows:
+              luna_cursor:
+                steps:
+                  - type: call_action
+                    action: launch_cursor_run
+                    model: openai/gpt-4.1
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) config.getWorkflows();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> lunaWorkflow = (Map<String, Object>) workflows.get("luna_cursor");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) lunaWorkflow.get("steps");
+        assertEquals("openai/gpt-4.1", steps.get(0).get("model"));
+    }
+
+    @Test
     void buildRouterParsesDiscordMentionRouting(@TempDir Path dir) throws Exception {
         Path yaml = dir.resolve("bots.yaml");
         Files.writeString(yaml, """
@@ -274,5 +305,36 @@ class ConfigLoaderTest {
         List<BotDefinition> bots = loader.buildBots(config);
         assertEquals(1, bots.size());
         assertFalse(bots.get(0).isHandlesOwnedSpaces());
+    }
+
+    @Test
+    void loadFromPathPreservesWorkflowStepModelField(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+                workflow:
+                  type: configured
+                  params:
+                    workflowRef: luna_cursor
+            workflows:
+              luna_cursor:
+                steps:
+                  - type: call_action
+                    action: launch_cursor_run
+                    model: openai/gpt-4.1
+            routing: []
+            """);
+
+        BotConfig config = loader.loadFromPath(yaml);
+        Object workflowObj = config.getWorkflows().get("luna_cursor");
+        assertTrue(workflowObj instanceof Map<?, ?>);
+        Object stepsObj = ((Map<?, ?>) workflowObj).get("steps");
+        assertTrue(stepsObj instanceof List<?>);
+        assertTrue(((List<?>) stepsObj).get(0) instanceof Map<?, ?>);
+        assertEquals("openai/gpt-4.1", ((Map<?, ?>) ((List<?>) stepsObj).get(0)).get("model"));
     }
 }

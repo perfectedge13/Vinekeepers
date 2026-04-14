@@ -407,4 +407,22 @@ class ConfigurableWorkflowRunnerTest {
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
     }
+
+    @Test
+    void callActionStepCopiesTopLevelModelIntoBindArgs() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("capture_model", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "capture_model", "model", "openai/gpt-4.1", "storeIn", "usedModel"),
+                Map.of("type", "done", "message", "Model: {{usedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("step-model", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        StateStore store = new StateStore();
+
+        WorkflowRunResult result = runner.runResult(new Event("test", "message", Map.of("content", "run")), store, "luna");
+
+        assertTrue(result.isCompleted());
+        assertEquals("Model: openai/gpt-4.1", result.getReplyMessage());
+    }
 }
