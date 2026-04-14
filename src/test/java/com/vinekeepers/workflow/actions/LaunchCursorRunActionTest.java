@@ -10,14 +10,17 @@ import com.vinekeepers.core.cursor.LifecycleRunRecord;
 import com.vinekeepers.state.LifecycleContext;
 import com.vinekeepers.state.LifecycleContextStore;
 import com.vinekeepers.state.StateStore;
+import com.vinekeepers.env.Env;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LaunchCursorRunActionTest {
@@ -178,6 +181,77 @@ class LaunchCursorRunActionTest {
         assertTrue(result.toString().startsWith("Cursor launch failed:"));
     }
 
+    @Test
+    void runPrefersWorkflowStepModelOverEnvDefault() {
+        String oldCursorModel = System.getProperty("CURSOR_MODEL");
+        try {
+            System.setProperty("CURSOR_MODEL", "openai/gpt-4.1");
+            AtomicReference<String> capturedModel = new AtomicReference<>();
+            CursorCloudAdapter adapter = new CursorCloudAdapter() {
+                @Override
+                public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                    capturedModel.set(request.model());
+                    return new CursorAgentLaunchResult(
+                            "agent-789", "Run", "CREATING",
+                            request.repositoryUrl(), request.baseRef(), request.branchName(),
+                            "https://cursor.com/agents?id=agent-789", null, true, NOW);
+                }
+                @Override
+                public CursorAgentDetails getAgent(String agentId) { return null; }
+                @Override
+                public CursorAgentConversation getConversation(String agentId) {
+                    return new CursorAgentConversation(agentId, List.of());
+                }
+                @Override
+                public void addFollowup(String agentId, String promptText) {}
+            };
+            LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+            action.run(null, Map.of(), Map.of(
+                    "project", "owner/repo",
+                    "codeChange", "Add feature",
+                    "__sessionKey", "skey",
+                    "model", "openai/gpt-5"));
+            assertEquals("openai/gpt-5", capturedModel.get());
+        } finally {
+            restoreProperty("CURSOR_MODEL", oldCursorModel);
+        }
+    }
+
+    @Test
+    void runUsesEnvModelWhenWorkflowStepModelMissing() {
+        String oldCursorModel = System.getProperty("CURSOR_MODEL");
+        try {
+            System.setProperty("CURSOR_MODEL", "openai/gpt-4.1-mini");
+            AtomicReference<String> capturedModel = new AtomicReference<>();
+            CursorCloudAdapter adapter = new CursorCloudAdapter() {
+                @Override
+                public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                    capturedModel.set(request.model());
+                    return new CursorAgentLaunchResult(
+                            "agent-790", "Run", "CREATING",
+                            request.repositoryUrl(), request.baseRef(), request.branchName(),
+                            "https://cursor.com/agents?id=agent-790", null, true, NOW);
+                }
+                @Override
+                public CursorAgentDetails getAgent(String agentId) { return null; }
+                @Override
+                public CursorAgentConversation getConversation(String agentId) {
+                    return new CursorAgentConversation(agentId, List.of());
+                }
+                @Override
+                public void addFollowup(String agentId, String promptText) {}
+            };
+            LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+            action.run(null, Map.of(), Map.of(
+                    "project", "owner/repo",
+                    "codeChange", "Add feature",
+                    "__sessionKey", "skey"));
+            assertEquals("openai/gpt-4.1-mini", capturedModel.get());
+        } finally {
+            restoreProperty("CURSOR_MODEL", oldCursorModel);
+        }
+    }
+
     private static CursorCloudAdapter stubAdapter() {
         return new CursorCloudAdapter() {
             @Override
@@ -196,5 +270,13 @@ class LaunchCursorRunActionTest {
             @Override
             public void addFollowup(String agentId, String promptText) {}
         };
+    }
+
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
     }
 }

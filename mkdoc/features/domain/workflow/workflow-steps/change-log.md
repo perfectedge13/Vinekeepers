@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-04-14
+
+- **Per-step call_action model override:** `ConfigurableWorkflowRunner` now supports an optional `model` key on a `call_action` step. The runner injects this value into action bind args as `model` (unless bind already provides `model`), so actions can consume a step-specific model without changing other step types.
+
 ## 2026-03-13
 
 - **capture_field trimAndLower:** `CaptureFieldFromEventStep` supports optional **trimAndLower** (boolean) in step config. When true, captured text from message content is trimmed and lowercased before storing in state (e.g. room name in arrietty_room). `ConfigurableWorkflowRunner` parses `trimAndLower` from capture_field step config and passes it to the step. Tests: `CaptureFieldFromEventStepTest.messageEventWithTrimAndLowerTrimsAndLowercasesContent`, `ConfigurableWorkflowRunnerTest.runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue`.

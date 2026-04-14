@@ -2,6 +2,10 @@
 
 # Entries
 
+## 2026-04-14
+
+- **Per-step Cursor model selection:** `launch_cursor_run` now prefers a `model` value provided by the current `call_action` workflow step (or bind/state), falling back to `CURSOR_MODEL` only when the step does not provide one. This allows YAML workflows to set the Cursor/OpenAI model per workflow step without changing global environment defaults.
+
 ## 2026-03-13
 
 - **Arrietty room UX and message-first capture:** Arrietty template in `config/bots.yaml` uses `workflowRef: arrietty_room` with **message-first** flow: first step is `capture_field` (e.g. `storeIn: roomAction`) with optional **trimAndLower: true** for room name UX (trim and lowercase user input). Router ownership warning when lifecycle owner lacks handlesOwnedSpaces. No hardcoded bot ids in Router or engine.
