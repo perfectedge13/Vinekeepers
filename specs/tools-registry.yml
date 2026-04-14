@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-04-14T21:22:00Z"
 
 project:
   id: vinekeepers
@@ -95,6 +95,7 @@ requirements:
         - ToolRunner runs approved actions and returns results
         - ToolRunner rejects denied or unknown tools before execution
         - Configured workflows can resolve registered tools such as cursor.fullRun and echo through ToolRunner
+        - Tool-backed launch steps can pass a per-step model override from YAML args (model) to cursor.fullRun
       examples: []
     traceability:
       assets: [ASSET-TOOL, ASSET-TOOL-REGISTRY, ASSET-TOOL-RUNNER, ASSET-CURSOR-FULL-RUN-TOOL, ASSET-ECHO-TOOL, ASSET-STUB-TOOL, ASSET-BOOTSTRAP]
@@ -105,6 +106,12 @@ requirements:
           title: ToolRunnerTest
           intent: Verify ToolRunner executes allowed tools and rejects denied or unknown ones
           testClass: com.vinekeepers.tools.ToolRunnerTest
+          preconditions: []
+        - id: UNIT-CURSOR-FULL-RUN-TOOL-MODEL
+          title: CursorFullRunToolTest
+          intent: Verify cursor.fullRun uses model from args when provided
+          testClass: com.vinekeepers.tools.CursorFullRunToolTest
+          testMethod: runUsesModelFromArgsWhenProvided
           preconditions: []
         - id: MANUAL-TOOLS
           title: Tool registry and runner

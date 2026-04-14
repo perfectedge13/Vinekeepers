@@ -105,4 +105,53 @@ class CursorFullRunToolTest {
 
         assertTrue(result.toString().contains("Could not resolve project"));
     }
+
+    @Test
+    void runUsesModelFromArgsWhenProvided() {
+        AtomicReference<CursorAgentLaunchRequest> capturedRequest = new AtomicReference<>();
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                capturedRequest.set(request);
+                return new CursorAgentLaunchResult(
+                        "bc_1000",
+                        "Luna run",
+                        "CREATING",
+                        request.repositoryUrl(),
+                        request.baseRef(),
+                        request.branchName(),
+                        "https://cursor.com/agents?id=bc_1000",
+                        null,
+                        true,
+                        Instant.parse("2026-03-07T20:00:00Z")
+                );
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return new CursorAgentDetails(agentId, "", "", "", "", "", "", "", "", Instant.now());
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of(new CursorAgentMessage("m1", "assistant_message", "Working")));
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {
+            }
+        };
+        StateStore stateStore = new StateStore();
+        CursorFullRunTool tool = new CursorFullRunTool(adapter, stateStore);
+
+        tool.run(Map.of(
+                "project", "acme/vinekeepers",
+                "codeChange", "Add model override",
+                "model", "gpt-4.1-mini",
+                "__sessionKey", "bot:luna:conv:chan-1:user-1",
+                "__event", Map.of("channelId", "chan-1", "messageId", "msg-1")
+        ));
+
+        assertEquals("gpt-4.1-mini", capturedRequest.get().model());
+    }
 }

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-04-14T21:20:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -633,6 +633,7 @@ requirements:
         - WorkflowRunnerFactory creates runner by type (stub, configured)
         - StubWorkflow/StubState and StubWorkflowRunner used when no custom workflow
         - Configurable workflows support prompt_for_field and capture_field steps for conversational pause/resume
+        - call_action step supports optional model value to override CURSOR_MODEL for that step execution
         - Configurable workflow state records waiting field, pending prompt, completion, and error status
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
         - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
@@ -648,7 +649,7 @@ requirements:
           branch)
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
-          actions that render content
+          actions that render content; optional call_action model is forwarded as action arg model
         - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
           contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
           default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
@@ -753,6 +754,12 @@ requirements:
           title: CallActionStepTest
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-CALL-ACTION-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action optional model is forwarded in action args
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionStepWithModelPassesModelIntoActionArgs
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest

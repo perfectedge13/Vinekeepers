@@ -407,4 +407,22 @@ class ConfigurableWorkflowRunnerTest {
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
     }
+
+    @Test
+    void runCallActionStepWithModelPassesModelIntoActionArgs() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("captureModel", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "captureModel", "model", "gpt-4.1", "storeIn", "selectedModel"),
+                Map.of("type", "done", "message", "Model: {{selectedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("action-with-model", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        Event event = new Event("test", "msg", Map.of());
+        StateStore store = new StateStore();
+
+        String out = runner.run(event, store, "luna");
+
+        assertEquals("Model: gpt-4.1", out);
+    }
 }

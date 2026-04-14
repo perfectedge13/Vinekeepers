@@ -72,6 +72,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
         Map<String, Object> eventMeta = getMap(args, "__event");
         String replyToMessageId = eventMeta != null ? getString(eventMeta, "messageId") : null;
         String deliveryChannelId = getString(args, "deliveryChannelId");
+        String configuredModel = firstNonBlank(getString(args, "model"), Env.get("CURSOR_MODEL", ""));
 
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
@@ -79,7 +80,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                configuredModel
         );
 
         try {
