@@ -18,6 +18,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LaunchCursorRunActionTest {
@@ -176,6 +177,94 @@ class LaunchCursorRunActionTest {
         Object result = action.run(null, Map.of(), Map.of(
                 "project", "acme/repo", "codeChange", "Add feature", "__sessionKey", "s1"));
         assertTrue(result.toString().startsWith("Cursor launch failed:"));
+    }
+
+    @Test
+    void runUsesStepModelWhenConfiguredToSupportedOpenAiModel() {
+        final CursorAgentLaunchRequest[] captured = new CursorAgentLaunchRequest[1];
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                captured[0] = request;
+                return new CursorAgentLaunchResult(
+                        "model-1", "Run", "CREATING",
+                        request.repositoryUrl(), request.baseRef(), request.branchName(),
+                        "https://cursor.com/agents?id=model-1", null, true, NOW);
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+        action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "model", "openai/gpt-4.1",
+                "__sessionKey", "session-1"));
+
+        assertNotNull(captured[0]);
+        assertEquals("openai/gpt-4.1", captured[0].model());
+    }
+
+    @Test
+    void runFallsBackWhenStepModelIsUnsupported() {
+        final CursorAgentLaunchRequest[] captured = new CursorAgentLaunchRequest[1];
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                captured[0] = request;
+                return new CursorAgentLaunchResult(
+                        "model-2", "Run", "CREATING",
+                        request.repositoryUrl(), request.baseRef(), request.branchName(),
+                        "https://cursor.com/agents?id=model-2", null, true, NOW);
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, new StateStore(), new LifecycleContextStore());
+        action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "model", "anthropic/claude-3-7-sonnet",
+                "__sessionKey", "session-1"));
+
+        assertNotNull(captured[0]);
+        assertNull(captured[0].model(), "Unsupported step model should fall back to configured env model (unset in test).");
+    }
+
+    @Test
+    void resolveModelAcceptsOpenAiAndFallsBackForUnsupported() {
+        assertEquals("openai/gpt-4.1", LaunchCursorRunAction.resolveModel("openai/gpt-4.1", "openai/gpt-4o-mini"));
+        assertEquals("openai/gpt-4o-mini", LaunchCursorRunAction.resolveModel("anthropic/claude-3-7-sonnet", "openai/gpt-4o-mini"));
+        assertEquals("openai/gpt-4o-mini", LaunchCursorRunAction.resolveModel("", "openai/gpt-4o-mini"));
+    }
+
+    @Test
+    void isSupportedOpenAiModelAcceptsConfiguredOpenAiFamilies() {
+        assertTrue(LaunchCursorRunAction.isSupportedOpenAiModel("gpt-4.1"));
+        assertTrue(LaunchCursorRunAction.isSupportedOpenAiModel("openai/gpt-4o-mini"));
+        assertTrue(LaunchCursorRunAction.isSupportedOpenAiModel("o3-mini"));
+        assertTrue(LaunchCursorRunAction.isSupportedOpenAiModel("chatgpt-4o-latest"));
+        assertTrue(!LaunchCursorRunAction.isSupportedOpenAiModel("anthropic/claude-3-7-sonnet"));
     }
 
     private static CursorCloudAdapter stubAdapter() {

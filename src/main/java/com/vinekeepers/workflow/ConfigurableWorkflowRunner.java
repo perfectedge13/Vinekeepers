@@ -168,7 +168,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         toolRunner,
                         toolPolicy,
                         (String) stepMap.get("action"),
-                        (Map<String, Object>) stepMap.get("bind"),
+                        resolveActionBind(stepMap),
                         (String) stepMap.get("storeIn")));
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
@@ -178,5 +178,18 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolveActionBind(Map<String, Object> stepMap) {
+        Map<String, Object> bind = stepMap.get("bind") instanceof Map<?, ?> m
+                ? new java.util.LinkedHashMap<>((Map<String, Object>) m)
+                : new java.util.LinkedHashMap<>();
+        Object stepModel = stepMap.get("model");
+        if (stepModel instanceof String model && !model.isBlank()) {
+            // Top-level model config keeps workflow YAML concise for LLM-backed steps.
+            bind.put("model", model.trim());
+        }
+        return bind;
     }
 }

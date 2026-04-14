@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-04-14T00:00:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -888,6 +888,10 @@ requirements:
           create_lifecycle_context uses bind precedence (bind overrides state for configuredBotId, repo, requestText,
           runtimeBotInstanceId, deliveryChannelId); excludes THREAD_CREATE_FAILED from context deliveryChannelId
         - >-
+          launch_cursor_run supports optional step-level model in workflow YAML (`model` on call_action step); when
+          provided and recognized as OpenAI (gpt/o/chatgpt families, optional openai/ prefix), it is used for the
+          launch request; unsupported model values log a warning and fall back to CURSOR_MODEL
+        - >-
           launch_cursor_run acknowledgement to Discord includes optional status (e.g. launching) and directs user to
           lifecycle room; passes optional deliveryChannelId from bind/state into LifecycleRunRecord
       examples: []
@@ -1121,6 +1125,12 @@ requirements:
             (e.g. launching) and lifecycle room
           testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
           testMethod: runLaunchesAndStoresRecordAndBindsContext
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-MODEL
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run uses supported OpenAI step model and falls back for unsupported values
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: resolveModelAcceptsOpenAiAndFallsBackForUnsupported
           preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow
