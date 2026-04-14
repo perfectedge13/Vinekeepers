@@ -74,7 +74,7 @@ assets:
 requirements:
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration. Workflow step config may include optional `model` for `call_action` steps (e.g. launch_cursor_run), where the value is passed to action bind args as model.
     status: active
     priority: high
     type: functional
@@ -94,6 +94,7 @@ requirements:
         - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
+        - Workflow call_action step may set optional model in YAML; the model is forwarded to action bind args (bind model overrides step model)
       examples: []
     traceability:
       assets: [ASSET-CONFIG-LOADER, ASSET-BOT-CONFIG, ASSET-BOTS-YAML, ASSET-BOT-DEFINITION]

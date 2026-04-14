@@ -168,7 +168,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         toolRunner,
                         toolPolicy,
                         (String) stepMap.get("action"),
-                        (Map<String, Object>) stepMap.get("bind"),
+                        resolveCallActionBind(stepMap),
                         (String) stepMap.get("storeIn")));
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
@@ -178,5 +178,17 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolveCallActionBind(Map<String, Object> stepMap) {
+        Map<String, Object> bind = stepMap.get("bind") instanceof Map<?, ?> map
+                ? new java.util.LinkedHashMap<>((Map<String, Object>) map)
+                : new java.util.LinkedHashMap<>();
+        Object model = stepMap.get("model");
+        if (model instanceof String text && !text.isBlank() && !bind.containsKey("model")) {
+            bind.put("model", text);
+        }
+        return bind;
     }
 }

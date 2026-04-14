@@ -635,7 +635,9 @@ requirements:
         - Configurable workflows support prompt_for_field and capture_field steps for conversational pause/resume
         - Configurable workflow state records waiting field, pending prompt, completion, and error status
         - SessionKeyStrategies resolve channel, channel_user, or thread conversation keys for persisted workflow state
-        - CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool
+        - >-
+          CallActionStep can invoke either a registered workflow action or a ToolRunner-backed tool; call_action step
+          config may set model and it is exposed as bind.model to the action when bind.model is not explicitly set
         - >-
           capture_field step supports optional trimAndLower (boolean); when true, captured text is trimmed and
           lowercased; for message events content is read from payload content or text (and optional contentKey)
@@ -753,6 +755,12 @@ requirements:
           title: CallActionStepTest
           intent: Verify CallActionStep invokes registered action
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-CALL-ACTION-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action step model is forwarded to action bind when bind.model is absent
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionStepWithModelAddsModelToActionBind
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest
@@ -1121,6 +1129,12 @@ requirements:
             (e.g. launching) and lifecycle room
           testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
           testMethod: runLaunchesAndStoresRecordAndBindsContext
+          preconditions: []
+        - id: UNIT-LAUNCH-CURSOR-RUN-ACTION-MODEL-PREFERENCE
+          title: LaunchCursorRunActionTest
+          intent: Verify launch_cursor_run uses bind/state model when provided and falls back to CURSOR_MODEL otherwise
+          testClass: com.vinekeepers.workflow.actions.LaunchCursorRunActionTest
+          testMethod: runUsesModelFromBindWhenPresent
           preconditions: []
     anti_patterns:
       - Hardcoding Discord channel in workflow

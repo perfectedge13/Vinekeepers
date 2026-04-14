@@ -85,6 +85,24 @@ class ConfigurableWorkflowRunnerTest {
     }
 
     @Test
+    void runCallActionStepUsesStepLevelModelWhenModelMissingInBind() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("capture", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "capture", "model", "openai/gpt-4.1", "storeIn", "selectedModel"),
+                Map.of("type", "done", "message", "Model: {{selectedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("step-model", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        Event event = new Event("test", "msg", Map.of());
+        StateStore store = new StateStore();
+
+        String out = runner.run(event, store, "b");
+
+        assertEquals("Model: openai/gpt-4.1", out);
+    }
+
+    @Test
     void runPromptAndCapturePausesThenResumesAtCaptureStep() {
         List<Map<String, Object>> steps = List.of(
                 Map.of("type", "prompt_for_field", "prompt", "Which project?", "storeIn", "project"),
