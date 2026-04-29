@@ -51,7 +51,8 @@ public final class WorkflowRunnerFactory {
         }
         return create(resolvedBot.getWorkflowType(), resolvedBot.getWorkflowParams(), workflows, actionRegistry,
                 toolRunner, resolvedBot.getToolPolicy(), resolvedBot.getConversationMode(),
-                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry);
+                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry,
+                resolveDefaultModel(resolvedBot.getModelProfile() != null ? resolvedBot.getModelProfile().getModelId() : null));
     }
 
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
@@ -67,15 +68,29 @@ public final class WorkflowRunnerFactory {
                                         ToolRunner toolRunner, ToolPolicy toolPolicy,
                                         ConversationMode conversationMode, String sessionKeyStrategy,
                                         DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        return create(workflowType, workflowParams, workflows, actionRegistry, toolRunner, toolPolicy,
+                conversationMode, sessionKeyStrategy, choiceProviderRegistry, null);
+    }
+
+    public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
+                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry,
+                                        ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                        ConversationMode conversationMode, String sessionKeyStrategy,
+                                        DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                        String defaultLlmModel) {
         String type = workflowType != null && !workflowType.isBlank() ? workflowType : "stub";
         return switch (type) {
             case "configured" -> {
                 WorkflowDefinition def = resolveWorkflowDefinition(workflowParams, workflows);
                 yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry(),
-                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry);
+                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry, defaultLlmModel);
             }
             default -> new StubWorkflowRunner();
         };
+    }
+
+    private static String resolveDefaultModel(String modelId) {
+        return modelId != null && !modelId.isBlank() ? modelId : null;
     }
 
     @SuppressWarnings("unchecked")

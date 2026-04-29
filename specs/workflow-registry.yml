@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-04-29T20:30:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -649,6 +649,10 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
+        - >-
+          LLM-backed call_action steps (launch_cursor_run, cursor.fullRun) may declare optional model in step config;
+          when present and non-blank it is used for that step invocation, otherwise runtime falls back to bot default
+          model; model on non-LLM step types is invalid at workflow load
         - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
           contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
           default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
@@ -751,8 +755,13 @@ requirements:
           preconditions: []
         - id: UNIT-CALL-ACTION-STEP
           title: CallActionStepTest
-          intent: Verify CallActionStep invokes registered action
+          intent: Verify CallActionStep invokes registered action and injects model only for LLM-backed actions
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify LLM-backed step model override/fallback and validation for invalid model usage
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest

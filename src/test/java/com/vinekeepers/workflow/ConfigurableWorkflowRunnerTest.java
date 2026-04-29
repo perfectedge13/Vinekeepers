@@ -10,6 +10,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConfigurableWorkflowRunnerTest {
@@ -406,5 +407,69 @@ class ConfigurableWorkflowRunnerTest {
         assertEquals("Room: arrietty room", result.getReplyMessage());
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
+    }
+
+    @Test
+    void callActionWithStepModelInjectsModelForLlmBackedAction() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_cursor_run", (event, workflowState, bind) -> bind.get("__model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "model", "gpt-4.1-mini", "storeIn", "resolved"),
+                Map.of("type", "done", "message", "Model: {{resolved}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("llm-step-model", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+        StateStore store = new StateStore();
+
+        WorkflowRunResult result = runner.runResult(new Event("test", "message", Map.of("content", "go")), store, "luna");
+        assertTrue(result.isCompleted());
+        assertEquals("Model: gpt-4.1-mini", result.getReplyMessage());
+    }
+
+    @Test
+    void callActionWithoutStepModelFallsBackToBotDefaultModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_cursor_run", (event, workflowState, bind) -> bind.get("__model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "storeIn", "resolved"),
+                Map.of("type", "done", "message", "Model: {{resolved}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("llm-step-fallback", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(
+                def,
+                registry,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "bot-default-model");
+        StateStore store = new StateStore();
+
+        WorkflowRunResult result = runner.runResult(new Event("test", "message", Map.of("content", "go")), store, "luna");
+        assertTrue(result.isCompleted());
+        assertEquals("Model: bot-default-model", result.getReplyMessage());
+    }
+
+    @Test
+    void nonLlmStepWithModelFailsValidationAtConstruction() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "done", "model", "gpt-4.1-mini", "message", "bad")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("invalid-model-on-non-llm", steps);
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry()));
+        assertTrue(error.getMessage().contains("model is only allowed on LLM-backed workflow steps"));
+    }
+
+    @Test
+    void llmBackedStepWithBlankModelFailsValidation() {
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "model", " ")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("invalid-blank-model", steps);
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new ConfigurableWorkflowRunner(def, new WorkflowActionRegistry()));
+        assertTrue(error.getMessage().contains("model must be a non-blank string"));
     }
 }

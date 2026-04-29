@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.Set;
 
 /**
  * Interprets a workflow definition from config and persists conversational runtime state.
@@ -18,29 +20,40 @@ import java.util.Map;
 public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurableWorkflowRunner.class);
+    private static final Set<String> LLM_BACKED_ACTIONS = Set.of("launch_cursor_run", "cursor.fullRun");
 
     private final String sessionKeyStrategyName;
     private final List<WorkflowStep> steps;
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry) {
-        this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null);
+        this(definition, actionRegistry, null, ToolPolicy.allowAll(), ConversationMode.SINGLE_EVENT, null, null, null);
     }
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
                                       ToolRunner toolRunner, ToolPolicy toolPolicy,
                                       ConversationMode conversationMode, String sessionKeyStrategyName) {
-        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName, null);
+        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName, null, null);
     }
 
     public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
                                       ToolRunner toolRunner, ToolPolicy toolPolicy,
                                       ConversationMode conversationMode, String sessionKeyStrategyName,
                                       DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName,
+                choiceProviderRegistry, null);
+    }
+
+    public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
+                                      ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                      ConversationMode conversationMode, String sessionKeyStrategyName,
+                                      DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                      String defaultLlmModel) {
         WorkflowDefinition resolvedDefinition = definition != null ? definition : new WorkflowDefinition("", List.of());
         WorkflowActionRegistry resolvedRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.sessionKeyStrategyName = sessionKeyStrategyName;
+        validateSteps(resolvedDefinition, defaultLlmModel);
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
-                toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
+                toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry, defaultLlmModel);
     }
 
     @Override
@@ -130,7 +143,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     @SuppressWarnings("unchecked")
     private static List<WorkflowStep> buildSteps(WorkflowDefinition definition, WorkflowActionRegistry registry,
                                                  ToolRunner toolRunner, ToolPolicy toolPolicy,
-                                                 DynamicChoiceProviderRegistry choiceProviderRegistry) {
+                                                 DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                                 String defaultLlmModel) {
         List<WorkflowStep> out = new ArrayList<>();
         for (Map<String, Object> stepMap : definition.getSteps()) {
             String type = (String) stepMap.get("type");
@@ -163,13 +177,21 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                             (String) stepMap.get("contentKey"),
                             Boolean.TRUE.equals(trimAndLower)));
                 }
-                case "call_action" -> out.add(new com.vinekeepers.workflow.steps.CallActionStep(
-                        registry,
-                        toolRunner,
-                        toolPolicy,
-                        (String) stepMap.get("action"),
-                        (Map<String, Object>) stepMap.get("bind"),
-                        (String) stepMap.get("storeIn")));
+                case "call_action" -> {
+                    String actionId = (String) stepMap.get("action");
+                    String modelOverride = stringValue(stepMap.get("model"));
+                    String resolvedModel = resolveModel(modelOverride, defaultLlmModel);
+                    boolean llmBacked = isLlmBackedStep(type, actionId);
+                    out.add(new com.vinekeepers.workflow.steps.CallActionStep(
+                            registry,
+                            toolRunner,
+                            toolPolicy,
+                            actionId,
+                            (Map<String, Object>) stepMap.get("bind"),
+                            (String) stepMap.get("storeIn"),
+                            resolvedModel,
+                            llmBacked));
+                }
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(
@@ -178,5 +200,51 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    private static void validateSteps(WorkflowDefinition definition, String defaultLlmModel) {
+        List<Map<String, Object>> stepMaps = definition.getSteps();
+        for (int i = 0; i < stepMaps.size(); i++) {
+            Map<String, Object> stepMap = stepMaps.get(i);
+            String type = stringValue(stepMap.get("type"));
+            String actionId = stringValue(stepMap.get("action"));
+            Object modelRaw = stepMap.get("model");
+            if (modelRaw == null) {
+                continue;
+            }
+            if (!isLlmBackedStep(type, actionId)) {
+                throw invalidStep(i, "model is only allowed on LLM-backed workflow steps.");
+            }
+            String model = stringValue(modelRaw);
+            if (model == null || model.isBlank()) {
+                throw invalidStep(i, "model must be a non-blank string when configured.");
+            }
+            String resolvedModel = resolveModel(model, defaultLlmModel);
+            if (resolvedModel == null || resolvedModel.isBlank()) {
+                throw invalidStep(i, "LLM-backed step requires a model override or bot default model.");
+            }
+        }
+    }
+
+    private static IllegalArgumentException invalidStep(int stepIndex, String message) {
+        return new IllegalArgumentException("Invalid workflow step at index " + stepIndex + ": " + message);
+    }
+
+    private static boolean isLlmBackedStep(String type, String actionId) {
+        if (!"call_action".equals(type)) {
+            return false;
+        }
+        return actionId != null && LLM_BACKED_ACTIONS.contains(actionId);
+    }
+
+    private static String stringValue(Object value) {
+        return value != null ? value.toString() : null;
+    }
+
+    private static String resolveModel(String stepModel, String defaultLlmModel) {
+        if (stepModel != null && !stepModel.isBlank()) {
+            return stepModel;
+        }
+        return defaultLlmModel;
     }
 }

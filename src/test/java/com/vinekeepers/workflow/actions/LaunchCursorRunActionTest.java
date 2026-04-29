@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -152,6 +153,41 @@ class LaunchCursorRunActionTest {
         assertTrue(ack.contains("Status: launching"), "ack must include status");
         assertTrue(ack.contains("lifecycle room"), "ack must mention lifecycle room");
         assertTrue(ack.contains("Agent: "), "ack must include agent URL when present");
+    }
+
+    @Test
+    void runUsesPerStepModelOverrideWhenProvided() {
+        StateStore stateStore = new StateStore();
+        LifecycleContextStore contextStore = new LifecycleContextStore();
+        AtomicReference<CursorAgentLaunchRequest> capturedRequest = new AtomicReference<>();
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                capturedRequest.set(request);
+                return new CursorAgentLaunchResult(
+                        "agent-model-1", "Run", "CREATING",
+                        request.repositoryUrl(), request.baseRef(), request.branchName(),
+                        null, null, true, NOW);
+            }
+            @Override
+            public CursorAgentDetails getAgent(String agentId) { return null; }
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+            @Override
+            public void addFollowup(String agentId, String promptText) {}
+        };
+        LaunchCursorRunAction action = new LaunchCursorRunAction(adapter, stateStore, contextStore);
+
+        action.run(null, Map.of(), Map.of(
+                "project", "owner/repo",
+                "codeChange", "Add feature",
+                "__sessionKey", "skey",
+                "__model", "gpt-4.1-mini"
+        ));
+
+        assertEquals("gpt-4.1-mini", capturedRequest.get().model());
     }
 
     @Test
