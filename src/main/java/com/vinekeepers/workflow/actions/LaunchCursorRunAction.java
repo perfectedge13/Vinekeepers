@@ -79,7 +79,7 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                resolveModel(args)
         );
 
         try {
@@ -161,6 +161,14 @@ public final class LaunchCursorRunAction implements com.vinekeepers.workflow.Wor
 
     private static String firstNonBlank(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    private static String resolveModel(Map<String, Object> args) {
+        String configured = getString(args, "model");
+        if (configured != null && !configured.isBlank()) {
+            return configured.trim();
+        }
+        return Env.get("CURSOR_MODEL", "");
     }
 
     private static Instant firstNonBlankInstant(Instant a, Instant b) {

@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -406,5 +408,71 @@ class ConfigurableWorkflowRunnerTest {
         assertEquals("Room: arrietty room", result.getReplyMessage());
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
+    }
+
+    @Test
+    void configuredCallActionStepModelOverridesStateAndBindAtRuntime() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_cursor_run", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "model", "gpt-4.1-mini", "storeIn", "usedModel"),
+                Map.of("type", "done", "message", "Model: {{usedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("model-flow", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(
+                def,
+                registry,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "gpt-4o-mini",
+                Set.of("gpt-4.1-mini", "gpt-4o-mini"));
+        StateStore store = new StateStore();
+        String key = "bot:luna:state";
+        ConfigurableWorkflowState state = new ConfigurableWorkflowState();
+        state.put("model", "state-model");
+        store.put(key, state);
+
+        String out = runner.run(new Event("test", "message", Map.of()), store, "luna");
+        assertEquals("Model: gpt-4.1-mini", out);
+    }
+
+    @Test
+    void configuredCallActionStepWithoutModelUsesDefaultModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_cursor_run", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "storeIn", "usedModel"),
+                Map.of("type", "done", "message", "Model: {{usedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("default-model-flow", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(
+                def, registry, null, null, null, null, null, "gpt-4o-mini", Set.of("gpt-4o-mini"));
+        String out = runner.run(new Event("test", "message", Map.of()), new StateStore(), "luna");
+        assertEquals("Model: gpt-4o-mini", out);
+    }
+
+    @Test
+    void configuredCallActionStepRejectsUnknownModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "model", "unknown-model")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("invalid-model", steps);
+        assertThrows(IllegalArgumentException.class, () -> new ConfigurableWorkflowRunner(
+                def, registry, null, null, null, null, null, "gpt-4o-mini", Set.of("gpt-4o-mini")));
+    }
+
+    @Test
+    void nonLlmStepWithModelFailsValidation() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "ask_input", "prompt", "x", "storeIn", "input", "model", "gpt-4.1-mini")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("invalid-step-model", steps);
+        assertThrows(IllegalArgumentException.class, () -> new ConfigurableWorkflowRunner(
+                def, registry, null, null, null, null, null, "gpt-4o-mini", Set.of("gpt-4o-mini", "gpt-4.1-mini")));
     }
 }

@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: "1.0.0"
-  updated_utc: "2026-03-13T15:00:00Z"
+  updated_utc: "2026-05-03T05:40:00Z"
 
 project:
   id: vinekeepers
@@ -67,14 +67,14 @@ assets:
   - id: ASSET-BOT-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/bot/BotDefinition.java
-    role: Bot composition (persona, model, workflow, tools, runtime conversation settings, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces for ownership-based routing)
+    role: Bot composition (persona, model, optional supportedStepModels allow-list, workflow, tools, runtime conversation settings, optional discordTokenEnvKey for per-bot Discord identity, and optional handlesOwnedSpaces for ownership-based routing)
     requires: [REQ-BOT-003]
     feature_ids: [FEAT-BOT]
 
 requirements:
   - id: REQ-CONFIG-001
     title: Load bot config from YAML
-    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
+    statement: ConfigLoader loads bot definitions, routing, and workflows from YAML configuration; BotConfig models the structure. Workflow block, bot runtime options such as conversationMode and sessionKeyStrategy, optional discordTokenEnvKey for per-bot Discord identity (e.g. luna, arrietty in config), optional handlesOwnedSpaces per bot for ownership-based routing, optional model.supportedStepModels allow-list for configured workflow step model validation, and routing filter keys including optional discordTrigger, discordMention, and discordAuthors are parsed from YAML into runtime configuration.
     status: active
     priority: high
     type: functional
@@ -93,6 +93,7 @@ requirements:
         - ConfigLoader parses routing filters including optional discordTrigger, discordMention, and discordAuthors (list of string ids or usernames) from YAML
         - ConfigLoader parses optional discordTokenEnvKey (env var name for bot Discord token) from bot YAML into BotDefinition
         - ConfigLoader parses optional handlesOwnedSpaces (boolean) from bot YAML into BotDefinition; absent defaults to false
+        - ConfigLoader parses optional model.supportedStepModels list from bot YAML into BotDefinition for step-level model allow-list checks
         - Workflow step bind keys (e.g. lifecycleBotName, deliveryChannelId) and content with {{key}} interpolation are supported in step config; step action create_thread with storeIn (e.g. deliveryChannelId) is supported
       examples: []
     traceability:
@@ -128,6 +129,12 @@ requirements:
           intent: Verify handlesOwnedSpaces absent in bot YAML yields false on BotDefinition
           testClass: com.vinekeepers.config.ConfigLoaderTest
           testMethod: buildBotsParsesHandlesOwnedSpacesAbsentAsFalse
+          preconditions: []
+        - id: UNIT-CONFIG-LOADER-SUPPORTED-STEP-MODELS
+          title: ConfigLoaderTest
+          intent: Verify model.supportedStepModels is parsed from bot YAML into BotDefinition
+          testClass: com.vinekeepers.config.ConfigLoaderTest
+          testMethod: buildBotsParsesSupportedStepModels
           preconditions: []
 
 features:

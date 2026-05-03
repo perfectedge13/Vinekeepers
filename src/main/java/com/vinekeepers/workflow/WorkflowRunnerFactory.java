@@ -7,6 +7,7 @@ import com.vinekeepers.tools.ToolRunner;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Creates WorkflowRunner instances from workflow type and optional params.
@@ -47,11 +48,14 @@ public final class WorkflowRunnerFactory {
         BotDefinition resolvedBot = bot;
         if (resolvedBot == null) {
             return create("stub", null, workflows, actionRegistry, toolRunner, ToolPolicy.allowAll(),
-                    ConversationMode.SINGLE_EVENT, null, null);
+                    ConversationMode.SINGLE_EVENT, null, null, null, Set.of());
         }
+        Set<String> supportedModels = resolvedBot.getSupportedStepModels();
         return create(resolvedBot.getWorkflowType(), resolvedBot.getWorkflowParams(), workflows, actionRegistry,
                 toolRunner, resolvedBot.getToolPolicy(), resolvedBot.getConversationMode(),
-                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry);
+                resolvedBot.getSessionKeyStrategy(), choiceProviderRegistry,
+                resolvedBot.getModelProfile() != null ? resolvedBot.getModelProfile().getModelId() : null,
+                supportedModels);
     }
 
     public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
@@ -67,12 +71,24 @@ public final class WorkflowRunnerFactory {
                                         ToolRunner toolRunner, ToolPolicy toolPolicy,
                                         ConversationMode conversationMode, String sessionKeyStrategy,
                                         DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        return create(workflowType, workflowParams, workflows, actionRegistry, toolRunner, toolPolicy,
+                conversationMode, sessionKeyStrategy, choiceProviderRegistry, null, Set.of());
+    }
+
+    public static WorkflowRunner create(String workflowType, Map<String, Object> workflowParams,
+                                        Map<String, Object> workflows, WorkflowActionRegistry actionRegistry,
+                                        ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                        ConversationMode conversationMode, String sessionKeyStrategy,
+                                        DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                        String defaultModel,
+                                        Set<String> supportedModels) {
         String type = workflowType != null && !workflowType.isBlank() ? workflowType : "stub";
         return switch (type) {
             case "configured" -> {
                 WorkflowDefinition def = resolveWorkflowDefinition(workflowParams, workflows);
                 yield new ConfigurableWorkflowRunner(def, actionRegistry != null ? actionRegistry : new WorkflowActionRegistry(),
-                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry);
+                        toolRunner, toolPolicy, conversationMode, sessionKeyStrategy, choiceProviderRegistry,
+                        defaultModel, supportedModels);
             }
             default -> new StubWorkflowRunner();
         };

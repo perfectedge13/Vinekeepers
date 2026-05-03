@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-05-03T05:45:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -649,6 +649,20 @@ requirements:
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
+        - >-
+          Only direct LLM-invoking workflow steps currently support per-step model selection; in this workflow engine
+          that is limited to call_action where action is launch_cursor_run or cursor.fullRun.
+        - >-
+          Direct LLM-invoking steps may set optional model (non-empty string). If omitted, effective model falls back
+          to the bot default modelId from config.
+        - >-
+          Unknown model values in per-step model fail workflow runner construction when bot model.supportedStepModels is
+          configured; if supportedStepModels is omitted, any non-empty model string is allowed.
+        - >-
+          model on non-LLM step types is rejected with MODEL_NOT_ALLOWED_FOR_STEP_TYPE during workflow runner
+          construction.
+        - >-
+          Runtime/user-provided model values do not override step-configured model; action args use resolved step model.
         - create_thread action creates a Discord thread under parent channel; bind channelId, threadName, optional
           contextId; when channelId has a lifecycle context uses that context's bot gateway (owner gateway), else
           default gateway; blank or missing channelId returns THREAD_CREATE_FAILED; on success when contextId in
@@ -751,8 +765,32 @@ requirements:
           preconditions: []
         - id: UNIT-CALL-ACTION-STEP
           title: CallActionStepTest
-          intent: Verify CallActionStep invokes registered action
+          intent: Verify CallActionStep invokes registered action and enforces step-configured model precedence
           testClass: com.vinekeepers.workflow.steps.CallActionStepTest
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL-OVERRIDE
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action launch_cursor_run with step model overrides state/bind model at runtime
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: configuredCallActionStepModelOverridesStateAndBindAtRuntime
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL-DEFAULT
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify call_action launch_cursor_run without step model uses bot default model
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: configuredCallActionStepWithoutModelUsesDefaultModel
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL-UNKNOWN
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify unsupported per-step model is rejected when supportedStepModels allow-list is configured
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: configuredCallActionStepRejectsUnknownModel
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-STEP-MODEL-NON-LLM
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify model on non-LLM step type is rejected during workflow runner creation
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: nonLlmStepWithModelFailsValidation
           preconditions: []
         - id: UNIT-DONE-STEP
           title: DoneStepTest

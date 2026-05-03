@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkflowRunnerFactoryTest {
@@ -59,5 +61,25 @@ class WorkflowRunnerFactoryTest {
         WorkflowRunner runner = WorkflowRunnerFactory.create("configured", null, null, new WorkflowActionRegistry());
         assertNotNull(runner);
         assertTrue(runner instanceof ConfigurableWorkflowRunner);
+    }
+
+    @Test
+    void createConfiguredRejectsUnsupportedStepModel() {
+        Map<String, Object> params = Map.of("steps", List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "model", "unsupported-model")
+        ));
+        assertThrows(IllegalArgumentException.class,
+                () -> WorkflowRunnerFactory.create(
+                        "configured",
+                        params,
+                        null,
+                        new WorkflowActionRegistry(),
+                        null,
+                        com.vinekeepers.bot.ToolPolicy.allowAll(),
+                        com.vinekeepers.bot.ConversationMode.SINGLE_EVENT,
+                        null,
+                        null,
+                        "gpt-4o-mini",
+                        Set.of("gpt-4o-mini")));
     }
 }

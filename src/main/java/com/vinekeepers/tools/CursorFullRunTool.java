@@ -73,7 +73,7 @@ public final class CursorFullRunTool implements Tool {
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                firstNonBlank(getString(args, "model"), Env.get("CURSOR_MODEL", ""))
         );
 
         try {

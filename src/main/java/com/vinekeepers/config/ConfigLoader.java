@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Loads bots and routing from YAML config.
@@ -121,6 +122,7 @@ public final class ConfigLoader {
         String provider = modelMap != null ? (String) modelMap.get("provider") : "stub";
         String modelId = modelMap != null ? (String) modelMap.get("modelId") : "stub";
         ModelProfile modelProfile = new ModelProfile(provider, modelId);
+        Set<String> supportedStepModels = parseSupportedStepModels(modelMap);
 
         ToolPolicy toolPolicy = parseToolPolicy((Map<String, Object>) b.get("toolPolicy"));
         int maxContext = 4096;
@@ -142,12 +144,33 @@ public final class ConfigLoader {
         boolean handlesOwnedSpaces = Boolean.TRUE.equals(b.get("handlesOwnedSpaces"));
 
         return new BotDefinition(id, persona, modelProfile, toolPolicy, memoryPolicy,
-                workflowType, workflowParams, conversationMode, sessionKeyStrategy, discordTokenEnvKey, handlesOwnedSpaces);
+                workflowType, workflowParams, conversationMode, sessionKeyStrategy, discordTokenEnvKey,
+                handlesOwnedSpaces, supportedStepModels);
     }
 
     @SuppressWarnings("unchecked")
     private ToolPolicy parseToolPolicy(Map<String, Object> p) {
         if (p == null) return ToolPolicy.allowAll();
         return new ToolPolicy(toSet((List<String>) p.get("allowed")), toSet((List<String>) p.get("denied")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<String> parseSupportedStepModels(Map<String, Object> modelMap) {
+        if (modelMap == null) {
+            return Set.of();
+        }
+        Object models = modelMap.get("supportedStepModels");
+        if (models == null) {
+            models = modelMap.get("supportedModels");
+        }
+        if (!(models instanceof List<?> list)) {
+            return Set.of();
+        }
+        return list.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

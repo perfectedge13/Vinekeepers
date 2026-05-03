@@ -2,6 +2,7 @@ package com.vinekeepers.bot;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Definition of a bot: id, persona, model, tool and memory policies, workflow type and params.
@@ -21,6 +22,8 @@ public final class BotDefinition {
     private final String discordTokenEnvKey;
     /** When true, this bot is routed inbound events for lifecycle rooms it owns (single-owner precedence). */
     private final boolean handlesOwnedSpaces;
+    /** Optional allow-list for configured per-step workflow models. Empty means any non-blank model is accepted. */
+    private final Set<String> supportedStepModels;
 
     public BotDefinition(
             String id,
@@ -85,6 +88,23 @@ public final class BotDefinition {
             String sessionKeyStrategy,
             String discordTokenEnvKey,
             boolean handlesOwnedSpaces) {
+        this(id, persona, modelProfile, toolPolicy, memoryPolicy, workflowType, workflowParams, conversationMode,
+                sessionKeyStrategy, discordTokenEnvKey, handlesOwnedSpaces, Set.of());
+    }
+
+    public BotDefinition(
+            String id,
+            Persona persona,
+            ModelProfile modelProfile,
+            ToolPolicy toolPolicy,
+            MemoryPolicy memoryPolicy,
+            String workflowType,
+            Map<String, Object> workflowParams,
+            ConversationMode conversationMode,
+            String sessionKeyStrategy,
+            String discordTokenEnvKey,
+            boolean handlesOwnedSpaces,
+            Set<String> supportedStepModels) {
         this.id = Objects.requireNonNull(id, "id");
         this.persona = Objects.requireNonNull(persona, "persona");
         this.modelProfile = Objects.requireNonNull(modelProfile, "modelProfile");
@@ -96,6 +116,7 @@ public final class BotDefinition {
         this.sessionKeyStrategy = sessionKeyStrategy;
         this.discordTokenEnvKey = (discordTokenEnvKey != null && !discordTokenEnvKey.isBlank()) ? discordTokenEnvKey : null;
         this.handlesOwnedSpaces = handlesOwnedSpaces;
+        this.supportedStepModels = supportedStepModels != null ? Set.copyOf(supportedStepModels) : Set.of();
     }
 
     public String getId() {
@@ -147,5 +168,13 @@ public final class BotDefinition {
      */
     public boolean isHandlesOwnedSpaces() {
         return handlesOwnedSpaces;
+    }
+
+    public Set<String> getSupportedStepModels() {
+        return supportedStepModels;
+    }
+
+    public Set<String> getSupportedModels() {
+        return supportedStepModels;
     }
 }

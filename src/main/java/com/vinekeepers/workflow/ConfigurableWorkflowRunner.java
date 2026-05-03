@@ -9,8 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interprets a workflow definition from config and persists conversational runtime state.
@@ -18,6 +20,7 @@ import java.util.Map;
 public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurableWorkflowRunner.class);
+    private static final Set<String> MODELABLE_ACTIONS = Set.of("launch_cursor_run", "cursor.fullRun");
 
     private final String sessionKeyStrategyName;
     private final List<WorkflowStep> steps;
@@ -36,11 +39,22 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                                       ToolRunner toolRunner, ToolPolicy toolPolicy,
                                       ConversationMode conversationMode, String sessionKeyStrategyName,
                                       DynamicChoiceProviderRegistry choiceProviderRegistry) {
+        this(definition, actionRegistry, toolRunner, toolPolicy, conversationMode, sessionKeyStrategyName,
+                choiceProviderRegistry, null, Set.of());
+    }
+
+    public ConfigurableWorkflowRunner(WorkflowDefinition definition, WorkflowActionRegistry actionRegistry,
+                                      ToolRunner toolRunner, ToolPolicy toolPolicy,
+                                      ConversationMode conversationMode, String sessionKeyStrategyName,
+                                      DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                      String defaultModel,
+                                      Set<String> supportedModels) {
         WorkflowDefinition resolvedDefinition = definition != null ? definition : new WorkflowDefinition("", List.of());
         WorkflowActionRegistry resolvedRegistry = actionRegistry != null ? actionRegistry : new WorkflowActionRegistry();
         this.sessionKeyStrategyName = sessionKeyStrategyName;
         this.steps = buildSteps(resolvedDefinition, resolvedRegistry, toolRunner,
-                toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry);
+                toolPolicy != null ? toolPolicy : ToolPolicy.allowAll(), choiceProviderRegistry,
+                defaultModel, supportedModels);
     }
 
     @Override
@@ -130,12 +144,22 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
     @SuppressWarnings("unchecked")
     private static List<WorkflowStep> buildSteps(WorkflowDefinition definition, WorkflowActionRegistry registry,
                                                  ToolRunner toolRunner, ToolPolicy toolPolicy,
-                                                 DynamicChoiceProviderRegistry choiceProviderRegistry) {
+                                                 DynamicChoiceProviderRegistry choiceProviderRegistry,
+                                                 String defaultModel,
+                                                 Set<String> supportedModels) {
         List<WorkflowStep> out = new ArrayList<>();
+        String normalizedDefaultModel = normalizeModel(defaultModel);
+        Set<String> allowedModels = normalizeSupportedModels(supportedModels);
         for (Map<String, Object> stepMap : definition.getSteps()) {
             String type = (String) stepMap.get("type");
             if (type == null) {
                 type = "done";
+            }
+            String explicitModel = parseModelOverride(stepMap, type);
+            boolean llmStep = isDirectLlmStep(type, stepMap);
+            String effectiveModel = llmStep ? resolveEffectiveModel(explicitModel, normalizedDefaultModel) : null;
+            if (effectiveModel != null) {
+                validateAllowedModel(effectiveModel, allowedModels);
             }
             switch (type) {
                 case "ask_input" -> out.add(new com.vinekeepers.workflow.steps.AskForInputStep(
@@ -169,7 +193,8 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         toolPolicy,
                         (String) stepMap.get("action"),
                         (Map<String, Object>) stepMap.get("bind"),
-                        (String) stepMap.get("storeIn")));
+                        (String) stepMap.get("storeIn"),
+                        isModelableAction(stepMap) ? effectiveModel : null));
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
                 case "done" -> out.add(new com.vinekeepers.workflow.steps.DoneStep(
@@ -178,5 +203,75 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    private static String parseModelOverride(Map<String, Object> stepMap, String type) {
+        if (!stepMap.containsKey("model")) {
+            return null;
+        }
+        if (!isLlmCapableStepType(type, stepMap)) {
+            throw new IllegalArgumentException("MODEL_NOT_ALLOWED_FOR_STEP_TYPE: step type `" + type
+                    + "` does not support model overrides.");
+        }
+        Object raw = stepMap.get("model");
+        if (!(raw instanceof String value) || value.isBlank()) {
+            throw new IllegalArgumentException("INVALID_STEP_MODEL: step model must be a non-empty string.");
+        }
+        return value.trim();
+    }
+
+    private static boolean isDirectLlmStep(String type, Map<String, Object> stepMap) {
+        if (!"call_action".equals(type)) {
+            return false;
+        }
+        return isModelableAction(stepMap);
+    }
+
+    private static boolean isModelableAction(Map<String, Object> stepMap) {
+        Object action = stepMap.get("action");
+        return action instanceof String actionId && MODELABLE_ACTIONS.contains(actionId);
+    }
+
+    private static boolean isLlmCapableStepType(String type, Map<String, Object> stepMap) {
+        return isDirectLlmStep(type, stepMap);
+    }
+
+    private static String resolveEffectiveModel(String stepModel, String defaultModel) {
+        if (stepModel != null && !stepModel.isBlank()) {
+            return stepModel;
+        }
+        // Keep backward compatibility: when no global default is configured, delegate to downstream default behavior.
+        return (defaultModel == null || defaultModel.isBlank()) ? null : defaultModel;
+    }
+
+    private static String normalizeModel(String model) {
+        if (model == null) {
+            return null;
+        }
+        String normalized = model.trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private static Set<String> normalizeSupportedModels(Set<String> supportedModels) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (supportedModels == null) {
+            return normalized;
+        }
+        for (String model : supportedModels) {
+            String value = normalizeModel(model);
+            if (value != null) {
+                normalized.add(value);
+            }
+        }
+        return normalized;
+    }
+
+    private static void validateAllowedModel(String model, Set<String> allowedModels) {
+        if (allowedModels == null || allowedModels.isEmpty()) {
+            return;
+        }
+        if (!allowedModels.contains(model)) {
+            throw new IllegalArgumentException("INVALID_STEP_MODEL: unsupported model `" + model + "`.");
+        }
     }
 }

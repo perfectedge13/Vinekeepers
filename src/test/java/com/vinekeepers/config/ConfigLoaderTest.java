@@ -275,4 +275,27 @@ class ConfigLoaderTest {
         assertEquals(1, bots.size());
         assertFalse(bots.get(0).isHandlesOwnedSpaces());
     }
+
+    @Test
+    void buildBotsParsesSupportedStepModels(@TempDir Path dir) throws Exception {
+        Path yaml = dir.resolve("bots.yaml");
+        Files.writeString(yaml, """
+            bots:
+              - id: luna
+                persona:
+                  name: Luna
+                  systemPrompt: ""
+                model:
+                  provider: openai
+                  modelId: gpt-4o-mini
+                  supportedStepModels: [gpt-4o-mini, gpt-4.1-mini]
+            routing: []
+            """);
+        BotConfig config = loader.loadFromPath(yaml);
+        List<BotDefinition> bots = loader.buildBots(config);
+        assertEquals(1, bots.size());
+        assertEquals(
+                java.util.Set.of("gpt-4o-mini", "gpt-4.1-mini"),
+                bots.get(0).getSupportedStepModels());
+    }
 }

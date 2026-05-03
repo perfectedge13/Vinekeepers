@@ -7,6 +7,7 @@ import com.vinekeepers.workflow.WorkflowActionRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,5 +41,28 @@ class CallActionStepTest {
         CallActionStep step = new CallActionStep(null, "any", Map.of(), "x");
         StepResult result = step.execute(new Event("t", "k", Map.of()), new ConfigurableWorkflowState(), 0);
         assertEquals(null, result.getStoreValue());
+    }
+
+    @Test
+    void executeAppliesStepModelOverStateAndBind() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        AtomicReference<Map<String, Object>> captured = new AtomicReference<>();
+        registry.register("launch_cursor_run", (event, state, bind) -> {
+            captured.set(bind);
+            return bind.get("model");
+        });
+        CallActionStep step = new CallActionStep(
+                registry,
+                null,
+                null,
+                "launch_cursor_run",
+                Map.of("model", "from-bind"),
+                "modelOut",
+                "from-step");
+        ConfigurableWorkflowState state = new ConfigurableWorkflowState();
+        state.put("model", "from-state");
+        StepResult result = step.execute(new Event("t", "k", Map.of()), state, 0);
+        assertEquals("from-step", result.getStoreValue());
+        assertEquals("from-step", captured.get().get("model"));
     }
 }

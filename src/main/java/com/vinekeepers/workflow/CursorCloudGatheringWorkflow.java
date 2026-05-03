@@ -67,7 +67,7 @@ public final class CursorCloudGatheringWorkflow implements Workflow<GatheringSta
                     "main",
                     "luna/legacy",
                     true,
-                    ""
+                    null
             ));
             GatheringState done = state.withStep(GatheringState.Step.DONE);
             return WorkflowResult.done(done, "Launched Cursor agent " + launch.id());
