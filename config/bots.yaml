@@ -16,6 +16,9 @@ bots:
     persona:
       name: Luna
       systemPrompt: You are Luna, a bot that helps users run code changes via Cursor Cloud API. You gather which project to update and what change to make, then create a branch, run nova-commit, push, and optionally open a PR.
+    model:
+      provider: cursor
+      modelId: gpt-4o-mini
     workflow:
       type: configured
       params:
@@ -77,6 +80,7 @@ workflows:
       - type: done
         message: "Echo: {{userMessage}}"
   luna_cursor:
+    defaultModel: gpt-4o-mini
     steps:
       - type: prompt_for_field
         prompt: "Choose a repository"
@@ -152,6 +156,7 @@ workflows:
           lifecycleBotName: "Arrietty"
       - type: call_action
         action: launch_cursor_run
+        model: gpt-4.1
         bind: {}
         storeIn: launchMessage
       - type: done

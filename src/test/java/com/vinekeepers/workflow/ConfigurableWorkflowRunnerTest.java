@@ -407,4 +407,40 @@ class ConfigurableWorkflowRunnerTest {
         ConfigurableWorkflowState state = store.get("bot:arrietty:state", ConfigurableWorkflowState.class).orElseThrow();
         assertEquals("arrietty room", state.get("room"));
     }
+
+    @Test
+    void runCallActionLlmStepUsesStepModelOverride() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_cursor_run", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "model", "gpt-4.1", "storeIn", "selectedModel"),
+                Map.of("type", "done", "message", "Model: {{selectedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("llm-model", "gpt-4o-mini", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+
+        WorkflowRunResult result = runner.runResult(
+                new Event("discord:test", "message", Map.of("channelId", "chan-1", "authorId", "user-1", "content", "go")),
+                new StateStore(),
+                "luna");
+        assertEquals("Model: gpt-4.1", result.getReplyMessage());
+    }
+
+    @Test
+    void runCallActionLlmStepFallsBackToWorkflowDefaultModel() {
+        WorkflowActionRegistry registry = new WorkflowActionRegistry();
+        registry.register("launch_cursor_run", (event, state, bind) -> bind.get("model"));
+        List<Map<String, Object>> steps = List.of(
+                Map.of("type", "call_action", "action", "launch_cursor_run", "storeIn", "selectedModel"),
+                Map.of("type", "done", "message", "Model: {{selectedModel}}")
+        );
+        WorkflowDefinition def = new WorkflowDefinition("llm-model", "gpt-4o-mini", steps);
+        ConfigurableWorkflowRunner runner = new ConfigurableWorkflowRunner(def, registry);
+
+        WorkflowRunResult result = runner.runResult(
+                new Event("discord:test", "message", Map.of("channelId", "chan-1", "authorId", "user-1", "content", "go")),
+                new StateStore(),
+                "luna");
+        assertEquals("Model: gpt-4o-mini", result.getReplyMessage());
+    }
 }

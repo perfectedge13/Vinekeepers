@@ -120,6 +120,9 @@ public final class ConfigLoader {
         Map<String, Object> modelMap = (Map<String, Object>) b.get("model");
         String provider = modelMap != null ? (String) modelMap.get("provider") : "stub";
         String modelId = modelMap != null ? (String) modelMap.get("modelId") : "stub";
+        if ((modelId == null || modelId.isBlank()) && b.get("defaultModel") instanceof String fallbackDefaultModel) {
+            modelId = fallbackDefaultModel;
+        }
         ModelProfile modelProfile = new ModelProfile(provider, modelId);
 
         ToolPolicy toolPolicy = parseToolPolicy((Map<String, Object>) b.get("toolPolicy"));

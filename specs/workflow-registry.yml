@@ -1,7 +1,7 @@
 schema:
   id: req-registry
   version: 1.0.0
-  updated_utc: '2026-03-13T16:30:00Z'
+  updated_utc: '2026-05-05T00:05:00Z'
 project:
   id: vinekeepers
   name: Vinekeepers
@@ -288,7 +288,7 @@ assets:
   - id: ASSET-WORKFLOW-DEFINITION
     kind: source
     path: src/main/java/com/vinekeepers/workflow/WorkflowDefinition.java
-    role: Workflow definition from config (id and list of step configs)
+    role: Workflow definition from config (id, optional defaultModel, and list of step configs)
     requires:
       - REQ-WORKFLOW-001
     feature_ids:
@@ -616,7 +616,9 @@ requirements:
       Workflow<S> handle(event, context, state) returns WorkflowResult<S>; WorkflowRunner runs a workflow for an event
       and returns WorkflowRunResult with reply, waiting, completion, and error state. WorkflowRunnerFactory creates
       runners from config workflow type and params (stub, configured), and configurable workflows can pause for later
-      events using session key strategies.
+      events using session key strategies. For YAML-configured workflows, LLM-invoking call_action steps
+      (launch_cursor_run and cursor.fullRun) resolve model as step override (`model`/`modelOverride`) then
+      workflow/bot default model, with fallback to CURSOR_MODEL when needed.
     status: active
     priority: high
     type: functional
@@ -646,6 +648,19 @@ requirements:
         - >-
           Branch when key/value may use value "" to match empty string from capture_field (e.g. arrietty_room blank
           branch)
+        - >-
+          For configured workflows, only LLM call_action steps (launch_cursor_run and cursor.fullRun) may define
+          step-level model override (`model` or `modelOverride`); non-LLM steps with model override are rejected at
+          workflow construction
+        - >-
+          LLM step model selection precedence is step override (`model`/`modelOverride`) then workflow defaultModel
+          (or bot model profile modelId) then CURSOR_MODEL environment default
+        - >-
+          Unsupported model identifiers in workflow defaultModel, step model override, or CURSOR_MODEL are rejected
+          fail-fast during workflow construction
+        - >-
+          If an LLM call_action step has no step override and no workflow/bot/env default model, workflow construction
+          fails with a configuration error
         - >-
           Step bind and state passed to actions; interpolation uses merged map (state then bind, bind overrides) for
           actions that render content
@@ -706,7 +721,7 @@ requirements:
           preconditions: []
         - id: UNIT-WORKFLOW-RUNNER-FACTORY
           title: WorkflowRunnerFactoryTest
-          intent: Verify factory creates runners by type (stub, configured)
+          intent: Verify factory creates runners by type (stub, configured) and enforces LLM model validation
           testClass: com.vinekeepers.workflow.WorkflowRunnerFactoryTest
           preconditions: []
         - id: UNIT-WORKFLOW-DEFINITION
@@ -799,6 +814,23 @@ requirements:
             and lowercased value
           testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
           testMethod: runCaptureFieldWithTrimAndLowerStoresTrimmedAndLowercasedValue
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LLM-MODEL-OVERRIDE
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify LLM call_action step model override is passed to launch_cursor_run bind
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionLlmStepUsesStepModelOverride
+          preconditions: []
+        - id: UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LLM-MODEL-DEFAULT
+          title: ConfigurableWorkflowRunnerTest
+          intent: Verify LLM call_action step falls back to workflow default model when no override
+          testClass: com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest
+          testMethod: runCallActionLlmStepFallsBackToWorkflowDefaultModel
+          preconditions: []
+        - id: UNIT-WORKFLOW-RUNNER-FACTORY-LLM-MODEL-VALIDATION
+          title: WorkflowRunnerFactoryTest
+          intent: Verify configured workflow fail-fast validation for invalid model placement/identifier and missing LLM model source
+          testClass: com.vinekeepers.workflow.WorkflowRunnerFactoryTest
           preconditions: []
         - id: MANUAL-WORKFLOW
           title: Workflow interface

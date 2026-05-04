@@ -42,3 +42,11 @@ Events that match the filter are sent to the engine for that `botId`; the engine
 2. Add a corresponding `routing:` entry with `botId` and the desired `filter`.
 3. If the bot needs a custom Workflow or Reasoner implementation, register it in Bootstrap for that bot id; otherwise the engine may use StubWorkflow/StubReasoner.
 4. Restart the application so ConfigLoader reloads `config/bots.yaml`.
+
+## Configuring LLM model selection for workflow steps
+
+- Set a bot-level default model under `bots[].model.modelId` (for example `gpt-4o-mini`).
+- For configured workflows, set optional `workflows.<id>.defaultModel` to override the bot default inside that workflow.
+- For LLM-invoking `call_action` steps (`launch_cursor_run` or `cursor.fullRun`), set a per-step override with `model` (or `modelOverride`).
+- Model precedence for LLM workflow steps is: step override -> workflow/default bot model -> `CURSOR_MODEL`.
+- Model override on non-LLM steps is invalid and workflow construction fails fast.

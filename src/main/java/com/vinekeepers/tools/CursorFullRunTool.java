@@ -67,13 +67,14 @@ public final class CursorFullRunTool implements Tool {
         Map<String, Object> eventMetadata = getMap(args, "__event");
         String baseBranch = firstNonBlank(getString(args, "baseBranch"), Env.get("CURSOR_BASE_BRANCH", DEFAULT_BASE_BRANCH));
         String branchName = buildBranchName(change);
+        String resolvedModel = firstNonBlank(getString(args, "model"), Env.get("CURSOR_MODEL", ""));
         CursorAgentLaunchRequest request = new CursorAgentLaunchRequest(
                 CursorInstructionComposer.buildInstruction(repositoryUrl, baseBranch, change),
                 repositoryUrl,
                 baseBranch,
                 branchName,
                 true,
-                Env.get("CURSOR_MODEL", "")
+                resolvedModel
         );
 
         try {

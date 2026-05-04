@@ -49,6 +49,10 @@ public final class CallActionStep implements WorkflowStep {
         return StepResult.advance(storeIn, result);
     }
 
+    public String getActionId() {
+        return actionId;
+    }
+
     private Map<String, Object> buildArgs(Event event, ConfigurableWorkflowState state) {
         Map<String, Object> args = new LinkedHashMap<>();
         if (state != null) {

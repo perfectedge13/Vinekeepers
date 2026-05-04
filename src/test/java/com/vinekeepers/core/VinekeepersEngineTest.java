@@ -91,7 +91,9 @@ class VinekeepersEngineTest {
 
     @Test
     void lunaWorkflowWithReplySenderSendsReplyToDiscord() {
-        Map<String, Object> lunaCursorSteps = Map.of("steps", List.of(
+        Map<String, Object> lunaCursorSteps = Map.of(
+                "defaultModel", "gpt-4o-mini",
+                "steps", List.of(
                 Map.<String, Object>of("type", "ask_input", "prompt", "Which project do you want to update?", "storeIn", "project"),
                 Map.<String, Object>of("type", "ask_input", "prompt", "What code change should I make?", "storeIn", "codeChange"),
                 Map.<String, Object>of("type", "call_action", "action", "cursor.fullRun", "bind", Map.of()),
@@ -133,7 +135,9 @@ class VinekeepersEngineTest {
 
     @Test
     void lunaWorkflowPersistsStateByConversationKey() {
-        Map<String, Object> lunaCursorSteps = Map.of("steps", List.of(
+        Map<String, Object> lunaCursorSteps = Map.of(
+                "defaultModel", "gpt-4o-mini",
+                "steps", List.of(
                 Map.<String, Object>of("type", "ask_input", "prompt", "Which project do you want to update?", "storeIn", "project"),
                 Map.<String, Object>of("type", "ask_input", "prompt", "What code change should I make?", "storeIn", "codeChange"),
                 Map.<String, Object>of("type", "call_action", "action", "cursor.fullRun", "bind", Map.of()),

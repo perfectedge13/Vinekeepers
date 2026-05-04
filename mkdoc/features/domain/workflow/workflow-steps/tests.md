@@ -12,9 +12,11 @@ Unit tests cover workflow definition parsing, step result helpers, workflow acti
 | UNIT-STEP-RESULT | StepResultTest | com.vinekeepers.workflow.StepResultTest | — | Verify `StepResult` factory methods and outcome normalization |
 | UNIT-WORKFLOW-ACTION-REGISTRY | WorkflowActionRegistryTest | com.vinekeepers.workflow.WorkflowActionRegistryTest | — | Verify action registration, resolution, execution, and safe failure handling |
 | UNIT-ASK-FOR-INPUT-STEP | AskForInputStepTest | com.vinekeepers.workflow.steps.AskForInputStepTest | — | Verify `ask_input` stores user input in state |
-| UNIT-CALL-ACTION-STEP | CallActionStepTest | com.vinekeepers.workflow.steps.CallActionStepTest | — | Verify `call_action` invokes the registered action |
+| UNIT-CALL-ACTION-STEP | CallActionStepTest | com.vinekeepers.workflow.steps.CallActionStepTest | — | Verify `call_action` invokes the registered action and exposes action id for LLM model wiring |
 | UNIT-BRANCH-STEP | BranchStepTest | com.vinekeepers.workflow.steps.BranchStepTest | — | Verify `branch` step condition and value-based routing |
 | UNIT-CONFIGURABLE-WORKFLOW-RUNNER | ConfigurableWorkflowRunnerTest | com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest | — | Verify ConfigurableWorkflowRunner executes steps and applies clearKeys for edit-reprompt |
+| UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LLM-MODEL-OVERRIDE | ConfigurableWorkflowRunnerTest | com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest | runCallActionLlmStepUsesStepModelOverride | Verify LLM call_action step uses step-level model override |
+| UNIT-CONFIGURABLE-WORKFLOW-RUNNER-LLM-MODEL-DEFAULT | ConfigurableWorkflowRunnerTest | com.vinekeepers.workflow.ConfigurableWorkflowRunnerTest | runCallActionLlmStepFallsBackToWorkflowDefaultModel | Verify LLM call_action step falls back to workflow default model |
 | UNIT-DONE-STEP | DoneStepTest | com.vinekeepers.workflow.steps.DoneStepTest | — | Verify `done` completes with message and template support |
 | UNIT-POST-CHANNEL-MESSAGE-INTERPOLATION | PostChannelMessageActionTest | com.vinekeepers.workflow.actions.PostChannelMessageActionTest | runInterpolatesContentFromBindState | Verify post_channel_message interpolates content from merged map (state then bind, bind overrides) |
 | UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-PRECEDENCE | CreateLifecycleContextActionTest | com.vinekeepers.workflow.actions.CreateLifecycleContextActionTest | runPrefersBindOverStateForNewFields | Verify create_lifecycle_context uses bind precedence (bind overrides state) |
@@ -27,4 +29,5 @@ Unit tests cover workflow definition parsing, step result helpers, workflow acti
 | UNIT-CREATE-LIFECYCLE-CONTEXT-ACTION | CreateLifecycleContextActionTest | com.vinekeepers.workflow.actions.CreateLifecycleContextActionTest | — | Verify create_lifecycle_context action creates and stores lifecycle context |
 | UNIT-CREATE-LIFECYCLE-CONTEXT-BIND-WINS | CreateLifecycleContextActionTest | com.vinekeepers.workflow.actions.CreateLifecycleContextActionTest | runConfiguredBotIdBindPrecedenceBindWinsOverState | Verify create_lifecycle_context bind precedence (bind overrides state for configuredBotId) |
 | UNIT-LAUNCH-CURSOR-RUN-ACTION | LaunchCursorRunActionTest | com.vinekeepers.workflow.actions.LaunchCursorRunActionTest | runLaunchesAndStoresRecordAndBindsContext | Verify launch_cursor_run action launches run, registers run record, and acknowledges to Discord with status (e.g. launching) and lifecycle room |
+| UNIT-WORKFLOW-RUNNER-FACTORY-LLM-MODEL-VALIDATION | WorkflowRunnerFactoryTest | com.vinekeepers.workflow.WorkflowRunnerFactoryTest | — | Verify fail-fast validation for LLM model placement, unsupported model IDs, and missing model source |
 

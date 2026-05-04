@@ -105,4 +105,52 @@ class CursorFullRunToolTest {
 
         assertTrue(result.toString().contains("Could not resolve project"));
     }
+
+    @Test
+    void runUsesModelFromArgsWhenProvided() {
+        AtomicReference<CursorAgentLaunchRequest> capturedRequest = new AtomicReference<>();
+        CursorCloudAdapter adapter = new CursorCloudAdapter() {
+            @Override
+            public CursorAgentLaunchResult launchAgent(CursorAgentLaunchRequest request) {
+                capturedRequest.set(request);
+                return new CursorAgentLaunchResult(
+                        "bc_model",
+                        "Luna run",
+                        "CREATING",
+                        request.repositoryUrl(),
+                        request.baseRef(),
+                        request.branchName(),
+                        "https://cursor.com/agents?id=bc_model",
+                        null,
+                        true,
+                        Instant.parse("2026-03-07T20:00:00Z")
+                );
+            }
+
+            @Override
+            public CursorAgentDetails getAgent(String agentId) {
+                return new CursorAgentDetails(agentId, "", "", "", "", "", "", "", "", Instant.now());
+            }
+
+            @Override
+            public CursorAgentConversation getConversation(String agentId) {
+                return new CursorAgentConversation(agentId, List.of());
+            }
+
+            @Override
+            public void addFollowup(String agentId, String promptText) {
+            }
+        };
+        CursorFullRunTool tool = new CursorFullRunTool(adapter, new StateStore());
+
+        Object result = tool.run(Map.of(
+                "project", "acme/vinekeepers",
+                "codeChange", "Add a model override",
+                "model", "gpt-4.1",
+                "__sessionKey", "bot:luna:conv:chan-1:user-1"
+        ));
+
+        assertTrue(result.toString().contains("Launching Cursor Cloud run"));
+        assertEquals("gpt-4.1", capturedRequest.get().model());
+    }
 }

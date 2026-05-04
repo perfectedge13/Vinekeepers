@@ -41,4 +41,10 @@ class CallActionStepTest {
         StepResult result = step.execute(new Event("t", "k", Map.of()), new ConfigurableWorkflowState(), 0);
         assertEquals(null, result.getStoreValue());
     }
+
+    @Test
+    void getActionIdReturnsConfiguredActionId() {
+        CallActionStep step = new CallActionStep(null, "launch_cursor_run", Map.of(), "x");
+        assertEquals("launch_cursor_run", step.getActionId());
+    }
 }

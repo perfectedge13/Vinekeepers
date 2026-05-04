@@ -9,8 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interprets a workflow definition from config and persists conversational runtime state.
@@ -18,6 +20,7 @@ import java.util.Map;
 public final class ConfigurableWorkflowRunner implements WorkflowRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurableWorkflowRunner.class);
+    private static final Set<String> LLM_STEP_ACTIONS = Set.of("launch_cursor_run", "cursor.fullRun");
 
     private final String sessionKeyStrategyName;
     private final List<WorkflowStep> steps;
@@ -168,7 +171,7 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
                         toolRunner,
                         toolPolicy,
                         (String) stepMap.get("action"),
-                        (Map<String, Object>) stepMap.get("bind"),
+                        resolveCallActionBind(stepMap, definition),
                         (String) stepMap.get("storeIn")));
                 case "branch" -> out.add(new com.vinekeepers.workflow.steps.BranchStep(
                         (List<Map<String, Object>>) stepMap.get("branches")));
@@ -178,5 +181,34 @@ public final class ConfigurableWorkflowRunner implements WorkflowRunner {
             }
         }
         return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolveCallActionBind(Map<String, Object> stepMap, WorkflowDefinition definition) {
+        Map<String, Object> bind = stepMap.get("bind") instanceof Map<?, ?> b
+                ? new HashMap<>((Map<String, Object>) b)
+                : new HashMap<>();
+        String type = stepMap.get("type") != null ? stepMap.get("type").toString() : "";
+        String action = stepMap.get("action") != null ? stepMap.get("action").toString() : "";
+        if ("call_action".equals(type) && LLM_STEP_ACTIONS.contains(action)) {
+            String stepModel = normalizeModel(stepMap.get("model"));
+            if (stepModel == null) {
+                stepModel = normalizeModel(stepMap.get("modelOverride"));
+            }
+            if (stepModel != null) {
+                bind.put("model", stepModel);
+            } else if (definition.getDefaultModel() != null && !bind.containsKey("model")) {
+                bind.put("model", definition.getDefaultModel());
+            }
+        }
+        return bind;
+    }
+
+    private static String normalizeModel(Object modelValue) {
+        if (modelValue == null) {
+            return null;
+        }
+        String model = modelValue.toString().trim();
+        return model.isEmpty() ? null : model;
     }
 }

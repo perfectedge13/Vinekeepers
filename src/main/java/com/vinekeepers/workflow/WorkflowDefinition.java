@@ -10,10 +10,16 @@ import java.util.Objects;
 public final class WorkflowDefinition {
 
     private final String id;
+    private final String defaultModel;
     private final List<Map<String, Object>> steps;
 
     public WorkflowDefinition(String id, List<Map<String, Object>> steps) {
+        this(id, null, steps);
+    }
+
+    public WorkflowDefinition(String id, String defaultModel, List<Map<String, Object>> steps) {
         this.id = id != null ? id : "";
+        this.defaultModel = defaultModel != null && !defaultModel.isBlank() ? defaultModel : null;
         this.steps = steps != null ? List.copyOf(steps) : List.of();
     }
 
@@ -23,5 +29,9 @@ public final class WorkflowDefinition {
 
     public List<Map<String, Object>> getSteps() {
         return steps;
+    }
+
+    public String getDefaultModel() {
+        return defaultModel;
     }
 }
